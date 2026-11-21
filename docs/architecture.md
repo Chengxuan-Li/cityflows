@@ -311,7 +311,8 @@ type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 
 interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
   entrance?: { placeId: PlaceId | null }; provenance: Provenance }
 interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
-  kind: WalkKind; widthM: number | null; layer?: number; provenance: Provenance }
+  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; widthM: number | null; layer?: number;
+  provenance: Provenance }
 ~~~
 
 Stall geometry, sidewalks along streets and walk links over TASK-091 crossings are derived at
@@ -3172,6 +3173,20 @@ the city, and roads retain the strongest tone.
   crossing, still ends them).
   The node inspector lists the arms with a "Crossing" checkbox each (disabled, with the reason,
   where no stripe fits).
+- TASK-257 (owner-approved field): a crossing walk link's optional `marking` is its paint as OSM
+  maps it, read by the importer (`crossingMarking`) from the way's tags, else from its nearest
+  crossing node along the way that has them (per link, so a way over a divided road can be
+  unmarked on one carriageway and a zebra on the other), and for TASK-239's node crossings from
+  the node: `crossing:markings` first (`no` none; `lines`, `dashes`, `dots` lines; `yes`,
+  `zebra`, `ladder` zebra), then `crossing_ref=zebra` or `crossing=zebra|marked|uncontrolled`
+  zebra, `crossing=unmarked|no|informal` none, `crossing=traffic_signals` lines (a signalised
+  crossing's two lines). Absent (no tag says, and every older file) paints as before. Paint
+  only: an unmarked link paints nothing where it crosses a road, and a road end whose arm only
+  unmarked mapped crossings lead paints nothing unless an edit turned it on; a lines link and an
+  end whose painted mapped crossings are all lines draw the two broken lines; a road end at a
+  signalized node keeps them whatever OSM marks (its walk lights stand there); otherwise
+  TASK-217's rule (broken lines near a signal, a zebra elsewhere). The walk graph, crossing
+  controls, spans, stop lines and the simulation do not read it.
 - TASK-091 (B46): a centre line (a two-way street's, or the solid median edge of TASK-089) ends
   at the junction mouth: it is clipped out of both its nodes' outlines, also where an outline
   reaches back over the approach (TASK-079's stretch drawn above the junction now applies to

@@ -359,6 +359,7 @@ const walkNetwork = z.object({
       to: walkNodeId,
       line: z.array(vec2).min(2),
       kind: z.enum(['footway', 'pedestrian', 'path', 'steps', 'living_street', 'crossing']),
+      marking: z.enum(['zebra', 'lines', 'none']).optional(),
       layer: z.int().optional(),
       widthM: z.number().positive().nullable(),
       provenance,

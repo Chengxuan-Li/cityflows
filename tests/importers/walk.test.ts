@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
+import { crossingMarking } from '../../src/importers/osm/walk';
 import { compile } from '../../src/network';
+import { crossingStyle } from '../../src/network/crossings';
 import { crossingStripes } from '../../src/render/marking-geometry';
 import { buildQuery } from '../../src/importers/overpass';
 import { citySchema } from '../../src/schema';
@@ -230,4 +232,137 @@ test('TASK-239: a node crossing ends on a mapped footway within 8 m of the lane 
   const plain = nodeLinks(imported(street(zebra)))[0]!;
   const south = (line: Vec2[]) => line.reduce((a, b) => (b.y > a.y ? b : a));
   expect(south(link!.line)).toEqual(south(plain.line));
+});
+
+// TASK-257: a crossing's marking from OSM, and its paint.
+test.each([
+  ['crossing=unmarked', { crossing: 'unmarked' }, 'none'],
+  ['crossing=no', { crossing: 'no' }, 'none'],
+  ['crossing=informal', { crossing: 'informal' }, 'none'],
+  ['crossing:markings=no', { 'crossing:markings': 'no' }, 'none'],
+  ['crossing=zebra', { crossing: 'zebra' }, 'zebra'],
+  ['crossing=marked', { crossing: 'marked' }, 'zebra'],
+  ['crossing=uncontrolled', { crossing: 'uncontrolled' }, 'zebra'],
+  ['crossing_ref=zebra', { crossing_ref: 'zebra' }, 'zebra'],
+  ['crossing:markings=yes', { 'crossing:markings': 'yes' }, 'zebra'],
+  ['crossing:markings=zebra:double', { 'crossing:markings': 'zebra:double' }, 'zebra'],
+  ['crossing:markings=ladder', { 'crossing:markings': 'ladder' }, 'zebra'],
+  ['crossing:markings=lines', { crossing: 'marked', 'crossing:markings': 'lines' }, 'lines'],
+  [
+    'crossing:markings=dashes',
+    { crossing: 'traffic_signals', 'crossing:markings': 'dashes' },
+    'lines',
+  ],
+  ['crossing:markings=dots', { 'crossing:markings': 'dots' }, 'lines'],
+  ['crossing=traffic_signals', { crossing: 'traffic_signals' }, 'lines'],
+  ['signals without markings', { crossing: 'traffic_signals', 'crossing:markings': 'no' }, 'none'],
+  ['unmarked, finer tag marked', { crossing: 'unmarked', 'crossing:markings': 'zebra' }, 'zebra'],
+  ['crossing:markings=surface', { crossing: 'unmarked', 'crossing:markings': 'surface' }, 'none'],
+  ['no tag', { highway: 'crossing' }, undefined],
+  ['crossing=pelican alone', { crossing_ref: 'pelican' }, undefined],
+] as const)('TASK-257: %s reads as %s', (_, tags, marking) => {
+  expect(crossingMarking(tags)).toBe(marking);
+});
+
+/** A crossing way 3-7-4 over the street at node 7: `way` its tags, `node` node 7's. */
+const crossingWay = (way: string, node = '') =>
+  street(
+    node,
+    `<node id="3" lat="48.0005" lon="11.003"/><node id="4" lat="48.0015" lon="11.003"/><way id="20"><nd ref="3"/><nd ref="7"/><nd ref="4"/>${tag('highway', 'footway') + tag('footway', 'crossing') + way}</way>`,
+  );
+const wayMarkings = (city: ReturnType<typeof imported>, way = 20) =>
+  Object.values(city.walk!.links)
+    .filter((l) => l.provenance.osmIds?.[0] === way)
+    .map((l) => l.marking);
+
+test('TASK-257: a crossing way takes its own tags, else its crossing node’s', () => {
+  expect(wayMarkings(imported(crossingWay(tag('crossing', 'unmarked'))))).toEqual(['none', 'none']);
+  expect(
+    wayMarkings(imported(crossingWay(tag('crossing', 'zebra'), tag('crossing', 'unmarked')))),
+  ).toEqual(['zebra', 'zebra']);
+  expect(
+    wayMarkings(
+      imported(crossingWay('', tag('highway', 'crossing') + tag('crossing', 'unmarked'))),
+    ),
+  ).toEqual(['none', 'none']);
+  // Neither says: no field, painted as before.
+  const plain = imported(crossingWay(''));
+  expect(wayMarkings(plain)).toEqual([undefined, undefined]);
+  for (const link of Object.values(plain.walk!.links)) expect('marking' in link).toBe(false);
+});
+
+test('TASK-257: a crossing way over two streets takes each link’s nearest crossing node', () => {
+  // A second street through node 17, 111 m north; node 7 unmarked, node 17 a zebra.
+  const second = `<node id="15" lat="48.002" lon="11.001"/><node id="16" lat="48.002" lon="11.005"/><node id="17" lat="48.002" lon="11.003">${tag('highway', 'crossing') + tag('crossing', 'zebra')}</node><node id="5" lat="48.0025" lon="11.003"/><way id="12"><nd ref="15"/><nd ref="17"/><nd ref="16"/><tag k="highway" v="residential"/></way><way id="20"><nd ref="3"/><nd ref="7"/><nd ref="4"/><nd ref="17"/><nd ref="5"/>${tag('highway', 'footway') + tag('footway', 'crossing')}</way>`;
+  const city = imported(
+    street(
+      tag('highway', 'crossing') + tag('crossing', 'unmarked'),
+      `<node id="3" lat="48.0005" lon="11.003"/><node id="4" lat="48.0015" lon="11.003"/>${second}`,
+    ),
+  );
+  expect(wayMarkings(city)).toEqual(['none', 'none', 'zebra', 'zebra']);
+});
+
+test('TASK-257: a node crossing takes its node’s marking', () => {
+  expect(nodeLinks(imported(street(zebra)))[0]!.marking).toBe('zebra');
+  const lines = tag('highway', 'crossing') + tag('crossing:markings', 'lines');
+  expect(nodeLinks(imported(street(lines)))[0]!.marking).toBe('lines');
+});
+
+/** The crossing paint over the street, as zebra stripes (about 1.1 m²) and line dashes. */
+function paint(city: ReturnType<typeof imported>) {
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const area = (s: Vec2[]) =>
+    Math.abs(
+      s.reduce((a, p, i) => a + p.x * s[(i + 1) % s.length]!.y - s[(i + 1) % s.length]!.x * p.y, 0),
+    ) / 2;
+  const shapes = result.compiled.roads.flatMap((r) =>
+    [false, true].flatMap((atEnd) => crossingStripes(result.compiled, r, atEnd, city)),
+  );
+  return {
+    zebra: shapes.filter((s) => area(s) > 0.5).length,
+    dashes: shapes.filter((s) => area(s) <= 0.5).length,
+  };
+}
+
+test('TASK-257: a mapped crossing paints a zebra, two lines, or nothing as its marking says', () => {
+  const zebraPaint = paint(imported(crossingWay(tag('crossing', 'zebra'))));
+  expect(zebraPaint.zebra).toBeGreaterThanOrEqual(4);
+  expect(zebraPaint.dashes).toBe(0);
+  // Absent (an older project, or no tag): a zebra, as before.
+  expect(paint(imported(crossingWay('')))).toEqual(zebraPaint);
+  const lines = paint(imported(crossingWay(tag('crossing:markings', 'lines'))));
+  expect(lines.zebra).toBe(0);
+  expect(lines.dashes).toBeGreaterThan(8);
+  expect(paint(imported(crossingWay(tag('crossing', 'unmarked'))))).toEqual({
+    zebra: 0,
+    dashes: 0,
+  });
+});
+
+test('TASK-257: a road end’s crossing paints as the mapped crossings of its arm say', () => {
+  // A side street north from node 7; a crossing way over it 12 m from the junction.
+  const side = (way: string) =>
+    street(
+      '',
+      `<node id="8" lat="48.003" lon="11.003"/><way id="11"><nd ref="7"/><nd ref="8"/><tag k="highway" v="residential"/></way><node id="3" lat="48.00111" lon="11.0028"/><node id="4" lat="48.00111" lon="11.0032"/><way id="20"><nd ref="3"/><nd ref="4"/>${tag('highway', 'footway') + tag('footway', 'crossing') + way}</way>`,
+    );
+  const styles = (way: string) => {
+    const city = imported(side(way));
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled;
+    const junction = net.index.node.get(
+      Object.values(city.nodes).find((n) => n.provenance.osmIds?.[0] === 7)!.id,
+    )!;
+    return Object.values(city.roads)
+      .filter((r) => r.provenance.osmIds?.includes(11))
+      .map((r) => net.roads[net.index.road.get(r.id)!]!)
+      .map((r) => crossingStyle(net, r, r.to === junction, city));
+  };
+  expect(styles('')).toEqual(['zebra', 'zebra']);
+  expect(styles(tag('crossing', 'zebra'))).toEqual(['zebra', 'zebra']);
+  expect(styles(tag('crossing:markings', 'lines'))).toEqual(['signal', 'signal']);
+  expect(styles(tag('crossing', 'unmarked'))).toEqual(['none', 'none']);
 });

@@ -216,7 +216,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // as nodes, with the last ids (the tram timetable stays 90e3ff6f).
     // TASK-256: rebuilt; 7 short ballast sections between a street track and another bed are
     // embedded (Rotteckring rt:12944 among them; only their `form` changes).
-    '2f14f6dcf410281e9d280e16f9e5cabaff00eac95dcb0e938a4adc89e9716ca9',
+    // TASK-257: rebuilt; crossing walk links carry their OSM `marking` (none 37, lines 124, zebra
+    // 40); nothing else changes.
+    'a0a7c166891d83952de63b885773283c282b27ffd7bd7b92c3bfe44f6f17c4d5',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

@@ -1258,13 +1258,14 @@ export function crossingStripes(
 }
 
 /** TASK-217 (D1): where each mapped crossing way (walk link of kind `crossing`) crosses a
- * road's lanes, in lane metres from the lane's start, by road; a link crossing at another grade
- * is left out. */
+ * road's lanes, in lane metres from the lane's start, by road; a link crossing at another grade,
+ * or (TASK-257) one OSM maps unmarked, is left out. */
 const mappedHits = new WeakMap<object, WeakMap<CompiledCity, Map<number, MappedHit[]>>>();
 interface MappedHit {
   link: number;
   lane: number;
   atM: number;
+  lines: boolean;
 }
 function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource): MappedHit[] {
   const walk = source?.walk;
@@ -1275,14 +1276,14 @@ function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource
   if (!byRoad) {
     byRoad = new Map();
     for (const [k, link] of Object.values(walk.links).entries()) {
-      if (link.kind !== 'crossing') continue;
+      if (link.kind !== 'crossing' || link.marking === 'none') continue;
       const grade = link.layer ?? walk.nodes[link.from]!.layer;
       for (const i of lanesNear(city, link.line)) {
         const lane = city.lanes[i]!;
         if (city.roads[lane.road]!.grade !== grade) continue;
         for (const hit of polylineCrossings(link.line, lane.polyline)) {
           const list = byRoad.get(lane.road) ?? [];
-          list.push({ link: k, lane: i, atM: hit.alongB });
+          list.push({ link: k, lane: i, atM: hit.alongB, lines: link.marking === 'lines' });
           byRoad.set(lane.road, list);
         }
       }
@@ -1298,8 +1299,8 @@ function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource
  * or one at an end without a crossing of its own (Freiburg's zebras where a slip road splits at
  * the crossing node, n:398). Stripes 2.5 m long along each lane, centred where the way crosses
  * its centreline, at the end crossings' 0.9 m pitch across the road; none inside a junction; the
- * broken lines of a signalised crossing near a signalized node (`nearSignal`), zebra stripes
- * elsewhere.
+ * broken lines of a signalised crossing near a signalized node (`nearSignal`) or (TASK-257) where
+ * OSM marks it with lines, zebra stripes elsewhere.
  */
 function mappedStripes(
   city: CompiledCity,
@@ -1313,7 +1314,7 @@ function mappedStripes(
     .map((o) => preparePolygonRing(o));
   const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
   const paint: Vec2[][] = [];
-  for (const at of paintedMapped(city, road, atEnd, source)) {
+  for (const { at, lines } of paintedMapped(city, road, atEnd, source)) {
     const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
     const local = (lane: CLane, d: number, offset: number): Vec2 => {
       const s = Math.max(0, Math.min(lane.lengthM, d));
@@ -1348,7 +1349,7 @@ function mappedStripes(
       lanes[0]!.cumulative,
       Math.min(lanes[0]!.lengthM, mean),
     );
-    paint.push(...(nearSignal(city, p) ? signalLines(stripes) : stripes));
+    paint.push(...(lines || nearSignal(city, p) ? signalLines(stripes) : stripes));
   }
   return paint;
 }
@@ -1356,24 +1357,28 @@ function mappedStripes(
 const preparePolygonRing = (ring: Vec2[]) => (p: Vec2) => pointInPolygon(p, ring, 0);
 
 /** The mapped crossings `mappedStripes` paints over the half of a road nearer one end: per
- * crossing way, where it crosses each lane (lane index to lane metres). */
+ * crossing way, where it crosses each lane (lane index to lane metres), and whether OSM marks it
+ * with lines. */
 function paintedMapped(
   city: CompiledCity,
   road: CRoad,
   atEnd: boolean,
   source?: CrossingSource,
-): Map<number, number>[] {
+): { at: Map<number, number>; lines: boolean }[] {
   const hits = roadMappedHits(city, road, source);
   if (!hits.length || road.group !== undefined) return [];
   const ownCrossing =
     crossingEnabled(city, road, atEnd, source) &&
     crossingPlacement(city, road, atEnd).stripes.length > 0;
   return [...new Set(hits.map((h) => h.link))].flatMap((link) => {
-    const at = new Map(hits.filter((h) => h.link === link).map((h) => [h.lane, h.atM]));
+    const own = hits.filter((h) => h.link === link);
+    const at = new Map(own.map((h) => [h.lane, h.atM]));
     const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
     const length = city.lanes[road.lanes.find((lane) => at.has(lane))!]!.lengthM;
     const fromCut = atEnd ? length - mean : mean;
-    return mean > length / 2 !== atEnd || (ownCrossing && fromCut <= MAPPED_M) ? [] : [at];
+    return mean > length / 2 !== atEnd || (ownCrossing && fromCut <= MAPPED_M)
+      ? []
+      : [{ at, lines: own[0]!.lines }];
   });
 }
 
@@ -1388,7 +1393,7 @@ function crossingPaint(city: CompiledCity, lane: CLane, source?: CrossingSource)
       span && crossingStyle(city, road, atEnd, source) !== 'none'
         ? [{ fromM: Math.min(span.nearM, span.farM), toM: Math.max(span.nearM, span.farM) }]
         : [];
-    const mapped = paintedMapped(city, road, atEnd, source).flatMap((at) => {
+    const mapped = paintedMapped(city, road, atEnd, source).flatMap(({ at }) => {
       const m = at.get(lane.idx);
       return m === undefined ? [] : [{ fromM: m - 1.25, toM: m + 1.25 }];
     });

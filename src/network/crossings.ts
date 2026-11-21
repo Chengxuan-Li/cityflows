@@ -7,7 +7,7 @@ import {
   segmentDistance,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { City } from '../schema';
+import type { City, CrossingMarking } from '../schema';
 import { junctionCorners } from './junctions';
 import type { CLane, CompiledCity, CNode, CRoad } from './types';
 
@@ -176,6 +176,7 @@ export const MAPPED_M = 12;
 interface MappedCrossing {
   line: Vec2[];
   grade: number;
+  marking?: CrossingMarking;
 }
 const mappedSets = new WeakMap<object, MappedCrossing[]>();
 /** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
@@ -186,23 +187,27 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
-      .map((l) => ({ line: l.line, grade: l.layer ?? walk.nodes[l.from]!.layer }));
+      .map((l) => ({
+        line: l.line,
+        grade: l.layer ?? walk.nodes[l.from]!.layer,
+        ...(l.marking ? { marking: l.marking } : {}),
+      }));
     mappedSets.set(walk.links, set);
   }
   return set;
 }
 
-/** TASK-217 (D1): whether a mapped crossing way crosses a lane centreline of the arm of a road
- * end within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a
- * short road belongs to one of its ends). */
+/** TASK-217 (D1): the mapped crossing ways that cross a lane centreline of the arm of a road end
+ * within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a short
+ * road belongs to one of its ends). */
 function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: CrossingSource) {
   const links = mappedCrossings(source);
-  if (!links.length) return false;
+  if (!links.length) return [];
   const node = city.nodes[atEnd ? road.to : road.from]!;
   const arm = crossingArms(city, node).find((a) =>
     a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
   )!;
-  return links.some((link) =>
+  return links.filter((link) =>
     arm.some(
       (e) =>
         link.grade === e.road.grade &&
@@ -220,11 +225,13 @@ function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: Cro
 /** TASK-217 (D1): how a road end's crossing is painted; it changes nothing else (place, span,
  * stop line, walk link). `signal`: at a signalized node the two broken lines of a signalised
  * crossing (German practice: no zebra under signals), also where a mapped crossing leads the arm
- * within `SIGNAL_NEAR_M` of a signalized node; `zebra`: where a mapped crossing way leads the
- * arm (`mappedArm`), where an edit turned the crossing on, and at the default crossings of roads
- * drawn by hand; `none`: a default crossing of an imported road where OSM maps none near the arm
- * (TASK-216's D1: 155 of 167 drawn crossings at the Hauptbahnhof lay over 4 m from any mapped
- * one; a mapped city maps its marked crossings). */
+ * within `SIGNAL_NEAR_M` of a signalized node, or (TASK-257) where every painted one leading it
+ * is marked with lines; `zebra`: where a mapped crossing way leads the arm (`mappedArm`), where
+ * an edit turned the crossing on, and at the default crossings of roads drawn by hand; `none`: a
+ * default crossing of an imported road where OSM maps none near the arm (TASK-216's D1: 155 of
+ * 167 drawn crossings at the Hauptbahnhof lay over 4 m from any mapped one; a mapped city maps
+ * its marked crossings), and (TASK-257) one away from a signalized node whose mapped crossings
+ * all say unmarked (`marking: 'none'`), unless an edit turned it on. */
 export type CrossingStyle = 'zebra' | 'signal' | 'none';
 export function crossingStyle(
   city: CompiledCity,
@@ -233,8 +240,15 @@ export function crossingStyle(
   source?: CrossingSource,
 ): CrossingStyle {
   const node = city.nodes[atEnd ? road.to : road.from]!;
+  // The walk lights stand at its ends (TASK-111): a signalised crossing whatever OSM paints.
   if (node.signal !== null) return 'signal';
-  if (mappedArm(city, road, atEnd, source)) {
+  const leading = mappedArm(city, road, atEnd, source);
+  const painted = leading.filter((link) => link.marking !== 'none');
+  const canonical = source?.roads?.[road.id];
+  const edited = canonical?.crossings?.[atEnd ? 'end' : 'start'] === true;
+  const unmarked = leading.length > 0 && !painted.length && !edited;
+  if (painted.length) {
+    if (painted.every((link) => link.marking === 'lines')) return 'signal';
     const points = crossingPlacement(city, road, atEnd).stripes.flat();
     const centre = points.length
       ? {
@@ -244,9 +258,8 @@ export function crossingStyle(
       : node.pos;
     return nearSignal(city, centre) ? 'signal' : 'zebra';
   }
-  const canonical = source?.roads?.[road.id];
-  if (canonical?.crossings?.[atEnd ? 'end' : 'start'] === true) return 'zebra';
-  return canonical?.provenance.source === 'osm' ? 'none' : 'zebra';
+  if (edited) return 'zebra';
+  return unmarked || canonical?.provenance.source === 'osm' ? 'none' : 'zebra';
 }
 
 /** TASK-217 (D1): a mapped crossing this close to a signalized node is a signalised crossing,
