@@ -2054,6 +2054,16 @@ the engine's head choices without changing route search or its request/result co
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
 
+TASK-208: a head alternative into another lane of the blocked movement's own next road is not
+taken when its route needs at least two more lane changes after that road than the route from the
+blocked movement's landing lane. Such a lane gets round a car standing on the next road, but not
+round a queue beyond it: its route runs beside the queue and has to change back into it. In Munich
+the heads on `r:53` and `r:1306`, refused into `r:700` lane 1 by the jughandle's queue, took lane
+0, whose route needs two changes into that queue on `r:698` and `r:654`; most missed the turn.
+TASK-223: an alternative needing one more change is still taken. Refusing those too (TASK-208's
+first form) held heads at many other Munich stop lines and raised fixed-time delay by 6.7%; the
+two-change threshold keeps almost all of the `r:654` reduction.
+
 Detour reroutes (TASK-193). The reroute after a head detour, and after every missed turn taken
 by a lane fallback (including the chain chosen through a junction group), avoids coming back
 over roads the trip has already driven, the road it is leaving among them. When the plain route

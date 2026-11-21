@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
-import type { TripRequest } from '../../src/schema';
+import type { Road, TripRequest } from '../../src/schema';
 import { createRouteProvider, freeFlowLinkCosts, type RouteRequest } from '../../src/routing';
 import { simParamsSchema } from '../../src/schema/demand.schema';
 import { createEngine } from '../../src/sim/engine';
@@ -421,4 +421,116 @@ test('T58 detours preserve conflict-zone safety and the same-seed state hash', (
   }
   expect(engines[0]!.inspect(2)!.routeReason).toBe('missed_turn');
   expect(DEFAULT_SIM_PARAMS.headDetourS).toBe(45);
+});
+
+// TASK-208: Munich's queue heads on r:53 and r:1306, refused into r:700 lane 1 by the jughandle's
+// queue in lane 2 beyond it, detoured into r:700 lane 0, whose route needs two changes back into
+// that queue on r:698 and r:654; most missed and went round the ring. Here a one-lane approach
+// enters both lanes of a short road; only the right lane's continuation reaches the destination
+// road, and it is a standing queue (cars waiting for a closed place). The left lane is free but
+// its route has to change back into the queue further on: across one lane of the long road when
+// it has two (TASK-223 still takes that detour), across two when it has three.
+function queueBeyond(longLanes: 2 | 3) {
+  const { city, node, road, place } = buildCity('Queue beyond', 1);
+  const start = node(0, 0),
+    j = node(100, 0),
+    k = node(112, 0),
+    m = node(212, 0);
+  const approach = road(start, j);
+  const side = road(node(100, -300), j);
+  const short = road(j, k, { lanes: 2 });
+  const long = road(k, m, { lanes: longLanes });
+  const right = longLanes - 1;
+  const onward = road(m, node(400, 0));
+  const elsewhere = road(m, node(212, 300));
+  const provenance = { source: 'authored' } as const;
+  const only = (at: typeof j, from: Road, to: Road, pairs: [number, number][]) => {
+    at.turnRules.push({ from: from.id, to: to.id, allowed: false, provenance });
+    for (const [fromLane, toLane] of pairs)
+      at.turnRules.push({ from: from.id, to: to.id, fromLane, toLane, allowed: true, provenance });
+  };
+  only(j, approach, short, [
+    [0, 0],
+    [0, 1],
+  ]);
+  only(j, side, short, [[0, 1]]);
+  only(k, short, long, [
+    [0, 0],
+    [1, right],
+  ]);
+  only(m, long, onward, [[right, 0]]);
+  only(
+    m,
+    long,
+    elsewhere,
+    Array.from({ length: right }, (_, lane): [number, number] => [lane, 0]),
+  );
+  // Cars from the side road waiting for a closed place on the onward road fill it back across
+  // the junction, the long road's right lane, the short road's right lane and the side road.
+  place('Closed', 'work', m.pos, [{ road: onward, direction: 'in', positionM: 150 }]);
+  Object.values(city.places).at(-1)!.capacity = 0;
+  place('Side', 'gateway', node(100, -300).pos, [{ road: side, direction: 'out', positionM: 5 }]);
+  place('Origin', 'gateway', start.pos, [{ road: approach, direction: 'out', positionM: 5 }]);
+  place('Destination', 'work', m.pos, [{ road: onward, direction: 'in', positionM: 160 }]);
+  // From the onward and the other road a car can come back round to the approach.
+  const back = node(400, -200);
+  road(city.nodes[onward.to]!, back);
+  road(city.nodes[elsewhere.to]!, back);
+  road(back, start);
+  const [closed, sideOrigin, origin, destination] = Object.values(city.places);
+  const trip = (i: number, from: string, to: string, departS: number): TripRequest => ({
+    id: `trip:${i}`,
+    personId: null,
+    originPlaceId: from,
+    destinationPlaceId: to,
+    departS,
+    mode: 'car',
+    vehicleClass: 'car',
+    purpose: 'private',
+    legs: [],
+  });
+  const trips = [
+    ...Array.from({ length: 50 }, (_, i) => trip(i, sideOrigin!.id, closed!.id, 100 + 3 * i)),
+    trip(50, origin!.id, destination!.id, 300),
+  ];
+  return { compiled: setup(city), trips, approach, short };
+}
+
+function queueHead(longLanes: 2 | 3) {
+  const { compiled, trips, approach, short } = queueBeyond(longLanes);
+  const left = compiled.index.lane.get(`${short.id}#0`)!;
+  const engine = createEngine();
+  engine.load({
+    compiled,
+    trips,
+    scenario: scenario(),
+    params: {
+      headDetourS: 5,
+      maxReplans: 0,
+      gridlock: { ...DEFAULT_SIM_PARAMS.gridlock, respawnS: Infinity },
+    },
+  });
+  const lanes = new Set<number>();
+  for (let step = 0; step < 6000; step++) {
+    engine.step();
+    lanes.add(engine.inspect(trips.length)?.lane ?? -1);
+  }
+  const car = engine.inspect(trips.length)!;
+  return {
+    car,
+    onApproach: compiled.lanes[car.lane]!.road === compiled.index.road.get(approach.id),
+    tookLeft: lanes.has(left),
+  };
+}
+
+test('TASK-208 a queue head does not detour into a lane of its next road that leads back into the queue across two lanes', () => {
+  // It waits at the head of the approach for the right lane.
+  const { car, onApproach, tookLeft } = queueHead(3);
+  expect(car).toMatchObject({ state: 'driving', routeReason: 'initial' });
+  expect(onApproach).toBe(true);
+  expect(tookLeft).toBe(false);
+});
+
+test('TASK-223 a queue head still detours into a lane one change away from the queue', () => {
+  expect(queueHead(2).tookLeft).toBe(true);
 });

@@ -6,6 +6,7 @@ import {
   reachableLanes,
   roadAccessFilter,
   type LinkCosts,
+  type Route,
   type RouteProvider,
   type RouteRequest,
   type RouteResult,
@@ -338,6 +339,20 @@ function createRun({
       vehicleRouteRequest(vehicles, params, id, lane, 0),
     );
     return avoiding.ok && revisits(avoiding.route.roads) < plain ? avoiding : result;
+  }
+
+  /** Lane changes a route needs after its first road: on each later road, from the lane it
+   * enters by to the lane its next movement leaves from, or to the destination's lane. */
+  function laterChanges(route: Route) {
+    let changes = 0;
+    for (let i = 0; i < route.movements.length; i++) {
+      const entry = compiled.lanes[compiled.movements[route.movements[i]!]!.toLane]!;
+      const leave = route.movements[i + 1];
+      const lane =
+        leave === undefined ? route.targetLanes.at(-1)![0]! : compiled.movements[leave]!.fromLane;
+      changes += Math.abs(compiled.lanes[lane]!.lane - entry.lane);
+    }
+    return changes;
   }
 
   function headRouteFrom(id: number, lane: number) {
@@ -1149,6 +1164,7 @@ function createRun({
       let best = -1;
       let cost = Infinity;
       if (headDestination[id] !== vehicles.destination[id]) unresolvedHeads[id] = undefined;
+      let plannedChanges = -1;
       for (const idx of lane.out) {
         const movement = compiled.movements[idx]!;
         const tail = vehicles.last(movement.toLane);
@@ -1164,6 +1180,22 @@ function createRun({
         )
           continue;
         const result = headRouteFrom(id, movement.toLane);
+        // TASK-208: another lane of the blocked movement's own next road gets round a car
+        // standing on that road, but not round a queue beyond it: a route that needs two or more
+        // lane changes after that road beyond the planned exit's runs beside the queue and has to
+        // merge back into it (Munich r:53 and r:1306 into r:700 lane 0, then two changes into the
+        // jughandle's lane 2 on r:698 and r:654, most of them missed). TASK-223: one extra change
+        // is still taken; refusing it too held heads at many Munich stop lines (fixed-time +6.7%).
+        if (
+          result.ok &&
+          compiled.lanes[movement.toLane]!.road === compiled.lanes[planned.toLane]!.road
+        ) {
+          if (plannedChanges === -1) {
+            const own = headRouteFrom(id, planned.toLane);
+            plannedChanges = own.ok ? laterChanges(own.route) : Infinity;
+          }
+          if (laterChanges(result.route) >= plannedChanges + 2) continue;
+        }
         if (
           result.ok &&
           !result.route.movements.includes(planned.idx) &&
