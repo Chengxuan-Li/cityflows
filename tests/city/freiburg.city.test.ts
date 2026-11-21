@@ -253,7 +253,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
   // TASK-255: stop lines at the signals mapped before their junctions (TASK-218's D4), whose
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
-  expect(morning.stateHash).toBe(1024213382);
+  // TASK-265: the zebras mapped as crossing nodes at n:7, n:8, n:211 and n:254 (signal exit) stand
+  // on their nodes, with their walkers and conflict zones (1,518 completed, 65.8 to 66.9 s).
+  expect(morning.stateHash).toBe(3774208755);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

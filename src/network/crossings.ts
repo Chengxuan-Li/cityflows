@@ -210,9 +210,9 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
  * points where it meets the end's lane centrelines within `MAPPED_M` of the cut and in the half
  * of the lane nearer the node (as `mappedArm`); of several, the one nearest the cut. Null where
  * OSM maps none there. Crossing ways keep TASK-140's anchoring onto the curb rule's band: moving
- * the band onto them too (the first version) moved 98 Munich zebra ends, 89 of them a median 4 m
- * nearer the junction, into the drawn curb returns, and cost Munich seed 1 9% (actuated, choice
- * off).
+ * the band onto them too (the first version) moved 98 Munich zebra ends, most of them about 4 m
+ * nearer the junction, into the drawn curb returns, and Munich 0.15 seed 1 (choice off) lost about
+ * 10% in both signal modes.
  */
 function mappedCentreM(
   city: CompiledCity,
@@ -332,7 +332,12 @@ const MOVE_OUT_M = 6;
  * do not move out (their stop line follows the crossing, and each metre out is a metre less
  * storage and a longer start at green: Munich at 0.15 gridlocked 75 times with the move-out, 41
  * without); their stop line lies behind the crossing (`populateStops`), and where it would fall
- * in a lane's first half the end has no stripes and keeps TASK-072's stop.
+ * in a lane's first half the end has no stripes and keeps TASK-072's stop. TASK-265: where OSM
+ * maps a crossing node on the end (`mappedCentreM`), the band is centred on it instead (no nearer
+ * than 0.25 m from the cut, no move-out), so the stripes, the walk link (`crossingCentreM`), the
+ * walker conflict zone and the stop line stand where it is mapped; a node inside the drawn curb
+ * returns keeps the band there, its stripes only 0.2 m clear of the curb; where that leaves no
+ * stripe, or a served signal's stop line in a lane's first half, the curb rule places the band.
  */
 export function crossingPlacement(
   city: CompiledCity,
