@@ -210,6 +210,7 @@ export interface ParkingFacility {
  * only; sidewalks along streets and walk links over crossings are derived at compile. */
 export type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 'crossing';
 export type CrossingMarking = 'zebra' | 'lines' | 'none';
+export type HandrailSide = 'left' | 'right' | 'center';
 
 export interface WalkNode {
   id: WalkNodeId;
@@ -230,6 +231,13 @@ export interface WalkLink {
    * stripes, two lines along its edges, or none. Absent = not stated: painted as before (zebra,
    * or a signalised crossing's lines near a signal). */
   marking?: CrossingMarking;
+  /** TASK-275: a roof over the way as OSM maps it (`covered`, `bridge=covered`). Absent = not
+   * stated: drawn open as before. */
+  covered?: boolean;
+  /** TASK-275: the handrails OSM maps on the way, left and right in the link's direction
+   * (`handrail`, `handrail:left|right|center`); empty = none. Absent = not stated: railings as
+   * before. */
+  handrail?: HandrailSide[];
   widthM: number | null;
   provenance: Provenance;
 }

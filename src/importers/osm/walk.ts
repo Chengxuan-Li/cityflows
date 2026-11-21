@@ -10,6 +10,7 @@ import {
   allocateId,
   type City,
   type CrossingMarking,
+  type HandrailSide,
   type Road,
   type WalkKind,
   type WalkNode,
@@ -128,6 +129,8 @@ export function importWalk(
     const layer = osmLayer(way.tag) ?? 0;
     const width = Number(way.tag.width?.replace(/\s*m$/, ''));
     const marked = kind === 'crossing' ? wayMarking(way, sourceNodes) : undefined;
+    const covered = walkCovered(way.tag),
+      handrail = walkHandrail(way.tag);
     let run: RoadPoint[] = [];
     const flush = () => {
       for (const part of clipPart(run, bounds, `walk/${way.id}`, new Set())) {
@@ -146,6 +149,8 @@ export function importWalk(
             line: [from.pos, to.pos],
             kind,
             ...(marking ? { marking } : {}),
+            ...(covered ? { covered } : {}),
+            ...(handrail ? { handrail } : {}),
             layer,
             widthM: width > 0 && Number.isFinite(width) ? width : null,
             provenance: { source: 'osm', osmIds: [way.id] },
@@ -173,6 +178,39 @@ export function importWalk(
     addNode({ key: String(node.id), osmId: node.id, pos }, osmLayer(node.tag) ?? 0);
   }
   city.walk = walk;
+}
+
+/** TASK-275: a way under a roof: `covered=yes|roof|canopy|arcade|colonnade`, or a covered bridge
+ * (`bridge=covered`, the Schwabentorsteg). `covered=no`, `pergola` and other values say no roof. */
+export function walkCovered(tags: OsmTags): boolean {
+  return (
+    ['yes', 'roof', 'canopy', 'arcade', 'colonnade'].includes(tags.covered ?? '') ||
+    tags.bridge === 'covered'
+  );
+}
+
+const handrailSides = ['left', 'right', 'center'] as const;
+
+/**
+ * TASK-275: a way's handrails from its OSM tags, sides in the way's direction. `handrail=yes|both`
+ * gives left and right, `left`, `right` or `center` that one, `no` none; then each
+ * `handrail:left|right|center=yes|no` adds or removes its side (the finer tag wins: mappers write
+ * `handrail=no` with `handrail:left=yes` and `handrail:right=yes`, Freiburg 24740545). Once any of
+ * these tags says something, a side none names has no handrail. Undefined where none does.
+ */
+export function walkHandrail(tags: OsmTags): HandrailSide[] | undefined {
+  const base = tags.handrail;
+  const sides = new Set<HandrailSide>();
+  if (base === 'yes' || base === 'both') sides.add('left').add('right');
+  else if (base === 'left' || base === 'right' || base === 'center') sides.add(base);
+  let stated = base === 'no' || sides.size > 0;
+  for (const side of handrailSides) {
+    const value = tags[`handrail:${side}`];
+    if (value === 'yes') sides.add(side);
+    else if (value === 'no') sides.delete(side);
+    stated ||= value === 'yes' || value === 'no';
+  }
+  return stated ? handrailSides.filter((side) => sides.has(side)) : undefined;
 }
 
 /**

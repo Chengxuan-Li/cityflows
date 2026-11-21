@@ -311,7 +311,8 @@ type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 
 interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
   entrance?: { placeId: PlaceId | null }; provenance: Provenance }
 interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
-  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; widthM: number | null; layer?: number;
+  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; covered?: boolean;
+  handrail?: ('left' | 'right' | 'center')[]; widthM: number | null; layer?: number;
   provenance: Provenance }
 ~~~
 
@@ -3213,6 +3214,22 @@ the city, and roads retain the strongest tone.
   signalized node keeps them whatever OSM marks (its walk lights stand there); otherwise
   TASK-217's rule (broken lines near a signal, a zebra elsewhere). The walk graph, crossing
   controls, spans, stop lines and the simulation do not read it.
+- TASK-275 (owner-approved fields): a walk link's optional `covered` and `handrail`, read by the
+  importer from its way (`walkCovered`, `walkHandrail`). `covered`: `covered=yes|roof|canopy|
+  arcade|colonnade` or `bridge=covered`, stored only when true. `handrail`: the sides with a
+  handrail, left and right in the link's direction: `handrail=yes|both` left and right,
+  `left|right|center` that one, `no` none, then `handrail:left|right|center=yes|no` adds or
+  removes its side; once any of these says something, an unnamed side has none (`[]`). Absent
+  (no tag says, and every older file) draws as before. 3D only (`render3d/footbridges.ts`): on a
+  footbridge (TASK-262) a side the tag does not name has no railing; a named side keeps the
+  open-edge rule, and on stairs runs the whole flight (also beside a wall); ends keep the rule; a
+  stair flight at grade carries its named handrails; `center` draws a rail along the line. A
+  covered way, raised or at grade (layer 0, both nodes at grade), gets a light canopy 3 m over its
+  paving (pieces of at most 2 m) on posts along its sides wherever nothing stands over it: no
+  footbridge roof (TASK-262's canopy), no building taller than the paving, no road, junction,
+  walk or platform surface more than 1 m above it, no track on a bridge within 2.2 m; at grade the
+  paving under buildings and roofs is not drawn. The walk graph and the simulation do not read
+  them.
 - TASK-091 (B46): a centre line (a two-way street's, or the solid median edge of TASK-089) ends
   at the junction mouth: it is clipped out of both its nodes' outlines, also where an outline
   reaches back over the approach (TASK-079's stretch drawn above the junction now applies to

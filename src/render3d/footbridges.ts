@@ -20,7 +20,7 @@ import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CWalkLink } from '../network';
 import type { CityGeometry } from '../render/types';
 import { walkGeometry, type WalkShape } from '../render/walk-geometry';
-import type { ContextAreaFeature, ContextFeature } from '../schema';
+import type { ContextAreaFeature, ContextFeature, HandrailSide } from '../schema';
 import { roadSurfaceAt, type cityHeights } from './heights';
 import { walkHeight } from './walk';
 
@@ -46,6 +46,11 @@ export const footbridgeSize = {
   /** A roof is a deck's canopy when most of it lies within this of the deck's centre line. */
   canopyReachM: 4,
   canopyPostSpacingM: 5,
+  /** TASK-275: a covered way's own canopy (no roof mapped over it): its slab depth. */
+  lightCanopyDepthM: 0.12,
+  /** TASK-275: a bridge track's deck reaches this far from its centre line (half a bed, the
+   * deck's 1 m beyond it, and a margin). */
+  trackOverM: 3.5,
 };
 
 /** A walkable surface or a building, to tell an open deck edge (a drop) from one that meets
@@ -107,13 +112,28 @@ export function isFootbridge(city: CompiledCity, link: CWalkLink) {
   );
 }
 
+/** A drawn walk way with its paving height and the TASK-275 tags of its mapped way. */
+interface Way {
+  shape: WalkShape;
+  z: (p: Vec2) => number;
+  handrail?: HandrailSide[];
+  covered: boolean;
+}
+
 interface Model {
-  bridges: { shape: WalkShape; z: (p: Vec2) => number }[];
+  bridges: Way[];
+  /** TASK-275: stair flights off the decks whose handrails OSM maps, and covered ways at grade. */
+  flights: Way[];
+  coveredGround: Way[];
   floors: Floor[];
   floorIndex: Flatbush;
   tracks: Vec2[][];
+  /** TASK-275: a bridge track's deck level (its layer, at least 1), else 0. */
+  trackDecks: number[];
   trackIndex: Flatbush | undefined;
   canopies: Map<ContextAreaFeature, number>;
+  /** Every `building=roof`: TASK-275 keeps a light canopy from under one. */
+  roofs: ContextAreaFeature[];
 }
 
 const models = new WeakMap<Heights, { source: CityGeometry; model: Model }>();
@@ -124,16 +144,35 @@ function model(city: CompiledCity, source: CityGeometry, heights: Heights): Mode
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
   const shapes = walkGeometry(city, source);
   const floors: Floor[] = [];
-  const bridges: Model['bridges'] = [];
+  const bridges: Way[] = [],
+    flights: Way[] = [],
+    coveredGround: Way[] = [];
   for (const shape of shapes) {
-    const z = walkHeight(city, heights, shape.link);
+    const l = shape.link;
+    const z = walkHeight(city, heights, l);
     floors.push({
       box: bounds(shape.polygons.flat()),
       shape,
       inside: (p) => shape.polygons.some((t) => inTriangle(p, t)),
       z,
     });
-    if (isFootbridge(city, shape.link)) bridges.push({ shape, z });
+    // A compiled piece of a mapped way keeps its id before the slash and its direction.
+    const mapped = l.generated ? undefined : source.walk?.links[l.id.split('/')[0]!];
+    const way: Way = { shape, z, handrail: mapped?.handrail, covered: mapped?.covered === true };
+    if (isFootbridge(city, l)) bridges.push(way);
+    else if (
+      way.handrail &&
+      l.kind === 'steps' &&
+      Math.abs(z(l.line[0]!) - z(l.line.at(-1)!)) >= 0.3
+    )
+      flights.push(way);
+    if (
+      way.covered &&
+      l.layer === 0 &&
+      city.walk.nodes[l.from]!.layer === 0 &&
+      city.walk.nodes[l.to]!.layer === 0
+    )
+      coveredGround.push(way);
   }
   for (const road of city.roads) {
     const ring = closed(road.surface);
@@ -186,9 +225,11 @@ function model(city: CompiledCity, source: CityGeometry, heights: Heights): Mode
   for (const floor of floors) floorIndex.add(...floor.box);
   if (!floors.length) floorIndex.add(0, 0, 0, 0);
   floorIndex.finish();
-  const tracks = (city.rail?.tracks ?? [])
-    .filter((t) => !t.tunnel)
-    .flatMap((t) => t.line.slice(1).map((b, i) => [t.line[i]!, b]));
+  const open = (city.rail?.tracks ?? []).filter((t) => !t.tunnel);
+  const tracks = open.flatMap((t) => t.line.slice(1).map((b, i) => [t.line[i]!, b]));
+  const trackDecks = open.flatMap((t) =>
+    t.line.slice(1).map(() => (t.bridge && !t.covered ? Math.max(1, t.layer) : 0)),
+  );
   let trackIndex: Flatbush | undefined;
   if (tracks.length) {
     trackIndex = new Flatbush(tracks.length);
@@ -197,9 +238,13 @@ function model(city: CompiledCity, source: CityGeometry, heights: Heights): Mode
   }
   const result: Model = {
     bridges,
+    flights,
+    coveredGround,
     floors,
     floorIndex,
     tracks,
+    trackDecks,
+    roofs,
     trackIndex,
     canopies: new Map(),
   };
@@ -265,20 +310,34 @@ export interface FootbridgeCounts {
   railingM: number;
   canopies: number;
   canopyPosts: number;
+  /** TASK-275: raised ways and stair flights whose railings follow their mapped `handrail`, and
+   * the length of their centre handrails. */
+  handrailLinks: number;
+  centerRailM: number;
+  /** TASK-275: covered ways (raised, or at grade), those that get a canopy of their own, its
+   * area and posts. */
+  coveredLinks: number;
+  lightCanopies: number;
+  lightCanopyM2: number;
+  lightCanopyPosts: number;
 }
 
-/** Decks with depth and fascias, railings along open edges, piers and canopy posts. */
+/** Decks with depth and fascias, railings along open edges, piers and canopy posts; TASK-275:
+ * railings by the mapped `handrail`, and a light canopy over covered ways with nothing over them. */
 export function buildFootbridges(city: CompiledCity, source: CityGeometry, heights: Heights) {
   const m = model(city, source, heights);
   const size = footbridgeSize;
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
   const deck: number[] = [],
-    rails: number[] = [];
+    rails: number[] = [],
+    canopy: number[] = [];
   const posts: { p: Vec2; base: number; top: number }[] = [];
-  const postGrids = new Map<number, Set<string>>();
-  const addPost = (p: Vec2, base: number, top: number, spacing: number) => {
+  const postGrids = new Map<string, Set<string>>();
+  /** `grid`: posts in one grid keep `spacing` apart (TASK-275: one per canopy side). */
+  const addPost = (p: Vec2, base: number, top: number, spacing: number, grid = '') => {
     const cell = spacing * 0.8;
-    const postGrid = postGrids.get(spacing) ?? postGrids.set(spacing, new Set()).get(spacing)!;
+    const key = `${spacing}${grid}`;
+    const postGrid = postGrids.get(key) ?? postGrids.set(key, new Set()).get(key)!;
     const cx = Math.floor(p.x / cell),
       cy = Math.floor(p.y / cell);
     for (let dx = -1; dx <= 1; dx++)
@@ -307,6 +366,44 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
       if (pointInPolygon(p, ring)) return ground(p) + lifted;
     return undefined;
   };
+  const roofRings = m.roofs.map((roof) => ({
+    ring: closed(roof.rings[0]!),
+    box: bounds(roof.rings[0]!),
+    under: m.canopies.get(roof) ?? roof.minHeightM ?? 3,
+  }));
+  /** TASK-275: whether something stands over the paving at `p`, height `z`: a roof (a footbridge
+   * canopy or any `building=roof`) above it, a building taller than it, a road, junction, walk or
+   * platform surface more than 1 m above it, or a bridge track's deck (within `trackOverM` of its
+   * centre line) more than 1 m above it. */
+  const over = (p: Vec2, z: number) => {
+    for (const { ring, box, under } of roofRings)
+      if (
+        p.x >= box[0] &&
+        p.y >= box[1] &&
+        p.x <= box[2] &&
+        p.y <= box[3] &&
+        ground(p) + under > z &&
+        pointInPolygon(p, ring)
+      )
+        return true;
+    for (const i of m.floorIndex.search(p.x, p.y, p.x, p.y)) {
+      const floor = m.floors[i]!;
+      if (floor.inside(p) && floor.z(p) > z + 1) return true;
+    }
+    if (m.trackIndex)
+      for (const i of m.trackIndex.search(
+        p.x - size.trackOverM,
+        p.y - size.trackOverM,
+        p.x + size.trackOverM,
+        p.y + size.trackOverM,
+      )) {
+        const [a, b] = m.tracks[i]!,
+          deck = m.trackDecks[i]!;
+        if (deck && ground(p) + deck * 5 > z + 1 && segmentDistance(p, a!, b!) < size.trackOverM)
+          return true;
+      }
+    return false;
+  };
   const counts: FootbridgeCounts = {
     bridges: 0,
     links: m.bridges.length,
@@ -315,34 +412,59 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
     railingM: 0,
     canopies: m.canopies.size,
     canopyPosts: 0,
+    handrailLinks: 0,
+    centerRailM: 0,
+    coveredLinks: 0,
+    lightCanopies: 0,
+    lightCanopyM2: 0,
+    lightCanopyPosts: 0,
   };
   const quad = (target: number[], a: number[], b: number[], c: number[], d: number[]) =>
     target.push(...a, ...b, ...c, ...a, ...c, ...d);
-  for (const { shape, z } of m.bridges) {
-    const raised = (p: Vec2) => z(p) - ground(p);
-    const l = shape.link;
-    const curved =
-      city.walk.nodes[l.from]!.layer !== l.layer || city.walk.nodes[l.to]!.layer !== l.layer;
-    // The deck's underside follows the paving's triangles, split on ramps as the paving is.
-    const under = (tri: Vec2[]) => {
-      const lengths = tri.map((p, i) =>
-        Math.hypot(p.x - tri[(i + 1) % 3]!.x, p.y - tri[(i + 1) % 3]!.y),
-      );
-      const edge = lengths.indexOf(Math.max(...lengths));
-      if (curved && lengths[edge]! > 2) {
-        const a = tri[edge]!,
-          b = tri[(edge + 1) % 3]!,
-          c = tri[(edge + 2) % 3]!;
-        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        under([a, mid, c]);
-        under([mid, b, c]);
-        return;
-      }
-      if (!tri.some((p) => raised(p) > 0.3)) return;
-      for (const p of tri) deck.push(p.x, Math.max(ground(p), z(p) - size.deckM), p.y);
-    };
-    for (const tri of shape.polygons) under(tri);
-    // Boundary edges: those of one triangle only, facing away from its third corner.
+  /** A handrail (a band and its top) and a knee rail from `p0` to `p1` at paving heights `z0`,
+   * `z1`, 4 cm inside an edge whose outward normal is `n`, with its posts. */
+  const railing = (p0: Vec2, p1: Vec2, z0: number, z1: number, nx: number, ny: number) => {
+    const i0 = { x: p0.x - nx * 0.04, y: p0.y - ny * 0.04 },
+      i1 = { x: p1.x - nx * 0.04, y: p1.y - ny * 0.04 };
+    const top0 = z0 + size.railM,
+      top1 = z1 + size.railM;
+    quad(
+      rails,
+      [i0.x, top0, i0.y],
+      [i1.x, top1, i1.y],
+      [i1.x, top1 - 0.06, i1.y],
+      [i0.x, top0 - 0.06, i0.y],
+    );
+    quad(
+      rails,
+      [i0.x, top0, i0.y],
+      [i1.x, top1, i1.y],
+      [i1.x - nx * 0.06, top1, i1.y - ny * 0.06],
+      [i0.x - nx * 0.06, top0, i0.y - ny * 0.06],
+    );
+    quad(
+      rails,
+      [i0.x, z0 + 0.5, i0.y],
+      [i1.x, z1 + 0.5, i1.y],
+      [i1.x, z1 + 0.46, i1.y],
+      [i0.x, z0 + 0.46, i0.y],
+    );
+    addPost(i0, z0, top0, size.postSpacingM);
+  };
+  /**
+   * The paving's boundary edges (those of one triangle only) in pieces of at most 1 m, each with
+   * its edge's outward normal and, for TASK-275's tags, its side of the link in the link's
+   * direction: `left` or `right` within 45 degrees of square to the link, none across an end.
+   */
+  const boundary = (
+    shape: WalkShape,
+    visit: (
+      piece: { p0: Vec2; p1: Vec2; mid: Vec2; lengthM: number; first: boolean },
+      nx: number,
+      ny: number,
+      side: 'left' | 'right' | undefined,
+    ) => void,
+  ) => {
     const ids = new Map<Vec2, number>();
     const id = (p: Vec2) => {
       let i = ids.get(p);
@@ -372,8 +494,14 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
         nx = -nx;
         ny = -ny;
       }
+      // The left of a heading d is (d.y, -d.x) with y south (`offsetPolyline`'s right is -that).
+      const d = nearestOnPolyline(shape.link.line, {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+      }).direction;
+      const left = nx * d.y - ny * d.x;
+      const side = left > Math.SQRT1_2 ? 'left' : left < -Math.SQRT1_2 ? 'right' : undefined;
       const pieces = Math.ceil(length / 1);
-      let run = false;
       for (let j = 0; j < pieces; j++) {
         const p0 = { x: a.x + ((b.x - a.x) * j) / pieces, y: a.y + ((b.y - a.y) * j) / pieces };
         const p1 = {
@@ -381,14 +509,66 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
           y: a.y + ((b.y - a.y) * (j + 1)) / pieces,
         };
         const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-        const zm = z(mid),
-          h = zm - ground(mid);
-        if (h <= 0.3 || meets({ x: mid.x + nx * 0.3, y: mid.y + ny * 0.3 }, zm, shape)) {
-          run = false;
-          continue;
-        }
-        const z0 = z(p0),
-          z1 = z(p1);
+        visit({ p0, p1, mid, lengthM: length / pieces, first: j === 0 }, nx, ny, side);
+      }
+    }
+  };
+  /** TASK-275: a centre handrail along the link's line. */
+  const centreRail = ({ shape, z }: Way) => {
+    const line = shape.link.line;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1]!,
+        b = line[i]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length < 1e-3) continue;
+      const pieces = Math.ceil(length / 1);
+      for (let j = 0; j < pieces; j++) {
+        const p0 = { x: a.x + ((b.x - a.x) * j) / pieces, y: a.y + ((b.y - a.y) * j) / pieces };
+        const p1 = {
+          x: a.x + ((b.x - a.x) * (j + 1)) / pieces,
+          y: a.y + ((b.y - a.y) * (j + 1)) / pieces,
+        };
+        railing(p0, p1, z(p0), z(p1), -(b.y - a.y) / length, (b.x - a.x) / length);
+        counts.centerRailM += length / pieces;
+      }
+    }
+  };
+  for (const way of m.bridges) {
+    const { shape, z, handrail } = way;
+    const raised = (p: Vec2) => z(p) - ground(p);
+    const l = shape.link;
+    const stairs = l.kind === 'steps';
+    const curved =
+      city.walk.nodes[l.from]!.layer !== l.layer || city.walk.nodes[l.to]!.layer !== l.layer;
+    // The deck's underside follows the paving's triangles, split on ramps as the paving is.
+    const under = (tri: Vec2[]) => {
+      const lengths = tri.map((p, i) =>
+        Math.hypot(p.x - tri[(i + 1) % 3]!.x, p.y - tri[(i + 1) % 3]!.y),
+      );
+      const edge = lengths.indexOf(Math.max(...lengths));
+      if (curved && lengths[edge]! > 2) {
+        const a = tri[edge]!,
+          b = tri[(edge + 1) % 3]!,
+          c = tri[(edge + 2) % 3]!;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        under([a, mid, c]);
+        under([mid, b, c]);
+        return;
+      }
+      if (!tri.some((p) => raised(p) > 0.3)) return;
+      for (const p of tri) deck.push(p.x, Math.max(ground(p), z(p) - size.deckM), p.y);
+    };
+    for (const tri of shape.polygons) under(tri);
+    if (handrail) counts.handrailLinks++;
+    let run = false;
+    boundary(shape, ({ p0, p1, mid, lengthM, first }, nx, ny, side) => {
+      if (first) run = false;
+      const zm = z(mid),
+        h = zm - ground(mid);
+      const open = h > 0.3 && !meets({ x: mid.x + nx * 0.3, y: mid.y + ny * 0.3 }, zm, shape);
+      const z0 = z(p0),
+        z1 = z(p1);
+      if (open)
         quad(
           deck,
           [p0.x, z0, p0.y],
@@ -396,45 +576,155 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
           [p1.x, Math.max(ground(p1), z1 - size.deckM), p1.y],
           [p0.x, Math.max(ground(p0), z0 - size.deckM), p0.y],
         );
-        if (h < 1) {
-          run = false;
-          continue;
-        }
-        if (!run) counts.railings++;
-        run = true;
-        counts.railingM += length / pieces;
-        // Handrail (a band and its top) and a knee rail, 4 cm inside the edge.
-        const i0 = { x: p0.x - nx * 0.04, y: p0.y - ny * 0.04 },
-          i1 = { x: p1.x - nx * 0.04, y: p1.y - ny * 0.04 };
-        const top0 = z0 + size.railM,
-          top1 = z1 + size.railM;
-        quad(
-          rails,
-          [i0.x, top0, i0.y],
-          [i1.x, top1, i1.y],
-          [i1.x, top1 - 0.06, i1.y],
-          [i0.x, top0 - 0.06, i0.y],
-        );
-        quad(
-          rails,
-          [i0.x, top0, i0.y],
-          [i1.x, top1, i1.y],
-          [i1.x - nx * 0.06, top1, i1.y - ny * 0.06],
-          [i0.x - nx * 0.06, top0, i0.y - ny * 0.06],
-        );
-        quad(
-          rails,
-          [i0.x, z0 + 0.5, i0.y],
-          [i1.x, z1 + 0.5, i1.y],
-          [i1.x, z1 + 0.46, i1.y],
-          [i0.x, z0 + 0.46, i0.y],
-        );
-        addPost(i0, z0, top0, size.postSpacingM);
-        const canopy = canopyAt(mid);
-        if (canopy !== undefined && addPost(mid, zm, canopy, size.canopyPostSpacingM))
-          counts.canopyPosts++;
+      // TASK-262: a railing on an open edge 1 m up. TASK-275: on a side, only where the mapped
+      // `handrail` names it; stairs carry a named handrail along the whole flight, also beside a
+      // wall or near the ground.
+      const ruled = open && h >= 1;
+      const railed = handrail && side ? handrail.includes(side) && (stairs || ruled) : ruled;
+      if (!railed) {
+        run = false;
+        return;
       }
+      if (!run) counts.railings++;
+      run = true;
+      counts.railingM += lengthM;
+      railing(p0, p1, z0, z1, nx, ny);
+      const roof = canopyAt(mid);
+      if (roof !== undefined && addPost(mid, zm, roof, size.canopyPostSpacingM))
+        counts.canopyPosts++;
+    });
+    if (handrail?.includes('center')) centreRail(way);
+  }
+  // TASK-275: stair flights off the decks carry their mapped handrails on the sides it names.
+  for (const way of m.flights) {
+    const { shape, z, handrail } = way;
+    counts.handrailLinks++;
+    let run = false;
+    boundary(shape, ({ p0, p1, lengthM, first }, nx, ny, side) => {
+      if (first) run = false;
+      if (!side || !handrail!.includes(side)) {
+        run = false;
+        return;
+      }
+      if (!run) counts.railings++;
+      run = true;
+      counts.railingM += lengthM;
+      railing(p0, p1, z(p0), z(p1), nx, ny);
+    });
+    if (handrail!.includes('center')) centreRail(way);
+  }
+  // TASK-275: a covered way gets a light canopy, `canopyM` over its paving on posts along its
+  // sides, wherever nothing stands over it (`over`): a raised way under a mapped roof keeps that
+  // roof as its canopy (TASK-262); at grade, the paving under a building is not drawn. Along the
+  // link in 1 m steps, a step is open when its centre line and both edges (0.1 m in) are; the
+  // paving is cut square to the link where open runs begin and end.
+  const top = size.canopyM + size.lightCanopyDepthM;
+  for (const way of [...m.bridges.filter((w) => w.covered), ...m.coveredGround]) {
+    const { shape, z } = way;
+    const l = shape.link;
+    counts.coveredLinks++;
+    const a = l.line[0]!,
+      b = l.line.at(-1)!;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 1e-3) continue;
+    const d = { x: (b.x - a.x) / length, y: (b.y - a.y) / length },
+      n = { x: d.y, y: -d.x };
+    const half = Math.min(l.widthM, 3) / 2;
+    const station = (p: Vec2) => (p.x - a.x) * d.x + (p.y - a.y) * d.y;
+    const at = (s: number, across: number) => ({
+      x: a.x + d.x * s + n.x * across,
+      y: a.y + d.y * s + n.y * across,
+    });
+    const steps = Math.max(1, Math.round(length));
+    const runs: [number, number][] = [];
+    for (let i = 0; i < steps; i++) {
+      const s = ((i + 0.5) * length) / steps;
+      const clear = [0, half - 0.1, 0.1 - half].every((across) => {
+        const p = at(s, across);
+        return !over(p, z(p));
+      });
+      if (!clear) continue;
+      const s0 = (i * length) / steps,
+        s1 = ((i + 1) * length) / steps;
+      if (runs.at(-1)?.[1] === s0) runs.at(-1)![1] = s1;
+      else runs.push([s0, s1]);
     }
+    if (!runs.length) continue;
+    // Runs reaching an end take the paving beyond it too (the round joins at bends).
+    const open = runs.map(([s0, s1]): [number, number] => [
+      s0 === 0 ? -Infinity : s0,
+      s1 > length - 1e-6 ? Infinity : s1,
+    ]);
+    let area = 0;
+    const emit = (tri: Vec2[]) => {
+      area += Math.abs(
+        ((tri[1]!.x - tri[0]!.x) * (tri[2]!.y - tri[0]!.y) -
+          (tri[2]!.x - tri[0]!.x) * (tri[1]!.y - tri[0]!.y)) /
+          2,
+      );
+      for (const lift of [size.canopyM, top])
+        for (const p of tri) canopy.push(p.x, z(p) + lift, p.y);
+    };
+    /** Keeps the part of a convex polygon where `sign * (station - s) >= 0`. */
+    const clip = (polygon: Vec2[], s: number, sign: number) => {
+      if (!Number.isFinite(s)) return polygon;
+      const out: Vec2[] = [];
+      for (let i = 0; i < polygon.length; i++) {
+        const p = polygon[i]!,
+          q = polygon[(i + 1) % polygon.length]!;
+        const fp = sign * (station(p) - s),
+          fq = sign * (station(q) - s);
+        if (fp >= 0) out.push(p);
+        if (fp >= 0 !== fq >= 0) {
+          const t = fp / (fp - fq);
+          out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+        }
+      }
+      return out;
+    };
+    const piece = (tri: Vec2[]) => {
+      // Split to 2 m so the canopy follows a ramp's or a flight's height as the paving does.
+      const lengths = tri.map((p, i) =>
+        Math.hypot(p.x - tri[(i + 1) % 3]!.x, p.y - tri[(i + 1) % 3]!.y),
+      );
+      const edge = lengths.indexOf(Math.max(...lengths));
+      if (lengths[edge]! > 2) {
+        const p = tri[edge]!,
+          q = tri[(edge + 1) % 3]!,
+          r = tri[(edge + 2) % 3]!;
+        const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        piece([p, mid, r]);
+        piece([mid, q, r]);
+        return;
+      }
+      for (const [s0, s1] of open) {
+        const kept = clip(clip(tri, s0, 1), s1, -1);
+        for (let k = 2; k < kept.length; k++) emit([kept[0]!, kept[k - 1]!, kept[k]!]);
+      }
+    };
+    for (const tri of shape.polygons) piece(tri);
+    if (area < 0.01) continue;
+    counts.lightCanopies++;
+    counts.lightCanopyM2 += area;
+    const fascia = (p0: Vec2, p1: Vec2) =>
+      quad(
+        canopy,
+        [p0.x, z(p0) + size.canopyM, p0.y],
+        [p1.x, z(p1) + size.canopyM, p1.y],
+        [p1.x, z(p1) + top, p1.y],
+        [p0.x, z(p0) + top, p0.y],
+      );
+    for (const [s0, s1] of open)
+      for (const s of [s0, s1]) if (Number.isFinite(s)) fascia(at(s, half), at(s, -half));
+    boundary(shape, ({ p0, p1, mid }, nx, ny, side) => {
+      const s = station(mid);
+      if (!open.some(([s0, s1]) => s >= s0 && s <= s1)) return;
+      fascia(p0, p1);
+      const zm = z(mid);
+      const inset = { x: mid.x - nx * 0.1, y: mid.y - ny * 0.1 };
+      if (side && addPost(inset, zm, zm + size.canopyM, size.canopyPostSpacingM, side))
+        counts.lightCanopyPosts++;
+    });
   }
   // Bridges: groups of raised ways joined at a raised walk node (not through the ground).
   const parent = new Map<string, string>();
@@ -568,6 +858,7 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
   };
   mesh(deck, 0x9aa39f, true);
   mesh(rails, 0x56625f, false);
+  mesh(canopy, 0xd3d8d5, true);
   const box = new BoxGeometry(1, 1, 1);
   const transform = new Object3D();
   const pierMesh = new InstancedMesh(
@@ -602,6 +893,8 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
   });
   group.add(pierMesh, postMesh);
   counts.railingM = Math.round(counts.railingM);
+  counts.centerRailM = Math.round(counts.centerRailM);
+  counts.lightCanopyM2 = Math.round(counts.lightCanopyM2);
   return { group, counts, piers };
 }
 

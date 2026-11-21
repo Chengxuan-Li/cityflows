@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
-import { crossingMarking } from '../../src/importers/osm/walk';
+import { crossingMarking, walkCovered, walkHandrail } from '../../src/importers/osm/walk';
 import { compile } from '../../src/network';
 import { crossingStyle } from '../../src/network/crossings';
 import { crossingStripes } from '../../src/render/marking-geometry';
@@ -365,4 +365,61 @@ test('TASK-257: a road end’s crossing paints as the mapped crossings of its ar
   expect(styles(tag('crossing', 'zebra'))).toEqual(['zebra', 'zebra']);
   expect(styles(tag('crossing:markings', 'lines'))).toEqual(['signal', 'signal']);
   expect(styles(tag('crossing', 'unmarked'))).toEqual(['none', 'none']);
+});
+
+test.each([
+  ['handrail=yes', { handrail: 'yes' }, ['left', 'right']],
+  ['handrail=both', { handrail: 'both' }, ['left', 'right']],
+  ['handrail=left', { handrail: 'left' }, ['left']],
+  ['handrail=center', { handrail: 'center' }, ['center']],
+  ['handrail=no', { handrail: 'no' }, []],
+  ['handrail:right=yes alone', { 'handrail:right': 'yes' }, ['right']],
+  [
+    'sides yes, centre no',
+    { 'handrail:left': 'yes', 'handrail:right': 'yes', 'handrail:center': 'no' },
+    ['left', 'right'],
+  ],
+  [
+    'handrail=no, finer sides yes',
+    { handrail: 'no', 'handrail:left': 'yes', 'handrail:right': 'yes', 'handrail:center': 'yes' },
+    ['left', 'right', 'center'],
+  ],
+  ['handrail=yes, right no', { handrail: 'yes', 'handrail:right': 'no' }, ['left']],
+  ['no tag', { highway: 'steps' }, undefined],
+  ['an unknown value alone', { handrail: 'wood' }, undefined],
+] as const)('TASK-275: %s reads as handrails %j', (_, tags, sides) => {
+  expect(walkHandrail(tags)).toEqual(sides);
+});
+
+test.each([
+  [{ covered: 'yes' }, true],
+  [{ covered: 'arcade' }, true],
+  [{ covered: 'colonnade' }, true],
+  [{ bridge: 'covered', layer: '1' }, true],
+  [{ covered: 'no' }, false],
+  [{ covered: 'pergola' }, false],
+  [{ bridge: 'yes' }, false],
+] as const)('TASK-275: %j reads as covered %s', (tags, covered) => {
+  expect(walkCovered(tags)).toBe(covered);
+});
+
+test('TASK-275: walk links carry their way’s covered and handrail tags; untagged ways carry neither', () => {
+  const tagged = xml
+    .replace(
+      '<tag k="highway" v="steps"/>',
+      `<tag k="highway" v="steps"/>${tag('covered', 'yes')}${tag('handrail', 'no')}${tag('handrail:right', 'yes')}`,
+    )
+    .replace('<tag k="highway" v="path"/>', `<tag k="highway" v="path"/>${tag('handrail', 'no')}`);
+  const result = importOsm(tagged, { importerVersion: 'test' });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const links = Object.values(result.city.walk!.links);
+  const of = (kind: string) => links.find((l) => l.kind === kind)!;
+  expect(of('steps')).toMatchObject({ covered: true, handrail: ['right'] });
+  expect(of('path').handrail).toEqual([]);
+  expect('covered' in of('path')).toBe(false);
+  for (const kind of ['footway', 'pedestrian', 'living_street', 'crossing']) {
+    expect('covered' in of(kind)).toBe(false);
+    expect('handrail' in of(kind)).toBe(false);
+  }
+  expect(citySchema.safeParse(result.city).success).toBe(true);
 });
