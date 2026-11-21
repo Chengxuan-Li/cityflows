@@ -185,7 +185,7 @@ const baselines = {
   // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
   // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-  'munich-donnersberger': '9546701887629ab0ffcdef5605e24b6d76f552aa49d51585836fabf62f8ddcf3',
+  'munich-donnersberger': '220cbc2ecf50b83526c0b0299a652946bb89f95f272850ee487a20c8cfb81183',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -195,7 +195,7 @@ const baselines = {
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-  'sindelfingen-a81': 'f0857a99470c223fdeb9349d63a77a2f0dd2fdd652c4e52bf6de51a954320df2',
+  'sindelfingen-a81': 'aa77cd0e0aaf8eb5be3d5ae1a9fb05f3a5fc3a72e72c27192e6bee488f5ac711',
 };
 const lampCounts = {
   grid: [0, 0],

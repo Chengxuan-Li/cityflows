@@ -178,6 +178,11 @@ describe('TASK-279 v2: traffic crawling below walking pace', () => {
   // both directions: the next car always reaches the stripes sooner than the walker needs.
   const crawl = observe(true, true);
 
+  test('a waiting walker holds crawling traffic short of the stripes', () => {
+    // Without the hold a creeping queue came to stand on the crossing (0 such stops).
+    expect(crawl.counts.straightForWaiting).toBeGreaterThan(5);
+  });
+
   test('a walker steps out in front of crawling traffic that can stop, which then stops', () => {
     // Without the rule: mean wait 12.1 s, 19 stops (walkers waited for the queues to thin).
     expect(crawl.walkers.crossings.unmarked).toBeGreaterThan(10);

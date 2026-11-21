@@ -202,7 +202,7 @@ const pins = {
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-    compile: '9546701887629ab0ffcdef5605e24b6d76f552aa49d51585836fabf62f8ddcf3',
+    compile: '220cbc2ecf50b83526c0b0299a652946bb89f95f272850ee487a20c8cfb81183',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
@@ -234,7 +234,7 @@ const pins = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-    compile: 'f0857a99470c223fdeb9349d63a77a2f0dd2fdd652c4e52bf6de51a954320df2',
+    compile: 'aa77cd0e0aaf8eb5be3d5ae1a9fb05f3a5fc3a72e72c27192e6bee488f5ac711',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).

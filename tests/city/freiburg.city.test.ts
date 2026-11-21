@@ -287,8 +287,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
   // Lead merge: TASK-277 and 271 on main, 1,532 completed, 59.8 s.
   // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
-  // turning drivers (1,530 to 1,532 completed, 62.6 to 62.0 s).
-  expect(morning.stateHash).toBe(883105405);
+  // turning drivers and crawling traffic (1,532 to 1,530 completed, 59.8 to 60.1 s).
+  expect(morning.stateHash).toBe(699806056);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

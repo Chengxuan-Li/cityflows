@@ -196,12 +196,17 @@ interface MappedCrossing {
   grade: number;
   marking?: CrossingMarking;
 }
-const mappedSets = new WeakMap<object, MappedCrossing[]>();
-/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
-function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
+const mappedSets = new WeakMap<CompiledCity, WeakMap<object, MappedCrossing[]>>();
+/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. TASK-279:
+ * cached per compiled city too: the importer compiles before it adds the node-only crossings
+ * (TASK-239) to the same `walk.links`, and a list read then left them out of later compiles
+ * (York's two zebras; Munich `n:6`'s differed between a fresh import and the cache). */
+function mappedCrossings(city: CompiledCity, source?: CrossingSource): MappedCrossing[] {
   const walk = source?.walk;
   if (!walk) return [];
-  let set = mappedSets.get(walk.links);
+  let byLinks = mappedSets.get(city);
+  if (!byLinks) mappedSets.set(city, (byLinks = new WeakMap()));
+  let set = byLinks.get(walk.links);
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
@@ -211,7 +216,7 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
         grade: l.layer ?? walk.nodes[l.from]!.layer,
         ...(l.marking ? { marking: l.marking } : {}),
       }));
-    mappedSets.set(walk.links, set);
+    byLinks.set(walk.links, set);
   }
   return set;
 }
@@ -227,7 +232,7 @@ function laneBox(lane: CLane): Box {
  * within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a short
  * road belongs to one of its ends). */
 function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: CrossingSource) {
-  const links = mappedCrossings(source);
+  const links = mappedCrossings(city, source);
   if (!links.length) return [];
   const node = city.nodes[atEnd ? road.to : road.from]!;
   const arm = crossingArms(city, node).find((a) =>

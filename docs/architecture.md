@@ -2271,10 +2271,12 @@ TASK-279: at an `unmarked` crossing a walker has no priority (StVO §25(3)) but 
 turning into the arm (§9(3): a left, right or U-turn movement at the crossing's node into a
 crossed lane, or a vehicle on that lane that entered by one, read from its route). Of the
 vehicles the second rule reads, every turning driver must meet that rule; every other one must
-have passed the span, stand, or reach the span at its current speed no sooner than the walker
-reaches the span's far edge plus `walkClearanceS` (a gap). While waiting in such a gap it holds
-the crossed lanes for turning drivers only (a midblock crossing for none); on the crossing it
-holds them as on a zebra.
+have passed the span, stand, crawl below `walkSpeedMps` able to stop before the span at its
+`bMps2` (v2, as in a jam's creeping queue), or reach the span at its current speed no sooner than
+the walker reaches the span's far edge plus `walkClearanceS` (a gap). While waiting it holds the
+crossed lanes for traffic crawling below `walkSpeedMps` (v2: a creeping queue otherwise came to
+stand on the crossing), and in such a gap also for turning drivers; on the crossing it holds them
+as on a zebra.
 
 A waiting walker that would step out but for the traffic (any zebra walker; a signal walker
 with enough walk green), and a crossing walker for each span it has not passed by

@@ -21,8 +21,9 @@ import { createVehicleProfiles, type Vehicles } from './vehicle';
  * (eligible) and crossing walkers hold the lanes they have not passed by `crossingClearM`: their
  * stripes' near edge is a standing obstacle for every vehicle that can still stop before it.
  * TASK-279: at an unmarked crossing (StVO §25(3)) a walker has priority only over drivers turning
- * into the arm (§9(3)): it steps out in a gap of the other traffic and, while waiting, holds only
- * the turning drivers.
+ * into the arm (§9(3)): it steps out in a gap of the other traffic (standing or crawling below
+ * walking pace counts as one) and, while waiting, holds only crawling traffic and the turning
+ * drivers.
  */
 
 export const WALKER_STATES = [
@@ -276,8 +277,9 @@ export function createWalkers(
     peakActive = Math.max(peakActive, activeCount);
   }
 
-  // Lanes held this step: flat [lo, hi, inside, kind, node] per lane; `node` >= 0 (TASK-279): held
-  // only for drivers turning into the arm there (a walker waiting at an unmarked crossing).
+  // Lanes held this step: flat [lo, hi, inside, kind, node, waiting] per lane. TASK-279: `waiting`
+  // 1 for a walker waiting at an unmarked crossing, which holds only traffic crawling below
+  // walking pace and, in a gap (`node` >= 0), drivers turning into the arm at `node`.
   // TASK-211: allocated whole (a sparse `[]` written at large lane indices becomes a dictionary).
   let blocks = Array<number[] | undefined>(city.lanes.length).fill(undefined);
   let touched: number[] = [];
@@ -587,13 +589,13 @@ export function createWalkers(
       const s = state[id];
       if (s !== WAITING && s !== CROSSING) continue;
       // A waiting walker holds lanes only when it would step out but for the traffic, and not
-      // at a signal crossing no phase serves, where it waits for a gap (TASK-245); at an
-      // unmarked crossing, in a gap, only for drivers turning into the arm (TASK-279).
-      if (s === WAITING && (!green[id] || yields[id])) continue;
+      // at a signal crossing no phase serves, where it waits for a gap (TASK-245). TASK-279: at
+      // an unmarked crossing it holds traffic crawling below walking pace (v2: a creeping queue
+      // otherwise stands on the crossing), and in a gap the drivers turning into the arm.
+      const waiting = s === WAITING && runKind[id] === UNMARKED;
+      if (s === WAITING && !waiting && (!green[id] || yields[id])) continue;
       const position = s === CROSSING ? runPos[id]! : 0;
-      const turning = s === WAITING && runKind[id] === UNMARKED;
       for (const span of runSpans[id]!) {
-        if (turning && span.node < 0) continue;
         if (position > span.at + span.half + params.crossingClearM) continue;
         const inside = s === CROSSING && position >= span.at - span.half - ENTER_M ? 1 : 0;
         let list = blocks[span.lane];
@@ -601,7 +603,14 @@ export function createWalkers(
           blocks[span.lane] = list = [];
           touched.push(span.lane);
         }
-        list.push(span.lo, span.hi, inside, runKind[id]!, turning ? span.node : -1);
+        list.push(
+          span.lo,
+          span.hi,
+          inside,
+          runKind[id]!,
+          waiting && green[id] ? span.node : -1,
+          waiting ? 1 : 0,
+        );
       }
     }
     blocking = touched.length > 0;
@@ -628,6 +637,7 @@ export function createWalkers(
     const position = vehicles.position[id]!;
     const v = vehicles.speed[id]!;
     held.id = id;
+    held.speed = v;
     held.position = position;
     held.braking = (v * v) / (2 * brakeOf(id));
     held.best = Infinity;
@@ -661,18 +671,23 @@ export function createWalkers(
   }
 
   /** The vehicle `hold` asks about, and the nearest held span found so far. */
-  const held = { id: 0, position: 0, braking: 0, best: Infinity };
+  const held = { id: 0, speed: 0, position: 0, braking: 0, best: Infinity };
   /** `via`: the movement by which the vehicle enters `index`; null for its own lane. */
   function check(index: number, offset: number, via: CMovement | null) {
     const list = blocks[index];
     if (!list) return;
-    for (let i = 0; i < list.length; i += 5) {
+    for (let i = 0; i < list.length; i += 6) {
       const at = offset + list[i]!;
       const d = at - held.position;
       if (d < 0 || at >= held.best) continue;
       if (held.braking > d && !list[i + 2]) continue;
       const node = list[i + 4]!;
-      if (node >= 0 && !(via ? turnsInto(via, node) : turnedInto(held.id, index, node))) continue;
+      if (
+        list[i + 5] &&
+        held.speed >= params.walkSpeedMps &&
+        !(node >= 0 && (via ? turnsInto(via, node) : turnedInto(held.id, index, node)))
+      )
+        continue;
       held.best = at;
       heldKind = list[i + 3]!;
       heldInside = list[i + 2]!;
@@ -767,8 +782,8 @@ export function createWalkers(
     holds(lane: number, fromM: number, toM: number) {
       const list = blocking ? blocks[lane] : undefined;
       if (!list) return false;
-      for (let i = 0; i < list.length; i += 5)
-        if (list[i + 4]! < 0 && list[i]! < toM && list[i + 1]! > fromM) return true;
+      for (let i = 0; i < list.length; i += 6)
+        if (!list[i + 5] && list[i]! < toM && list[i + 1]! > fromM) return true;
       return false;
     },
     /** A vehicle's yield this step: binding when its walker stop was its nearest obstacle. */
