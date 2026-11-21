@@ -334,3 +334,108 @@ test('TASK-283 a gateway in a pocket behind a destination street gets only the t
   const { failedByReason } = engine.metrics();
   expect(failedByReason.no_route + failedByReason.no_parking).toBe(0);
 });
+
+test('TASK-288 a person drawn to a gateway their car cannot reach works at one it can', () => {
+  // A loop of public streets with homes, offices and a gateway; east of it Lane, a destination
+  // street, leads to a pocket with a public car park and a second gateway (TASK-283's pocket).
+  // Loop homes reach only the loop gateway, Lane homes both; a cut-off gateway reaches nothing.
+  const { city, node, street, place } = buildCity('Reachable gateways', 288);
+  const [a, b, c, d] = [node(0, 0), node(300, 0), node(300, 300), node(0, 300)];
+  const loop = [street(a, b), street(b, c), street(c, d), street(d, a)];
+  const [e, f] = [node(600, 0), node(900, 0)];
+  const [pocket] = street(e, f);
+  const lane = street(b, e);
+  for (const road of lane) road.access = { all: 'destination' };
+  place('Homes', 'residential', { x: 150, y: -10 }, [
+    { road: loop[0]![0], direction: 'both', positionM: 150 },
+  ]);
+  place('Offices', 'work', { x: 150, y: 310 }, [
+    { road: loop[2]![0], direction: 'both', positionM: 150 },
+  ]);
+  place('Lane homes', 'residential', { x: 450, y: -10 }, [
+    { road: lane[0], direction: 'both', positionM: 100 },
+    { road: lane[1], direction: 'both', positionM: 200 },
+  ]);
+  const [toPocket, fromPocket] = street(node(1200, 0), f);
+  place('Pocket gateway', 'gateway', { x: 1200, y: 0 }, [
+    { road: toPocket, direction: 'out' },
+    { road: fromPocket, direction: 'in', positionM: 280 },
+  ]);
+  const [toLoop, fromLoop] = street(node(-300, 150), a);
+  place('Loop gateway', 'gateway', { x: -300, y: 150 }, [
+    { road: toLoop, direction: 'out' },
+    { road: fromLoop, direction: 'in', positionM: 300 },
+  ]);
+  const [lonely] = street(node(0, 900), node(300, 900));
+  place('Isolated', 'gateway', { x: 0, y: 900 }, [{ road: lonely, direction: 'in' }]);
+  const places = Object.fromEntries(Object.values(city.places).map((p) => [p.name, p]));
+  places.Homes!.population = 80;
+  places['Lane homes']!.population = 80;
+  places.Offices!.jobs = 40;
+  // The pocket gateway draws most out-commuters by its jobs and nearness.
+  places['Pocket gateway']!.jobs = 200;
+  places['Loop gateway']!.jobs = 20;
+  places.Isolated!.jobs = 100;
+  const parkId = allocateId(city, 'pk');
+  city.parking = {
+    [parkId]: {
+      id: parkId,
+      kind: 'garage',
+      name: 'Pocket car park',
+      capacity: 200,
+      access: 'public',
+      placeId: null,
+      shape: { kind: 'point', pos: { x: 750, y: 10 } },
+      connectors: [
+        {
+          id: allocateId(city, 'c'),
+          roadId: pocket.id,
+          lane: 0,
+          positionM: 150,
+          direction: 'both',
+          throughputPerMin: 30,
+        },
+      ],
+      provenance: { source: 'authored' },
+      occupancyAtStart: 0,
+    },
+  };
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+
+  const scenario = morning(288);
+  scenario.demand.throughTripsPerHour[7] = 0;
+  scenario.demand.gravityScaleM = 100_000;
+  const persons = generatePopulation(city, scenario.demand);
+  const from = (home: string) => persons.filter((p) => p.homePlaceId === places[home]!.id);
+  const works = (home: string) => {
+    const counts: Record<string, number> = {};
+    for (const p of from(home)) {
+      const name = p.workPlaceId ? city.places[p.workPlaceId]!.name : '-';
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    return counts;
+  };
+  // Loop homes draw only the loop gateway, as often as they drew any gateway: the pocket
+  // gateway's commuters move there, and the cut-off one's.
+  const loopHomes = works('Homes');
+  expect(loopHomes['Pocket gateway']).toBeUndefined();
+  expect(loopHomes.Isolated).toBeUndefined();
+  expect(loopHomes['Loop gateway']).toBeGreaterThan(from('Homes').length / 2);
+  // Lane homes reach the pocket too; the cut-off gateway is redrawn among the two.
+  const laneHomes = works('Lane homes');
+  expect(laneHomes['Pocket gateway']).toBeGreaterThan(0);
+  expect(laneHomes.Isolated).toBeUndefined();
+
+  const trips = scheduleTrips(city, persons, scenario, result.compiled);
+  for (const person of persons.filter((p) => p.workPlaceId !== null))
+    expect(person.agenda.length).toBeGreaterThan(1);
+  expect(ends(city, trips)).toContain('Homes>Loop gateway');
+  expect(ends(city, trips)).toContain('Lane homes>Pocket gateway');
+
+  const engine = createEngine();
+  engine.load({ compiled: result.compiled, trips, scenario, population: persons });
+  engine.step((scenario.endS - scenario.startS) * 10);
+  const { failedByReason } = engine.metrics();
+  expect(failedByReason.no_route + failedByReason.no_parking).toBe(0);
+});
