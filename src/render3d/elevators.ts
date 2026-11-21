@@ -2,7 +2,7 @@ import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } fr
 import { pointInPolygon, segmentDistance, segmentsIntersect } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { WalkGraph } from '../network';
-import type { ContextAreaFeature } from '../schema';
+import type { ContextAreaFeature, ContextFeature } from '../schema';
 import type { MapPalette } from '../render/style';
 
 /** TASK-263: an elevator (`building=elevator`, `building:part=elevator`) is drawn as a framed
@@ -71,8 +71,12 @@ export function elevatorLandings(rings: readonly Vec2[][], walk?: WalkGraph): La
         ends.push({ at, next, far, layer: link.layer });
   }
   const landings: Landing[] = [];
+  const onOutline = (p: Vec2) =>
+    ring.some((a, i) => segmentDistance(p, a, ring[(i + 1) % ring.length]!) <= 0.3);
   for (const { at, next, far, layer } of ends) {
-    if (layer < 0 || pointInPolygon(far, closed, 0.3)) continue;
+    // TASK-274: a link that ends on the outline (a door node, as a tower mapped around its
+    // elevator has) leaves the shaft too.
+    if (layer < 0 || (pointInPolygon(far, closed, 0.3) && !onOutline(far))) continue;
     if (!ends.some((o) => o.layer !== layer && Math.hypot(o.at.x - at.x, o.at.y - at.y) < 0.5))
       continue;
     const length = Math.hypot(next.x - at.x, next.y - at.y);
@@ -80,7 +84,12 @@ export function elevatorLandings(rings: readonly Vec2[][], walk?: WalkGraph): La
       facing = -Infinity;
     ring.forEach((a, i) => {
       const b = ring[(i + 1) % ring.length]!;
-      if (segmentDistance(at, a, b) > 0.3 && !segmentsIntersect(at, far, a, b)) return;
+      if (
+        segmentDistance(at, a, b) > 0.3 &&
+        segmentDistance(far, a, b) > 0.3 &&
+        !segmentsIntersect(at, far, a, b)
+      )
+        return;
       const side = Math.hypot(b.x - a.x, b.y - a.y);
       const dot = ((b.y - a.y) * (next.x - at.x) - (b.x - a.x) * (next.y - at.y)) / (side * length);
       if (dot > facing) [edge, facing] = [i, dot];
@@ -94,13 +103,80 @@ export function elevatorLandings(rings: readonly Vec2[][], walk?: WalkGraph): La
 
 /** The shaft's top above its base: the tagged height or levels, else a head above the highest
  * landing (the ground when no walkway reaches it). */
-export function elevatorTopM(piece: ContextAreaFeature, landings: readonly Landing[]) {
+export function elevatorTopM(
+  piece: Pick<ContextAreaFeature, 'heightM' | 'levels'>,
+  landings: readonly Landing[],
+) {
   return (
     piece.heightM ??
     (piece.levels !== undefined
       ? piece.levels * 3
       : Math.max(0, ...landings.map((l) => l.heightM)) + elevatorHeadM)
   );
+}
+
+/** TASK-274: the side of the square shaft drawn for an elevator mapped only as a node. */
+export const pointShaftM = 1.6;
+
+type ElevatorPoint = Extract<ContextFeature, { kind: 'point' }>;
+
+/** Whether an elevator node's `level` tag (`sub`), a list of numbers, names none above 0. */
+const underground = (point: ElevatorPoint) =>
+  !!point.sub?.split(';').every((l) => Number.isFinite(Number(l)) && Number(l) <= 0);
+const aboveGround = (landings: readonly Landing[]) => landings.some((l) => l.heightM > 0);
+
+/** TASK-274: the elevators mapped only as nodes, by the outline rule above. One inside a building
+ * outline (the importer keeps it only in a small one, its tower) makes that outline its shaft; one
+ * in the open is a `pointShaftM` square turned to its top walkway. Either is drawn only when it
+ * serves a level above the ground; underground lifts, and those whose walkways do not show two
+ * layers, draw nothing. */
+export function elevatorPoints(features: readonly ContextFeature[], walk?: WalkGraph) {
+  const towers = new Set<ContextFeature>(),
+    shafts: { rings: Vec2[][]; landings: Landing[]; topM: number }[] = [];
+  if (!walk) return { towers, shafts };
+  for (const point of features) {
+    if (point.kind !== 'point' || point.class !== 'elevator' || underground(point)) continue;
+    const { pos } = point;
+    const tower = features.find(
+      (f) =>
+        f.kind === 'area' &&
+        f.class === 'building' &&
+        // A tower is at most 16 m² (the importer keeps no node in a larger outline).
+        f.rings[0]!.some((p) => Math.abs(p.x - pos.x) < 20 && Math.abs(p.y - pos.y) < 20) &&
+        pointInPolygon(pos, f.rings[0]!) &&
+        !f.rings.slice(1).some((hole) => pointInPolygon(pos, hole)),
+    );
+    if (tower?.kind === 'area') {
+      if (aboveGround(elevatorLandings(tower.rings, walk))) towers.add(tower);
+      continue;
+    }
+    const ends: { layer: number; next: Vec2 }[] = [];
+    for (const { generated, line, layer } of walk.links) {
+      if (generated) continue;
+      const first = line[0]!,
+        last = line.at(-1)!;
+      if (Math.hypot(first.x - pos.x, first.y - pos.y) < 0.5) ends.push({ layer, next: line[1]! });
+      if (Math.hypot(last.x - pos.x, last.y - pos.y) < 0.5)
+        ends.push({ layer, next: line.at(-2)! });
+    }
+    const top = ends.reduce<(typeof ends)[number] | undefined>(
+      (best, end) => (!best || end.layer > best.layer ? end : best),
+      undefined,
+    );
+    if (!top || ends.every((e) => e.layer === top.layer)) continue;
+    const length = Math.hypot(top.next.x - pos.x, top.next.y - pos.y);
+    const ux = ((top.next.x - pos.x) / length) * (pointShaftM / 2),
+      uy = ((top.next.y - pos.y) / length) * (pointShaftM / 2);
+    const corner = (a: number, b: number) => ({
+      x: pos.x + a * ux - b * uy,
+      y: pos.y + a * uy + b * ux,
+    });
+    const rings = [[corner(1, 1), corner(-1, 1), corner(-1, -1), corner(1, -1), corner(1, 1)]];
+    const landings = elevatorLandings(rings, walk);
+    if (aboveGround(landings))
+      shafts.push({ rings, landings, topM: elevatorTopM(point, landings) });
+  }
+  return { towers, shafts };
 }
 
 type Point3 = [number, number, number];

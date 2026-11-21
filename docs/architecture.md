@@ -352,7 +352,7 @@ identical with terrain present or absent.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-type ContextPoint = 'tree' | 'street_lamp';
+type ContextPoint = 'tree' | 'street_lamp' | 'elevator';
 type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 
 type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
@@ -397,6 +397,15 @@ are derived display geometry and never enter the project or compiled network.
 TASK-107 adds `street_lamp` context points: optional `heightM` from `height` and `sub`
 from `lamp_mount`, falling back to `support`. No schema-version bump; old files still open.
 Imported lamps persist, while generated furniture stays renderer-only and is never saved.
+
+TASK-274 adds `elevator` context points: `highway=elevator` nodes with optional `heightM` from
+`height` and `sub` from `level`, except `indoor=yes` ones and those inside a building outline (indoors,
+or TASK-263's `building=elevator` shaft), unless the outline is the lift's tower: at most 16 m², without
+parts and not valued `elevator`. The 3D view draws one by TASK-263's shaft rule (landings where
+mapped walkways of different layers meet it, the top 3 m above the highest unless tagged), in its
+tower's outline or else as a 1.6 m square, when it serves a level above the ground: a landing above
+it, and the `level` tag, when present, naming a level above 0. Underground lifts and those whose
+walkways show one layer draw nothing. No schema-version bump; old files still open.
 
 Invariants (checked by compile, section 5):
 

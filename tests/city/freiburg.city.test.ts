@@ -228,7 +228,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // `placementTransition`; r:1175's widened surface moves two car-park exits on it by 0.05 mm.
     // TASK-269: rebuilt; the mini-roundabout n:347 (7099586035, Wilhelmstraße and Faulerstraße)
     // gives way on its four entries (`miniRoundabout`); nothing else changes.
-    '16eac73d7330b3c27df05628a60e7cee2ba1096c91120f7a360e580f08411c53',
+    // TASK-274: rebuilt; two `elevator` points appended to the context (display only).
+    'PENDING_MANIFEST',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
