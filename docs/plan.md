@@ -276,6 +276,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | done 2026-11-20 (diagnosis only: seed-1 full demand is divergence; no change) |
 | [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
 | [TASK-252](tasks/TASK-252.md) | render | Walk lights at crossings no signal phase serves draw dark | walk-light drawing, signal snapshot | 245, 249 | test, list, identical hashes, budgets | done 2026-11-20 (merged; hashes identical) |
+| [TASK-253](tasks/TASK-253.md) | 9 | TASK-223's missed-turn rule re-measured on five-seed full demand | `detourHeads` | 223, 249 | misses, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | in progress 2026-11-20 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5743,6 +5747,19 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-20 (owner, after the second run's report): (1) OSM that disagrees with the ground is met by
+  improving the app's reading of OSM (importer and drawing rules), not by editing OSM and not by per-id
+  curation; this covers `r:1179`'s `placement` and D7's late lane gain. (2) "Others ok to your
+  suggestions", read by the lead as: start a third unsupervised run under the standing rules (merge rule,
+  audit tolerance, five-seed full demand, at most four agents, a Full run after each merge) on TASK-223's
+  re-measure, TASK-242's placement and tagged widths, TASK-218's D4 with J1 and the small visual leftovers
+  (TASK-253 to 256); add the walk-link marking field for `crossing=unmarked` (a schema change the owner
+  approves, to be contracted); retire the parked branches nothing will use again (208 and 219, landed
+  through 223 and 234; 215, reworked as 217; 244, aim not met), tagged `archive/<branch>` before
+  deletion. 218, 223 and 242 stay until run 3 settles them. Arnulfstraße stays as OSM maps it (grass)
+  until imagery is approved; a new imagery download still needs the owner's explicit yes. (3) The owner
+  asked to discuss more preloaded cities in the New city panel; the lead's proposal is in chat.
 
 - 2026-11-20 (owner): keep both of the lead's readings adopted during the second unsupervised run. (1) Audit
   tolerance: a geometry-audit measure or named case that worsens by less than 1 cm, less than 1 m², or by
