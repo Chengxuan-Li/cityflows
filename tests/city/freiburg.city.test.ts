@@ -139,7 +139,9 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   expect(census.unservedStops).toEqual([]);
   // TASK-214's rebuild: the renumbered ids' offsets no longer fitted 10 an hour, so the lead's
   // salted retry in `buildTimetable` picks other offsets (same routes and headways).
-  expect(table.hash).toBe('90e3ff6f');
+  // TASK-255: seven more junction groups move the tram stop ids allocated after them by seven
+  // (ts:13306 to ts:13313); same routes, stops and headways.
+  expect(table.hash).toBe('c0bd7828');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -216,7 +218,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // as nodes, with the last ids (the tram timetable stays 90e3ff6f).
     // TASK-256: rebuilt; 7 short ballast sections between a street track and another bed are
     // embedded (Rotteckring rt:12944 among them; only their `form` changes).
-    '2f14f6dcf410281e9d280e16f9e5cabaff00eac95dcb0e938a4adc89e9716ca9',
+    // TASK-255: rebuilt; 18 signals mapped at their stop positions join their junctions' groups
+    // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
+    '59bcbb988b3d38d37283d5861684d220fee5da4ea4c6dcc178ff7312fa664dd7',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -247,7 +251,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // rounding error held it), and signal crossings no phase serves are crossed in a gap (1,464 to
   // 1,523 completed, 68.1 to 68.2 s).
   // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
-  expect(morning.stateHash).toBe(4228017009);
+  // TASK-255: stop lines at the signals mapped before their junctions (TASK-218's D4), whose
+  // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
+  expect(morning.stateHash).toBe(1024213382);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

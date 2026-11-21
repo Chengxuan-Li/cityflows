@@ -2,6 +2,7 @@ import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
 import { groupAngle, groupExits } from '../../network/groups';
+import { STOP_POSITION, STOP_POSITION_CROSSING } from '../../network/junctions';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
@@ -167,6 +168,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const nodes = new Map<string, Node>();
   const incidents = new Map<string, JunctionRoads>();
   const signals: Node[] = [];
+  const crossingSignals = new Set<string>();
   function addNode(point: RoadPoint, wayLayer: number, wayId: number) {
     const existing = nodes.get(point.key);
     if (existing) return existing.id;
@@ -220,6 +222,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       provenance: { source: 'osm', osmIds: [point.osmId ?? wayId], inferred },
     };
     if (tags?.highway === 'traffic_signals') signals.push(node);
+    if (tags?.highway === 'traffic_signals' && tags.crossing && tags.crossing !== 'no')
+      crossingSignals.add(id);
     nodes.set(point.key, node);
     city.nodes[id] = node;
     incidents.set(id, { incoming: [], outgoing: [] });
@@ -321,6 +325,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const sameDirection = pairSameDirection(roads);
   const groupMaxM = options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M;
   const groups = formJunctionGroups(city, roads, groupMaxM, sources, new Set(signalIds));
+  for (const id of crossingSignals)
+    if (city.nodes[id]?.provenance.inferred!.includes(STOP_POSITION))
+      city.nodes[id].provenance.inferred!.push(STOP_POSITION_CROSSING);
   const crossovers = medianCrossovers(roads, groupMaxM);
   // Provisional group ids: the final ones are allocated last, so that no other id moves.
   if (groups.length)
