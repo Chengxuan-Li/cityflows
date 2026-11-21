@@ -143,6 +143,9 @@ test('V263 a tagged height wins; without a walkway the shaft is a head house; pa
     kind: 'area',
     class: 'building',
     sub: 'train_station',
+    // As tall as its tallest part, so the outline only wraps its parts (TASK-272's rule: an
+    // outline without a height of its own is a body and draws its uncovered area too).
+    heightM: 9,
     rings: [
       [
         { x: -10, y: -10 },
