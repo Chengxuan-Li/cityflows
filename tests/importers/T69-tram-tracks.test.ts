@@ -268,3 +268,51 @@ test('T232 track behind a one-lane street parking strip or `area:highway` platfo
         inferred: ['form'],
       });
 });
+
+// TASK-256 (TASK-232's `rt:12944`): a short section where the street track leaves for its own bed
+// keeps the street's paving up to the next bed.
+test('T256 a short ballast section between a street track and another bed is embedded', () => {
+  const square = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+    [x0, y0],
+  ];
+  // Per street (one-way, one lane, drawn 3 m wide): a track beside it to x = 0 (embedded), one
+  // turning off it to y + 8 over `run` m of x (ballast alone), and one on a grass strip.
+  type Way = { id: number; tags: Record<string, string>; points: [number, number][] };
+  const layout = (y: number, run: number, first: number): Way[] => [
+    {
+      id: first,
+      tags: { highway: 'residential', lanes: '1', oneway: 'yes' },
+      points: [
+        [-250, y],
+        [250, y],
+      ] as [number, number][],
+    },
+    { id: first + 1, tags: { landuse: 'grass' }, points: square(run + 2.5, y + 5, 220, y + 11) },
+    ...(
+      [
+        [
+          [-200, y + 3.2],
+          [0, y + 3.2],
+        ],
+        [
+          [0, y + 3.2],
+          [run, y + 8],
+        ],
+        [
+          [run, y + 8],
+          [200, y + 8],
+        ],
+      ] as [number, number][][]
+    ).map((points, k) => ({ id: first + 2 + k, tags: { railway: 'tram' }, points })),
+  ];
+  const city = load(osm([...layout(0, 10, 10), ...layout(100, 24.5, 20)]));
+  const form = (way: number) => byWay(city, way).map((t) => t.form);
+  // 11 m from the street track to the grass strip: embedded; 25 m: an own bed (ballast).
+  expect([form(12), form(13), form(14)]).toEqual([['embedded'], ['embedded'], ['grass']]);
+  expect([form(22), form(23), form(24)]).toEqual([['embedded'], ['ballast'], ['grass']]);
+  for (const t of byWay(city, 13)) expect(t.provenance?.inferred).toEqual(['form']);
+});

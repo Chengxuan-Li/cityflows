@@ -18,6 +18,7 @@ import {
   type RailKind,
   type RailNode,
   type RailPlatform,
+  type RailTrack,
   type TrackForm,
 } from '../../schema/rail';
 import { clip, polygonSources } from './buildings';
@@ -400,6 +401,10 @@ export const alongsideM = 2.5;
 /** TASK-220: a mapped grass area narrower than this (mean width, m) is a strip along the track,
  * not a park or a lawn it crosses. */
 export const grassStripM = 10;
+/** TASK-256: a section of track shorter than this between two other beds is where one bed meets
+ * the next, not a bed of its own (Rotteckring's `rt:12944`, 10 m from the stop's street track to
+ * the grass strip, paved on the ground). */
+export const transitionM = 20;
 /** How far off a grass strip track still counts as on it (strips end at their own kerb). */
 const stripReachM = 1.5;
 
@@ -440,7 +445,8 @@ const bbox = (points: Vec2[]) =>
  * carriageway's street band (TASK-232: the carriageway, its street parking strips, and the
  * `area:highway` areas reaching within `alongsideM` of it) over `embeddedShare`, embedded; else a
  * paved bed for a paved `surface`, and ballast for the rest (a separate track between
- * carriageways, a median reservation; `railway:track_ref` says nothing of form).
+ * carriageways, a median reservation; `railway:track_ref` says nothing of form). TASK-256: an
+ * inferred ballast section under `transitionM` between other beds, one embedded, is embedded.
  */
 export function assignTramForms(
   city: City,
@@ -639,4 +645,19 @@ export function assignTramForms(
     t.form = form;
     t.provenance = { source: 'osm', inferred: ['form'] };
   }
+  // TASK-256: a short inferred ballast section whose ends join only other beds, one of them
+  // embedded, is where the street track meets the next bed, paved up to it: embedded.
+  const byNode = new Map<string, RailTrack[]>();
+  for (const t of trams)
+    for (const n of [t.from, t.to]) byNode.set(n, [...(byNode.get(n) ?? []), t]);
+  const transitions = trams.filter((t) => {
+    if (t.form !== 'ballast' || !t.provenance?.inferred || polylineLength(t.line) >= transitionM)
+      return false;
+    const ends = [t.from, t.to].map((n) => byNode.get(n)!.filter((o) => o !== t));
+    return (
+      ends.every((list) => list.length && list.every((o) => o.form !== 'ballast')) &&
+      ends.flat().some((o) => o.form === 'embedded')
+    );
+  });
+  for (const t of transitions) t.form = 'embedded';
 }

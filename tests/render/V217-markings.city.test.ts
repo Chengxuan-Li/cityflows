@@ -18,6 +18,7 @@ import {
   crossingSpan,
   crossingStyle,
 } from '../../src/network/crossings';
+import { keepClearZones } from '../../src/network/keep-clear';
 import {
   approachMarkings,
   crossingStripes,
@@ -236,6 +237,27 @@ test('TASK-246: a keep-clear box stands on its lane between its tapers, inside t
     for (const shape of keepClearMarkings(net, r, markingThemes.de, city))
       for (const p of shape.points) expect(pointInPolygon(p, ring, 0.05), r.id).toBe(true);
   }
+});
+
+test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenade, r:225)', () => {
+  // The garage pk:2736 leaves onto the promenade's r:225#0 at 54.6 m: its mouth stays a zone cars
+  // keep clear, but the paving there is plain (a box 46.6 to 61.1 m before).
+  const promenade = lane('r:225#0');
+  expect(keepClearZones(net)[promenade.idx]!.some((z) => z.kind === 'mouth')).toBe(true);
+  expect(keepClearBoxes(net, promenade, markingThemes.de, city)).toEqual([]);
+  expect(keepClearMarkings(net, road('r:225'), markingThemes.de, city)).toEqual([]);
+  // Without the canonical city (no `sharedLane` known) the box is drawn, as on any street.
+  expect(keepClearBoxes(net, promenade, markingThemes.de)).toHaveLength(1);
+  // Every other street keeps its boxes: 137 in Freiburg.
+  const boxes = net.lanes.reduce(
+    (sum, l) =>
+      sum +
+      (net.roads[l.road]!.group === undefined
+        ? keepClearBoxes(net, l, markingThemes.de, city).length
+        : 0),
+    0,
+  );
+  expect(boxes).toBe(137);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {

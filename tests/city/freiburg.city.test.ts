@@ -214,7 +214,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-238: rebuilt; Bismarckallee's halves r:1251/r:2215 are one carriageway (TASK-231's D5).
     // TASK-239 (landed as TASK-248): rebuilt; 9 crossing links from marked crossings mapped only
     // as nodes, with the last ids (the tram timetable stays 90e3ff6f).
-    'eda9414182fc7c4e511a594c5eed4f50d048abbd13bee8a03362d87e4d54a202',
+    // TASK-256: rebuilt; 7 short ballast sections between a street track and another bed are
+    // embedded (Rotteckring rt:12944 among them; only their `form` changes).
+    '2f14f6dcf410281e9d280e16f9e5cabaff00eac95dcb0e938a4adc89e9716ca9',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
