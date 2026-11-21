@@ -38,7 +38,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           '264a0a453d7f0cc13047e4a011b43c0cd8066c059549e5d8eb31c835ba5a4d54'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          'a16e366f17543dd58f149487cab1732fdc94399e684e18a3a07514f70ecec661',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '8d093d324f4e89ffc38203fc766d47ae8882504ddd9c416030c8fe0ca0cc9e86',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

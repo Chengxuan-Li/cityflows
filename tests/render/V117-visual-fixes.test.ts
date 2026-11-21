@@ -222,18 +222,20 @@ const pins = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    compile: '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
+    // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right):
+    // compile, curbs, de and us.
+    compile: '642171008498b2b4820ea904792808ecc4faf972351dee024c17536c66995a49',
     lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
+    curbs: '9e4a116edceacff6a76f219f15df6d62995abf16c502d4d176fb2733bc411f24',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
-    de: '9cd02464624925ca52fb87cc9ee176c7edcd613047d874434a728a4c16b5aaec',
+    de: '750ebb3350fbd8083ab6b738c45d82f68534f1d89a758a0103a41437e4947cfc',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
-    us: '3d4a4d86647b45ed1ebba742b719a7f2d9120c6ac26a087b091b7261c7d47797',
+    us: '153a5051cdbe99124cce0a5d3b2a06f58ee52eba316f6fc092bcbd5686163cc6',
   },
 } as const;
 const hash = (value: unknown) =>

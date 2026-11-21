@@ -260,11 +260,9 @@ const corridorResiduals: Record<string, string> = {
 /** TASK-131: the Sindelfingen corridor pairs left, and why. Benzstraße's r:868/r:869 and
  * r:903/r:904 no longer overlap since 797678e; the A 81's unnamed carriageways (one ref) now pair
  * and pushOverlapping sets them apart, eased to zero toward their ends. */
-const sindelfingenResiduals: Record<string, string> = {
-  'r:464/r:543': 'The push eases to zero at n:542, where r:543 gains a lane (16.5 m2).',
-  'r:1252/r:545':
-    'The network continuation offset moves the two-lane r:545 1.75 m toward the median at n:1251; the importer push cannot act at a node (6.25 m2).',
-};
+// TASK-254 (TASK-242): none left. The A 81's carriageways are tagged `placement=right_of:1`, which
+// sets each block 1.75 m away from the median, so r:464/r:543 and r:1252/r:545 no longer meet.
+const sindelfingenResiduals: Record<string, string> = {};
 
 test.each(tierCities(auditCities))(
   'T39.2: %s lane overlap outside the outlines (measure 9)',

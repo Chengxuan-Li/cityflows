@@ -402,7 +402,8 @@ test.each(
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).
         // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-        'cec7abe1394ccbe06ded5a4b71ba8fbcd63bfd665c540bceb098eecb1e77cf09',
+        // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+        '98446b56d2cea36dc6dccb524b920befc2f9f78117a3bfdf47a490979c0a3745',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

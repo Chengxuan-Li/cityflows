@@ -69,7 +69,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
           // TASK-241: no hatch at lane gains (5 roads).
-          '207c3ee1da290df80ddfd1c12fb27fb0f9914dca7e811a956f54156d424a674e',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '9873b797de58b8b13b6ff4cc5fab8766f0926f9676e7f1eb9f1ff9c84fddacde',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

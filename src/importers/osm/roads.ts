@@ -17,6 +17,53 @@ const speedKph: Record<RoadClass, number> = {
   ramp: 40,
 };
 
+/** The lane width where no width is tagged. */
+const defaultLaneWidth = (roadClass: RoadClass) =>
+  roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+
+/**
+ * TASK-254 (TASK-242's `n:1146`): where a one-way road gains or drops lanes across a node of only
+ * its two ends, the network lines the lanes that run on up by their left edges and tapers in the
+ * gained ones; it draws no width taper for a lane that runs on, so lanes running on at another
+ * width turn the node into a junction fan. There tagged widths (`roadSpecs`) that would change
+ * the width of a lane running on are not read: the road keeps its class's default width, repeated
+ * until no such node is left. The tag describes its whole way, so the other roads of that way keep
+ * the default too (else they meet it at a step across the junction that split the way).
+ * Friedrichstraße `r:1148` (`width:lanes=2.5|3|3|3|2.5`) after the two 3.5 m lanes of `r:1175`
+ * drew a fan whose edge sagged up to 0.4 m onto the median's grass; `r:1149`, the same way beyond
+ * the Hauptbahnhof junction `n:1147`, then met it 3.5 m narrower.
+ */
+export function keepRunningLaneWidths(roads: OsmRoad[]): void {
+  const ends = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const node of [road.from, road.to]) ends.set(node, [...(ends.get(node) ?? []), road]);
+  const widths = (road: Road) => road.lanes.map((lane) => lane.widthM);
+  const tagged = (road: Road) =>
+    road.lanes.some((lane) => lane.widthM !== defaultLaneWidth(road.roadClass));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const { road, wayId } of roads) {
+      if (road.streetGroupId !== null || !tagged(road)) continue;
+      const steps = [road.from, road.to].some((node) => {
+        const at = ends.get(node)!;
+        const other = at.find((o) => o !== road);
+        if (at.length !== 2 || !other || other.streetGroupId !== null) return false;
+        if ((node === road.to ? other.from : other.to) !== node) return false;
+        if (other.lanes.length === road.lanes.length) return false;
+        const [a, b] = [widths(road), widths(other)];
+        return a.some((w, i) => i < b.length && Math.abs(w - b[i]!) > 1e-9);
+      });
+      if (!steps) continue;
+      // The tag describes its whole way: every road of the way keeps the default.
+      for (const same of roads.filter((o) => o.wayId === wayId)) {
+        const width = defaultLaneWidth(same.road.roadClass);
+        same.road.lanes = same.road.lanes.map((lane) => ({ ...lane, widthM: width }));
+      }
+      changed = true;
+    }
+  }
+}
+
 /** A lane width read from `width` or `width:lanes` outside these bounds is not a lane's (a
  * `width` that covers parking, cycle lanes or a hard shoulder, a typo), so the tag is ignored;
  * motorways, trunk roads and ramps keep at least RAA's narrowest lanes. */
@@ -235,7 +282,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   const hasSpeed = Number.isFinite(taggedSpeed) && taggedSpeed > 0;
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
   if (osmLayer(tag) === undefined) unsupported('layer');
-  const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+  const widthM = defaultLaneWidth(roadClass);
   // TASK-233 (TASK-216 D6): a two-way way tagged `lanes=1` is one carriageway that oncoming cars
   // share, drawn without a centre line (`marking-geometry.ts`). Each direction keeps its default
   // width: TASK-231's 4.5 m (RASt 06, a car meeting a lorry) narrowed Freiburg's promenade, whose

@@ -64,6 +64,38 @@ describe('TASK-254 tagged road widths and placement', () => {
     ]);
   });
 
+  it('lanes running on across a lane gain keep their width (TASK-254, n:1146)', () => {
+    const main = { highway: 'primary', oneway: 'yes', name: 'Main' };
+    const run = (second: Record<string, string>) => {
+      const city = load(
+        osm([
+          {
+            id: 1,
+            tags: { ...main, lanes: '2' },
+            points: [
+              [-200, 0],
+              [0, 0],
+            ],
+          },
+          {
+            id: 2,
+            tags: { ...main, ...second },
+            points: [
+              [0, 0],
+              [200, 0],
+            ],
+          },
+        ]),
+      );
+      return roadOf(city, 2).lanes.map((lane) => lane.widthM);
+    };
+    // Friedrichstraße r:1175 into r:1148: the two lanes running on would narrow at the gain.
+    expect(run({ lanes: '5', 'width:lanes': '2.5|3|3|3|2.5' })).toEqual(Array(5).fill(3.5));
+    // Running-on lanes at their width (only the gained lane tagged narrower), or no gain: read.
+    expect(run({ lanes: '3', 'width:lanes': '3.5|3.5|3' })).toEqual([3.5, 3.5, 3]);
+    expect(run({ lanes: '2', 'width:lanes': '3|3' })).toEqual([3, 3]);
+  });
+
   it('placement puts the lane block on the named lane boundary', () => {
     const three = [3.5, 3.5, 3.5];
     expect(placementOffset('right_of:1', three)).toBe(1.75);

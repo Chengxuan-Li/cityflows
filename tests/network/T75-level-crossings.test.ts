@@ -178,14 +178,16 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-          '5796a8298c0a7537c50e5218c1ce28f70b3f9d20aab68c532976a8f3f3cf2536',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '76c416e327ae7d060c93a38b0a88af5ed3bfcc31a39429d9b0f1cbcad467829c',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-          '898ddcb0324f2c99edfdf2ad313496a1733077c45432a4decec6d8d7a5f434c5',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '7d66cbd149f70b1e8679bd3f5a3fb293fc9d945db26cce06d9b6853a3a0fc084',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

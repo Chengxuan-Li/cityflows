@@ -191,7 +191,8 @@ const baselines = {
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
   // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-  'sindelfingen-a81': '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
+  // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+  'sindelfingen-a81': '642171008498b2b4820ea904792808ecc4faf972351dee024c17536c66995a49',
 };
 const lampCounts = {
   grid: [0, 0],

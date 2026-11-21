@@ -22,7 +22,14 @@ import { parseOsm } from './parse';
 import { addOsmGarages } from './parking';
 import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
-import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
+import {
+  createRoads,
+  isBridge,
+  keepRunningLaneWidths,
+  osmLayer,
+  roadSpecs,
+  type OsmRoad,
+} from './roads';
 import { smoothRoads } from './smooth';
 import {
   assignCorridors,
@@ -318,6 +325,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     signals.map((n) => n.id),
   );
   // Corridors before the groups: a median crossing joins the two carriageways of one corridor.
+  keepRunningLaneWidths(roads);
   placeRoads(city, roads, data);
   const coincident = assignCorridors(city, roads);
   const sameDirection = pairSameDirection(roads);
