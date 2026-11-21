@@ -205,13 +205,15 @@ const pins = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
-    de: '8afbd5fe05eed429a6ab4a6a0320cf48571d47b0a238bf05e0688e82bc8023a2',
+    // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
+    de: '6bf159e95f018ec1b2f1a6debd3572f83b654c515af7d51557a577e4561c52d8',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
-    us: '714f48807b1837b21e6360ba10f95db9fde9a28f04e82ba6efffdf8edc3acb4c',
+    // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
+    us: 'd828085dd199ef4065e16a41e104fdb3edd33c65eef8980036e9dba6bd45ae8c',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -229,11 +231,13 @@ const pins = {
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
-    de: '9cd02464624925ca52fb87cc9ee176c7edcd613047d874434a728a4c16b5aaec',
+    // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
+    de: '96ca872a12eeef4aa7a1b08e5b4845ed17e05b5436e3bdefc829f27906647462',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
-    us: '3d4a4d86647b45ed1ebba742b719a7f2d9120c6ac26a087b091b7261c7d47797',
+    // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
+    us: 'af49c2ebb855cc91d3b4d299b0fa947b9c2415fb0ecf34fafb0b10c3d88fab08',
   },
 } as const;
 const hash = (value: unknown) =>

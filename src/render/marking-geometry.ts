@@ -148,19 +148,27 @@ const keepGlyphs: Record<string, string[]> = {
   A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
   R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
 };
+/** TASK-233: a direction of a two-way `lanes=1` way, one carriageway both directions share (the
+ * importer's `sharedLane`, read from the canonical road): drawn without lane paint. */
+const sharedCarriageway = (road: CRoad, source?: CrossingSource) =>
+  road.lanes.length === 1 &&
+  !!source?.roads?.[road.id]?.provenance.inferred?.includes('sharedLane');
 /** TASK-169: the stretches of a lane its keep-clear markings cover, in lane metres: its mouth
  * zones (`keepClearZones`), cut 0.5 m clear of the lane's crossings (TASK-215, M4: Freiburg
  * n:1462, a lot mouth at two crossings), each 3 m or more; the US and UK themes' text also needs
  * glyphs of 0.8 m or more. TASK-246: a box stands on the lane at its full width, so it keeps to the
  * lane between its taper at the start (a lane gain, `taperStartM`) and its taper at the end
  * (`taperEndM`), where the lane's centre line and edges bend: Freiburg's r:1189#3 box fanned
- * across the gain at n:1169. A box that is shorter than 3 m once cut is left out. */
+ * across the gain at n:1169. A box that is shorter than 3 m once cut is left out. TASK-256: none
+ * on a shared one-lane carriageway (`sharedCarriageway`), which has no lane of its own direction
+ * to box and no lane paint: the Freiburg promenade's garage mouth (`r:225`) is plain paving. */
 export function keepClearBoxes(
   city: CompiledCity,
   lane: CLane,
   markingTheme: MarkingTheme,
   source?: CrossingSource,
 ): KeepClearZone[] {
+  if (sharedCarriageway(city.roads[lane.road]!, source)) return [];
   const crosswalks = [false, true].flatMap((atEnd) => {
     const span = crossingSpan(city, lane, atEnd, source);
     return span
@@ -422,9 +430,7 @@ function buildRoadMarkings(
         .filter((piece) => cumulativeLengths(piece).at(-1)! >= 2.7)
         .map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)),
     );
-  const sharedLane =
-    road.lanes.length === 1 &&
-    source?.roads?.[road.id]?.provenance.inferred?.includes('sharedLane');
+  const sharedLane = sharedCarriageway(road, source);
   const partners =
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
