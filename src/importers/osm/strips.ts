@@ -239,9 +239,16 @@ export function addStrips(
     ...polygonSources(data, streetSide).map((s) => s.id),
     ...data.way.filter((w) => streetSide(w.tag)).map((w) => w.id),
   ]);
+  const removed = new Set<string>();
   for (const p of Object.values(city.places))
-    if (p.kind === 'parking' && p.provenance.osmIds?.some((id) => areaIds.has(id)))
+    if (p.kind === 'parking' && p.provenance.osmIds?.some((id) => areaIds.has(id))) {
       delete city.places[p.id];
+      removed.add(p.id);
+    }
+  // TASK-267: a lot that took a removed area as its owner (Cambridge's Trinity College lot,
+  // relation 2214067, touching the one-bay `parking=lane` area 681099117) serves no place.
+  for (const facility of Object.values(city.parking ?? {}))
+    if (facility.placeId !== null && removed.has(facility.placeId)) facility.placeId = null;
   const result = compile(city);
   if (!result.ok) return;
   addMappedAreas(city, data, positions, bounds, result.compiled, diagnostics);

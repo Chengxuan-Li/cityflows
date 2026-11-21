@@ -1,6 +1,6 @@
 import { pointInPolygon, segmentsIntersect } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
-import type { CompiledCity } from '../../network';
+import { compile, type CompiledCity, type Diagnostic } from '../../network';
 import { allocateId, type City, type ParkingFacility } from '../../schema';
 import { clip, polygonSources } from './buildings';
 import { contains, type Bounds } from './clip';
@@ -31,6 +31,31 @@ function touches(a: Vec2[], b: Vec2[]): boolean {
       b.some((q, j) => segmentsIntersect(p, a[(i + 1) % a.length]!, q, b[(j + 1) % b.length]!)),
     )
   );
+}
+
+/** TASK-267: the final compile. A parking facility it rejects (`parking_invalid`) is dropped and
+ * reported by id and OSM id, and the city compiled again, so that one facility the importer could
+ * not place never fails the import. Other errors still fail it. */
+export function compileDroppingParking(city: City, diagnostics: Diagnostic[]) {
+  const result = compile(city);
+  if (result.ok) return result;
+  const rejected = new Map<string, string[]>();
+  for (const d of result.diagnostics)
+    if (d.severity === 'error' && d.code === 'parking_invalid' && city.parking?.[d.refs[0]!])
+      rejected.set(d.refs[0]!, [...(rejected.get(d.refs[0]!) ?? []), d.message]);
+  if (!rejected.size) return result;
+  for (const [id, reasons] of rejected) {
+    const facility = city.parking![id]!;
+    const osm = facility.provenance.osmIds ?? [];
+    diagnostics.push({
+      severity: 'warning',
+      code: 'parking_dropped',
+      refs: [id],
+      message: `Dropped ${facility.kind} ${id}${osm.length ? ` (OSM ${osm.join(', ')})` : ''}: ${reasons.join('; ')}`,
+    });
+    delete city.parking![id];
+  }
+  return compile(city);
 }
 
 export function addOsmGarages(
