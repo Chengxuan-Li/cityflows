@@ -296,6 +296,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (render rule for parts; City Hall stands; Freiburg 20 bodies) |
+| [TASK-273](tasks/TASK-273.md) | city | City walls and gates: fetched, read and drawn (D5, York; owner-approved query change and re-fetch) | `overpass.ts`, context import, drawing | 259 | tests, close-ups, identity, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-274](tasks/TASK-274.md) | render | Elevators mapped only as points (owner-approved schema value) | `src/schema`, point import, `elevators.ts` | 263 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
+| [TASK-275](tasks/TASK-275.md) | render | Covered and handrail on walk links (owner-approved schema fields) | `src/schema`, `walk.ts`, `footbridges.ts` | 262 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5934,6 +5937,12 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-21 (owner): "We may merge; allow re download; ok to add schema fields for elevator points, covered
+  and handrail tags." (1) TASK-264 merges (the audit's width measure on `r:1175` reads the intended widening).
+  (2) The Overpass query may change to fetch city walls and gates, and York's extract may be fetched again
+  (TASK-273). (3) Schema: a point value for `highway=elevator` nodes (TASK-274), and `covered` and `handrail`
+  on walk links (TASK-275).
 
 - 2026-11-21 (owner): "we may start the queued tasks together ... no need to limit": the four-agent cap
   is lifted; queued tasks start in parallel (TASK-259, 261, 262, 263 now; D7 still waits for TASK-254,
