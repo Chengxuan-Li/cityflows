@@ -93,10 +93,24 @@ function cityTopology(city: CompiledCity) {
   return cached;
 }
 
+/** TASK-287: the roads meeting a node, in compiled order (`city.roads.filter` by node, which the
+ * renderer ran per road end). */
+export function nodeRoads(city: CompiledCity, node: CNode): CRoad[] {
+  return cityTopology(city).incident[node.idx]!;
+}
+
 /** A node's arms (TASK-091): its road ends, where ends within 20 degrees of each other form one
  * arm if they are of one corridor or run in opposite directions (the two directions of a street,
  * a divided pair, carriageways the importer did not pair, as Munich r:476 and r:984 at n:1181). */
 export function crossingArms(city: CompiledCity, node: CNode): RoadEnd[][] {
+  // TASK-287: per compiled city and node; callers read the arms, never change them (York's first
+  // frame asked for them 15,000 times for 1,096 nodes, each time for every incident road end).
+  let byNode = armSets.get(city);
+  if (!byNode) armSets.set(city, (byNode = []));
+  return (byNode[node.idx] ??= nodeArms(city, node));
+}
+const armSets = new WeakMap<CompiledCity, RoadEnd[][][]>();
+function nodeArms(city: CompiledCity, node: CNode): RoadEnd[][] {
   const arms: RoadEnd[][] = [];
   const close = Math.cos(Math.PI / 9);
   for (const road of cityTopology(city).incident[node.idx]!)
@@ -254,6 +268,24 @@ export function crossingStyle(
   atEnd: boolean,
   source?: CrossingSource,
 ): CrossingStyle {
+  // TASK-287: per compiled city, source and road end; the renderer asks once per lane and paint
+  // (UK zig-zags, stripes, lane lines), and a city and its source are not changed once compiled.
+  let bySource = styles.get(city);
+  if (!bySource) styles.set(city, (bySource = new WeakMap()));
+  let byRoad = bySource.get(source ?? noSource);
+  if (!byRoad) bySource.set(source ?? noSource, (byRoad = new WeakMap()));
+  let ends = byRoad.get(road);
+  if (!ends) byRoad.set(road, (ends = []));
+  return (ends[+atEnd] ??= endStyle(city, road, atEnd, source));
+}
+const styles = new WeakMap<CompiledCity, WeakMap<object, WeakMap<CRoad, CrossingStyle[]>>>();
+const noSource = {};
+function endStyle(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): CrossingStyle {
   const node = city.nodes[atEnd ? road.to : road.from]!;
   // The walk lights stand at its ends (TASK-111): a signalised crossing whatever OSM paints.
   if (node.signal !== null) return 'signal';
@@ -374,10 +406,19 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
   const inOwn = preparePolygon(node.outline);
   const inFar = far.length ? preparePolygon(far) : () => false;
   const outside = (p: Vec2) => !inOwn(p) && !inFar(p);
+  // TASK-287: a curb return whose box lies over the clearance (and a micrometre) away passes
+  // without its segments.
+  const curbBoxes = curbs.map((c) => boxOf(c.curve!));
   const clearOfCurbs = (p: Vec2) =>
-    curbs.every((c) =>
-      c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M),
-    );
+    curbs.every((c, k) => {
+      const box = curbBoxes[k]!;
+      const dx = Math.max(box.minX - p.x, 0, p.x - box.maxX),
+        dy = Math.max(box.minY - p.y, 0, p.y - box.maxY);
+      return (
+        dx * dx + dy * dy > (CURB_CLEAR_M + 1e-6) ** 2 ||
+        c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M)
+      );
+    });
   const at = (from: number) => {
     const stripes: Vec2[][] = [];
     for (let side = 0.225; side + STRIPE_M <= width; side += STRIPE_PITCH_M) {

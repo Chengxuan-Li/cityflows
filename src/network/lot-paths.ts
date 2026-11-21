@@ -1,4 +1,5 @@
 import {
+  boxOf,
   distance,
   nearestOnPolyline,
   pointAtDistance,
@@ -7,6 +8,7 @@ import {
   cumulativeLengths,
   polylineCrossings,
 } from '../geo/polyline';
+import type { Box } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
 import type { CompiledCity, Diagnostic, LotCirculation } from './types';
@@ -20,15 +22,38 @@ const mix = (a: Vec2, b: Vec2, t: number) => ({
   y: a.y + (b.y - a.y) * t,
 });
 
+/** TASK-287: ring boxes, so a segment or point tests only the rings it can meet (York: 834 bays in
+ * 62 lots, every bay a ring each aisle piece and probe of its lot was tested against, five times
+ * Freiburg's). The margin is far above the tolerances of `segmentIntersection` and
+ * `pointInPolygon`, so the answers are the same. */
+const ringBoxes = new WeakMap<Vec2[], Box>();
+const RING_MARGIN_M = 1e-5;
+function ringNear(ring: Vec2[], x0: number, y0: number, x1: number, y1: number) {
+  let box = ringBoxes.get(ring);
+  if (!box) ringBoxes.set(ring, (box = boxOf(ring)));
+  return (
+    box.minX - RING_MARGIN_M <= x1 &&
+    x0 <= box.maxX + RING_MARGIN_M &&
+    box.minY - RING_MARGIN_M <= y1 &&
+    y0 <= box.maxY + RING_MARGIN_M
+  );
+}
+const inRing = (p: Vec2, ring: Vec2[]) =>
+  ringNear(ring, p.x, p.y, p.x, p.y) && pointInPolygon(p, ring);
+
 /** Split at polygon edges, not at a sampling interval (narrow exclusions must still cut). */
 function cuts(a: Vec2, b: Vec2, rings: Vec2[][]) {
   const ts = [0, 1],
     length = distance(a, b);
-  for (const ring of rings)
+  const [x0, x1] = a.x < b.x ? [a.x, b.x] : [b.x, a.x],
+    [y0, y1] = a.y < b.y ? [a.y, b.y] : [b.y, a.y];
+  for (const ring of rings) {
+    if (!ringNear(ring, x0, y0, x1, y1)) continue;
     for (let i = 1; i < ring.length; i++) {
       const hit = segmentIntersection(a, b, ring[i - 1]!, ring[i]!);
       if (hit && length > 0) ts.push(distance(a, hit) / length);
     }
+  }
   return [...new Set(ts)].sort((a, b) => a - b);
 }
 
@@ -41,8 +66,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       exclusions = (source.exclusions ?? []).map(closed);
     const bays = lot.stalls.map((s) => closed(s.corners));
     const obstacles = [...exclusions, ...bays];
-    const inside = (p: Vec2) =>
-      pointInPolygon(p, boundary) && !obstacles.some((r) => pointInPolygon(p, r));
+    const inside = (p: Vec2) => inRing(p, boundary) && !obstacles.some((r) => inRing(p, r));
     // `passage`: an entry link may run under a building exclusion (a courtyard lot reached
     // through a building passage, Munich pk:2037, Sindelfingen pk:1475), never over a bay.
     const clear = (a: Vec2, b: Vec2, entry = false, passage = false) => {
@@ -52,8 +76,8 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       for (let i = 1; i < ts.length; i++) {
         if (ts[i]! - ts[i - 1]! < 1e-8) continue;
         const p = mix(a, b, (ts[i]! + ts[i - 1]!) / 2);
-        if (blocking.some((r) => pointInPolygon(p, r))) return false;
-        if (pointInPolygon(p, boundary)) entered = true;
+        if (blocking.some((r) => inRing(p, r))) return false;
+        if (inRing(p, boundary)) entered = true;
         else if (!entry || entered) return false;
       }
       return (

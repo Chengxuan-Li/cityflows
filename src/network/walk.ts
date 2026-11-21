@@ -246,10 +246,10 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     link.cuts.push(n.along);
     return n.point;
   };
-  const nearestCache = new Map<Raw, { near: ReturnType<typeof prepareNearest>; box: number[] }>();
-  const prepare = (link: Raw) => {
-    let prepared = nearestCache.get(link);
-    if (!prepared) {
+  const boxCache = new Map<Raw, number[]>();
+  const boxOf = (link: Raw) => {
+    let box = boxCache.get(link);
+    if (!box) {
       let x0 = Infinity,
         y0 = Infinity,
         x1 = -Infinity,
@@ -260,7 +260,15 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         x1 = Math.max(x1, p.x);
         y1 = Math.max(y1, p.y);
       }
-      prepared = { near: prepareNearest(link.line), box: [x0, y0, x1, y1] };
+      boxCache.set(link, (box = [x0, y0, x1, y1]));
+    }
+    return box;
+  };
+  const nearestCache = new Map<Raw, { near: ReturnType<typeof prepareNearest>; box: number[] }>();
+  const prepare = (link: Raw) => {
+    let prepared = nearestCache.get(link);
+    if (!prepared) {
+      prepared = { near: prepareNearest(link.line), box: boxOf(link) };
       nearestCache.set(link, prepared);
     }
     return prepared;
@@ -862,6 +870,10 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       .map((l) => l.id.slice(0, l.id.lastIndexOf('/'))),
   );
   const isCore = (i: number) => coreLinks.has(raw[i]!.id);
+  // Fill missing access without moving an existing main-network entrance onto infill.
+  const ranks: number[] = [];
+  const rankOf = (j: number) =>
+    (ranks[j] ??= (isCore(j) ? 0 : 2) + (raw[j]!.generated && separateCurb(raw[j]!) ? 1 : 0));
   const attached = new Map<string, { pos: Vec2; target: Raw }>();
   const owningCurb = (access: ReturnType<typeof attached.get>, road: CRoad) => {
     if (!access || access.target.layer !== layerOf(road)) return;
@@ -892,26 +904,35 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       x1 = Math.max(x1, p.x);
       y1 = Math.max(y1, p.y);
     }
+    // The shape's box gap to a target's box, squared: no probe (each lies in the shape's box)
+    // comes nearer the target.
+    const gap = (j: number) => {
+      const [tx0, ty0, tx1, ty1] = boxOf(raw[j]!) as [number, number, number, number];
+      const dx = Math.max(tx0 - x1, 0, x0 - tx1),
+        dy = Math.max(ty0 - y1, 0, y0 - ty1);
+      return dx * dx + dy * dy;
+    };
+    // TASK-287: the access is the valid probe of least rank, then distance, then target index
+    // and probe order. Without a preferred point that order is total, so the targets are tried
+    // by rank and box gap and the search stops at the first that cannot win (York: 26 targets
+    // projected per shape in index order, most of them far). A preferred point's 1e-6 tie rule
+    // is not transitive: those keep index order.
     const candidates = pathTree
       .search(x0 - ACCESS_M, y0 - ACCESS_M, x1 + ACCESS_M, y1 + ACCESS_M)
-      .filter((j) => raw[j]!.layer === layer && raw[j]!.kind !== 'crossing');
-    let best: { target: Raw; a: Vec2; b: Vec2; away: number; rank: number } | undefined;
-    for (const j of candidates.sort((a, b) => a - b)) {
+      .filter((j) => raw[j]!.layer === layer && raw[j]!.kind !== 'crossing')
+      .map((j) => ({ j, rank: rankOf(j), gap: preferred ? 0 : gap(j) }))
+      .sort((a, b) => (preferred ? a.j - b.j : a.rank - b.rank || a.gap - b.gap || a.j - b.j));
+    let best: { target: Raw; j: number; a: Vec2; b: Vec2; away: number; rank: number } | undefined;
+    for (const { j, rank, gap: targetGap } of candidates) {
       const target = raw[j]!,
         probes = [...points];
-      // Fill missing access without moving an existing main-network entrance onto infill.
-      const rank = (isCore(j) ? 0 : 2) + (target.generated && separateCurb(target) ? 1 : 0);
+      if (best && !preferred && (rank > best.rank || targetGap > best.away ** 2)) break;
       const prepared = prepare(target);
       if (best) {
         // Every probe lies in the shape's box, so the per-probe tests below would reject this
         // whole target; skip its polygon projections (lead, TASK-110 merge: compile time).
         if (rank > best.rank) continue;
-        if (rank === best.rank) {
-          const [tx0, ty0, tx1, ty1] = prepared.box as [number, number, number, number];
-          const dx = Math.max(tx0 - x1, 0, x0 - tx1),
-            dy = Math.max(ty0 - y1, 0, y0 - ty1);
-          if (dx * dx + dy * dy > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
-        }
+        if (rank === best.rank && gap(j) > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
       }
       if (shape.kind === 'polygon') for (const p of target.line) probes.push(nearShape!(p).point);
       let previousProbe: Vec2 | undefined;
@@ -934,11 +955,11 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
                   ? n.away > best.away + 1e-6 ||
                     (Math.abs(n.away - best.away) <= 1e-6 &&
                       distance(n.point, preferred) >= distance(best.b, preferred))
-                  : n.away >= best.away)))) ||
+                  : n.away > best.away || (n.away === best.away && j >= best.j))))) ||
           !clear(a, n.point, layer)
         )
           continue;
-        best = { target, a, b: n.point, away: n.away, rank };
+        best = { target, j, a, b: n.point, away: n.away, rank };
       }
     }
     if (!best) return;
