@@ -1,3 +1,15 @@
+import {
+  areaD,
+  booleanOpD,
+  booleanOpDWithPolyTree,
+  ClipType,
+  EndType,
+  FillRule,
+  inflatePathsD,
+  JoinType,
+  PolyTreeD,
+  type PolyPathD,
+} from 'clipper2-ts';
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { straightSkeleton, type StraightSkeleton } from '../geo/straight-skeleton';
 import type { Vec2 } from '../geo/vec2';
@@ -489,19 +501,93 @@ function skeletonRoof({ nodes, faces, arcs }: StraightSkeleton, ends: Ends) {
   return { triangles, walls };
 }
 
+const top = (piece: { heightM?: number; levels?: number }) =>
+  piece.heightM ?? (piece.levels === undefined ? undefined : piece.levels * 3);
+const positive = (ring: Vec2[]) => {
+  const open = openRing(ring).map(({ x, y }) => ({ x, y }));
+  return area(open) < 0 ? open.reverse() : open;
+};
+const closed = (ring: { x: number; y: number }[]) => [
+  ...ring.map(({ x, y }) => ({ x, y })),
+  { x: ring[0]!.x, y: ring[0]!.y },
+];
+
+/** TASK-272: the outline's area that no part covers, as outer rings with their holes. Pieces
+ * narrower than 1 m (the seams left where outline and parts were simplified apart) and under
+ * 4 m² (the importer's smallest area) are dropped. */
+function uncovered(feature: Area): Vec2[][][] {
+  // Its courtyards and its parts' outer rings, all one way round, so overlaps never cancel.
+  const covered = [...feature.rings.slice(1), ...feature.parts!.map((part) => part.rings[0]!)];
+  const rest = booleanOpD(
+    ClipType.Difference,
+    [positive(feature.rings[0]!)],
+    covered.map(positive),
+    FillRule.NonZero,
+    2,
+  );
+  const opened = inflatePathsD(
+    inflatePathsD(rest, -0.5, JoinType.Miter, EndType.Polygon, 2, 2),
+    0.5,
+    JoinType.Miter,
+    EndType.Polygon,
+    2,
+    2,
+  );
+  const tree = new PolyTreeD();
+  booleanOpDWithPolyTree(ClipType.Intersection, opened, rest, tree, FillRule.NonZero, 2);
+  const pieces: Vec2[][][] = [];
+  // Outer rings hold holes; a hole can hold islands, which are outer rings again.
+  const walk = (node: PolyPathD) => {
+    for (let i = 0; i < node.count; i++) {
+      const outer = node.child(i);
+      const holes = Array.from({ length: outer.count }, (_, j) => outer.child(j));
+      const net =
+        Math.abs(areaD(outer.poly!)) - holes.reduce((sum, h) => sum + Math.abs(areaD(h.poly!)), 0);
+      if (net >= 4) pieces.push([closed(outer.poly!), ...holes.map((h) => closed(h.poly!))]);
+      holes.forEach(walk);
+    }
+  };
+  walk(tree);
+  return pieces;
+}
+
 /** TASK-201: what 3D draws of a building: its `building:part` areas when it has them (each
  * from its own minimum height, in the outline's colour and material unless it has its own),
- * otherwise the outline itself. */
+ * otherwise the outline itself.
+ *
+ * TASK-272: where the outline's height is not the height of its tallest part (Simple 3D
+ * Buildings' convention for the outline, which then only envelopes its parts), the outline
+ * gives the main body: the area no part covers stands with the outline's own tags, and a part
+ * with neither height nor levels takes the outline's (Philadelphia City Hall: a 30 m body
+ * around a 167 m tower, 26 of its 30 parts untagged). */
 export function buildingPieces(feature: Area): Area[] {
   if (!feature.parts?.length) return [feature];
   const { colour, material } = feature;
-  return feature.parts.map((part) => ({
+  const outlineTop = top(feature);
+  const tallest = Math.max(...feature.parts.map((part) => top(part) ?? 0));
+  const body = outlineTop === undefined || Math.abs(tallest - outlineTop) > 0.5;
+  const inherited =
+    body && outlineTop !== undefined
+      ? {
+          ...(feature.heightM !== undefined && { heightM: feature.heightM }),
+          ...(feature.levels !== undefined && { levels: feature.levels }),
+        }
+      : {};
+  const pieces: Area[] = feature.parts.map((part) => ({
     kind: 'area',
     class: 'building',
     ...(colour && { colour }),
     ...(material && { material }),
+    ...(top(part) === undefined && inherited),
     ...part,
   }));
+  if (body)
+    for (const rings of uncovered(feature)) {
+      const rest: Area = { ...feature, rings };
+      delete rest.parts;
+      pieces.push(rest);
+    }
+  return pieces;
 }
 
 /** Display-only building roof; x/east, z/south, y/up, with the building base at zero. */
