@@ -282,11 +282,14 @@ const contextFeature = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('line'),
-    class: z.enum(['rail', 'tram', 'waterway', 'tree_row']),
+    class: z.enum(['rail', 'tram', 'waterway', 'tree_row', 'city_wall', 'city_gate']),
     line: z.array(vec2).min(2),
     widthM: z.number().positive().optional(),
     layer: z.int().optional(),
     spacingM: z.number().min(2).optional(),
+    heightM: z.number().positive().optional(),
+    walkway: z.literal(true).optional(),
+    bridge: z.literal(true).optional(),
   }),
   z.object({
     kind: z.literal('point'),

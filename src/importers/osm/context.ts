@@ -14,7 +14,8 @@ import type {
   RoofShape,
 } from '../../schema';
 import { clip, polygonSources } from './buildings';
-import { clipPart, type Bounds } from './clip';
+import { clipPart, contains, type Bounds } from './clip';
+import { drivableClass } from './filter';
 import type { OsmData, OsmTags } from './parse';
 import { surfaceLot } from './lots';
 import { polygonCenter } from './places';
@@ -54,8 +55,17 @@ function areaClass(tag: OsmTags): ContextArea | undefined {
 const buildingPart = (tag: OsmTags) =>
   !tag.building && !!tag['building:part'] && tag['building:part'] !== 'no';
 
+/** TASK-273: a city wall, by either tagging; its stairs (`highway=steps`) are walk, and a wall
+ * mapped as a building (a gate or tower over the wall) is that building. */
+const cityWall = (tag: OsmTags) =>
+  (tag.barrier === 'city_wall' || tag.historic === 'citywalls') &&
+  tag.highway !== 'steps' &&
+  (!tag.building || tag.building === 'no');
+const walkways = new Set(['footway', 'path', 'pedestrian', 'cycleway', 'bridleway']);
+
 function lineClass(tag: OsmTags): ContextLine | undefined {
   if (tag.natural === 'tree_row') return 'tree_row';
+  if (cityWall(tag)) return 'city_wall';
   if (tag.tunnel === 'yes' && Number(tag.layer) < 0) return;
   if (['rail', 'light_rail', 'subway', 'narrow_gauge'].includes(tag.railway ?? '')) return 'rail';
   if (tag.railway === 'tram') return 'tram';
@@ -412,9 +422,11 @@ export function importContext(
   );
   for (const way of data.way) {
     const kind = lineClass(way.tag);
-    const path = ['footway', 'path', 'cycleway', 'pedestrian', 'steps', 'track'].includes(
-      way.tag.highway ?? '',
-    );
+    const path =
+      kind !== 'city_wall' &&
+      ['footway', 'path', 'cycleway', 'pedestrian', 'steps', 'track'].includes(
+        way.tag.highway ?? '',
+      );
     if (!kind && !path) continue;
     // Missing nodes break a line rather than drawing a fabricated bridge across the gap.
     let run: Vec2[] = [];
@@ -456,6 +468,8 @@ export function importContext(
         const spacing = kind === 'tree_row' ? measurement(way.tag.spacing) : undefined;
         const spacingM = spacing !== undefined && spacing >= 2 ? spacing : undefined;
         const layer = way.tag.layer === undefined ? undefined : Number(way.tag.layer);
+        const wall = kind === 'city_wall';
+        const heightM = wall ? measurement(way.tag.height) : undefined;
         features.push({
           kind: 'line',
           class: kind!,
@@ -463,6 +477,9 @@ export function importContext(
           ...(widthM !== undefined && { widthM }),
           ...(spacingM !== undefined && { spacingM }),
           ...(Number.isInteger(layer) && { layer }),
+          ...(heightM !== undefined && { heightM }),
+          ...(wall && walkways.has(way.tag.highway ?? '') && { walkway: true as const }),
+          ...(wall && way.tag.bridge && way.tag.bridge !== 'no' && { bridge: true as const }),
         });
       }
       run = [];
@@ -474,6 +491,7 @@ export function importContext(
     }
     flush();
   }
+  features.push(...gateArches(data, positions, snapped, buildings, round));
   // TASK-274: an elevator mapped only as a node. One tagged `indoor=yes` is left out, and so is one
   // inside a building outline, indoors, unless the outline is its tower: at most `elevatorTowerM2`,
   // without parts and not itself valued `elevator` (that shaft is drawn by TASK-263).
@@ -507,4 +525,55 @@ export function importContext(
       message: `Mapped ${mapped.count} building roofs from ${shape} to ${mapped.shape}`,
     });
   return features;
+}
+
+/** TASK-273: a gate mapped only as a node on a way (`historic=city_gate`) is an arch across that
+ * way: a line square to it through the node, spanning its tagged `width` (else 3 m a lane, else
+ * 6 m for a road and 3 m for a path) with a 1.5 m pier at each side. A node inside a building
+ * outline is that building's gate (a gatehouse), and a node on no way has no direction. */
+function gateArches(
+  data: OsmData,
+  positions: Map<number, Vec2>,
+  bounds: Bounds,
+  buildings: { feature: ContextAreaFeature }[],
+  round: (line: Vec2[]) => Vec2[],
+): ContextFeature[] {
+  const gates = data.node.filter((node) => node.tag.historic === 'city_gate');
+  if (!gates.length) return [];
+  const arches: ContextFeature[] = [];
+  for (const node of gates) {
+    const p = positions.get(node.id);
+    if (!p || !contains(bounds, p)) continue;
+    if (buildings.some(({ feature }) => pointInPolygon(p, feature.rings[0]!))) continue;
+    // The road through the gate before any path, then the first in file order.
+    const ways = data.way
+      .filter((way) => way.tag.highway && way.nd.includes(node.id))
+      .sort((a, b) => Number(!drivableClass(a)) - Number(!drivableClass(b)));
+    const way = ways[0];
+    if (!way) continue;
+    const i = way.nd.indexOf(node.id);
+    const before = positions.get(way.nd[Math.max(0, i - 1)]!),
+      after = positions.get(way.nd[Math.min(way.nd.length - 1, i + 1)]!);
+    if (!before || !after) continue;
+    const length = Math.hypot(after.x - before.x, after.y - before.y);
+    if (!length) continue;
+    const lanes = Number(way.tag.lanes);
+    const span =
+      measurement(way.tag.width) ??
+      (Number.isInteger(lanes) && lanes > 0 ? lanes * 3 : drivableClass(way) ? 6 : 3);
+    const half = span / 2 + 1.5;
+    const nx = -(after.y - before.y) / length,
+      ny = (after.x - before.x) / length;
+    const heightM = measurement(node.tag.height);
+    arches.push({
+      kind: 'line',
+      class: 'city_gate',
+      line: round([
+        { x: p.x - nx * half, y: p.y - ny * half },
+        { x: p.x + nx * half, y: p.y + ny * half },
+      ]),
+      ...(heightM !== undefined && { heightM }),
+    });
+  }
+  return arches;
 }

@@ -1,7 +1,7 @@
 import type { ImportOptions } from './types';
 
 export type Bbox = NonNullable<ImportOptions['bbox']>;
-export const queryVersion = 10;
+export const queryVersion = 11;
 export const defaultEndpoint =
   import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 let active = false;
@@ -54,7 +54,9 @@ export function buildQuery(bbox: Bbox, context = true): string {
         )
         .join('') +
       `node[highway=street_lamp](${s},${w},${n},${e});` +
-      `node[natural=tree](${s},${w},${n},${e});way[natural=tree_row](${s},${w},${n},${e});`
+      `node[natural=tree](${s},${w},${n},${e});way[natural=tree_row](${s},${w},${n},${e});` +
+      // TASK-273: city walls (either tagging) and their gates, nodes on the road or gatehouses.
+      `way[barrier=city_wall](${s},${w},${n},${e});way[historic=citywalls](${s},${w},${n},${e});nwr[historic=city_gate](${s},${w},${n},${e});`
     : '';
   const lots = `way[highway=service][service=parking_aisle](${s},${w},${n},${e});way[amenity=parking](${s},${w},${n},${e});rel[amenity=parking][type=multipolygon](${s},${w},${n},${e});`;
   const garages = `nwr[building~"^(parking|garage|garages)$"](${s},${w},${n},${e});nwr[amenity=parking][parking~"^(underground|multi-storey)$"](${s},${w},${n},${e});node[entrance=garage](${s},${w},${n},${e});`;

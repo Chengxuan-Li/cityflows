@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { areaError, buildQuery, fetchOverpass } from './overpass';
+import { areaError, buildQuery, fetchOverpass, queryVersion } from './overpass';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -52,4 +52,17 @@ test('T48 garage data is requested independently of decorative surroundings', ()
   expect(query).toContain('nwr[amenity=parking][parking~"^(underground|multi-storey)$"]');
   expect(query).toContain('node[entrance=garage]');
   expect(query).toContain('[service!~"^(parking_aisle|driveway)$"]');
+});
+
+test('TASK-273 query version 11 fetches city walls and their gates with the surroundings', () => {
+  const bbox: [number, number, number, number] = [-1.0975, 53.9514, -1.0713, 53.9655];
+  const full = buildQuery(bbox);
+  for (const clause of [
+    'way[barrier=city_wall]',
+    'way[historic=citywalls]',
+    'nwr[historic=city_gate]',
+  ])
+    expect(full).toContain(clause + '(53.9514,-1.0975,53.9655,-1.0713);');
+  expect(buildQuery(bbox, false)).not.toContain('city_wall');
+  expect(queryVersion).toBe(11);
 });

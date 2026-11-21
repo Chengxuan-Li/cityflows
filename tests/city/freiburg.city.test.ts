@@ -231,7 +231,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-274: rebuilt; two `elevator` points appended to the context (display only).
     // TASK-275: rebuilt; walk links carry their OSM `covered` (207) and `handrail` (263); nothing
     // else changes.
-    'a6b96fb3a031fb76c2117140032a4e182a69f08d16081f6ff4338403e7354e00',
+    // TASK-273: rebuilt; the extract's one city wall (way 1052938724 at Augustinerplatz, fetched
+    // as a member of the square's area relation) is a context line; nothing else changes.
+    'PENDING_MANIFEST',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
