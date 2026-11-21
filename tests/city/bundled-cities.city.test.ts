@@ -55,10 +55,10 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // The showcase gate (TASK-258), as Freiburg's: the morning at the showcase demand (0.15 persons
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
-// Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
-// gate (`heldOutOfPanel`, TASK-284: York) is expected to fail, so the fix that lets it pass shows.
+// Munich's and Sindelfingen's own traffic tests pin theirs. TASK-286: York passes since its
+// Layerthorpe gateway leaves on a lane the router can leave (TASK-284 expected it to fail).
 describe.for(['munich', 'sindelfingen', 'luebeck', 'york'])('%s at the showcase demand', (id) => {
-  (id in heldOutOfPanel ? test.fails : test)(
+  test(
     'drains: no gridlock, no stalled head, no unroutable trip, no visit adds 900 s',
     async () => {
       const project = await openBundled(id);

@@ -74,12 +74,10 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
 };
 
 /** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New
- * city panel because they fail the showcase gate or the load budget (the gate test expects the
- * failure, so a fix shows); each with why. */
+ * city panel because they fail the showcase gate or the load budget; each with why. TASK-286:
+ * York passes its gate (no `no_route` at the Layerthorpe gateway); its load remains (TASK-287). */
 export const heldOutOfPanel: Record<string, string> = {
-  york:
-    'no_route at the Layerthorpe gateway (its exit lane needs lane changes on roads under 30 m); ' +
-    'first frame 1.6x Freiburg',
+  york: 'first frame 1.6x Freiburg',
 };
 
 /** The committed bundled project, opened as the app opens it. */

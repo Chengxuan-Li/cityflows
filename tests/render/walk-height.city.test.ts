@@ -16,7 +16,10 @@ const pins = {
   // Lead merge: re-pinned on TASK-275's canopies and handrails (the same hashes with and without
   // TASK-278's lookups on the merged tree).
   // Lead merge: re-pinned on TASK-271 (passages and covered ways at grade change the walk).
-  freiburg: '09b27fc15dd96f5df2fcaaec4d925d8c7751743849f82322bcbd335d927cd9ec',
+  // TASK-286: Stefan-Meier-Straße's way in has no gateway connector; the sidewalk beside the
+  // gateway it left loses three near-collinear corners (5 triangles to 2, 28.914 to 28.912 m²).
+  // Footways, steps and footbridges are unchanged.
+  freiburg: '6fd38e9f6d904b3117ec7e32cbb284258dc367a8238890f4d1b393c862ebf2ee',
   munich: '15bab3954dfa57a1bd897bf6ad9291e4973a36068cdb3510cca36c2c0275efaa',
   sindelfingen: 'b5ae4105b3a362ced824c74d4b6878ceaeb94385fb22a2ca098530f47fc9fc24',
 };

@@ -7,6 +7,7 @@ import {
 } from '../../geo/polyline';
 import { carService } from '../../network/car-service';
 import { isLaneDrop } from '../../network/lane-drop';
+import { reachableLanes } from '../../network/lane-reach';
 import { parkingEgress } from '../../network/parking-egress';
 import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
@@ -15,6 +16,9 @@ import { allocateId, vehicleClasses, type City, type Place, type RoadClass } fro
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import type { OsmRoad } from './roads';
+
+/** The router's default `laneChangeDistanceM` (`SimParams`). */
+const laneChangeM = 30;
 
 const gatewayDemand: Record<RoadClass, number> = {
   motorway: 400,
@@ -32,8 +36,13 @@ const gatewayDemand: Record<RoadClass, number> = {
 // unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
 // TASK-270: `publicCar` keeps only what a car may drive through, as the router does (car lanes on
 // roads with car access `yes`, no lane drops), so the core is the public network and a lane only
-// reaches it through public roads, not through a destination or private zone. Lane changes count on
-// every road there, as in `carService`: the router can make them further on.
+// reaches it through public roads, not through a destination or private zone.
+// TASK-286: there lane changes count as the router makes them (`reachableLanes`, the lane search's
+// edges): a lane entered at its road's start leaves by the movements of every lane it can change
+// to within the road's length less 10 m, each change 30 m. TASK-270 counted a change on every road,
+// so York's Layerthorpe gateway left on a lane that reaches the core only by changing lanes on
+// roads of 5 to 22.6 m, and every route from it failed. `leaves` and `arrives` judge a gateway's
+// connector by the router's origin and destination budgets.
 export function networkAccess(compiled: CompiledCity, laneChanges = true, publicCar = false) {
   const car = vehicleClasses.indexOf('car');
   const open = compiled.lanes.map(
@@ -49,17 +58,33 @@ export function networkAccess(compiled: CompiledCity, laneChanges = true, public
     out[m.fromLane]!.push(m.toLane);
     incoming[m.toLane]!.push(m.fromLane);
   }
-  for (const road of laneChanges ? compiled.roads : []) {
-    const lanes = road.lanes.map((i) => compiled.lanes[i]!);
-    if (lanes.some((l) => !open[l.idx])) continue;
-    if (!publicCar && lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
-    for (const lane of lanes)
-      for (const other of lanes) {
-        if (lane.idx === other.idx) continue;
-        out[lane.idx]!.push(other.idx);
-        incoming[other.idx]!.push(lane.idx);
-      }
-  }
+  const moves = out.map((next) => [...next]);
+  if (publicCar)
+    for (const lane of compiled.lanes) {
+      const endM = Math.max(0, compiled.roads[lane.road]!.lengthM - 10);
+      for (const { lane: from, changes } of reachableLanes(
+        compiled,
+        open,
+        lane.idx,
+        endM,
+        laneChangeM,
+      ))
+        for (const to of changes ? moves[from]! : []) {
+          out[lane.idx]!.push(to);
+          incoming[to]!.push(lane.idx);
+        }
+    }
+  else
+    for (const road of laneChanges ? compiled.roads : []) {
+      const lanes = road.lanes.map((i) => compiled.lanes[i]!);
+      if (lanes.some((l) => l.lengthM < (lanes.length - 1) * laneChangeM + 10)) continue;
+      for (const lane of lanes)
+        for (const other of lanes) {
+          if (lane.idx === other.idx) continue;
+          out[lane.idx]!.push(other.idx);
+          incoming[other.idx]!.push(lane.idx);
+        }
+    }
   const seen = new Set<number>(),
     order: number[] = [];
   for (const lane of compiled.lanes) {
@@ -105,7 +130,26 @@ export function networkAccess(compiled: CompiledCity, laneChanges = true, public
       }
     return result;
   };
-  return { core: new Set(core), fromCore: reach(out), toCore: reach(incoming) };
+  const coreSet = new Set(core),
+    fromCore = reach(out),
+    toCore = reach(incoming);
+  /** A car starting on `lane` at `fromM` reaches the core (the router's origin budget is the
+   * lane's length). */
+  const leaves = (lane: number, fromM: number) => {
+    const { lengthM } = compiled.lanes[lane]!;
+    for (const { lane: from } of reachableLanes(compiled, open, lane, lengthM, laneChangeM, fromM))
+      if (coreSet.has(from) || moves[from]!.some((to) => toCore.has(to))) return true;
+    return false;
+  };
+  /** A car from the core can stop on `lane` at `atM`: it enters the road on a lane it can change
+   * from to `lane` within `atM` (the router's destination budget). */
+  const arrives = (lane: number, atM: number) =>
+    compiled.roads[compiled.lanes[lane]!.road]!.lanes.some(
+      (entry) =>
+        fromCore.has(entry) &&
+        [...reachableLanes(compiled, open, entry, atM, laneChangeM)].some((r) => r.lane === lane),
+    );
+  return { core: coreSet, fromCore, toCore, leaves, arrives };
 }
 
 export function addPlace(
@@ -142,6 +186,7 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
   // Altstadt behind destination streets, and a cut end whose lanes lead nowhere had connectors
   // anyway: every `no_route` of TASK-259's scout.
   const access = networkAccess(compiled, true, polygon);
+  const inset = (lengthM: number) => Math.min(5, lengthM / 2);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
   const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
@@ -152,8 +197,16 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       const lanes = compiled.roads[compiled.index.road.get(road.id)!]!.lanes.map(
         (i) => compiled.lanes[i]!,
       );
+      // TASK-286: a polygon's connector lane is one the router can leave (out) or reach (in) from
+      // the connector's own position; of several, the driving side's outer one as before (York's
+      // Layerthorpe `r:3638`: lane 1, not lane 0, which reaches the core only by lane changes on
+      // roads under 30 m).
       let candidates = lanes.filter((l) =>
-        (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
+        polygon
+          ? end === 'start'
+            ? access.leaves(l.idx, inset(l.lengthM))
+            : access.arrives(l.idx, l.lengthM - inset(l.lengthM))
+          : (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
       );
       if (
         !polygon &&
@@ -263,12 +316,11 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
         .map((e) => gatewayDemand[e.source.road.roadClass] * e.source.road.lanes.length),
     );
     for (const { source, lane, end } of group) {
-      const inset = Math.min(5, lane.lengthM / 2);
       place.connectors.push({
         id: allocateId(city, 'c'),
         roadId: source.road.id,
         lane: lane.lane,
-        positionM: end === 'start' ? inset : lane.lengthM - inset,
+        positionM: end === 'start' ? inset(lane.lengthM) : lane.lengthM - inset(lane.lengthM),
         direction: end === 'start' ? 'out' : 'in',
         throughputPerMin: 30 * source.road.lanes.length,
       });
