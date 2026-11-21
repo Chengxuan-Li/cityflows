@@ -48,12 +48,21 @@ test('the app opens on Freiburg, paused, and renders it within its frame budget 
   await page.waitForFunction(
     () => performance.getEntriesByName('cityflows:first-frame-3d').length > 0,
   );
+  // TASK-278: the 3D scene's build (`setCity`), reported beside the frames.
+  const buildMs = Number(
+    await page.locator('canvas[data-view="3d"]').getAttribute('data-build-ms'),
+  );
   const threeD = await railFrameTiming(page, 'cityflows:render3d', sample);
   await button(page, 'Pause').click();
   const report = {
     environment: await railTimingEnvironment(page),
     '2d': { frameMs: twoD.frameMs, renderMs: twoD.renderMs, renderP95Ms: p95(twoD.renders) },
-    '3d': { frameMs: threeD.frameMs, renderMs: threeD.renderMs, renderP95Ms: p95(threeD.renders) },
+    '3d': {
+      frameMs: threeD.frameMs,
+      renderMs: threeD.renderMs,
+      renderP95Ms: p95(threeD.renders),
+      buildMs,
+    },
   };
   console.info('Freiburg landing frames', JSON.stringify(report));
   await writeFile(info.outputPath('freiburg-frames.json'), JSON.stringify(report, null, 2));
