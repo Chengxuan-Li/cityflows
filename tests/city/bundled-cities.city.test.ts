@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { openBundled, projectFile, realPlaceBuilds } from '../../bench/bundled-cities';
+import {
+  heldOutOfPanel,
+  openBundled,
+  projectFile,
+  realPlaceBuilds,
+} from '../../bench/bundled-cities';
 import { probeMorning } from '../../bench/import-probe';
 import { compile } from '../../src/network';
 import { realPlaces } from '../../src/ui/bundled-projects';
@@ -11,8 +16,22 @@ import { limit } from '../timeouts';
 const manifest = (json: string) =>
   (JSON.parse(json) as { manifest: { files: Record<string, string> } }).manifest.files;
 
-test('the panel lists every bundled real place, and each has a build', () => {
-  expect(realPlaces.map((place) => place.id).sort()).toEqual(Object.keys(realPlaceBuilds).sort());
+test('the panel lists every bundled real place not held out of it, and each has a build', () => {
+  expect(realPlaces.map((place) => place.id).sort()).toEqual(
+    Object.keys(realPlaceBuilds)
+      .filter((id) => !(id in heldOutOfPanel))
+      .sort(),
+  );
+});
+
+// TASK-284: the driving side is the importer's inference from the location (TASK-268), not an
+// option of the build: York, the first left-hand place, drives on the left with UK markings.
+test.for([
+  ['luebeck', 'right', 'de'],
+  ['york', 'left', 'uk'],
+] as const)('%s drives on the %s, inferred', async ([id, side, theme]) => {
+  const { city } = await openBundled(id);
+  expect([city.drivingSide, city.markingTheme]).toEqual([side, theme]);
 });
 
 // The staleness test: a bundled archive must be what its builder makes of the committed extract
@@ -36,9 +55,10 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // The showcase gate (TASK-258), as Freiburg's: the morning at the showcase demand (0.15 persons
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
-// Munich's and Sindelfingen's own traffic tests pin theirs.
-describe.for(['munich', 'sindelfingen'])('%s at the showcase demand', (id) => {
-  test(
+// Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
+// gate (`heldOutOfPanel`, TASK-284: York) is expected to fail, so the fix that lets it pass shows.
+describe.for(['munich', 'sindelfingen', 'luebeck', 'york'])('%s at the showcase demand', (id) => {
+  (id in heldOutOfPanel ? test.fails : test)(
     'drains: no gridlock, no stalled head, no unroutable trip, no visit adds 900 s',
     async () => {
       const project = await openBundled(id);
