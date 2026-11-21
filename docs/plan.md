@@ -312,6 +312,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | done 2026-11-21 (merged variant; York gate passes; York in the panel) |
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
 | [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | done 2026-11-21 (merged on the owner's go; Munich and Freiburg identical; Sindelfingen 280 to 890 trips a day) |
+| [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | in progress 2026-11-21 (owner's go) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6140,6 +6141,8 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-21 (owner): "Yes, open it": TASK-289 (the York lot deadlock at `pk:4462`) started.
 
 - 2026-11-21 (owner): "Merge the variant": TASK-288's variant `0f3b4f1` merged, Sindelfingen's demand rising from 280
   to 890 trips a day accepted. The York lot deadlock (`pk:4462`) found by its v1 stays a noted follow-up.
