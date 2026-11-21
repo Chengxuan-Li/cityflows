@@ -195,25 +195,29 @@ const pins = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
-    compile: 'd2959e1ab01640a549a333aaae2995abd30b0e4c3a0e27f734b29c15daacb280',
+    // TASK-265: n:6's zebra, its walk link and walker spans stand on that node, 3.6 m farther out.
+    compile: 'a6f742244c50fc1d57ccdf08df6eb196b43391029ca8a8edacef89c81d7a7189',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    // TASK-265: the curb opens at n:6's zebra on its crossing node (r:10, r:11).
+    curbs: '080d9124d77cfcbf5e54356a14bc6e8b260432dcbefb2f0a62787e0de24c46d9',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
     // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
-    de: '6bf159e95f018ec1b2f1a6debd3572f83b654c515af7d51557a577e4561c52d8',
+    // TASK-265: n:6's zebra on its crossing node; lane lines end at it.
+    de: '2fdbb85d17737cd1f6bdb9ab364d81a4a3f244e83e9b594beba0103d6aca77aa',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
     // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
-    us: 'd828085dd199ef4065e16a41e104fdb3edd33c65eef8980036e9dba6bd45ae8c',
+    // TASK-265: n:6's zebra on its crossing node; lane lines end at it.
+    us: 'f49db87132085e8186e2f8ad77a30b2b1949e6cfd70cbfa0cf70ca18f1505c91',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
