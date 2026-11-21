@@ -24,12 +24,15 @@ import {
 import { clip, polygonSources } from './buildings';
 import { clipPart, contains, type Bounds, type RoadPoint } from './clip';
 import type { OsmData, OsmTags } from './parse';
-import { osmLayer } from './roads';
+import { isBridge, osmLayer } from './roads';
 
 const isTrack = (t: OsmTags) => railKinds.includes(t.railway as RailKind);
 /** TASK-132: a building passage or covered way stays at grade under its roof; its `layer` (and
  * `tunnel`) still order it below the building, as before. */
 const covered = (t: OsmTags) => t.tunnel === 'building_passage' || t.covered === 'yes';
+/** TASK-271: roads read covered ways at grade (`osmLayer`); track layers keep them below. */
+const railLayer = (t: OsmTags) =>
+  t.layer === undefined && !isBridge(t) && covered(t) ? -1 : osmLayer(t);
 /** TASK-134: whether a way carries an overhead contact line, from `electrified`; undefined when
  * untagged. `yes` counts unless `electrified:rail` says the conductor is a rail. */
 const contactLine = (t: OsmTags) => {
@@ -138,7 +141,7 @@ export function importRail(
     return id;
   };
   for (const w of ways) {
-    const layer = osmLayer(w.tag) ?? 0;
+    const layer = railLayer(w.tag) ?? 0;
     const runs: RoadPoint[][] = [];
     let run: RoadPoint[] = [];
     for (const ref of [...w.nd, NaN]) {
@@ -246,7 +249,7 @@ export function importRail(
       name: tag.name ?? areaNames.get(sourceKey) ?? tag.ref ?? 'Platform',
       ...(tag.ref ? { ref: tag.ref } : {}),
       mode,
-      layer: osmLayer(tag) ?? 0,
+      layer: railLayer(tag) ?? 0,
       tracks: [],
       station: null,
       osmId,
@@ -547,7 +550,7 @@ export function assignTramForms(
     }),
     ...data.way.flatMap((w) => {
       const ring = w.tag['area:highway'] && w.nd[0] === w.nd.at(-1) ? located(w.nd) : undefined;
-      const layer = osmLayer(w.tag) ?? 0;
+      const layer = railLayer(w.tag) ?? 0;
       return ring && ring.length >= 4 && nearOneLane(ring, layer) ? [{ ring, layer }] : [];
     }),
   ];
@@ -555,7 +558,7 @@ export function assignTramForms(
   const tramRoads = data.way.flatMap((w) => {
     const half = tramRoadHalfWidth(w.tag);
     const line = half === undefined ? undefined : located(w.nd);
-    return line && line.length >= 2 ? [{ line, half: half!, layer: osmLayer(w.tag) ?? 0 }] : [];
+    return line && line.length >= 2 ? [{ line, half: half!, layer: railLayer(w.tag) ?? 0 }] : [];
   });
   const tramRoadIndex = index(tramRoads, (r) => r.line);
   const reach = Math.max(0, ...tramRoads.map((r) => r.half));
