@@ -8,7 +8,14 @@ import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
-import { clipPart, findBoundaryCuts, prunePolygonCuts, type Bounds, type RoadPoint } from './clip';
+import {
+  clipPart,
+  findBoundaryCuts,
+  prunePolygonCuts,
+  roundaboutBounds,
+  type Bounds,
+  type RoadPoint,
+} from './clip';
 import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
 import { addMappedLotPortals } from './lot-junctions';
@@ -155,6 +162,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const positions = new Map(data.node.map((node) => [node.id, lonLatToLocal(geo, node)]));
   const ways = kept.map(({ way }) => way);
   const boundaryCuts = findBoundaryCuts(ways, positions, bounds);
+  const roadBounds = roundaboutBounds(ways, positions, bounds);
   const splits = junctions(ways, [
     ...data.node
       .filter(({ tag }) => ['traffic_signals', 'stop', 'give_way'].includes(tag.highway ?? ''))
@@ -247,7 +255,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
           `way/${way.id}`,
         ]);
       }
-      for (const clipped of clipPart(points, bounds, `way/${way.id}/${index}`, boundaryCuts)) {
+      for (const clipped of clipPart(points, roadBounds, `way/${way.id}/${index}`, boundaryCuts)) {
         const first = clipped.points[0]!;
         const last = clipped.points.at(-1)!;
         if (first.key === last.key)
