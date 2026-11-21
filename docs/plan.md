@@ -287,7 +287,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | done 2026-11-21 (notches to 0, stairs as flights; hashes identical) |
 | [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | done 2026-11-21 (decks, railings, piers, roofs as canopies; walk-link tags need a schema field) |
 | [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | done 2026-11-21 (merged; 6 Freiburg shafts; node-only elevators need a schema value, owner) |
-| [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | held for the owner 2026-11-21 (traffic identical; audit width measure flags the intended widening on `r:1175`) |
+| [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged on the owner's approval; arrows at the painted ones, traffic identical) |
 | [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-266](tasks/TASK-266.md) | render | Rail geometry load time: the polygon clipping in `railGeometry` (Sindelfingen 6.7 s) | `rail-geometry.ts` | 258 | identical output, times, budgets | done 2026-11-21 (Sindelfingen railGeometry 12 s to 0.3 s, identical output) |
 | [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
@@ -5537,7 +5537,8 @@ to 8.8 m before `n:1146` (main about 15 m past), within about 1 m of the paint; 
 against -42 to -70. Traffic identical (Freiburg seeds 1 to 3 hashes, full demand seed 1 run; Munich and
 Sindelfingen byte-identical). Audit: all identical except the width measure, max 4.764 to 10.49 m and roads
 over 5 cm 380 to 381, both `r:1175` (the measure reads the intended widening as an error), and painted length
-+29 m. Outside the lead's tolerance by the letter, so held for the owner (lead recommends merging). Agent used
++29 m. Outside the lead's tolerance by the letter, so held; the owner approved the merge (2026-11-21). Lead merge on
+TASK-270: Freiburg rebuilt (manifest bb42a5b6...), gate hash 2336162246 unchanged. Agent used
 `pkill -f` on its own uniquely named script once (no other process affected).
 
 TASK-266 (Claude Code subagent, Opus 5.5 high, 2026-11-21; `35818d9`): `railGeometry`'s time was the level-crossing
