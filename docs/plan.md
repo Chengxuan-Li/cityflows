@@ -282,14 +282,20 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | done 2026-11-21 (merged; Munich zebra ends 114 to 25, hashes identical) |
 | [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | done 2026-11-21 (merged; both pass the gate; Sindelfingen loads in 8 to 13 s, TASK-266) |
-| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | in progress 2026-11-21 (downloads approved) |
-| [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | done 2026-11-21 (none passes raw; fixes TASK-267 to 272; York picked) |
+| [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | done 2026-11-21 (merged; embankments Freiburg 47 to 11, covered bed points 975 to 148; hashes identical) |
 | [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
-| [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | done 2026-11-21 (merged; 6 Freiburg shafts; node-only elevators need a schema value, owner) |
 | [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-266](tasks/TASK-266.md) | render | Rail geometry load time: the polygon clipping in `railGeometry` (Sindelfingen 6.7 s) | `rail-geometry.ts` | 258 | identical output, times, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-268](tasks/TASK-268.md) | city | Left-hand traffic: the driving side from the location, far-side protected turns, no priority to the left (D3, D11, D15) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-269](tasks/TASK-269.md) | city | Mini-roundabouts and UK zebra zig-zags (D4, D16) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5491,6 +5497,31 @@ worst 86 s, 27.1 s. Budgets on a loaded machine: first frame Freiburg 3.5 to 4.7
 Sindelfingen 8.4 to 12.9 s (6.8 s of it in `railGeometry`'s polygon clipping: TASK-266); frame times within
 budget. Archives 0.85 MB and 0.41 MB gzip. Lead merge: archives rebuilt on TASK-255 and 257 (Freiburg
 unchanged by the builder); `.prettierignore` lists the archives.
+
+TASK-259 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `b37ff10`, docs only): scout of Lübeck, York,
+Cambridge and Philadelphia on the raw import (`docs/decisions/2026-11-20-more-cities.md`). Extracts in
+`D:\cityflows-wt\259-data` (Lübeck 7.99 MB, York 4.17, Cambridge 4.88, Philadelphia 3.61; SHA-256 in the
+document). None passes the showcase gate: Lübeck 122 `no_route` and 3.1% parking (polygon gateways, D7, D17);
+York fails to import left-hand (D1; passes on a diagnostic import); Cambridge throws (D2); Philadelphia 98
+`no_route`, City Hall missing, over budget (D7, D9, D10). UK pick York. Left-hand defects D1, D3, D4, D11, D8,
+D16, D15. Fix tasks contracted: TASK-267 to 272; D5 (city walls) needs a query change and re-fetch (owner).
+
+TASK-260 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `00634c9`): owner bugs 1 and 2. (1) Each raised
+track built its own open embankment; now one embankment per group (outline over the beds plus 1 m, gaps under 3
+m closed, decks left out; one height surface; 1:1.5 slopes on outer edges along a track; concrete walls at
+track ends, within 4 m of a leaving track and at decks). (2) Decks were triangulated from the outline alone;
+now cut on a 2 m grid and every bed edge, corners at the nearby tracks' heights, steps between beds; parapets
+only along tracks; ramp paint split every 4 m. Embankments Freiburg 47 to 11, Munich 35 to 7; covered bed points
+Freiburg 975 to 148 (left: tracks leaving a switch at different grades, from `src/network/rail.ts` heights),
+Munich 47 to 0. Hashes identical; 3D build 3.24 to 3.85 s (budget 5), frame p95 within budget.
+
+TASK-263 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `1616c32`): owner bug 6. Buildings and parts
+valued `elevator` draw as framed glass shafts (`src/render3d/elevators.ts`): no storeys or window grid, a dim
+even glow at night; landings where walkways of different layers end at the shaft, a door per walkway; height
+tagged, or levels × 3 m, or 3 m above the top landing. Freiburg 6 shafts (the 5 Hbf shafts reach the 10 m
+footbridge deck); Munich, Sindelfingen none. Hashes identical; 3D build 3.19 to 3.39 s. Not done:
+`highway=elevator` nodes without a shaft (Freiburg 5, Munich 7, two outdoor at the Donnersbergerbrücke) need a
+point type value in `src/schema` (owner's call).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
