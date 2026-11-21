@@ -1083,7 +1083,9 @@ the OSM `lanes` tags carry one.
   service 2, ramp uses the rank of the road it joins minus one (minimum 1).
 - `priority = majorRank * 10 + turnRank` where `majorRank` is the incoming road's classRank,
   except that roads listed in `node.minorRoads` (yield/stop) get rank 0, and `turnRank` is 2
-  for through and right, 1 for left, merge and diverge, 0 for uturn. Ties are broken in the
+  for through and the near-side turn, 1 for the turn across the oncoming flow, merge and diverge,
+  0 for uturn. The near-side turn is right under right-hand traffic and left under left-hand, the
+  turn across the flow the other one (TASK-282). Ties are broken in the
   simulation by the right-before-left rule (none under left-hand traffic, TASK-268: the UK gives
   way by the road hierarchy, which the rank holds), then by waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
