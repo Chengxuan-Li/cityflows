@@ -293,7 +293,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-267](tasks/TASK-267.md) | city | Imports that import: one bad parking facility never fails or crashes an import (D1, D2) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-268](tasks/TASK-268.md) | city | Left-hand traffic: the driving side from the location, far-side protected turns, no priority to the left (D3, D11, D15) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-269](tasks/TASK-269.md) | city | Mini-roundabouts and UK zebra zig-zags (D4, D16) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
-| [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-270](tasks/TASK-270.md) | city | Polygon gateways that route (D7) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (merged; no_route 0 in Lübeck, Cambridge, Philadelphia; Freiburg gate 62.6 s) |
 | [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (render rule for parts; City Hall stands; Freiburg 20 bodies) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
@@ -5579,6 +5579,17 @@ Munich 16, 17, 2,698 m; Sindelfingen 1. Not readable without walk-link fields: `
 on piers at its ends. Hashes identical; 3D build within budget (about 250 ms for the structure). Lead merge with TASK-261: `walkHeight`
 now follows TASK-261's levels, stair ends and flight pitch, so railings and piers match the drawn stairs
 (Freiburg piers 76 to 72, re-pinned).
+
+TASK-270 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `4792497`): polygon gateways only on lanes that reach
+(out) or are reached from (in) the largest component of the network the router allows (car access `yes`, no lane
+drops); TASK-198's fallback onto dead entries is gone; bbox imports unchanged. A ring crossing a roundabout keeps
+it whole within a circle 30 m wider, its arms cut there. `no_route` (0.15, choice on): Lübeck 122 to 0, Cambridge
+(diagnostic) 229 to 0, Philadelphia 98 to 0; no-parking failures to 0 in all three. Freiburg gateways 11 to 10
+(the B 31 link out at Lessingstraße, which nothing reached); gate 1,518 / 0, 65.8 s to 1,530 / 0, 62.6 s (hash
+2336162246), seeds 2 and 3 -7.2 and +3.0 s; Munich and Sindelfingen byte-identical (identical by construction,
+seed 1 checked). Passes the merge rule. Left: pockets behind restricted streets get no gateway (Lübeck's south
+loop via Wallstraße, Cambridge's north-east behind its bus gates); keeping them needs demand to judge a gateway
+trip by the person's own car facility (a follow-up). Lead merge: archives rebuilt by the builder, unchanged.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
