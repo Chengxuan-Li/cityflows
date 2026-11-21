@@ -97,8 +97,6 @@ function parallelBridge(layers: [number, number]) {
   const result = compile(city);
   if (!result.ok) throw Error('compile');
   const compiled = result.compiled;
-  const { roadGrades, nodeGrades } = cityGrades(compiled);
-  const heights = railHeights(compiled, roadGrades, nodeGrades);
   const rail = buildRail(compiled, city, cityHeights(compiled, city));
   const solid = rail.group.getObjectByName('rail-structures') as Mesh;
   const p = solid.geometry.getAttribute('position');
@@ -107,7 +105,7 @@ function parallelBridge(layers: [number, number]) {
   );
   const at = (track: string, x: number) => {
     const t = compiled.rail!.tracks.find((t) => t.id === track)!;
-    return railHeightAt(heights, t, Math.abs(x - t.line[0]!.x));
+    return railHeightAt(rail.heights!, t, Math.abs(x - t.line[0]!.x));
   };
   return { triangles, at, rail };
 }
@@ -143,9 +141,33 @@ test('TASK-260 a bridge over tracks at different heights is one deck that covers
 function railway(
   nodes: Record<string, [number, number, RailNode['kind']?]>,
   sections: [string, string, Partial<RailTrack>?][],
+  underpass: 'road' | 'walk' | 'shared' = 'road',
 ) {
   const { city, node, road } = buildCity('Rail', 1);
-  road(node(0, -60), node(0, 60));
+  if (underpass === 'road') road(node(0, -60), node(0, 60));
+  else {
+    if (underpass === 'shared') road(node(-35, 0, 1), node(35, 0, 1));
+    const provenance = { source: 'authored' } as const;
+    const a = { x: 0, y: -60 },
+      b = { x: 0, y: 60 };
+    city.walk = {
+      nodes: {
+        'wn:1': { id: 'wn:1', pos: a, layer: 0, provenance },
+        'wn:2': { id: 'wn:2', pos: b, layer: 0, provenance },
+      },
+      links: {
+        'wl:1': {
+          id: 'wl:1',
+          from: 'wn:1',
+          to: 'wn:2',
+          kind: 'footway',
+          widthM: 2,
+          line: [a, b],
+          provenance,
+        },
+      },
+    };
+  }
   city.rail = {
     nodes: Object.fromEntries(
       Object.entries(nodes).map(([id, [x, y, kind]]) => [
@@ -165,8 +187,6 @@ function railway(
   const result = compile(city);
   if (!result.ok) throw Error('compile');
   const compiled = result.compiled;
-  const { roadGrades, nodeGrades } = cityGrades(compiled);
-  const heights = railHeights(compiled, roadGrades, nodeGrades);
   const rail = buildRail(compiled, city, cityHeights(compiled, city));
   const p = (rail.group.getObjectByName('rail-structures') as Mesh).geometry.getAttribute(
     'position',
@@ -176,9 +196,64 @@ function railway(
   );
   const track = (id: string) => compiled.rail!.tracks.find((t) => t.id === id)!;
   const at = (id: string, x: number) =>
-    railHeightAt(heights, track(id), nearestOnPolyline(track(id).line, { x, y: 0 }).along);
-  return { triangles, track, at, heightOf: (t: Track, s: number) => railHeightAt(heights, t, s) };
+    railHeightAt(rail.heights!, track(id), nearestOnPolyline(track(id).line, { x, y: 0 }).along);
+  return {
+    triangles,
+    track,
+    at,
+    heightOf: (t: Track, s: number) => railHeightAt(rail.heights!, t, s),
+  };
 }
+
+test.each([
+  ['road', 4.5],
+  ['walk', 2.64],
+] as const)('TASK-291 a low bridge leaves headroom across the %s surface', (underpass, min) => {
+  const { triangles } = railway(
+    { 'rn:1': [-35, 0], 'rn:2': [35, 0] },
+    [['rn:1', 'rn:2', { bridge: true, layer: 1 }]],
+    underpass,
+  );
+  // The deck is 1 m thick. Sample through the passage, including near the edges of the
+  // pavement, under the bed and under the overhang (inside the parapets).
+  for (const x of underpass === 'road' ? [-1.45, 0, 1.45] : [-0.95, 0, 0.95])
+    for (const y of [-2, 0, 2]) expect(solidTop(triangles, x, y) - 1).toBeGreaterThanOrEqual(min);
+});
+
+test('TASK-291 a tram keeps the height of the street sharing its deck', () => {
+  const { at } = railway(
+    { 'rn:1': [-35, 0], 'rn:2': [35, 0] },
+    [['rn:1', 'rn:2', { bridge: true, layer: 1, kind: 'tram', form: 'embedded' }]],
+    'shared',
+  );
+  // The original 6% approaches reach 2.04 m at the two stations beside the midpoint.
+  expect(at('rt:1', 0)).toBeCloseTo(2.04, 3);
+});
+
+test('TASK-291 a pier footing stays out of the lower road', () => {
+  const { triangles } = railway({ 'rn:1': [-30, 0], 'rn:2': [30, 0] }, [
+    ['rn:1', 'rn:2', { bridge: true, layer: 1 }],
+  ]);
+  // The regular 20 m pier spacing would place a pier at (0, 0).
+  const alongRoad = new Ray(new Vector3(0, 1, -8), new Vector3(0, 0, 1));
+  expect(
+    triangles.some(([a, b, c]) => alongRoad.intersectTriangle(a!, b!, c!, false, new Vector3())),
+  ).toBe(false);
+});
+
+test('TASK-291 the approach to a fixed tunnel keeps its gradient', () => {
+  const { track, heightOf } = railway(
+    { 'rn:1': [-35, 0], 'rn:2': [35, 0], 'rn:3': [50, 0], 'rn:4': [150, 0] },
+    [
+      ['rn:1', 'rn:2', { bridge: true, layer: 1 }],
+      ['rn:2', 'rn:3'],
+      ['rn:3', 'rn:4', { tunnel: true, layer: -1 }],
+    ],
+  );
+  const approach = track('rt:2');
+  for (let s = 0; s < approach.lengthM; s++)
+    expect(Math.abs(heightOf(approach, s + 1) - heightOf(approach, s))).toBeLessThan(0.040001);
+});
 
 test('TASK-280 a deck over a switch carries both tracks while they share a bed', () => {
   // A switch at x = -40 onto a bridge over the road: `rt:2` straight on, `rt:3` off at 3 degrees to
