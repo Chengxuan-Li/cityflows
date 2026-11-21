@@ -31,7 +31,12 @@ function way(id: number, nodes: number[], tags: Record<string, string>) {
 test.each([
   [{ bridge: 'viaduct' }, 1],
   [{ tunnel: 'yes' }, -1],
-  [{ covered: 'yes' }, -1],
+  // TASK-271 (TASK-259 D6): building passages and covered streets run at grade under a roof.
+  [{ covered: 'yes' }, 0],
+  [{ tunnel: 'building_passage' }, 0],
+  [{ tunnel: 'building_passage', covered: 'yes' }, 0],
+  [{ tunnel: 'building_passage', layer: '-1' }, -1],
+  [{ tunnel: 'yes', covered: 'yes' }, -1],
   [{ layer: '2', tunnel: 'yes' }, 2],
   [{ layer: '0', bridge: 'yes' }, 0],
   [{ bridge: 'no', tunnel: 'no', covered: 'no' }, 0],
@@ -68,4 +73,19 @@ test('keeps the join between consecutive bridge sections on the deck', () => {
     Object.values(city.nodes).map((node) => [node.provenance.osmIds![0], node.layer]),
   );
   expect(layers).toEqual({ 1: 0, 2: 1, 3: 0 });
+});
+
+test('a footway through a building passage stays at grade with its nodes', () => {
+  const city = importWays(
+    way(10, [1, 3], {}) +
+      `<way id="11"><nd ref="4"/><nd ref="2"/><nd ref="5"/><tag k="highway" v="footway"/>
+        <tag k="tunnel" v="building_passage"/></way>`,
+  );
+  const links = Object.values(city.walk!.links).filter((l) => l.provenance.osmIds?.includes(11));
+  expect(links.map((l) => l.layer)).toEqual([0, 0]);
+  expect(
+    Object.values(city.walk!.nodes)
+      .filter((n) => links.some((l) => l.from === n.id || l.to === n.id))
+      .map((n) => n.layer),
+  ).toEqual([0, 0, 0]);
 });

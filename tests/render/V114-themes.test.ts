@@ -69,7 +69,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
           // TASK-241: no hatch at lane gains (5 roads).
-          '207c3ee1da290df80ddfd1c12fb27fb0f9914dca7e811a956f54156d424a674e',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          '15fca425d91639a581850b657fe340b633339e757bff0c30768f56cadcd9ac69',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

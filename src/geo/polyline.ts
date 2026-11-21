@@ -374,8 +374,8 @@ export function pointInPolygon(point: Vec2, ring: readonly Vec2[], tolerance = 1
 /** Every crossing of two polylines: the point, the distance along each from its start, and
  * the index of the crossing segment's end vertex in each. */
 export function polylineCrossings(a: readonly Vec2[], b: readonly Vec2[]) {
-  const lengthsA = cumulativeLengths(a),
-    lengthsB = cumulativeLengths(b);
+  // TASK-277: the lengths only once a crossing is found; most pairs a caller tests never cross.
+  let lengthsA: Float64Array | undefined, lengthsB: Float64Array | undefined;
   const crossings: { point: Vec2; alongA: number; alongB: number; i: number; j: number }[] = [];
   for (let i = 1; i < a.length; i++) {
     const p = a[i - 1]!,
@@ -391,14 +391,16 @@ export function polylineCrossings(a: readonly Vec2[], b: readonly Vec2[]) {
       )
         continue;
       const point = segmentIntersection(p, q, r, s);
-      if (point)
-        crossings.push({
-          point,
-          alongA: lengthsA[i - 1]! + distance(p, point),
-          alongB: lengthsB[j - 1]! + distance(r, point),
-          i,
-          j,
-        });
+      if (!point) continue;
+      lengthsA ??= cumulativeLengths(a);
+      lengthsB ??= cumulativeLengths(b);
+      crossings.push({
+        point,
+        alongA: lengthsA[i - 1]! + distance(p, point),
+        alongB: lengthsB[j - 1]! + distance(r, point),
+        i,
+        j,
+      });
     }
   }
   return crossings;
@@ -623,9 +625,9 @@ export function polylineNearest(points: readonly Vec2[]): (p: Vec2) => NearestOn
 
 export type NearestOnPolyline = ReturnType<typeof nearestOnPolyline>;
 
-type Box = { minX: number; minY: number; maxX: number; maxY: number };
+export type Box = { minX: number; minY: number; maxX: number; maxY: number };
 
-function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
+export function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
@@ -640,7 +642,7 @@ function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
   return { minX, minY, maxX, maxY };
 }
 
-const boxesMeet = (a: Box, b: Box) =>
+export const boxesMeet = (a: Box, b: Box) =>
   a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
 
 /** A closed ring with its bounding box and the boxes of runs of 32 edges (edge `i` runs from

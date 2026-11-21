@@ -8,7 +8,8 @@ import { throughputFixture } from '../routing/throughput-fixtures';
 // populated/job place. Surface lots remain places/context until TASK-104 imports facilities.
 const expected = {
   Munich: { osm: 53, implicit: 87 },
-  Sindelfingen: { osm: 4, implicit: 20 },
+  // TASK-271: 23 implicit; a works block split by a passage road at grade has its own garage.
+  Sindelfingen: { osm: 4, implicit: 23 },
 };
 
 test.each(tierCities(['Munich', 'Sindelfingen'] as const))(

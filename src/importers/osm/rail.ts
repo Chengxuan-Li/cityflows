@@ -24,12 +24,15 @@ import {
 import { clip, polygonSources } from './buildings';
 import { clipPart, contains, type Bounds, type RoadPoint } from './clip';
 import type { OsmData, OsmTags } from './parse';
-import { osmLayer } from './roads';
+import { isBridge, osmLayer } from './roads';
 
 const isTrack = (t: OsmTags) => railKinds.includes(t.railway as RailKind);
 /** TASK-132: a building passage or covered way stays at grade under its roof; its `layer` (and
  * `tunnel`) still order it below the building, as before. */
 const covered = (t: OsmTags) => t.tunnel === 'building_passage' || t.covered === 'yes';
+/** TASK-271: roads read covered ways at grade (`osmLayer`); track layers keep them below. */
+const railLayer = (t: OsmTags) =>
+  t.layer === undefined && !isBridge(t) && covered(t) ? -1 : osmLayer(t);
 /** TASK-134: whether a way carries an overhead contact line, from `electrified`; undefined when
  * untagged. `yes` counts unless `electrified:rail` says the conductor is a rail. */
 const contactLine = (t: OsmTags) => {
@@ -53,6 +56,22 @@ const center = (points: Vec2[]) => ({
   y: points.reduce((s, p) => s + p.y, 0) / points.length,
 });
 const placePos = (p: Place) => (p.shape.kind === 'point' ? p.shape.pos : center(p.shape.ring));
+
+/** TASK-277 (TASK-259's D13): the name of the `public_transport=stop_area` each element is a
+ * member of, by `type/id` (the lowest relation id first). A stop area names its stop; its
+ * platforms often carry no name (Philadelphia's Suburban Station platforms) or only a `ref`, a
+ * platform or track number (the trolley tunnel's "3"), which names no stop. */
+export function stopAreaNames(data: OsmData): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const r of data.relation
+    .filter((r) => r.tag.public_transport === 'stop_area' && r.tag.name)
+    .sort((a, b) => a.id - b.id))
+    for (const m of r.member) {
+      const key = `${m.type}/${m.ref}`;
+      if (!names.has(key)) names.set(key, r.tag.name!);
+    }
+  return names;
+}
 
 /** Runs after all vehicle/walk/parking allocation, preserving existing entity IDs. */
 export function importRail(
@@ -122,7 +141,7 @@ export function importRail(
     return id;
   };
   for (const w of ways) {
-    const layer = osmLayer(w.tag) ?? 0;
+    const layer = railLayer(w.tag) ?? 0;
     const runs: RoadPoint[][] = [];
     let run: RoadPoint[] = [];
     for (const ref of [...w.nd, NaN]) {
@@ -215,6 +234,7 @@ export function importRail(
     .map((n) => ({ pos: positions.get(n.id)!, osmId: n.id }));
   if (masts.length) rail.masts = masts;
   const platformSources = new Map<string, string[]>();
+  const areaNames = stopAreaNames(data);
   const addPlatform = (
     sourceKey: string,
     osmId: number,
@@ -226,10 +246,10 @@ export function importRail(
     const p: RailPlatform = {
       id,
       shape,
-      name: tag.name ?? tag.ref ?? 'Platform',
+      name: tag.name ?? areaNames.get(sourceKey) ?? tag.ref ?? 'Platform',
       ...(tag.ref ? { ref: tag.ref } : {}),
       mode,
-      layer: osmLayer(tag) ?? 0,
+      layer: railLayer(tag) ?? 0,
       tracks: [],
       station: null,
       osmId,
@@ -530,7 +550,7 @@ export function assignTramForms(
     }),
     ...data.way.flatMap((w) => {
       const ring = w.tag['area:highway'] && w.nd[0] === w.nd.at(-1) ? located(w.nd) : undefined;
-      const layer = osmLayer(w.tag) ?? 0;
+      const layer = railLayer(w.tag) ?? 0;
       return ring && ring.length >= 4 && nearOneLane(ring, layer) ? [{ ring, layer }] : [];
     }),
   ];
@@ -538,7 +558,7 @@ export function assignTramForms(
   const tramRoads = data.way.flatMap((w) => {
     const half = tramRoadHalfWidth(w.tag);
     const line = half === undefined ? undefined : located(w.nd);
-    return line && line.length >= 2 ? [{ line, half: half!, layer: osmLayer(w.tag) ?? 0 }] : [];
+    return line && line.length >= 2 ? [{ line, half: half!, layer: railLayer(w.tag) ?? 0 }] : [];
   });
   const tramRoadIndex = index(tramRoads, (r) => r.line);
   const reach = Math.max(0, ...tramRoads.map((r) => r.half));

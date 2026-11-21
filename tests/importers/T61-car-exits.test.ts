@@ -355,7 +355,8 @@ test.each(
       'munich',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-      'd66934643600a4f176bfbc3d8f7d5700e0994ce7be364f15a04b5b7bf08ddf91',
+      // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+      '907938549cb091bb1266ad22201525d50ccf19d09fce6ee40df594259191a814',
       '741cf5660bbb6893febbfa55824038cf263df106c5fb3a863b64f3c8a6e9f64c',
       14,
       79,
@@ -364,8 +365,10 @@ test.each(
       'sindelfingen',
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-      '34dbb02fe860319cfcc334da356f2820a5cd016a9ea579b5acdf53bee4dc4dbf',
-      'f4fae021fb29d507d1e9d4f38c371a79667c8b81d09ad5c7fd9b48b704207fd6',
+      // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+      '85babc335ea6d9c02e2b0104cb746d15d0e022dfd53678a813dfe2827e18b806',
+      // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+      '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
       31,
       703,
     ],
