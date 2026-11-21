@@ -309,7 +309,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | held for the owner 2026-11-21 (passes the merge rule; Lübeck -557 and Cambridge -679 trips a day until populations draw reachable gateways) |
 | [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | done 2026-11-21 (merged; Lübeck in the panel; York held out: TASK-286, 287) |
 | [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
-| [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | done 2026-11-21 (merged variant; York gate passes; York in the panel) |
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5749,6 +5749,15 @@ roads, the walk compile's `attach` trying paths by rank and distance, lot-path b
 Quiet-machine medians (main to branch): York first frame 2.93 to 2.80 s, ready 6.42 to 6.09; Freiburg 2.26 to
 2.17, ready 5.14 to 4.37; Munich 2.24 to 2.13. York stays at 1.29x Freiburg's first frame (TASK-284's 1.6x was
 measured before TASK-277); left: `junctionPolygon`, seams, `walkGeometry` unions, Pixi batching.
+
+TASK-286 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged variant `bb051ff`): polygon gateway lanes judged by the
+router's lane-change rule (`reachableLanes`, moved unchanged to `src/network/lane-reach.ts`): a connector lane counts
+only if the router could use it from the connector; where at least one lane of a cut end passes, the outer passing
+lane is chosen; where none passes, TASK-270's choice is kept (the strict first version `6e70d18` dropped Freiburg's
+Stefan-Meier-Straße entry, +2.8 s; lead asked for the variant). York's Layerthorpe leaves on `r:3638#1`: gate seeds 1
+to 3 `no_route` 0 (main 3 / 2 / 2), parking failures 0 / 1 / 1 (main 21 / 23 / 23). Freiburg, Lübeck, Munich,
+Sindelfingen archives byte-identical. Lead merge: York joins the New city panel ("City walls and station: left-hand
+traffic, mini-roundabouts"; first frame 2.80 s after TASK-287); `heldOutOfPanel` emptied.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
