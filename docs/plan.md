@@ -280,6 +280,13 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
 | [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
+| [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | in progress 2026-11-20 (run 3) |
+| [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
+| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | waits for the owner's download approval |
+| [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
+| [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
+| [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | queued |
+| [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | queued |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5771,6 +5778,16 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-20 (owner): seven 3D bugs logged in Freiburg (shots in `docs/findings/2026-11-20-owner-3d-bugs/`):
+  rail bridge walls and decks cutting into each other (1, 2), broken walkway edges (3), twisted stairs (4),
+  floating footbridges that should have piers, railings and canopies (5, 7), elevator towers drawn as
+  buildings (6). Contracted as TASK-260 to 263, ahead of D7 and the `n:211` placement task.
+
+- 2026-11-20 (owner): more preloaded cities in the New city panel, as a mixed slate (places that show
+  different road cultures and stress the reading rules), raw imports under the no-curation rule. First
+  Munich and Sindelfingen from the committed extracts (TASK-258); then a scout of Lübeck, a UK centre and
+  Philadelphia (TASK-259), whose downloads wait for the owner's yes.
 
 - 2026-11-20 (owner, after the second run's report): (1) OSM that disagrees with the ground is met by
   improving the app's reading of OSM (importer and drawing rules), not by editing OSM and not by per-id
