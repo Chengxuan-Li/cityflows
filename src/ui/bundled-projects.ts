@@ -25,7 +25,8 @@ const generators: Record<string, (seed: number) => City> = {
 };
 
 /** TASK-258: the real places of the New city panel, each a bundled archive built by
- * `bench/bundled-cities.ts` from its committed extract; `?city=<id>` opens one. */
+ * `bench/bundled-cities.ts` from its committed extract; `?city=<id>` opens one, as it opens the
+ * archives the builder holds out of the panel (TASK-284: York). */
 export const realPlaces = [
   {
     id: 'freiburg',
@@ -41,6 +42,16 @@ export const realPlaces = [
     id: 'sindelfingen',
     name: 'Sindelfingen A81',
     note: 'A81 junction with roundabouts by the Mercedes-Benz plant',
+  },
+  {
+    id: 'philadelphia',
+    name: 'Philadelphia Center City',
+    note: 'One-way grid around City Hall: right on red, trains below',
+  },
+  {
+    id: 'luebeck',
+    name: 'Lübeck Altstadt',
+    note: 'Altstadt island and Hauptbahnhof: Holstentor, Trave bridges',
   },
 ];
 

@@ -289,8 +289,15 @@ export function createWalkers(
   let nearHeldLanes: number[] = [];
 
   const link = (index: number) => city.walk.links[index]!;
-  const speedOn = (index: number) =>
-    params.walkSpeedMps * (link(index).kind === 'steps' ? params.walkStepsFactor : 1);
+  // TASK-277: each link's walking speed in a dense table (the walk pass reads it per walker per
+  // step); rebuilt with the city on a live patch.
+  const linkSpeeds = () =>
+    Float64Array.from(
+      city.walk.links,
+      (l) => params.walkSpeedMps * (l.kind === 'steps' ? params.walkStepsFactor : 1),
+    );
+  let speeds = linkSpeeds();
+  const speedOn = (index: number) => speeds[index]!;
   const isCrossing = (legs: WalkLeg[], i: number) =>
     i < legs.length && !!link(legs[i]!.link).crossing;
 
@@ -868,6 +875,7 @@ export function createWalkers(
     patch(signalled: CompiledCity, timeS = lastTimeS) {
       const before = city;
       city = signalled;
+      speeds = linkSpeeds();
       router = createWalkRouter(city.walk);
       windows = new Map();
       served = servedLinks(city);

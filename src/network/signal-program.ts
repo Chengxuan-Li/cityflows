@@ -58,12 +58,14 @@ export function demandSplit(
   return green;
 }
 
-/** One green group: the movements a road pair (`from` to `to`, road ids) switches together. */
+/** One green group: the movements a road pair (`from` to `to`, road ids) switches together.
+ * `farSide`: a turn across the oncoming flow (left under right-hand traffic, right under
+ * left-hand; TASK-268's D3) or a U-turn, which four-arm signals protect. */
 interface Unit {
   from: string;
   to: string;
   members: number[];
-  left: boolean;
+  farSide: boolean;
 }
 
 export function generateSignalProgram(
@@ -74,6 +76,7 @@ export function generateSignalProgram(
   diagnostics: Diagnostic[],
 ): SignalProgram {
   const movements = compiled.nodes[compiled.index.node.get(node.id)!]!.movements;
+  const farTurn = city.drivingSide === 'left' ? 'right' : 'left';
   const groups = new Map<string, Unit>();
   for (const index of movements) {
     const movement = compiled.movements[index]!;
@@ -86,7 +89,7 @@ export function generateSignalProgram(
         from,
         to,
         members: [],
-        left: movement.turn === 'left' || movement.turn === 'uturn',
+        farSide: movement.turn === farTurn || movement.turn === 'uturn',
       };
       groups.set(key, group);
     }
@@ -296,8 +299,8 @@ function phasesFor(
 
   const first = groups[0]?.from;
   const axis = first === undefined ? 0 : roadHeading(city.roads[first]!, true);
-  const protectLeft = approachCount >= 4;
-  for (const { from, to, members, left } of groups) {
+  const protectFarSide = approachCount >= 4;
+  for (const { from, to, members, farSide } of groups) {
     const own = new Set(members);
     if (
       members.some((index) =>
@@ -327,12 +330,12 @@ function phasesFor(
     const angle = roadHeading(city.roads[from]!, true) - axis;
     const preferred = Math.abs(Math.cos(angle)) >= Math.SQRT1_2 ? 0 : 1;
     let phase = preferred;
-    if ((protectLeft && left) || !fits(preferred)) {
+    if ((protectFarSide && farSide) || !fits(preferred)) {
       // Keep the two opposing-approach phases and add a phase only where needed.
       phase = assigned.findIndex(
-        (_, i) => i >= 2 && program.phases[i]!.durationS === (left ? 15 : 30) && fits(i),
+        (_, i) => i >= 2 && program.phases[i]!.durationS === (farSide ? 15 : 30) && fits(i),
       );
-      if (phase === -1) phase = addPhase(left ? 15 : 30);
+      if (phase === -1) phase = addPhase(farSide ? 15 : 30);
     }
     program.phases[phase]!.groups.push({ from, to });
     members.forEach((index) => assigned[phase]!.add(index));

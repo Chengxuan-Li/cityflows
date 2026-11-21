@@ -94,6 +94,9 @@ unitTest.each(['right', 'left'] as const)(
       r.roadClass = 'primary';
     }
     if (drivingSide === 'left') for (const r of Object.values(b.city.roads)) r.lateralOffsetM *= -1;
+    // TASK-276: the yellow lines are the importer's (`kerbLine`), here on every nearside kerb.
+    for (const r of Object.values(b.city.roads))
+      r.provenance = { ...r.provenance, inferred: [`kerbLine:${drivingSide}:double`] };
     const result = compile(b.city);
     if (!result.ok) throw Error('compile');
     for (const r of result.compiled.roads) {
@@ -115,6 +118,8 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
   b.city.drivingSide = 'left';
   const [road] = b.street(b.node(0, 0), b.node(120, 0));
   for (const r of Object.values(b.city.roads)) r.lateralOffsetM *= -1;
+  // TASK-276: a double line read from OSM (`kerbLine`); a single one runs on beside a strip.
+  road!.provenance = { ...road!.provenance, inferred: ['kerbLine:left:double'] };
   const yellow = (city: typeof b.city) => {
     const result = compile(city);
     if (!result.ok) throw Error('compile');
@@ -195,12 +200,14 @@ const pins = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-    compile: '42faea0afacf40125bb9b95a537ab7db6782b1bc049b841bcd19771a6f906b79',
+    compile: '9546701887629ab0ffcdef5605e24b6d76f552aa49d51585836fabf62f8ddcf3',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    curbs: 'abfd1ae1fe3e4c6787c3f9fe8b2b37efd2fd7c745173025fd8d8625a3fdd15aa',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
@@ -225,21 +232,26 @@ const pins = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-    compile: '5eb17204765fd41f6b85818cebc8687b6815ad600f617cbb1e064c89ffceb9eb',
-    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    compile: 'f0857a99470c223fdeb9349d63a77a2f0dd2fdd652c4e52bf6de51a954320df2',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    curbs: 'e2ec9fd8f902e8ef063d5d490af65e79157be6d6156567b5570753cd0b4ab342',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
-    de: '96ca872a12eeef4aa7a1b08e5b4845ed17e05b5436e3bdefc829f27906647462',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    de: '27166f0115cc2f96e4817143b35877a66af174f6c878cbcdffd9bbd357849072',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
-    us: 'af49c2ebb855cc91d3b4d299b0fa947b9c2415fb0ecf34fafb0b10c3d88fab08',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    us: 'c7783c0792c0ca146715ba43b82c5947c6d1d204580f9147b16ec8a565076bec',
   },
 } as const;
 const hash = (value: unknown) =>

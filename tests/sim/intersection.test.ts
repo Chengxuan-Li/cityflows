@@ -44,21 +44,28 @@ function cross(control: Control, equalRank = false, leftHand = false, blocked = 
   return { compiled, northLane, westLane, northRequests, westRequests };
 }
 
+// West's primary outranks north's residential street under either side. Between equal ranks,
+// right-hand traffic gives way to the right (west), and TASK-268 (D15) left-hand traffic has no
+// side rule: the first to arrive, then the lower id (the trips listed first), goes first.
 test.each([
-  { equalRank: false, leftHand: false, winner: 'west' },
-  { equalRank: true, leftHand: false, winner: 'west' },
-  { equalRank: true, leftHand: true, winner: 'north' },
+  { equalRank: false, leftHand: false, westFirst: false, winner: 'west' },
+  { equalRank: false, leftHand: true, westFirst: false, winner: 'west' },
+  { equalRank: true, leftHand: false, westFirst: false, winner: 'west' },
+  { equalRank: true, leftHand: false, westFirst: true, winner: 'west' },
+  { equalRank: true, leftHand: true, westFirst: false, winner: 'north' },
+  { equalRank: true, leftHand: true, westFirst: true, winner: 'west' },
 ])(
-  'arbitrates conflicting approaches under load ($equalRank, $leftHand)',
-  ({ equalRank, leftHand, winner }) => {
+  'arbitrates conflicting approaches under load ($equalRank, $leftHand, $westFirst)',
+  ({ equalRank, leftHand, westFirst, winner }) => {
     const { compiled, northRequests, westRequests } = cross('uncontrolled', equalRank, leftHand);
     const engine = createEngine();
     engine.load({
       compiled,
       scenario: scenario(),
-      trips: [...northRequests, ...westRequests],
+      trips: westFirst ? [...westRequests, ...northRequests] : [...northRequests, ...westRequests],
       params: { idm: { ...DEFAULT_SIM_PARAMS.idm, desiredSpeedSd: 0 } },
     });
+    const fromNorth = (id: number) => id <= northRequests.length !== westFirst;
     const crossed = new Set<number>();
     for (let i = 0; i < 500; i++) {
       engine.step();
@@ -67,7 +74,7 @@ test.each([
       for (const [index, id] of view.id.entries()) {
         const field = view.lane[index]!;
         if (field >= 0) continue;
-        if (!crossed.size) expect(id <= northRequests.length ? 'north' : 'west').toBe(winner);
+        if (!crossed.size) expect(fromNorth(id) ? 'north' : 'west').toBe(winner);
         crossed.add(id);
       }
     }

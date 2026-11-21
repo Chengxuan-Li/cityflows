@@ -50,3 +50,26 @@ it('detects opposing crossing and convergent movements, except from one source l
   if (!inferred.ok) throw new Error(JSON.stringify(inferred.diagnostics));
   expect(inferred.compiled.movements[through.idx]!.priority).toBe(2);
 });
+
+it('ranks the turn across the oncoming flow below through traffic for each driving side', () => {
+  for (const side of ['right', 'left'] as const) {
+    const city = signalApproach();
+    city.drivingSide = side;
+    const center = Object.values(city.nodes).find((n) => n.control === 'signal')!;
+    center.control = 'uncontrolled';
+    center.signal = null;
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const { movements, nodes, index } = result.compiled;
+    const ranks: Record<string, number[]> = {};
+    for (const idx of nodes[index.node.get(center.id)!]!.movements) {
+      const movement = movements[idx]!;
+      (ranks[movement.turn] ??= []).push(movement.priority % 10);
+    }
+    const far = side === 'right' ? 'left' : 'right';
+    const near = side === 'right' ? 'right' : 'left';
+    expect(new Set(ranks.through), side).toEqual(new Set([2]));
+    expect(new Set(ranks[near]), side).toEqual(new Set([2]));
+    expect(new Set(ranks[far]), side).toEqual(new Set([1]));
+  }
+});

@@ -3,9 +3,11 @@ import { writeFile } from 'node:fs/promises';
 import { button, pageErrors, toolbarAction } from './helpers';
 import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 
-// TASK-258: the real places of the New city panel. Each opens from the panel and by `?city=<id>`,
-// paused at 07:00, and Munich and Sindelfingen report their frame figures as the Freiburg landing
-// spec measures them (render CPU p95 in 2D and 3D while the morning plays, and the 3D build).
+// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck). Each opens from the
+// panel and by `?city=<id>`, paused at 07:00, and every place but Freiburg reports its frame
+// figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
+// morning plays, and the 3D build). York is bundled but held out of the panel (`heldOutOfPanel`
+// in bench/bundled-cities.ts): it opens by `?city=york` and reports its figures too.
 
 test.use({ trace: 'off' });
 if (process.platform === 'win32')
@@ -19,7 +21,11 @@ const realPlaces = [
   { id: 'freiburg', name: 'Freiburg im Breisgau' },
   { id: 'munich', name: 'Munich Donnersbergerbrücke' },
   { id: 'sindelfingen', name: 'Sindelfingen A81' },
+  { id: 'philadelphia', name: 'Philadelphia Center City' },
+  { id: 'luebeck', name: 'Lübeck Altstadt' },
 ];
+/** Bundled, opened by `?city=`, not in the panel. */
+const heldOut = [{ id: 'york', name: 'York city centre' }];
 
 const opened = async (page: Page, name: string) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
@@ -71,7 +77,7 @@ for (const [width, height] of [
     expect(errors).toEqual([]);
   });
 
-for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg'))
+for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), ...heldOut])
   test(`${name} renders in 2D and 3D while its morning plays`, async ({ page }, info) => {
     test.setTimeout(240_000);
     const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 180, warm: 30 };
@@ -100,6 +106,10 @@ for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg')
       (await page.evaluate(
         () => performance.getEntriesByName('cityflows:first-frame-3d')[0]!.startTime,
       )) - click;
+    // The 3D scene's build (`setCity`), as the Freiburg landing spec reports it (TASK-278).
+    const buildMs = Number(
+      await page.locator('canvas[data-view="3d"]').getAttribute('data-build-ms'),
+    );
     const threeD = await railFrameTiming(page, 'cityflows:render3d', sample);
     await button(page, 'Pause').click();
     await page.screenshot({ path: info.outputPath(`${id}-3d.png`) });
@@ -111,6 +121,7 @@ for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg')
         frameMs: threeD.frameMs,
         renderMs: threeD.renderMs,
         renderP95Ms: p95(threeD.renders),
+        buildMs,
       },
     };
     console.info(`${name} frames`, JSON.stringify(report));

@@ -311,7 +311,8 @@ type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 
 interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
   entrance?: { placeId: PlaceId | null }; provenance: Provenance }
 interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
-  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; widthM: number | null; layer?: number;
+  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; covered?: boolean;
+  handrail?: ('left' | 'right' | 'center')[]; widthM: number | null; layer?: number;
   provenance: Provenance }
 ~~~
 
@@ -352,8 +353,8 @@ identical with terrain present or absent.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-type ContextPoint = 'tree' | 'street_lamp';
-type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+type ContextPoint = 'tree' | 'street_lamp' | 'elevator';
+type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row' | 'city_wall' | 'city_gate';
 
 type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
   | 'gambrel' | 'half-hipped' | 'round' | 'dome' | 'onion';
@@ -363,7 +364,8 @@ type ContextFeature =
                material?: string; orientation?: 'along' | 'across'; directionDeg?: number };
       colour?: string; material?: string; minHeightM?: number;
       parts?: BuildingPart[] }  // TASK-201, buildings only
-  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number;
+      heightM?: number; walkway?: true; bridge?: true }  // the last three: TASK-273, walls and gates
   | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
 // An area's own fields without kind, class and parts; `sub` is the `building:part` value.
 type BuildingPart = { rings: Vec2[][]; sub?: string; heightM?: number; levels?: number; roof?: …;
@@ -394,9 +396,39 @@ with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is
 extension without a schema-version bump. Only imported context is saved; generated trees
 are derived display geometry and never enter the project or compiled network.
 
+TASK-273 adds city walls and gate arches as context lines, without a schema-version bump. A
+`city_wall` line is a way tagged `barrier=city_wall` or the older `historic=citywalls`, but not
+its stairs (`highway=steps`, which stay walk) nor a way that is also a `building` (a gatehouse or
+tower over the wall, which stays a building); clipped and rounded as every context line, with
+optional `heightM` from `height`, `widthM` from `width`, `layer`, `walkway` when the way is also a
+`highway=footway`, `path`, `pedestrian`, `cycleway` or `bridleway` (York maps the wall walk on the
+wall's own way), and `bridge` when it is tagged `bridge` (it spans an opening). A wall footway is
+the wall, never a wooded path area. A gate mapped as a building stays that building (the
+gatehouse); a `historic=city_gate` node that lies on a way and in no building outline is a
+`city_gate` line: square to the way through the node, spanning the way's `width` (else 3 m a lane,
+else 6 m for a road and 3 m for a path) and a 1.5 m pier each side, with `heightM` from the node's
+`height`; a gate node on no way is left out. Drawing (display only): 3D draws a wall as a stone body
+of its height (default 4 m) and width (default 2 m) in the building meshes; a `bridge` wall keeps
+a 1.2 m lintel over its opening; a walkway at grade is paved between two 1 m parapets, and a walkway
+on a raised `layer` meets the underside of the walk's own footbridge deck (layer x 5 m), whose paving
+and handrails are the walkway. A gate arch is two piers and a lintel with haunches, 8 m high and
+3 m deep by default, clear to 4.5 m. 2D draws a wall as a band of its width with edges, a gate arch
+as a darker band. Walls and arches count as neither buildings nor ground. Query version 11 adds
+`way[barrier=city_wall]`, `way[historic=citywalls]` and `nwr[historic=city_gate]` to the
+surroundings.
+
 TASK-107 adds `street_lamp` context points: optional `heightM` from `height` and `sub`
 from `lamp_mount`, falling back to `support`. No schema-version bump; old files still open.
 Imported lamps persist, while generated furniture stays renderer-only and is never saved.
+
+TASK-274 adds `elevator` context points: `highway=elevator` nodes with optional `heightM` from
+`height` and `sub` from `level`, except `indoor=yes` ones and those inside a building outline (indoors,
+or TASK-263's `building=elevator` shaft), unless the outline is the lift's tower: at most 16 m², without
+parts and not valued `elevator`. The 3D view draws one by TASK-263's shaft rule (landings where
+mapped walkways of different layers meet it, the top 3 m above the highest unless tagged), in its
+tower's outline or else as a 1.6 m square, when it serves a level above the ground: a landing above
+it, and the `level` tag, when present, naming a level above 0. Underground lifts and those whose
+walkways show one layer draw nothing. No schema-version bump; old files still open.
 
 Invariants (checked by compile, section 5):
 
@@ -413,7 +445,9 @@ Invariants (checked by compile, section 5):
 TASK-114 adds optional display-only `City.markingTheme` without a schema-version bump.
 Compile, routing and simulation ignore it. Import uses explicit OSM country tags first,
 then coarse offline bounds: US/Canada → `us`, UK/Ireland → `uk`, elsewhere → `de`.
-Files without the field resolve from their geographic bounding box, else `de`.
+Files without the field resolve from their geographic bounding box, else `de`. TASK-268: an
+OSM import without `ImportOptions.drivingSide` drives on the left where the theme it infers is
+`uk`, on the right elsewhere; the import wizard proposes the same from the area.
 The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
 absent override. A pure marking-style edit retains the city version and compiled object.
 
@@ -524,7 +558,8 @@ interface CompiledCity {
 }
 
 interface CNode { idx: number; id: NodeId; pos: Vec2; grade: number; radiusM: number; control: Control;
-  movements: number[]; signal: CSignal | null; group?: number; }
+  movements: number[]; signal: CSignal | null; group?: number;
+  miniRoundabout?: boolean; }               // TASK-269: `highway=mini_roundabout`; every entry gives way, priority 0
 interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
   entries: number[]; exits: number[];          // road idx entering / leaving the group
   chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
@@ -1048,9 +1083,11 @@ the OSM `lanes` tags carry one.
   service 2, ramp uses the rank of the road it joins minus one (minimum 1).
 - `priority = majorRank * 10 + turnRank` where `majorRank` is the incoming road's classRank,
   except that roads listed in `node.minorRoads` (yield/stop) get rank 0, and `turnRank` is 2
-  for through and right, 1 for left, merge and diverge, 0 for uturn. Ties are broken in the
-  simulation by the right-before-left rule (left-before-right under left-hand traffic), then by
-  waiting time, then by vehicle id.
+  for through and the near-side turn, 1 for the turn across the oncoming flow, merge and diverge,
+  0 for uturn. The near-side turn is right under right-hand traffic and left under left-hand, the
+  turn across the flow the other one (TASK-282). Ties are broken in the
+  simulation by the right-before-left rule (none under left-hand traffic, TASK-268: the UK gives
+  way by the road hierarchy, which the rank holds), then by waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
   below the maximum rank among the node's incoming roads.
 
@@ -1932,9 +1969,9 @@ Step sequence, in this order every step:
 4. Resolution:
    - Lane changes are accepted in proposal order when the target gap is still free given
      already accepted changes this step.
-   - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
-     desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
-     no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
+   - Per node, entry candidates are sorted by (priority desc, right-before-left under right-hand
+     traffic, waiting time desc, id asc). A candidate is granted when its movement is green or
+     uncontrolled-allowed, no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
      holds a grant on a conflicting movement while still on its approach lane, or drives on
      it with its rear not yet past the end of that movement's conflict zone with the
      candidate's movement, `position < endM + occupant.lengthM`; a vehicle that has cleared the
@@ -3215,6 +3252,22 @@ the city, and roads retain the strongest tone.
   signalized node keeps them whatever OSM marks (its walk lights stand there); otherwise
   TASK-217's rule (broken lines near a signal, a zebra elsewhere). The walk graph, crossing
   controls, spans, stop lines and the simulation do not read it.
+- TASK-275 (owner-approved fields): a walk link's optional `covered` and `handrail`, read by the
+  importer from its way (`walkCovered`, `walkHandrail`). `covered`: `covered=yes|roof|canopy|
+  arcade|colonnade` or `bridge=covered`, stored only when true. `handrail`: the sides with a
+  handrail, left and right in the link's direction: `handrail=yes|both` left and right,
+  `left|right|center` that one, `no` none, then `handrail:left|right|center=yes|no` adds or
+  removes its side; once any of these says something, an unnamed side has none (`[]`). Absent
+  (no tag says, and every older file) draws as before. 3D only (`render3d/footbridges.ts`): on a
+  footbridge (TASK-262) a side the tag does not name has no railing; a named side keeps the
+  open-edge rule, and on stairs runs the whole flight (also beside a wall); ends keep the rule; a
+  stair flight at grade carries its named handrails; `center` draws a rail along the line. A
+  covered way, raised or at grade (layer 0, both nodes at grade), gets a light canopy 3 m over its
+  paving (pieces of at most 2 m) on posts along its sides wherever nothing stands over it: no
+  footbridge roof (TASK-262's canopy), no building taller than the paving, no road, junction,
+  walk or platform surface more than 1 m above it, no track on a bridge within 2.2 m; at grade the
+  paving under buildings and roofs is not drawn. The walk graph and the simulation do not read
+  them.
 - TASK-091 (B46): a centre line (a two-way street's, or the solid median edge of TASK-089) ends
   at the junction mouth: it is clipped out of both its nodes' outlines, also where an outline
   reaches back over the approach (TASK-079's stretch drawn above the junction now applies to
@@ -3657,8 +3710,9 @@ overrides are retained; otherwise-public aisle access is inferred as destination
 TASK-101, preventing through shortcuts without changing routing or simulation.
 Entries reuse mapped public nodes (including consolidated-node provenance). TASK-103 gives
 a lot with no reachable aisle one inferred driveway connector on the nearest permitted car
-lane within 30 m of its polygon; no vehicle road is fabricated. Only lots without a road
-that close retain `parking_unreachable`.
+lane within 30 m of its polygon; no vehicle road is fabricated. A lot without a road that
+close is reported (`parking_unreachable`) and left out with the aisles only it owns; its place
+stays (TASK-281).
 A mapped mouth that would consume an existing place connector remains disconnected with
 `parking_entry_unreachable`, preserving the original place and demand. TASK-144 also restores
 a real shared OSM node omitted from, or merged out of, the public graph when it remains an
@@ -3759,8 +3813,9 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    order. Two one-way carriageways of one name meeting at more than 90 degrees are a U-turn.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
-   road-pair group that conflicts with its phase, or a left turn at a node with four or more
-   approaches, gets an extra 15 s (left) or 30 s phase. TASK-048 resolves conflicting lanes
+   road-pair group that conflicts with its phase, or a far-side turn (left, right under
+   left-hand traffic, TASK-268) or U-turn at a node with four or more approaches, gets an extra
+   15 s (far-side turn) or 30 s phase. TASK-048 resolves conflicting lanes
    within a road-pair group before generating the program: keep the first nonconflicting
    movement in deterministic compiler order, explicitly ban conflicting pairs and record
    `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get

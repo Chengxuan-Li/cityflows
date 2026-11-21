@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="cityflows TASK-276 excerpt">
+<note>© OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright). Blossom Street, The Crescent, Queen Street and Nunnery Lane in York, cut from TASK-259's Overpass extract york-walls-v11.osm (OSM snapshot 2026-11-21T09:51:52Z).</note>
+  <bounds minlat="53.9545584" minlon="-1.0936521" maxlat="53.9559607" maxlon="-1.0906905"/>
+  <node id="12728387" lat="53.9552952" lon="-1.0906905"/>
+  <node id="12728390" lat="53.9556740" lon="-1.0911419">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing_ref" v="puffin"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="flush"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+    <tag k="traffic_signals:vibration" v="yes"/>
+  </node>
+  <node id="13798847" lat="53.9552715" lon="-1.0916641"/>
+  <node id="18239276" lat="53.9557616" lon="-1.0915875"/>
+  <node id="21268517" lat="53.9559607" lon="-1.0919424"/>
+  <node id="21268518" lat="53.9555663" lon="-1.0912665"/>
+  <node id="1070043938" lat="53.9558467" lon="-1.0917589"/>
+  <node id="1629111706" lat="53.9554737" lon="-1.0911376">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing_ref" v="puffin"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="lowered"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="no"/>
+    <tag k="traffic_signals:vibration" v="yes"/>
+  </node>
+  <node id="1629111707" lat="53.9556557" lon="-1.0913677">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing_ref" v="puffin"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="flush"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+    <tag k="traffic_signals:vibration" v="yes"/>
+  </node>
+  <node id="1632156884" lat="53.9554579" lon="-1.0913773">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing_ref" v="puffin"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="lowered"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+    <tag k="traffic_signals:vibration" v="yes"/>
+  </node>
+  <node id="1715948522" lat="53.9550016" lon="-1.0936171"/>
+  <node id="1715948533" lat="53.9548608" lon="-1.0936521"/>
+  <node id="1715948535" lat="53.9553895" lon="-1.0934080"/>
+  <node id="1715948540" lat="53.9545733" lon="-1.0935118"/>
+  <node id="1715948544" lat="53.9547219" lon="-1.0936145"/>
+  <node id="2117213075" lat="53.9553497" lon="-1.0934295"/>
+  <node id="3516446448" lat="53.9548149" lon="-1.0936397"/>
+  <node id="5523917503" lat="53.9556295" lon="-1.0913223"/>
+  <node id="5523917504" lat="53.9554967" lon="-1.0911911"/>
+  <node id="6865049175" lat="53.9553710" lon="-1.0934180"/>
+  <node id="6865049177" lat="53.9551426" lon="-1.0935411"/>
+  <node id="8826676064" lat="53.9556126" lon="-1.0912989"/>
+  <node id="8826676065" lat="53.9554323" lon="-1.0914190">
+    <tag k="cycleway" v="asl"/>
+    <tag k="direction" v="backward"/>
+  </node>
+  <node id="8826676066" lat="53.9553927" lon="-1.0914757">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals" v="junction"/>
+    <tag k="traffic_signals:direction" v="backward"/>
+  </node>
+  <node id="8826676067" lat="53.9557100" lon="-1.0914797">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals" v="junction"/>
+    <tag k="traffic_signals:direction" v="backward"/>
+  </node>
+  <node id="8826676068" lat="53.9556827" lon="-1.0914201">
+    <tag k="cycleway" v="asl"/>
+    <tag k="direction" v="backward"/>
+  </node>
+  <node id="8826676069" lat="53.9554282" lon="-1.0910134">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals" v="junction"/>
+    <tag k="traffic_signals:direction" v="forward"/>
+  </node>
+  <node id="8826676070" lat="53.9554529" lon="-1.0910808">
+    <tag k="cycleway" v="asl"/>
+    <tag k="direction" v="forward"/>
+  </node>
+  <node id="8826676071" lat="53.9557080" lon="-1.0911080">
+    <tag k="cycleway" v="asl"/>
+    <tag k="direction" v="backward"/>
+  </node>
+  <node id="8826676072" lat="53.9557426" lon="-1.0910735">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals" v="junction"/>
+    <tag k="traffic_signals:direction" v="backward"/>
+  </node>
+  <node id="8826676073" lat="53.9557795" lon="-1.0910344"/>
+  <node id="9195798737" lat="53.9555317" lon="-1.0912409"/>
+  <node id="9195798739" lat="53.9551015" lon="-1.0919420"/>
+  <node id="9195798746" lat="53.9548095" lon="-1.0924208"/>
+  <node id="9195798749" lat="53.9555871" lon="-1.0912745"/>
+  <node id="13240889255" lat="53.9545584" lon="-1.0934959"/>
+  <node id="13932121960" lat="53.9555226" lon="-1.0912906"/>
+  <node id="13932121961" lat="53.9554871" lon="-1.0913352"/>
+  <node id="13932121970" lat="53.9555099" lon="-1.0912164"/>
+  <way id="4434555">
+    <nd ref="21268518"/>
+    <nd ref="12728390"/>
+    <nd ref="8826676071"/>
+    <nd ref="8826676072"/>
+    <nd ref="8826676073"/>
+    <tag k="bus" v="yes"/>
+    <tag k="coach:conditional" v="destination @ (occupancy &gt; 16)"/>
+    <tag k="cycleway:left" v="no"/>
+    <tag k="cycleway:right" v="lane"/>
+    <tag k="cycleway:right:lane" v="advisory"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Blossom Street"/>
+    <tag k="old_name" v="Ploxwaingate"/>
+    <tag k="oneway" v="no"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="tourist_bus:conditional" v="destination @ (occupancy &gt; 16)"/>
+    <tag k="vehicle:conditional" v="destination @ (occupancy &gt; 16)"/>
+    <tag k="wikidata" v="Q104859524"/>
+    <tag k="wikipedia" v="en:Blossom Street"/>
+  </way>
+  <way id="159482174">
+    <nd ref="1715948535"/>
+    <nd ref="6865049175"/>
+    <nd ref="2117213075"/>
+    <nd ref="6865049177"/>
+    <nd ref="1715948522"/>
+    <nd ref="1715948533"/>
+    <nd ref="3516446448"/>
+    <nd ref="1715948544"/>
+    <nd ref="1715948540"/>
+    <nd ref="13240889255"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="highway" v="unclassified"/>
+    <tag k="lane_markings" v="no"/>
+    <tag k="lit" v="yes"/>
+    <tag k="name" v="The Crescent"/>
+    <tag k="parking:left" v="no"/>
+    <tag k="parking:right" v="lane"/>
+    <tag k="parking:right:orientation" v="diagonal"/>
+    <tag k="sidewalk" v="right"/>
+    <tag k="sidewalk:right:surface" v="paving_stones"/>
+    <tag k="source" v="Bing"/>
+    <tag k="source:name" v="OS_OpenData_StreetView"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="181142623">
+    <nd ref="1632156884"/>
+    <nd ref="8826676065"/>
+    <nd ref="8826676066"/>
+    <nd ref="13798847"/>
+    <nd ref="9195798739"/>
+    <tag k="cycleway:left" v="no"/>
+    <tag k="cycleway:right" v="lane"/>
+    <tag k="cycleway:right:lane" v="advisory"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="5"/>
+    <tag k="lanes:backward" v="3"/>
+    <tag k="lanes:forward" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Blossom Street"/>
+    <tag k="old_name" v="Ploxwaingate"/>
+    <tag k="parking:both" v="no"/>
+    <tag k="ref" v="A1036"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="turn:lanes:backward" v="left|through|right"/>
+    <tag k="wikidata" v="Q104859524"/>
+    <tag k="wikipedia" v="en:Blossom Street"/>
+  </way>
+  <way id="676208824">
+    <nd ref="21268518"/>
+    <nd ref="9195798749"/>
+    <nd ref="8826676064"/>
+    <nd ref="5523917503"/>
+    <nd ref="1629111707"/>
+    <nd ref="8826676068"/>
+    <nd ref="8826676067"/>
+    <nd ref="18239276"/>
+    <nd ref="1070043938"/>
+    <nd ref="21268517"/>
+    <tag k="alt_name" v="Inner Ring Road"/>
+    <tag k="cycleway" v="lane"/>
+    <tag k="cycleway:left:lane" v="advisory"/>
+    <tag k="cycleway:right:lane" v="exclusive"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="3"/>
+    <tag k="lanes:backward" v="2"/>
+    <tag k="lanes:forward" v="1"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Queen Street"/>
+    <tag k="ref" v="A1036"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="source:ref" v="OS_OpenData_StreetView"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="turn:lanes:backward" v="through;right|right"/>
+  </way>
+  <way id="820241988">
+    <nd ref="12728387"/>
+    <nd ref="8826676069"/>
+    <nd ref="8826676070"/>
+    <nd ref="1629111706"/>
+    <nd ref="5523917504"/>
+    <nd ref="13932121970"/>
+    <nd ref="9195798737"/>
+    <nd ref="21268518"/>
+    <tag k="alt_name" v="Inner Ring Road"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="foot" v="yes"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Nunnery Lane"/>
+    <tag k="old_name" v="Beggargate"/>
+    <tag k="oneway" v="no"/>
+    <tag k="ref" v="A1036"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="source:ref" v="OS_OpenData_StreetView"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="995872924">
+    <nd ref="9195798739"/>
+    <nd ref="9195798746"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lanes:backward" v="2"/>
+    <tag k="lanes:forward" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Blossom Street"/>
+    <tag k="old_name" v="Ploxwaingate"/>
+    <tag k="parking:both" v="no"/>
+    <tag k="ref" v="A1036"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q104859524"/>
+    <tag k="wikipedia" v="en:Blossom Street"/>
+  </way>
+  <way id="1528885222">
+    <nd ref="21268518"/>
+    <nd ref="13932121960"/>
+    <nd ref="13932121961"/>
+    <nd ref="1632156884"/>
+    <tag k="cycleway:left" v="no"/>
+    <tag k="cycleway:right" v="lane"/>
+    <tag k="cycleway:right:lane" v="advisory"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="5"/>
+    <tag k="lanes:backward" v="3"/>
+    <tag k="lanes:forward" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Blossom Street"/>
+    <tag k="old_name" v="Ploxwaingate"/>
+    <tag k="parking:both" v="no"/>
+    <tag k="ref" v="A1036"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="turn:lanes:backward" v="left|through|right"/>
+    <tag k="wikidata" v="Q104859524"/>
+    <tag k="wikipedia" v="en:Blossom Street"/>
+  </way>
+</osm>

@@ -13,9 +13,13 @@ import { limit } from '../timeouts';
 const pins = {
   // TASK-270 (lead merge): the same triangles, two level-crossing shapes list theirs in another
   // order after the gateway ids move.
-  freiburg: '55198bb7a3345be6b68a90d2b3564c648b347b19de18407494f7e547633594ec',
+  // TASK-281: one shape changes, platform 5's surface: the same 942.3 m² and bounds in another
+  // triangulation, once the unreachable lots' aisles near the Hauptbahnhof are left out.
+  freiburg: '1a1c7329c2ffbae3f6427fe96843ec68e18878683575a4113fb0404e4fa22007',
   munich: 'f35c2fa18c1fc8c56dac4d8385c1dc65714009d42166b2d909517c85b4e3c6bf',
-  sindelfingen: '2d25533967d65b1dcbfc623363e1a6376785e3974bf2bf2e1d72ff83d29a9191',
+  // TASK-271 (lead merge): the Daimler passage road at grade is a ground road the level-crossing
+  // rails are cut to.
+  sindelfingen: 'b1d5677b314f0d7a4db73c301397cabe5ef79ce7e056aad6c73b5f58035c11b4',
 };
 
 for (const [name, pin] of Object.entries(pins))

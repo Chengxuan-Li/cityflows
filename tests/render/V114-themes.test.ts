@@ -69,7 +69,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
           // TASK-241: no hatch at lane gains (5 roads).
-          '207c3ee1da290df80ddfd1c12fb27fb0f9914dca7e811a956f54156d424a674e',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          '15fca425d91639a581850b657fe340b633339e757bff0c30768f56cadcd9ac69',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
@@ -220,6 +221,9 @@ unitTest(
     if (opened.ok) expect(cityMarkingTheme(opened.project.city)).toBe('uk');
     const result = compile(city);
     if (!result.ok) throw new Error('compile failed');
+    // TASK-276: UK kerbs are yellow where the importer read lines (`kerbLine`).
+    for (const road of Object.values(city.roads))
+      road.provenance = { ...road.provenance, inferred: ['kerbLine:right:double'] };
     for (const theme of ['us', 'uk'] as const) {
       const mesh = buildMarkings(
         result.compiled,
@@ -280,6 +284,11 @@ unitTest.each([0, 1.4])(
       road.streetGroupId = null;
       road.corridorId = 'paired';
       road.lateralOffsetM += gap / 2;
+      // TASK-276: yellow lines read from OSM on both kerbs, the median one beside the partner.
+      road.provenance = {
+        ...road.provenance,
+        inferred: ['kerbLine:left:double', 'kerbLine:right:double'],
+      };
     }
     const compiled = compile(city);
     if (!compiled.ok) throw new Error('compile failed');
@@ -295,6 +304,12 @@ unitTest.each([0, 1.4])(
 
 unitTest('V114: new theme edge paint stays on tapered road surfaces', () => {
   const city = continuity();
+  // TASK-276: UK kerbs draw the yellow lines read from OSM (`kerbLine`), here on both kerbs.
+  for (const road of Object.values(city.roads))
+    road.provenance = {
+      ...road.provenance,
+      inferred: ['kerbLine:left:double', 'kerbLine:right:double'],
+    };
   const result = compile(city);
   if (!result.ok) throw new Error('compile failed');
   const net = result.compiled;

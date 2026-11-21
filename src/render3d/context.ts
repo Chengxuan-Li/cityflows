@@ -25,7 +25,14 @@ import { mapPalettes, style, type MapPalette } from '../render/style';
 import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 import { buildingPieces, buildRoof } from './roofs';
-import { elevatorLandings, elevatorShaft, elevatorTopM, isElevator } from './elevators';
+import {
+  elevatorLandings,
+  elevatorPoints,
+  elevatorShaft,
+  elevatorTopM,
+  isElevator,
+} from './elevators';
+import { footbridgeSize } from './footbridges';
 import type { WalkGraph } from '../network';
 
 type Building = Extract<ContextFeature, { kind: 'area' }>;
@@ -208,6 +215,106 @@ function paint(geometry: BufferGeometry, fill: number, wall = fill) {
   return geometry;
 }
 
+/** TASK-273: city walls and gate arches, in metres, where OSM tags none. */
+export const wallSize = {
+  heightM: 4,
+  widthM: 2,
+  /** A wall tagged `bridge` keeps this much above the opening it spans. */
+  lintelM: 1.2,
+  parapetM: 1,
+  parapetWidthM: 0.3,
+  gate: { heightM: 8, depthM: 3, pierM: 1.5, clearanceM: 4.5, haunchM: 0.8 },
+};
+
+type Wall = Extract<ContextFeature, { kind: 'line' }>;
+
+/** The strip between two signed offsets of a line, as a closed ring. */
+const strip = (line: Vec2[], from: number, to: number) => {
+  const ring = [...parallelOffset(line, from), ...parallelOffset(line, to).reverse()];
+  return [...ring, ring[0]!];
+};
+
+function prism(ring: Vec2[], low: number, high: number, top: number, side: number) {
+  const geometry = new ExtrudeGeometry(shape([ring]), {
+    depth: high - low,
+    bevelEnabled: false,
+    steps: 1,
+    curveSegments: 1,
+  })
+    .rotateX(-Math.PI / 2)
+    .translate(0, low, 0);
+  return paint(geometry, top, side);
+}
+
+/** A wall's stone body, from the ground or (a `bridge`) its lintel to its top. A wall whose
+ * walkway is on a raised `layer` is the walk's footbridge deck's support: its top meets the deck's
+ * underside, and the deck with its handrails is the walkway. A walkway at grade gets a paved top
+ * between two parapets. A gate arch is two piers and a lintel with haunches over the way. */
+export function wallPieces(feature: Wall, palette: MapPalette): BufferGeometry[] {
+  const stone = palette.context.wall,
+    coping = palette.context.wallEdge;
+  const { line } = feature;
+  if (feature.class === 'city_gate') {
+    const size = wallSize.gate;
+    const depth = feature.widthM ?? size.depthM,
+      high = feature.heightM ?? size.heightM;
+    const clearance = Math.min(size.clearanceM, high - wallSize.lintelM);
+    const [a, b] = [line[0]!, line.at(-1)!];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const at = (d: number) => ({
+      x: a.x + ((b.x - a.x) * d) / length,
+      y: a.y + ((b.y - a.y) * d) / length,
+    });
+    const pier = Math.min(size.pierM, length / 3);
+    const haunch = Math.min(size.haunchM, (length - 2 * pier) / 4);
+    const span = (from: number, to: number) => strip([at(from), at(to)], -depth / 2, depth / 2);
+    return [
+      prism(span(0, pier), 0, high, coping, stone),
+      prism(span(length - pier, length), 0, high, coping, stone),
+      prism(span(pier, length - pier), clearance, high, coping, stone),
+      prism(span(pier, pier + haunch), clearance - haunch, clearance, stone, stone),
+      prism(
+        span(length - pier - haunch, length - pier),
+        clearance - haunch,
+        clearance,
+        stone,
+        stone,
+      ),
+    ];
+  }
+  const width = feature.widthM ?? wallSize.widthM;
+  const raised = feature.walkway && (feature.layer ?? 0) > 0;
+  // walk.ts lays the paving 0.14 m above its level (5 m a layer); the deck hangs below it.
+  const top = raised
+    ? feature.layer! * 5 + 0.14 - footbridgeSize.deckM
+    : (feature.heightM ?? wallSize.heightM);
+  const low = feature.bridge ? Math.max(0, top - wallSize.lintelM) : 0;
+  const paved = feature.walkway && !raised;
+  const pieces = [
+    prism(
+      strip(line, -width / 2, width / 2),
+      low,
+      top,
+      paved ? palette.walk.footway : coping,
+      stone,
+    ),
+  ];
+  if (paved) {
+    const inner = width / 2 - Math.min(wallSize.parapetWidthM, width / 4);
+    for (const side of [-1, 1])
+      pieces.push(
+        prism(
+          strip(line, side * inner, (side * width) / 2),
+          top,
+          top + wallSize.parapetM,
+          coping,
+          stone,
+        ),
+      );
+  }
+  return pieces;
+}
+
 function merged(geometries: BufferGeometry[]) {
   const geometry = geometries.length
     ? mergeGeometries(geometries, false)!
@@ -238,6 +345,7 @@ export function buildContext(
   const order = {
     tree: -1,
     street_lamp: -1,
+    elevator: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,
@@ -247,18 +355,48 @@ export function buildContext(
     waterway: 5,
     rail: 6,
     tram: 7,
+    city_wall: 4,
+    city_gate: 4,
   };
   const rank = (f: ContextFeature) =>
     f.kind === 'area' && f.sub === 'path' ? 3.5 : order[f.class];
+  // TASK-274: elevators mapped only as nodes, a small shaft from the ground or their tower's.
+  const { towers, shafts } = elevatorPoints(features, walk);
+  for (const shaft of shafts) {
+    const base = terrain?.grid ? lowestGround(shaft.rings, terrain, true) : 0;
+    const block = new ExtrudeGeometry(shape(shaft.rings), {
+      depth: shaft.topM,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments: 1,
+    })
+      .rotateX(-Math.PI / 2)
+      .translate(0, base, 0);
+    buildings.push(paint(block, palette.context.building, palette.context.buildingEdge));
+    detailed.push(
+      elevatorShaft(shaft.rings, 0, shaft.topM, shaft.landings, palette).translate(0, base, 0),
+    );
+  }
   for (const feature of [...features].sort((a, b) => rank(a) - rank(b))) {
     if (feature.kind === 'point' || feature.class === 'tree_row') continue;
+    if (feature.class === 'city_wall' || feature.class === 'city_gate') {
+      const ring = strip(feature.line, -1, 1);
+      const base = terrain?.grid ? lowestGround([ring], terrain, true) : 0;
+      for (const piece of wallPieces(feature, palette)) {
+        piece.translate(0, base, 0);
+        buildings.push(piece.clone());
+        detailed.push(windowInfo(piece));
+      }
+      continue;
+    }
     if (feature.kind === 'area' && feature.class === 'building') {
       buildingCount++;
       const base = terrain?.grid ? lowestGround(feature.rings, terrain, true) : 0;
       for (const piece of buildingPieces(feature)) {
         const canopy = piece.sub === 'roof';
         const minimum = piece.minHeightM ?? (canopy ? 3 : 0);
-        const landings = isElevator(piece) ? elevatorLandings(piece.rings, walk) : undefined;
+        const landings =
+          isElevator(piece) || towers.has(piece) ? elevatorLandings(piece.rings, walk) : undefined;
         const total = landings
           ? elevatorTopM(piece, landings)
           : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
@@ -440,6 +578,7 @@ export function buildTerrainGround(
   const order = {
     tree: -1,
     street_lamp: -1,
+    elevator: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,
@@ -449,6 +588,8 @@ export function buildTerrainGround(
     waterway: 5,
     rail: 6,
     tram: 7,
+    city_wall: 4,
+    city_gate: 4,
   };
   // TASK-106's path areas rank between parking and buildings, as in the flat ground.
   const rank = (f: ContextFeature) =>
@@ -457,7 +598,12 @@ export function buildTerrainGround(
     .sort((a, b) => rank(a) - rank(b))
     .flatMap((feature) => {
       if (feature.kind === 'point' || feature.class === 'tree_row') return [];
-      if (feature.class === 'building') return [];
+      if (
+        feature.class === 'building' ||
+        feature.class === 'city_wall' ||
+        feature.class === 'city_gate'
+      )
+        return [];
       let rings: Vec2[][];
       if (feature.kind === 'area') rings = feature.rings;
       else {

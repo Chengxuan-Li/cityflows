@@ -259,6 +259,7 @@ export function addLots(
   // Entry reachability propagates through the mapped aisle network, including one-way direction.
   const withAisles = attached.ok ? attached : compile(city);
   if (!withAisles.ok) return;
+  const unreachable: ParkingFacility[] = [];
   for (const lot of lots) {
     const aisleNodes = new Set(
       lot.aisles!.flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to]),
@@ -327,16 +328,36 @@ export function addLots(
           throughputPerMin: 30,
         });
         lot.provenance.inferred!.push('driveway');
-      } else
+      } else {
+        unreachable.push(lot);
         diagnostics.push({
           severity: 'warning',
           code: 'parking_unreachable',
           refs: [lot.id],
-          message: `Lot ${lot.name ?? lot.id} has no reachable aisle or permitted road within 30 m`,
+          message: `Lot ${lot.name ?? lot.id} has no reachable aisle or permitted road within 30 m; left out`,
         });
+      }
     }
   }
-  return withAisles.compiled;
+  // TASK-281: a lot no car reaches has no stall a car can use, only stalls drawn without a path
+  // and a facility without an exit (Lübeck's Am Güterbahnhof, whose road the polygon prunes). It
+  // is left out with the aisles only it owns; its place stays. TASK-207 curated three such lots
+  // out of Freiburg by id.
+  if (!unreachable.length) return withAisles.compiled;
+  const kept = new Set(lots.filter((lot) => !unreachable.includes(lot)).flatMap((l) => l.aisles!));
+  const removed = new Set(unreachable.flatMap((lot) => lot.aisles!).filter((id) => !kept.has(id)));
+  for (const lot of unreachable) delete city.parking![lot.id];
+  if (!removed.size) return withAisles.compiled;
+  const ends = [...removed].flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to]);
+  for (const id of removed) delete city.roads[id];
+  const used = new Set(Object.values(city.roads).flatMap((road) => [road.from, road.to]));
+  for (const id of ends) if (!used.has(id)) delete city.nodes[id];
+  for (const node of Object.values(city.nodes)) {
+    node.turnRules = node.turnRules.filter((r) => !removed.has(r.from) && !removed.has(r.to));
+    node.minorRoads = node.minorRoads.filter((id) => !removed.has(id));
+  }
+  const result = compile(city);
+  return result.ok ? result.compiled : undefined;
 }
 
 /** Apply source-proven joins last, so parking access cannot renumber unrelated walk/rail data. */

@@ -298,6 +298,19 @@ export function walkHeight(
   };
 }
 
+/** TASK-278: `height` once per distinct point. A shape's triangles split to 2 m on a ramp share
+ * most of their corners (Sindelfingen: 1.22 million lookups at about 0.26 million points). */
+function once(height: (p: Vec2) => number) {
+  const known = new Map<number, Map<number, number>>();
+  return (p: Vec2) => {
+    let row = known.get(p.x);
+    if (!row) known.set(p.x, (row = new Map()));
+    let z = row.get(p.y);
+    if (z === undefined) row.set(p.y, (z = height(p)));
+    return z;
+  };
+}
+
 export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Heights) {
   const sidewalks: number[] = [],
     footways: number[] = [],
@@ -334,7 +347,7 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
         ? landFootways
         : footways;
     const hatchTarget = ground ? landSteps : steps;
-    const z = (p: { x: number; y: number }) => {
+    const z = once((p: Vec2) => {
       if (l.road !== undefined)
         return roadSurfaceAt(city.roads[l.road]!, heights.roads[l.road]!, p) + paving;
       if (ends)
@@ -354,7 +367,7 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
             )) +
         paving
       );
-    };
+    });
     const curvedHeight = roadHeight
       ? roadHeight.fromM !== roadHeight.deckM || roadHeight.toM !== roadHeight.deckM
       : fromGrade !== deck || toGrade !== deck;

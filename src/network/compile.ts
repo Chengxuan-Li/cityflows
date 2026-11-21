@@ -13,6 +13,7 @@ import {
   junctionCuts,
   junctionPolygon,
   MAX_SHIFT_M,
+  MINI_ROUNDABOUT,
   STOP_POSITION,
   throughAlignments,
   throughPath,
@@ -99,7 +100,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   validateCity(city, sourceNodes, sourceRoads, sourcePlaces, diagnostics);
   if (diagnostics.length) return { ok: false, diagnostics };
 
-  const nodes: CNode[] = sourceNodes.map(({ id, pos, layer, control }, idx) => ({
+  const nodes: CNode[] = sourceNodes.map(({ id, pos, layer, control, provenance }, idx) => ({
     idx,
     id,
     pos: { ...pos },
@@ -110,6 +111,9 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     control,
     movements: [],
     signal: null,
+    ...(control === 'yield' && provenance.inferred?.includes(MINI_ROUNDABOUT)
+      ? { miniRoundabout: true as const }
+      : {}),
   }));
   const nodeIndex = indices(nodes);
   const stopPositions = new Set(

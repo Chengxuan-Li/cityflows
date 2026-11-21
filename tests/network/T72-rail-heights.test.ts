@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import type { Mesh } from 'three';
 import { buildCity } from '../../src/fixtures/build-city';
-import { pointAtDistance, pointInPolygon } from '../../src/geo/polyline';
+import { nearestOnPolyline, pointAtDistance, pointInPolygon } from '../../src/geo/polyline';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
 import { railGrade, railHeightAt, railHeights } from '../../src/network/rail';
@@ -78,7 +78,11 @@ function steepest(compiled: CompiledCity, heights: ReturnType<typeof railHeights
     const p = heights.profiles[t.idx]!;
     const step = t.lengthM / (p.length - 1);
     for (let i = 1; i < p.length; i++)
-      worst = Math.max(worst, Math.abs(p[i]! - p[i - 1]!) / step / railGrade.maxGrade(t.kind));
+      // Less the micrometre rounding of each height.
+      worst = Math.max(
+        worst,
+        (Math.abs(p[i]! - p[i - 1]!) - 1e-6) / step / railGrade.maxGrade(t.kind),
+      );
   }
   return worst;
 }
@@ -210,12 +214,16 @@ test('T72 ramps keep within 4% for rail and 6% for trams, off switches, level cr
     ],
   );
   // The switch 60 m before the portal holds the ramp: the portal is 2.4 m deep, the tunnel
-  // reaches its 7 m inside, and neither branch beyond the switch dips.
+  // reaches its 7 m inside, and the track before the switch does not dip.
   expect(profile(compiled, heights, 'rt:2')[0]!.h).toBe(0);
-  expect(railHeightAt(heights, track(compiled, 'rt:3'), 0)).toBeCloseTo(-0.04 * 60, 6);
+  // TASK-280: to 5 mm, as the two tracks share their bed for the switch's first 10 m.
+  expect(railHeightAt(heights, track(compiled, 'rt:3'), 0)).toBeCloseTo(-0.04 * 60, 2);
   expect(Math.min(...heights.profiles[2]!)).toBe(railGrade.tunnelM);
-  for (const id of ['rt:1', 'rt:4'])
-    expect(profile(compiled, heights, id).every((q) => q.h === 0)).toBe(true);
+  expect(profile(compiled, heights, 'rt:1').every((q) => q.h === 0)).toBe(true);
+  // TASK-280: the branch shares the ramp's bed for its first 10 m (it leaves at 18 degrees), then
+  // climbs back to grade.
+  expect(profile(compiled, heights, 'rt:4').every((q) => q.h === 0 || q.s < 20)).toBe(true);
+  expect(Math.min(...heights.profiles[3]!)).toBeGreaterThan(-0.41);
   // The road at x = 200 and the junction at x = 230 hold their ramps: both portals are shallower
   // than 7 m and the tunnels deepen inside; trams ramp at 6%, railways at 4%.
   for (const [ground, tunnel, at, grade] of [
@@ -258,6 +266,70 @@ test('T72 ramps keep within 4% for rail and 6% for trams, off switches, level cr
   );
   expect(profile(pinned.compiled, pinned.heights, 'rt:2')[0]!.h).toBe(0);
   expect(profile(pinned.compiled, pinned.heights, 'rt:1').every((q) => q.h === 0)).toBe(true);
+});
+
+/** A switch at x = -40 onto a bridge over a road at x = 0: `rt:2` straight on, `rt:3` diverging at
+ * 3 degrees to a ground switch at x = 60, which holds it low; their centre lines part 3.2 m
+ * apart at x = 21. Past the bridge a tunnel (`rt:9`, layer -1) runs 1 m beside `rt:4`. */
+function switchOntoBridge() {
+  const { city, node, road } = buildCity('Switch onto bridge', 1);
+  road(node(0, -60), node(0, 60));
+  const result = railway(
+    city,
+    {
+      'rn:1': [-300, 0],
+      'rn:2': [-40, 0, 'switch'],
+      'rn:3': [60, 0],
+      'rn:4': [400, 0],
+      'rn:5': [40, 4.2],
+      'rn:6': [60, 5.25, 'switch'],
+      'rn:7': [200, 12],
+      'rn:8': [200, 22],
+      'rn:9': [100, -40],
+      'rn:10': [150, -1],
+      'rn:11': [300, -1],
+      'rn:12': [350, -40],
+    },
+    [
+      ['rn:1', 'rn:2'],
+      ['rn:2', 'rn:3', { bridge: true, layer: 1 }],
+      ['rn:2', 'rn:5', { bridge: true, layer: 1 }],
+      ['rn:3', 'rn:4'],
+      ['rn:5', 'rn:6'],
+      ['rn:6', 'rn:7'],
+      ['rn:6', 'rn:8'],
+      ['rn:9', 'rn:10'],
+      ['rn:10', 'rn:11', { tunnel: true, layer: -1 }],
+      ['rn:11', 'rn:12'],
+    ],
+  );
+  return { city, ...result };
+}
+
+test('TASK-280 tracks that share a bed share one profile, on their layer only', () => {
+  const { compiled, heights } = switchOntoBridge();
+  const straight = track(compiled, 'rt:2'),
+    diverging = track(compiled, 'rt:3');
+  // Until the centre lines part (3.2 m), one bed: one height, within the 6 cm paint (a station ties
+  // to the other track's nearest, up to 1 m along at 4%).
+  let shared = 0;
+  for (const q of profile(compiled, heights, 'rt:3')) {
+    const abreast = nearestOnPolyline(straight.line, q.p);
+    if (abreast.away >= railGrade.sharedBedM) continue;
+    shared++;
+    expect(Math.abs(q.h - railHeightAt(heights, straight, abreast.along))).toBeLessThan(0.06);
+  }
+  expect(shared).toBeGreaterThan(55);
+  // The ground switch holds the diverging track low, and with it the straight track over the
+  // shared bed; past it the straight track climbs to clear the road.
+  expect(railHeightAt(heights, diverging, diverging.lengthM)).toBeLessThan(0.81);
+  expect(railHeightAt(heights, straight, 100)).toBeGreaterThan(
+    railHeightAt(heights, diverging, 61) + 1,
+  );
+  expect(steepest(compiled, heights)).toBeLessThanOrEqual(1 + 1e-9);
+  // A tunnel 1 m beside a ground track is on another layer: each keeps its own height.
+  expect(profile(compiled, heights, 'rt:9').every((q) => q.h === railGrade.tunnelM)).toBe(true);
+  expect(Math.min(...heights.profiles[track(compiled, 'rt:4').idx]!)).toBe(0);
 });
 
 test('T72 same import, same hash: tunnels, building passages and bridges from OSM', () => {

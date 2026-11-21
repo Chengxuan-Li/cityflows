@@ -4,6 +4,8 @@ import { areaError, defaultEndpoint, fetchOverpass, type Bbox } from '../../impo
 import type { ImportResult } from '../../importers/types';
 import type { ImportMessage } from '../../importers/worker';
 import { defaultScenario } from '../../fixtures/scenarios';
+import type { City } from '../../schema';
+import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { CloseButton, Slider } from '../controls';
 import { useAppStore } from '../store';
 import { DiagnosticsStep } from './diagnostics-step';
@@ -21,7 +23,8 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   const [endpoint, setEndpoint] = useState(
     () => localStorage.getItem('cityflows-overpass-endpoint') ?? defaultEndpoint,
   );
-  const [side, setSide] = useState<'left' | 'right'>('right');
+  // TASK-268 (D11): by default the importer infers the side as it infers the marking theme.
+  const [side, setSide] = useState<'location' | 'left' | 'right'>('location');
   const [surroundings, setSurroundings] = useState(true);
   const [terrain, setTerrain] = useState(true);
   const [name, setName] = useState('OpenStreetMap import');
@@ -40,6 +43,12 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
   const residents = homes.reduce((sum, place) => sum + place.population, 0);
   const persons = homes.reduce((sum, place) => sum + Math.round(place.population * demandScale), 0);
   const busy = useAppStore((s) => s.busy);
+  // A map area's proposal: the theme's location rule, before the extract's country tags are read.
+  const locatedSide = file
+    ? undefined
+    : geographicMarkingTheme({ bbox } as City['geo']) === 'uk'
+      ? 'left'
+      : 'right';
   useEffect(() => {
     dialog.current?.showModal();
     return () => {
@@ -108,7 +117,7 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
         xml,
         options: {
           importerVersion: '1',
-          drivingSide: side,
+          ...(side !== 'location' && { drivingSide: side }),
           context: surroundings,
           terrain,
           ...(!file && { bbox }),
@@ -204,10 +213,10 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
             </label>
             <label className="edit-field">
               Driving side
-              <select
-                value={side}
-                onChange={(event) => setSide(event.target.value as 'left' | 'right')}
-              >
+              <select value={side} onChange={(event) => setSide(event.target.value as typeof side)}>
+                <option value="location">
+                  {locatedSide ? `From location (${locatedSide})` : 'From location'}
+                </option>
                 <option value="right">Right</option>
                 <option value="left">Left</option>
               </select>
@@ -278,7 +287,8 @@ export default function ImportWizard({ onClose }: { onClose: () => void }) {
       {step === 'accept' && result?.ok && (
         <>
           <p>
-            {name} · {Object.keys(result.city.roads).length} roads
+            {name} · {Object.keys(result.city.roads).length} roads · drives on the{' '}
+            {result.city.drivingSide}
           </p>
           <p>{result.city.geo?.source.attribution}</p>
           <div className="edit-fields">

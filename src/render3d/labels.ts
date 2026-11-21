@@ -39,7 +39,7 @@ import type { CityGeometry } from '../render/types';
 import type { ContextFeature } from '../schema';
 import { heightAt, type cityHeights } from './heights';
 import { buildingPieces } from './roofs';
-import { elevatorLandings, elevatorTopM, isElevator } from './elevators';
+import { elevatorLandings, elevatorPoints, elevatorTopM, isElevator } from './elevators';
 import { lowestGround } from './terrain';
 
 /**
@@ -265,6 +265,7 @@ export function buildingPrisms(
   walk?: WalkGraph,
 ): Prism[] {
   const prisms: Prism[] = [];
+  const { towers } = elevatorPoints(features, walk);
   for (const f of features) {
     if (f.kind !== 'area' || f.class !== 'building') continue;
     const base = terrain.grid ? lowestGround(f.rings, terrain, true) : 0;
@@ -273,7 +274,7 @@ export function buildingPrisms(
       const height =
         piece.sub === 'roof'
           ? Math.max(piece.heightM ?? 0, minimum + 0.2)
-          : isElevator(piece)
+          : isElevator(piece) || towers.has(piece)
             ? elevatorTopM(piece, elevatorLandings(piece.rings, walk))
             : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
       prisms.push({ rings: piece.rings, bottom: base + minimum, top: base + height });

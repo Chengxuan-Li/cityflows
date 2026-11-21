@@ -120,6 +120,9 @@ export const STOP_POSITION = 'stopPosition';
 /** TASK-255: a `STOP_POSITION` mapped on its signalised crossing (`crossing=traffic_signals`):
  * the stop line lies before the crossing (`populateStops`), not at the node. */
 export const STOP_POSITION_CROSSING = 'stopPositionCrossing';
+/** TASK-269 (D4): `Provenance.inferred` of a node read from `highway=mini_roundabout`. With the
+ * importer's `yield` on every entry, it compiles as `CNode.miniRoundabout`. */
+export const MINI_ROUNDABOUT = 'miniRoundabout';
 
 function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boolean {
   if (node.control !== 'uncontrolled' && !stopPosition) return false;

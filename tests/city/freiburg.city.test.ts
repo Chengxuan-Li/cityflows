@@ -117,18 +117,18 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // south on Günterstalstraße, and the line from Kronenstraße; then (TASK-202) the Rotteckring
   // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
   // east and back. TASK-214's rebuild of the project renumbers the rail nodes by one; TASK-270's
-  // (one gateway and one connector fewer) by two down.
+  // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
-    'rn:12241>rn:12224',
-    'rn:12882>rn:12224',
-    'rn:12226>rn:12559',
-    'rn:12515>rn:12575',
-    'rn:12047>rn:12513',
-    'rn:12515>rn:12880',
-    'rn:12882>rn:12513',
-    'rn:12226>rn:12224',
+    'rn:12240>rn:12223',
+    'rn:12881>rn:12223',
+    'rn:12225>rn:12558',
+    'rn:12514>rn:12574',
+    'rn:12046>rn:12512',
+    'rn:12514>rn:12879',
+    'rn:12881>rn:12512',
+    'rn:12225>rn:12223',
   ]);
-  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12882'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12881'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
   expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
@@ -140,7 +140,8 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // TASK-255: seven more junction groups move the tram stop ids allocated after them by seven
   // (ts:13306 to ts:13313); same routes, stops and headways.
   // TASK-270: the ids two down give other offsets; same routes, stops and headways.
-  expect(table.hash).toBe('58a9a234');
+  // TASK-281: the ids one further down, again other offsets; same routes, stops and headways.
+  expect(table.hash).toBe('15cc1c0e');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -224,7 +225,24 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-270: rebuilt; the B 31 link out at Lessingstraße has no connector (no public road
     // reaches it), Lessingstraße's way in joins Schnewlinstraße's gateway, and the later ids
     // move down by 2.
-    '7485c8529baf9b72e11096967716119af450db629fe97213224a25c49b6d3169',
+    // TASK-264: rebuilt; 40 roads from ways tagged placement=transition are marked
+    // `placementTransition`; r:1175's widened surface moves two car-park exits on it by 0.05 mm.
+    // TASK-269: rebuilt; the mini-roundabout n:347 (7099586035, Wilhelmstraße and Faulerstraße)
+    // gives way on its four entries (`miniRoundabout`); nothing else changes.
+    // TASK-274: rebuilt; two `elevator` points appended to the context (display only).
+    // TASK-275: rebuilt; walk links carry their OSM `covered` (207) and `handrail` (263); nothing
+    // else changes.
+    // TASK-273: rebuilt; the extract's one city wall (way 1052938724 at Augustinerplatz, fetched
+    // as a member of the square's area relation) is a context line; nothing else changes.
+    // TASK-281: rebuilt; the importer leaves out every lot no car reaches (TASK-207's three, no
+    // longer curated, and 6 more) with the aisles only they own (22 roads); one driveway fewer, so
+    // the later ids move down by 1.
+    // TASK-277: rebuilt; the Hauptbahnhof's four platforms mapped with only a `ref` ("1", "2;3",
+    // "4;5", "6;7") take their stop area's name; nothing else changes.
+    // TASK-271: rebuilt; building passages and covered ways read at grade by the importer, not
+    // by curation: the same roads and walk links, with 3 road nodes and 21 walk nodes where a
+    // passage meets a tagged layer -1 way at grade (the importer's portal rule).
+    'b9b2611e35f9b03890d6f4210dfadf7af579f4c8696bb50bba6ae5afb5f993a3',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -259,9 +277,18 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
   // TASK-270: Lessingstraße's way in shares Schnewlinstraße's gateway and the dead B 31 link out
   // has no connector (1,518 to 1,530 completed, 65.8 to 62.6 s).
+  // TASK-269: the mini-roundabout n:347: no arm or turn above another, and cars arriving together
+  // give way to the left (1,518 completed, 65.8 to 65.3 s).
+  // Lead merge: TASK-270 and 269 together, 1,530 completed, 61.4 s.
+  // TASK-281: the lots no car reaches are left out, and the later ids move down by 1 (1,530 to
+  // 1,531 completed, 62.6 to 60.1 s).
+  // Lead merge: TASK-273, 276, 278, 281, 282 on main, 1,533 completed, 60.5 s.
+  // TASK-271: passages read at grade by the importer; 3 road nodes and 21 walk nodes at the
+  // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
+  // Lead merge: TASK-277 and 271 on main, 1,532 completed, 59.8 s.
   // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
   // turning drivers (1,530 to 1,532 completed, 62.6 to 62.0 s).
-  expect(morning.stateHash).toBe(4283944330);
+  expect(morning.stateHash).toBe(883105405);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
