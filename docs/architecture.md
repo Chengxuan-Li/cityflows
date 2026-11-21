@@ -3643,8 +3643,9 @@ overrides are retained; otherwise-public aisle access is inferred as destination
 TASK-101, preventing through shortcuts without changing routing or simulation.
 Entries reuse mapped public nodes (including consolidated-node provenance). TASK-103 gives
 a lot with no reachable aisle one inferred driveway connector on the nearest permitted car
-lane within 30 m of its polygon; no vehicle road is fabricated. Only lots without a road
-that close retain `parking_unreachable`.
+lane within 30 m of its polygon; no vehicle road is fabricated. A lot without a road that
+close is reported (`parking_unreachable`) and left out with the aisles only it owns; its place
+stays (TASK-281).
 A mapped mouth that would consume an existing place connector remains disconnected with
 `parking_entry_unreachable`, preserving the original place and demand. TASK-144 also restores
 a real shared OSM node omitted from, or merged out of, the public graph when it remains an
