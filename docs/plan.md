@@ -308,7 +308,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
 | [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | held for the owner 2026-11-21 (passes the merge rule; Lübeck -557 and Cambridge -679 trips a day until populations draw reachable gateways) |
 | [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | in progress 2026-11-21 (run 3) |
-| [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | in progress 2026-11-21 (run 3) |
+| [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5724,6 +5724,13 @@ back (8 to 9 gateways), Cambridge three north-east exits (5 to 8); `no_route` 0 
 trip lists and traffic identical (passes the merge rule). Cost: people assigned to unreachable exits stay home
 (Lübeck 13,516 to 12,959 trips a day, Cambridge 4,546 to 3,867); the fix is drawing workplaces only among gateways the
 home's car reaches, which changes populations (owner's call).
+
+TASK-285 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `e8e6833`): Philadelphia Center City preloaded (raw
+polygon import, right-hand, flat; extract committed with attribution; `?city=philadelphia`; panel note "One-way grid
+around City Hall: right on red, trains below"). Showcase gate: 12,926 persons, 4,672 completed, 0 failed, 0 stalled,
+worst visit 404 s, 156.1 s. Budgets: first frame 2.95 to 3.14 s near idle (Freiburg 2.38 to 2.57), 3D after the click
+3.6 s idle, 2D p95 1.5 ms, 3D p95 3.0 ms. Archive 6.47 MB, 1.02 MB gzip. Follow-ups: 155 validation warnings (F1),
+load at 1.2x Freiburg (F2), subway service (F3). Lead merge: archives rebuilt unchanged.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
