@@ -3,10 +3,36 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { drape } from './terrain';
 import { heightAt, roadSurfaceAt, type cityHeights } from './heights';
 import { walkGeometry } from '../render/walk-geometry';
-import type { CompiledCity } from '../network';
+import type { CompiledCity, CWalkLink } from '../network';
 import type { CityGeometry } from '../render/types';
 import { distance, nearestOnPolyline } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+
+/** The paved surface height of a walk link at `p` (the deck top on a bridge). TASK-262: shared
+ * with the footbridge structure under and along it. */
+export function walkHeight(
+  city: CompiledCity,
+  heights: ReturnType<typeof cityHeights>,
+  l: CWalkLink,
+): (p: Vec2) => number {
+  const fromGrade = city.walk.nodes[l.from]!.layer,
+    toGrade = city.walk.nodes[l.to]!.layer;
+  return (p) => {
+    if (l.road !== undefined)
+      return roadSurfaceAt(city.roads[l.road]!, heights.roads[l.road]!, p) + 0.14;
+    return (
+      heights.terrain.groundAt(p.x, p.y) +
+      (l.node !== undefined
+        ? heights.nodes[l.node]! -
+          heights.terrain.groundAt(city.nodes[l.node]!.pos.x, city.nodes[l.node]!.pos.y)
+        : heightAt(
+            { lengthM: l.lengthM, fromM: fromGrade * 5, toM: toGrade * 5, deckM: l.layer * 5 },
+            nearestOnPolyline(l.line, p).along,
+          )) +
+      0.14
+    );
+  };
+}
 
 export function buildWalk(
   city: CompiledCity,
@@ -37,21 +63,7 @@ export function buildWalk(
         ? landFootways
         : footways;
     const hatchTarget = ground ? landSteps : steps;
-    const z = (p: { x: number; y: number }) => {
-      if (l.road !== undefined)
-        return roadSurfaceAt(city.roads[l.road]!, heights.roads[l.road]!, p) + 0.14;
-      return (
-        heights.terrain.groundAt(p.x, p.y) +
-        (l.node !== undefined
-          ? heights.nodes[l.node]! -
-            heights.terrain.groundAt(city.nodes[l.node]!.pos.x, city.nodes[l.node]!.pos.y)
-          : heightAt(
-              { lengthM: l.lengthM, fromM: fromGrade * 5, toM: toGrade * 5, deckM: l.layer * 5 },
-              nearestOnPolyline(l.line, p).along,
-            )) +
-        0.14
-      );
-    };
+    const z = walkHeight(city, heights, l);
     const curvedHeight = roadHeight
       ? roadHeight.fromM !== roadHeight.deckM || roadHeight.toM !== roadHeight.deckM
       : fromGrade !== l.layer || toGrade !== l.layer;
