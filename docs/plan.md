@@ -303,7 +303,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-277](tasks/TASK-277.md) | wave A | Philadelphia within budget, and transit names (D10, D13) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; Sindelfingen 3D 3.7 s sooner, identical meshes) |
 | [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
-| [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; covered bed points 148 to 0; hashes identical) |
 | [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; unreachable lots left out; Freiburg 60.1 s) |
 | [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
 | [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | in progress 2026-11-21 (run 3) |
@@ -5684,6 +5684,15 @@ off +5.9%); v2 moves only node-mapped crossings (Freiburg 7 ends: `n:211` 7.9 to
 seed spread ±1.7%), fixed off +1.3%, fixed on -0.4%; full demand five-seed +1.1% / -1.3%; Freiburg +1.1 s. Parked;
 owner's call (the only Munich change is `n:6`'s zebra 3.6 m outward). Also fixed on the branch: the mapped-crossing
 cache keyed by walk links went stale after in-process imports.
+
+TASK-280 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `98a89ea`): in `railHeights`, tracks on one layer
+whose centre lines run within 3.2 m and 30° of each other share one profile (2 m samples linked at no cost), so
+switch pins and ramps apply to both; tracks on other layers or past each other's ends stay apart; where an
+embankment slope would land on a ground track, a retaining wall stands. Covered bed points Freiburg 148 to 0;
+bridge points floating over the deck 126 to 0; ground track buried under embankments Freiburg 608 to 1, Munich 154
+to 31. No simulation code reads rail heights; hashes identical. Side effects: 42 Freiburg track sections lower
+(rt:12392 3.91 to 2.45 m, rt:12830 4.74 to 2.04 m: check road clearance at the next aerial pass); rt:12409 and
+rt:12417 rise to about 1.1 m beside a ramp.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
