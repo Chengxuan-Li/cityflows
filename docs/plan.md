@@ -297,14 +297,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-271](tasks/TASK-271.md) | city | Reading rules for building passages, conditional access and alternating one-ways (D6, D12, `oneway=faux`) | see contract | 259 | tests, counts, traffic where it moves, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-272](tasks/TASK-272.md) | city | Landmark buildings mapped as multipolygons (D9, Philadelphia City Hall) | see contract | 259 | tests, counts, traffic where it moves, merge rule | done 2026-11-21 (render rule for parts; City Hall stands; Freiburg 20 bodies) |
 | [TASK-273](tasks/TASK-273.md) | city | City walls and gates: fetched, read and drawn (D5, York; owner-approved query change and re-fetch) | `overpass.ts`, context import, drawing | 259 | tests, close-ups, identity, budgets | in progress 2026-11-21 (run 3) |
-| [TASK-274](tasks/TASK-274.md) | render | Elevators mapped only as points (owner-approved schema value) | `src/schema`, point import, `elevators.ts` | 263 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
-| [TASK-275](tasks/TASK-275.md) | render | Covered and handrail on walk links (owner-approved schema fields) | `src/schema`, `walk.ts`, `footbridges.ts` | 262 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
+| [TASK-274](tasks/TASK-274.md) | render | Elevators mapped only as points (owner-approved schema value) | `src/schema`, point import, `elevators.ts` | 263 | tests, counts, close-ups, hashes | done 2026-11-21 (merged; Donnersbergerbrücke lifts as shafts) |
+| [TASK-275](tasks/TASK-275.md) | render | Covered and handrail on walk links (owner-approved schema fields) | `src/schema`, `walk.ts`, `footbridges.ts` | 262 | tests, counts, close-ups, hashes | done 2026-11-21 (merged; railings by handrail, canopies on covered ways) |
 | [TASK-276](tasks/TASK-276.md) | wave A | UK kerb markings read from OSM (D8) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-277](tasks/TASK-277.md) | wave A | Philadelphia within budget, and transit names (D10, D13) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | in progress 2026-11-21 (run 3) |
+| [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5622,6 +5624,23 @@ lane's end is valid (York's lot entry 1e-13 m out after a recompile); (D2) a fac
 `addStrips` removed gets no owner (Cambridge's Trinity College lot); the final compile drops and reports a facility
 it rejects (`parking_dropped`) instead of failing. York and Cambridge import under both sides, none dropped;
 Munich, Sindelfingen, Freiburg byte-identical.
+
+TASK-274 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `1a12647`): owner-approved `ContextPoint` class
+`'elevator'` (schema, Zod, architecture; no migration). `highway=elevator` nodes are imported unless `indoor=yes`
+or inside a building, except an outline of at most 16 m² with no parts, which is read as the lift's tower and
+drawn as its shaft; landings also count walk links ending on the outline; a lift draws only if a walkway lands
+above 0 m. No query change (all 18 nodes sit on fetched walk ways). Munich: the two Donnersbergerbrücke lifts
+(office blocks on main) are now 15 m shafts; Freiburg: the Mobilitätszentrale tower. Hashes identical.
+
+TASK-275 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `8133424`): owner-approved walk-link fields
+`covered?: boolean` (`covered=yes|roof|canopy|arcade|colonnade`, `bridge=covered`) and
+`handrail?: ('left'|'right'|'center')[]` (`handrail*` tags; finer tags win). Railings follow `handrail` (Freiburg 58
+links, Munich 39); covered ways with nothing over them get a light canopy on posts (Freiburg 90 pieces, 529 m²,
+including the Schwabentorsteg and the Stühlinger stair tower); below grade none. Hashes identical; 3D build
+unchanged within noise. Left: one 3 m canopy piece just outside the Stühlinger rail bridge.
+
+Lead merge of TASK-274 and 275 (with contracts TASK-282, 283): bundled projects rebuilt (Freiburg manifest
+a6b96fb3...); the pinned render tests pass.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
