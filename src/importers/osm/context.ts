@@ -260,6 +260,9 @@ function buildingDetails(
   };
 }
 
+/** TASK-274: the largest building outline (m²) read as the tower of the elevator node inside it. */
+export const elevatorTowerM2 = 16;
+
 export function importContext(
   data: OsmData,
   positions: Map<number, Vec2>,
@@ -279,10 +282,9 @@ export function importContext(
       .filter((p, i, a) => !i || p.x !== a[i - 1]!.x || p.y !== a[i - 1]!.y);
   const features: ContextFeature[] = [];
   const mappedShapes = new Map<string, { shape: RoofShape; count: number }>();
-  for (const node of data.node) {
-    const lamp = node.tag.highway === 'street_lamp';
-    if (!lamp && node.tag.natural !== 'tree') continue;
-    const p = positions.get(node.id);
+  /** A node's position rounded to 0.1 m, when it lies in the bounds. */
+  const pointAt = (id: number) => {
+    const p = positions.get(id);
     if (
       !p ||
       p.x < snapped.min.x ||
@@ -291,8 +293,14 @@ export function importContext(
       p.y > snapped.max.y ||
       (snapped.ring && !pointInPolygon(p, snapped.ring))
     )
-      continue;
-    const pos = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+      return;
+    return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+  };
+  for (const node of data.node) {
+    const lamp = node.tag.highway === 'street_lamp';
+    if (!lamp && node.tag.natural !== 'tree') continue;
+    const pos = pointAt(node.id);
+    if (!pos) continue;
     const heightM = measurement(node.tag.height),
       crownM = lamp ? undefined : measurement(node.tag.diameter_crown);
     const sub = lamp ? (node.tag.lamp_mount ?? node.tag.support) : node.tag.leaf_type;
@@ -465,6 +473,31 @@ export function importContext(
       else flush();
     }
     flush();
+  }
+  // TASK-274: an elevator mapped only as a node. One tagged `indoor=yes` is left out, and so is one
+  // inside a building outline, indoors, unless the outline is its tower: at most `elevatorTowerM2`,
+  // without parts and not itself valued `elevator` (that shaft is drawn by TASK-263).
+  for (const node of data.node) {
+    if (node.tag.highway !== 'elevator' || node.tag.indoor === 'yes') continue;
+    const pos = pointAt(node.id);
+    if (!pos) continue;
+    const around = buildings.find(
+      ({ feature: { rings } }) =>
+        pointInPolygon(pos, rings[0]!) && !rings.slice(1).some((hole) => pointInPolygon(pos, hole)),
+    );
+    if (
+      around &&
+      (around.area > elevatorTowerM2 || around.feature.parts || around.feature.sub === 'elevator')
+    )
+      continue;
+    const heightM = measurement(node.tag.height);
+    features.push({
+      kind: 'point',
+      class: 'elevator',
+      pos,
+      ...(heightM !== undefined && { heightM }),
+      ...(node.tag.level && { sub: node.tag.level }),
+    });
   }
   for (const [shape, mapped] of mappedShapes)
     diagnostics.push({

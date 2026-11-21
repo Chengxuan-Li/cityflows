@@ -36,6 +36,7 @@ export function drawContext(
   const order = {
     tree: -1,
     street_lamp: -1,
+    elevator: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,

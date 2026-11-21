@@ -25,7 +25,13 @@ import { mapPalettes, style, type MapPalette } from '../render/style';
 import { buildingRingHash, buildingSeed, lampColors, windowLitGlsl } from '../render/lighting';
 import { drape, lowestGround, triangulate, type Terrain } from './terrain';
 import { buildingPieces, buildRoof } from './roofs';
-import { elevatorLandings, elevatorShaft, elevatorTopM, isElevator } from './elevators';
+import {
+  elevatorLandings,
+  elevatorPoints,
+  elevatorShaft,
+  elevatorTopM,
+  isElevator,
+} from './elevators';
 import type { WalkGraph } from '../network';
 
 type Building = Extract<ContextFeature, { kind: 'area' }>;
@@ -238,6 +244,7 @@ export function buildContext(
   const order = {
     tree: -1,
     street_lamp: -1,
+    elevator: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,
@@ -250,6 +257,23 @@ export function buildContext(
   };
   const rank = (f: ContextFeature) =>
     f.kind === 'area' && f.sub === 'path' ? 3.5 : order[f.class];
+  // TASK-274: elevators mapped only as nodes, a small shaft from the ground or their tower's.
+  const { towers, shafts } = elevatorPoints(features, walk);
+  for (const shaft of shafts) {
+    const base = terrain?.grid ? lowestGround(shaft.rings, terrain, true) : 0;
+    const block = new ExtrudeGeometry(shape(shaft.rings), {
+      depth: shaft.topM,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments: 1,
+    })
+      .rotateX(-Math.PI / 2)
+      .translate(0, base, 0);
+    buildings.push(paint(block, palette.context.building, palette.context.buildingEdge));
+    detailed.push(
+      elevatorShaft(shaft.rings, 0, shaft.topM, shaft.landings, palette).translate(0, base, 0),
+    );
+  }
   for (const feature of [...features].sort((a, b) => rank(a) - rank(b))) {
     if (feature.kind === 'point' || feature.class === 'tree_row') continue;
     if (feature.kind === 'area' && feature.class === 'building') {
@@ -258,7 +282,8 @@ export function buildContext(
       for (const piece of buildingPieces(feature)) {
         const canopy = piece.sub === 'roof';
         const minimum = piece.minHeightM ?? (canopy ? 3 : 0);
-        const landings = isElevator(piece) ? elevatorLandings(piece.rings, walk) : undefined;
+        const landings =
+          isElevator(piece) || towers.has(piece) ? elevatorLandings(piece.rings, walk) : undefined;
         const total = landings
           ? elevatorTopM(piece, landings)
           : (piece.heightM ?? (piece.levels === undefined ? 10 : piece.levels * 3));
@@ -440,6 +465,7 @@ export function buildTerrainGround(
   const order = {
     tree: -1,
     street_lamp: -1,
+    elevator: -1,
     tree_row: -1,
     landuse: 0,
     green: 1,

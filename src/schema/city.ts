@@ -243,7 +243,8 @@ export interface GeoSource {
 }
 
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-export type ContextPoint = 'tree' | 'street_lamp';
+/** TASK-274: `elevator` is a `highway=elevator` node outside every building outline. */
+export type ContextPoint = 'tree' | 'street_lamp' | 'elevator';
 export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
 export type RoofShape =
   | 'flat'

@@ -12,7 +12,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingEnabled, crossingPlacement } from '../network/crossings';
-import type { AccessValue, MarkingThemeId } from '../schema';
+import type { AccessValue, ContextFeature, MarkingThemeId } from '../schema';
 import { cityMarkingTheme } from '../schema/marking-theme';
 import { boundsOf } from './camera';
 import { cityGrades } from './grades';
@@ -192,11 +192,13 @@ export function placeDetails(city: CompiledCity, source: CityGeometry) {
   return placed;
 }
 
+/** The context trees are placed from: no lamps or (TASK-274) elevators among the tree points. */
 export function treeContext(source: CityGeometry): CityGeometry {
-  if (!source.context?.features.some((f) => f.class === 'street_lamp')) return source;
+  const other = (f: ContextFeature) => f.kind === 'point' && f.class !== 'tree';
+  if (!source.context?.features.some(other)) return source;
   return {
     ...source,
-    context: { features: source.context.features.filter((f) => f.class !== 'street_lamp') },
+    context: { features: source.context.features.filter((f) => !other(f)) },
   };
 }
 

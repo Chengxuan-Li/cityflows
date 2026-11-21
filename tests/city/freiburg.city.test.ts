@@ -222,7 +222,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
     // TASK-257: rebuilt; crossing walk links carry their OSM `marking` (none 37, lines 124, zebra
     // 40); nothing else changes.
-    '4d1bb6f353c8a78cbc5c76a51c47a17cd72578f0cc325015aef89dbfa79fddb6',
+    // TASK-274: rebuilt; two `elevator` points appended to the context (display only).
+    'af2da3dbfc16c67574d0b40480d9975809a536a160a87cdf6f8d360f1272ea2c',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
