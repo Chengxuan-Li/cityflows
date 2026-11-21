@@ -280,7 +280,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | parked 2026-11-21 (variant meets traffic, misses the audit tolerance: `n:828` +1.5 m², width counts, A 81 voids; `r:1179` no rule can tell) |
 | [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged; `r:1178` 9 m to 1.2 m, Freiburg gate 65.8 s, Munich identical) |
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
-| [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | in progress 2026-11-20 (run 3) |
+| [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | done 2026-11-21 (merged; Munich zebra ends 114 to 25, hashes identical) |
 | [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
 | [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | in progress 2026-11-21 (downloads approved) |
 | [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
@@ -5463,6 +5463,20 @@ hash checked); Freiburg gate first 1,491 / 11, 72.8 s (+6.7 s, gridlock), varian
 (+4.8 s); seeds 2, 3 within 1 s. Parked: the first misses the gate, the variant the audit tolerance
 (`n:828` +1.5 m², the width counts, the A 81 voids). For the owner: accept the variant (its A 81 voids are
 the overlap removed, `n:828`'s bulge is 1.5 m²), or a later task with offset tapers in the network.
+
+TASK-257 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `47e20b5`): the owner-approved walk-link
+field `marking?: 'zebra' | 'lines' | 'none'` (schema, `docs/architecture.md`; absent paints as before; read
+only by the renderer). Reading (`crossingMarking`, `walk.ts`): `crossing:markings` first (no / lines,
+dashes, dots / yes, zebra, ladder), then `crossing_ref=zebra` or `crossing=zebra|marked|uncontrolled` zebra,
+`unmarked|no|informal` none, `traffic_signals` lines; a way without tags reads its nearest tagged crossing
+node; TASK-248's node links read their node. Signalised road ends keep their broken lines. Paint before /
+after: Freiburg zebra ends 53 to 30, stripes 213 to 104; Munich ends 114 to 25 (77 to nothing), stripes 366
+to 75; Sindelfingen 8 to 5. Hashes identical (eight runs); frame budgets within limits. Reported, not
+changed: every unsignalised crossing is a `zebra` control in the simulation (walkers get §26 StVO priority
+everywhere), while German rules give walkers no priority at unmarked crossings (§25(3); only turning
+drivers yield, §9(3)): a traffic-moving follow-up. Lead merge on TASK-255: Freiburg rebuilt (manifest
+4d1bb6f3...), V217's TASK-257 counts re-pinned (stop positions draw no crossing paint: without the field
+44 / 173 / 1,939, with it 28 / 97 / 2,023); gate hash 1024213382 unchanged.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
