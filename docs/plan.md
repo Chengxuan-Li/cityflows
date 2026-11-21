@@ -299,6 +299,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-273](tasks/TASK-273.md) | city | City walls and gates: fetched, read and drawn (D5, York; owner-approved query change and re-fetch) | `overpass.ts`, context import, drawing | 259 | tests, close-ups, identity, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-274](tasks/TASK-274.md) | render | Elevators mapped only as points (owner-approved schema value) | `src/schema`, point import, `elevators.ts` | 263 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
 | [TASK-275](tasks/TASK-275.md) | render | Covered and handrail on walk links (owner-approved schema fields) | `src/schema`, `walk.ts`, `footbridges.ts` | 262 | tests, counts, close-ups, hashes | in progress 2026-11-21 (run 3) |
+| [TASK-276](tasks/TASK-276.md) | wave A | UK kerb markings read from OSM (D8) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-277](tasks/TASK-277.md) | wave A | Philadelphia within budget, and transit names (D10, D13) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-278](tasks/TASK-278.md) | wave A | Faster 3D walkways: height lookups (TASK-266's follow-up) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-279](tasks/TASK-279.md) | wave A | Unmarked crossings by German rules: no walker priority | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
+| [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5949,6 +5955,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-21 05:10 (owner): "Both waves": wave A starts now (TASK-276 to 281); wave B as the merges land
+  (bundle Lübeck and York, left-hand turn ranking, gateways into restricted pockets, bundle Philadelphia).
+  Branches 218 and 223 retired (tags `archive/...`; their work landed through TASK-255 and 253).
 
 - 2026-11-21 (owner): "We may merge; allow re download; ok to add schema fields for elevator points, covered
   and handrail tags." (1) TASK-264 merges (the audit's width measure on `r:1175` reads the intended widening).
