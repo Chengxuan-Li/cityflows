@@ -14,7 +14,8 @@ import { importOsmCached } from './city-cache';
 // the rail line, the rings and the Dreisam: the polygon TASK-197 scouted
 // (docs/decisions/2026-11-17-landing-city.md), fetched as fixtures/osm/freiburg-altstadt.osm
 // (TASK-201: again on 2026-11-18, with building parts).
-// Rebuild the bundled project on purpose with
+// Rebuild the bundled project on purpose with `bench/bundled-cities.ts` (every real place), or
+// alone with
 //   node --experimental-strip-types --import ./bench/register.ts bench/freiburg.ts
 
 export const freiburgExtract = 'fixtures/osm/freiburg-altstadt.osm';
@@ -211,28 +212,39 @@ export function curateFreiburg(city: City, data: OsmData): void {
   });
 }
 
-/** The bundled project, as the app opens it: the curated city, the showcase demand (0.15
- * persons per resident, mode choice on) and its population, paused at 07:00. */
+/** A bundled real place as the app opens it: the city, the showcase demand (0.15 persons per
+ * resident, mode choice on) and its population, paused at 07:00, saved with a fixed date so a
+ * rebuild of the same city is byte-identical. */
+export async function showcaseProject(
+  city: City,
+  id: string,
+  savedAt: string,
+  view?: Project['view'],
+): Promise<string> {
+  const scenario = defaultScenario('grid5x5');
+  scenario.id = id;
+  scenario.name = city.name;
+  scenario.demand.personsPerResident = 0.15;
+  // The population ships with the project: generating it took 1.3 s of the landing load.
+  const population = generatePopulation(city, scenario.demand);
+  const project: Project = { city, population, scenarios: [scenario], ...(view && { view }) };
+  return saveProjectJson(project, { projectId: id, savedAt });
+}
+
+/** The bundled project: the curated city with the showcase 3D camera. */
 export async function buildFreiburgProject(): Promise<string> {
   const xml = readFileSync(freiburgExtract, 'utf8');
   const data = parseOsm(xml);
   if (typeof data === 'string') throw new Error(data);
   const city = importFreiburg();
   curateFreiburg(city, data);
-  const scenario = defaultScenario('grid5x5');
-  scenario.id = 'freiburg';
-  scenario.name = city.name;
-  scenario.demand.personsPerResident = 0.15;
-  // The population ships with the project: generating it took 1.3 s of the landing load.
-  const population = generatePopulation(city, scenario.demand);
   // The showcase 3D camera: from over the Dreisam towards the Münster and the Schlossberg.
   const view = {
     camera: { '3d': { centre: { x: -300, y: 220 }, scale: 1.18, pitch: 50, bearing: -60 } },
     layers: null,
     selection: null,
   };
-  const project: Project = { city, population, scenarios: [scenario], view };
-  return saveProjectJson(project, { projectId: 'freiburg', savedAt: '2026-11-17T00:00:00.000Z' });
+  return showcaseProject(city, 'freiburg', '2026-11-17T00:00:00.000Z', view);
 }
 
 /** The committed bundled project, opened as the app opens it. */
