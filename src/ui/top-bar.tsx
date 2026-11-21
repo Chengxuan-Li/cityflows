@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { scenarios } from '../fixtures/scenarios';
 import { MenuItem, PopoverButton, Sheet, ToolbarButton, type ToolbarAction } from './controls';
+import { realPlaces } from './bundled-projects';
 import { byId, closeSheet, useEnabled } from './commands';
 import { ExportMenu } from './export-menu';
 import { RunControls } from './run-bar';
@@ -170,20 +171,31 @@ export function TopBar() {
         onClose={() => closeSheet('new')}
         className="new-picker"
       >
-        <ul className="scenario-list">
-          {[{ id: 'freiburg', name: 'Freiburg im Breisgau' }, ...scenarios].map(({ id, name }) => (
-            <li key={id}>
-              <button
-                onClick={() => {
-                  closeSheet('new');
-                  void open(id);
-                }}
-              >
-                {name}
-              </button>
-            </li>
-          ))}
-        </ul>
+        {[
+          { key: 'real', title: 'Real places', entries: realPlaces },
+          { key: 'test', title: 'Test layouts', entries: scenarios },
+        ].map(({ key, title, entries }) => (
+          <section key={key} aria-labelledby={`new-${key}`}>
+            <h3 id={`new-${key}`}>{title}</h3>
+            <ul className="scenario-list">
+              {entries.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    aria-labelledby={`new-${entry.id}`}
+                    aria-describedby={'note' in entry ? `new-${entry.id}-note` : undefined}
+                    onClick={() => {
+                      closeSheet('new');
+                      void open(entry.id);
+                    }}
+                  >
+                    <span id={`new-${entry.id}`}>{entry.name}</span>
+                    {'note' in entry && <small id={`new-${entry.id}-note`}>{entry.note}</small>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </Sheet>
     </header>
   );

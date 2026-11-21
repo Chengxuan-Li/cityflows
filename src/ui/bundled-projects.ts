@@ -24,6 +24,26 @@ const generators: Record<string, (seed: number) => City> = {
   station,
 };
 
+/** TASK-258: the real places of the New city panel, each a bundled archive built by
+ * `bench/bundled-cities.ts` from its committed extract; `?city=<id>` opens one. */
+export const realPlaces = [
+  {
+    id: 'freiburg',
+    name: 'Freiburg im Breisgau',
+    note: 'Altstadt and Hauptbahnhof: trams, S-Bahn, Dreisam bridges',
+  },
+  {
+    id: 'munich',
+    name: 'Munich Donnersbergerbrücke',
+    note: 'Mittlerer Ring over the main line, S-Bahn and trams',
+  },
+  {
+    id: 'sindelfingen',
+    name: 'Sindelfingen A81',
+    note: 'A81 junction with roundabouts by the Mercedes-Benz plant',
+  },
+];
+
 export async function bundledProject(id: string): Promise<OpenResult> {
   const archive = archives[`../../fixtures/projects/${id}.cityflows.json`];
   if (archive) return openProject(await archive());
