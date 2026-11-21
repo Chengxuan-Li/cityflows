@@ -483,10 +483,7 @@ function buildRoadMarkings(
       road.streetGroupId !== null &&
       !sharedLane &&
       (medianOnRight ? lane.right : lane.left) < 0 &&
-      (markingTheme.id !== 'uk' ||
-        !city.roads.some(
-          (other) => other.streetGroupId === road.streetGroupId && other.idx < road.idx,
-        ))
+      (markingTheme.id !== 'uk' || firstOfGroup(city, road))
     ) {
       const edge = parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2);
       const pattern = markingTheme.classes[road.roadClass].centre.dash;
@@ -583,12 +580,7 @@ function buildRoadMarkings(
     const zones = zigZags.filter((zone) => zone.lane === lane.idx);
     if (zones.length) {
       const median = medianOnRight ? 1 : -1;
-      const centre =
-        road.streetGroupId !== null &&
-        !sharedLane &&
-        !city.roads.some(
-          (other) => other.streetGroupId === road.streetGroupId && other.idx < road.idx,
-        );
+      const centre = road.streetGroupId !== null && !sharedLane && firstOfGroup(city, road);
       for (const side of [-1, 1]) {
         if ((side < 0 ? lane.left : lane.right) >= 0) continue;
         if (side === median && road.streetGroupId !== null && !centre) continue;
@@ -620,6 +612,21 @@ function buildRoadMarkings(
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
+}
+
+const groupFirsts = new WeakMap<CompiledCity, Map<string, number>>();
+/** Whether no road of the road's street group comes before it (TASK-287: the least index per
+ * group once per city, instead of a scan of every road per lane). */
+function firstOfGroup(city: CompiledCity, road: CRoad): boolean {
+  let firsts = groupFirsts.get(city);
+  if (!firsts) {
+    firsts = new Map();
+    for (const r of city.roads)
+      if (r.streetGroupId !== null)
+        firsts.set(r.streetGroupId, Math.min(firsts.get(r.streetGroupId) ?? Infinity, r.idx));
+    groupFirsts.set(city, firsts);
+  }
+  return firsts.get(road.streetGroupId!)! >= road.idx;
 }
 
 /** A point `offset` metres right of a lane's centreline (left when negative), `atM` along it. */

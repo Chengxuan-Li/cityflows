@@ -8,6 +8,8 @@ import {
   parallelOffset,
   pointAtDistance,
   preparePolygon,
+  type Box,
+  boxOf,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity, CRoad } from '../network';
@@ -207,7 +209,35 @@ const closed = (ring: Vec2[]) => [...ring, ring[0]!];
 /** `nearestOnPolyline(ring, p).away < margin`, with its arithmetic, stopping at the first hit and
  * skipping segments whose box is beyond the margin (lead, TASK-107 merge: placement time). */
 function nearRing(ring: readonly Vec2[], p: Vec2, margin: number) {
-  for (let i = 1; i < ring.length; i++) {
+  // TASK-287: by runs of 16 edges under their box, so a long ring (a road surface, a river)
+  // tests only the edges near the point; a run's box test rejects exactly the edges each
+  // edge's own test would.
+  let runs = ringRuns.get(ring);
+  if (!runs) {
+    runs = [];
+    for (let from = 1; from < ring.length; from += 16)
+      runs.push({
+        from,
+        to: Math.min(ring.length, from + 16),
+        box: boxOf(ring, from - 1, Math.min(ring.length, from + 16)),
+      });
+    ringRuns.set(ring, runs);
+  }
+  for (const { from, to, box } of runs) {
+    if (
+      box.minX - p.x > margin + 1e-9 ||
+      p.x - box.maxX > margin + 1e-9 ||
+      box.minY - p.y > margin + 1e-9 ||
+      p.y - box.maxY > margin + 1e-9
+    )
+      continue;
+    if (nearEdges(ring, from, to, p, margin)) return true;
+  }
+  return false;
+}
+const ringRuns = new WeakMap<readonly Vec2[], { from: number; to: number; box: Box }[]>();
+function nearEdges(ring: readonly Vec2[], from: number, to: number, p: Vec2, margin: number) {
+  for (let i = from; i < to; i++) {
     const a = ring[i - 1]!,
       b = ring[i]!;
     if (
@@ -395,6 +425,17 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
   const incoming = city.nodes.map(() => [] as CRoad[]);
   for (const road of city.roads) incoming[road.to]!.push(road);
 
+  // The access points on a road or its street group, in order (TASK-287: grouped once, not
+  // filtered from all of them per road).
+  const street = (road: CRoad) =>
+    road.streetGroupId !== null ? `g:${road.streetGroupId}` : `r:${road.idx}`;
+  const accessByStreet = new Map<string, typeof access>();
+  for (const c of access) {
+    const key = street(city.roads[city.lanes[c.lane]!.road]!);
+    const list = accessByStreet.get(key) ?? [];
+    list.push(c);
+    accessByStreet.set(key, list);
+  }
   const signCounts = { no: 0, destination: 0, delivery: 0, private: 0 };
   let labels = 0;
   for (const road of city.roads) {
@@ -437,18 +478,10 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
     const crossings = [false, true].flatMap((end) =>
       crossingEnabled(city, road, end, source) ? crossingPlacement(city, road, end).stripes : [],
     );
-    const connectors = access
-      .filter((c) => {
-        const other = city.roads[city.lanes[c.lane]!.road]!;
-        return (
-          other.idx === road.idx ||
-          (road.streetGroupId !== null && other.streetGroupId === road.streetGroupId)
-        );
-      })
-      .map((c) => {
-        const lane = city.lanes[c.lane]!;
-        return pointAtDistance(lane.polyline, lane.cumulative, c.positionM);
-      });
+    const connectors = (accessByStreet.get(street(road)) ?? []).map((c) => {
+      const lane = city.lanes[c.lane]!;
+      return pointAtDistance(lane.polyline, lane.cumulative, c.positionM);
+    });
     const width = road.lanes.reduce((n, i) => n + city.lanes[i]!.widthM, 0);
     for (const [side, baseEdge] of edges.entries()) {
       if (baseEdge.length < 2 || (road.streetGroupId && side !== curbSide)) continue;

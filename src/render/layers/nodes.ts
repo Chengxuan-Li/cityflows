@@ -6,6 +6,7 @@ import {
   pointInPolygon,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
+import { nodeRoads } from '../../network/crossings';
 import type { CMovement, CNode, CompiledCity, CRoad } from '../../network';
 import { roadStyle, style } from '../style';
 
@@ -81,8 +82,9 @@ export function drawRoadJoins(
  * The ring spans from the taper curve to 2 m inside the trunk's edge line. */
 export function curbTaper(city: CompiledCity, node: CNode) {
   if (node.control !== 'uncontrolled') return null;
-  const incoming = city.roads.filter((r) => r.to === node.idx && r.from !== node.idx);
-  const outgoing = city.roads.filter((r) => r.from === node.idx && r.to !== node.idx);
+  const roads = nodeRoads(city, node);
+  const incoming = roads.filter((r) => r.to === node.idx && r.from !== node.idx);
+  const outgoing = roads.filter((r) => r.from === node.idx && r.to !== node.idx);
   const merge = outgoing.length === 1 && incoming.length > 1;
   if (!merge && !(incoming.length === 1 && outgoing.length > 1)) return null;
   const trunk = (merge ? outgoing : incoming)[0]!;
@@ -136,12 +138,10 @@ export function curbBands(
 ): Vec2[][] {
   const ring = node.outline.slice(0, -1);
   const n = ring.length;
-  const others = city.roads
-    .filter((r) => r.from === node.idx || r.to === node.idx)
-    .flatMap((r) => [
-      ...(r.from === node.idx ? roadEndEdges(city, r, false).map((p) => ({ p, r })) : []),
-      ...(r.to === node.idx ? roadEndEdges(city, r, true).map((p) => ({ p, r })) : []),
-    ]);
+  const others = nodeRoads(city, node).flatMap((r) => [
+    ...(r.from === node.idx ? roadEndEdges(city, r, false).map((p) => ({ p, r })) : []),
+    ...(r.to === node.idx ? roadEndEdges(city, r, true).map((p) => ({ p, r })) : []),
+  ]);
   const near = (p: Vec2, q: Vec2) => Math.hypot(p.x - q.x, p.y - q.y) <= 0.15;
   const own = roadStyle(road, roadClasses).vergeM;
   return corners.flatMap((corner, side) => {
