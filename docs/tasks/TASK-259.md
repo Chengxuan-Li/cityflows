@@ -31,7 +31,7 @@ From `https://overpass-api.de/api/interpreter`, with the app's own query (`build
 | `philadelphia-center-city.osm` | Center City as a polygon | 1 to 2 MB |
 
 Nothing else is downloaded (no imagery, no terrain). If a polygon's extract comes out over 10 MB, shrink
-the polygon rather than fetch more. Keep the extracts in `D:\cityflows-wt9-data` (not committed);
+the polygon rather than fetch more. Keep the extracts in `D:\cityflows-wt\259-data` (not committed);
 record each one's query, polygon, snapshot time, size and SHA-256 in the decision document, ready for
 `ATTRIBUTION.txt` when a city is bundled.
 
