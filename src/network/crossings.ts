@@ -176,6 +176,9 @@ export const MAPPED_M = 12;
 interface MappedCrossing {
   line: Vec2[];
   grade: number;
+  /** TASK-265: a crossing mapped only as a node of the road (TASK-239's `addNodeCrossings`): the
+   * link and both its end nodes carry that one node's OSM id. */
+  node: boolean;
 }
 const mappedSets = new WeakMap<object, MappedCrossing[]>();
 /** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
@@ -186,18 +189,30 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
-      .map((l) => ({ line: l.line, grade: l.layer ?? walk.nodes[l.from]!.layer }));
+      .map((l) => {
+        const osm = l.provenance.osmIds;
+        return {
+          line: l.line,
+          grade: l.layer ?? walk.nodes[l.from]!.layer,
+          node:
+            osm?.length === 1 &&
+            [l.from, l.to].every((id) => walk.nodes[id]!.provenance.osmIds?.[0] === osm[0]),
+        };
+      });
     mappedSets.set(walk.links, set);
   }
   return set;
 }
 
 /**
- * TASK-265: where OSM maps a crossing over a road end, in metres from its cut: a crossing way, or
- * the link the importer makes of a crossing mapped only as a node of the road (TASK-239), at the
- * mean of the points where it meets the end's lane centrelines within `MAPPED_M` of the cut and
- * in the half of the lane nearer the node (as `mappedArm`); of several, the one nearest the cut.
- * Null where OSM maps none there.
+ * TASK-265: where OSM maps a crossing node on a road end, in metres from its cut: the link the
+ * importer makes of a crossing mapped only as a node of the road (TASK-239), at the mean of the
+ * points where it meets the end's lane centrelines within `MAPPED_M` of the cut and in the half
+ * of the lane nearer the node (as `mappedArm`); of several, the one nearest the cut. Null where
+ * OSM maps none there. Crossing ways keep TASK-140's anchoring onto the curb rule's band: moving
+ * the band onto them too (the first version) moved 98 Munich zebra ends, 89 of them a median 4 m
+ * nearer the junction, into the drawn curb returns, and cost Munich seed 1 9% (actuated, choice
+ * off).
  */
 function mappedCentreM(
   city: CompiledCity,
@@ -207,7 +222,7 @@ function mappedCentreM(
 ): number | null {
   let best: number | null = null;
   for (const link of mappedCrossings(source)) {
-    if (link.grade !== road.grade) continue;
+    if (!link.node || link.grade !== road.grade) continue;
     const along: number[] = [];
     for (const i of road.lanes) {
       const lane = city.lanes[i]!;
@@ -433,7 +448,8 @@ function placeCrossing(
   if (mapped !== null) {
     const from = Math.max(0.25, mapped - CROSSING_M / 2);
     const stripes = at(from, MAPPED_CURB_CLEAR_M);
-    if (stripes.length && !stopInFirstHalf(city, road, atEnd, from + CROSSING_M)) return { stripes, nearM: from, farM: from + CROSSING_M };
+    if (stripes.length && !stopInFirstHalf(city, road, atEnd, from + CROSSING_M))
+      return { stripes, nearM: from, farM: from + CROSSING_M };
   }
   const full = Math.floor((width - 0.225) / STRIPE_PITCH_M + 0.5);
   let best = { stripes: at(near), nearM: near, farM: near + CROSSING_M };
