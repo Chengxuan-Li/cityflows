@@ -12,6 +12,7 @@ import type { CLane, CMovement, CNode, CRoad } from './types';
 import {
   CONVERGING,
   MEDIAN_VOID_M,
+  PLACEMENT_TRANSITION,
   roadWidth,
   sameStreet,
   SHIFT_STEP_M,
@@ -242,6 +243,21 @@ export function continuationLayout(
       // (the wide one would leave its median).
       let cursor = 0;
       const trunkSource = sources[trunk.idx]!;
+      // TASK-264 (TASK-216 D7): where the narrower road is mapped as the transition between the two
+      // ways (`placement=transition`), the gain or drop happens along it: its surface takes on the
+      // added lanes' width over its whole length (`widenM`), and the wider road's added lanes are
+      // drawn at full width from the node (`road-paint.ts`). OSM splits a gain where the full lanes
+      // begin or where the taper begins; a transition way says it is the taper (Friedrichstraße's
+      // 2-to-5 gain at n:1146 drew its fan over the first 15 m of the five-lane way, after the
+      // painted arrows). The lanes themselves are laid out as before: the added lanes still part
+      // from the lane that feeds them, so a car keeps its place across the node. Only at a node
+      // of the two roads alone (not Freiburg's n:799, a junction-group node where the transition
+      // joins one direction of a two-way street beside another road).
+      const transition =
+        incident.length === 2 &&
+        branches.length === 1 &&
+        !balanced &&
+        !!sources[branches[0]!.idx]!.provenance.inferred?.includes(PLACEMENT_TRANSITION);
       const trunkJogs =
         branches.length === 1 &&
         !balanced &&
@@ -339,6 +355,9 @@ export function continuationLayout(
             new Set(matches.map(([a, b]) => (split ? `${a}:${b}` : `${b}:${a}`))),
           );
         if (trunkJogs) trunkOffsetM = -offsetM;
+        const outside = (lanes: number[]) =>
+          lanes.reduce((sum, i) => sum + trunkSource.lanes[i]!.widthM, 0);
+        const trunkUsed = matches.map(([a]) => a);
         layout.set(branch.idx, {
           [split ? 'start' : 'end']: {
             heading,
@@ -347,6 +366,12 @@ export function continuationLayout(
             holdM: 0,
             taperM: 0,
             reference: [],
+            ...(transition && {
+              widenM: [
+                outside(trunk.lanes.map((_, i) => i).filter((i) => i < Math.min(...trunkUsed))),
+                outside(trunk.lanes.map((_, i) => i).filter((i) => i > Math.max(...trunkUsed))),
+              ],
+            }),
           },
         });
       }
@@ -402,6 +427,7 @@ export function continuationLayout(
         trunk,
         branches,
         shared: sharedWidth.some((w) => w > 0),
+        transition,
       });
     }
     if (!valid) continue;
@@ -410,8 +436,13 @@ export function continuationLayout(
       node.setbacks.every((s) => s === 0) &&
       [...layout.values()].every(
         (r) =>
-          (!r.start || (r.start.offsetM === 0 && !r.start.splitM && !r.start.tapers.length)) &&
-          (!r.end || (r.end.offsetM === 0 && !r.end.splitM && !r.end.tapers.length)),
+          (!r.start ||
+            (r.start.offsetM === 0 &&
+              !r.start.splitM &&
+              !r.start.tapers.length &&
+              !r.start.widenM)) &&
+          (!r.end ||
+            (r.end.offsetM === 0 && !r.end.splitM && !r.end.tapers.length && !r.end.widenM)),
       );
     if (!unchanged) {
       for (const [idx, end] of layout) Object.assign(ends[idx]!, end);
@@ -445,7 +476,7 @@ function trimmedCut(node: CNode, nodes: CNode[], roads: CRoad[], road: CRoad): n
  * drops the transitions there (TASK-082: the lanes meet at the node's mitre). */
 function plainNodes(nodes: CNode[], roads: CRoad[], ends: RoadContinuity[]): Set<number> {
   const moves = (end: ContinuationEnd | undefined) =>
-    !!end && (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0);
+    !!end && (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0 || !!end.widenM);
   const moving = new Set<number>();
   for (const road of roads) {
     if (moves(ends[road.idx]!.start)) moving.add(road.from);
@@ -512,6 +543,8 @@ interface ContinuationGroup {
   branches: CRoad[];
   /** A branch shares a trunk lane with its left neighbour. */
   shared: boolean;
+  /** TASK-264: the branch is the mapped transition, whose surface widens over its length. */
+  transition: boolean;
 }
 
 /** TASK-221: a road and the roads that continue it through plain nodes (two road ends, no cut, no
@@ -606,7 +639,7 @@ function carryTransitions(
     // A plain node's own continuation moves nothing; another group's chain may run through it. A
     // trunk lane shared by two branches splits over the taper, the branches overlapping as it
     // does: a longer taper only lengthens that (Sindelfingen n:967, Freiburg n:900).
-    if (plain.has(node.idx) || group.shared) continue;
+    if (plain.has(node.idx) || group.shared || group.transition) continue;
     const branches = group.branches.map((b) =>
       plainChain(b, split, nodes, roads, sources, ends, pairs, plain),
     );

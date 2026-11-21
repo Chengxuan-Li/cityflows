@@ -30,7 +30,16 @@ export interface ContinuationEnd {
   /** A transition carried through plain nodes (TASK-221): it eases by `smootherstep`, so where
    * its hold or taper ends near one of those nodes the lanes do not bend across the joint. */
   carried?: boolean;
+  /** TASK-264: the widths, left and right of this road's block, that the road at the other side
+   * of the node adds (a lane gain) or drops (a lane drop) there, where this road is the mapped
+   * transition (`PLACEMENT_TRANSITION`): its surface takes them on over its window, so the gain's
+   * taper runs on it and the wider road's lanes start at their full width. */
+  widenM?: [number, number];
 }
+
+/** TASK-264: `Provenance.inferred` of a one-way road from a way tagged `placement=transition`, which
+ * OSM uses for a stretch along which the lanes change between the ways at its two ends. */
+export const PLACEMENT_TRANSITION = 'placementTransition';
 
 export interface RoadContinuity {
   start?: ContinuationEnd;
@@ -272,7 +281,12 @@ export function layoutRoad(
     if (!end && !shifted) continue;
     const span = Math.min(
       total,
-      Math.max(0, end ? end.holdM + end.taperM : 0, shifted - (atEnd ? refLength - s1 : s0)),
+      Math.max(
+        0,
+        end ? end.holdM + end.taperM : 0,
+        end?.widenM ? total : 0,
+        shifted - (atEnd ? refLength - s1 : s0),
+      ),
     );
     grid.push(atEnd ? s1 - span : s0 + span);
     windowEnds.push(atEnd ? s1 - span : s0 + span);
@@ -418,6 +432,27 @@ export function layoutRoad(
   }
 
   compiled.surface = [...offset(leftEdge), ...offset(leftEdge + width).reverse()];
+  // TASK-264: a transition road's edges move out to the wider block at its node, from nothing at
+  // its other end, across the end's heading at the node and the road's own normal upstream.
+  for (const atEnd of [false, true]) {
+    const widen = (atEnd ? transition.end : transition.start)?.widenM;
+    if (!widen) continue;
+    const heading = (atEnd ? transition.end : transition.start)!.heading;
+    const n = unique.length;
+    unique.forEach((s, k) => {
+      const w = 1 - smoothstep((atEnd ? s1 - s : s - s0) / Math.max(total, 1e-6));
+      const x = -Math.sin(heading) * w + normal[k]!.x * (1 - w),
+        y = Math.cos(heading) * w + normal[k]!.y * (1 - w);
+      const d = Math.hypot(x, y);
+      for (const [i, out] of [
+        [k, -widen[0]],
+        [2 * n - 1 - k, widen[1]],
+      ] as const) {
+        const p = compiled.surface[i]!;
+        compiled.surface[i] = { x: p.x + (x / d) * out * w, y: p.y + (y / d) * out * w };
+      }
+    });
+  }
   const roadLanes = compiled.lanes.map((i) => lanes[i]!);
   for (const lane of roadLanes) {
     if (!lane.taperStartM) continue;
