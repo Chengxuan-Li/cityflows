@@ -281,7 +281,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged; `r:1178` 9 m to 1.2 m, Freiburg gate 65.8 s, Munich identical) |
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | done 2026-11-21 (merged; Munich zebra ends 114 to 25, hashes identical) |
-| [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
+| [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | done 2026-11-21 (merged; both pass the gate; Sindelfingen loads in 8 to 13 s, TASK-266) |
 | [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | in progress 2026-11-21 (downloads approved) |
 | [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
@@ -289,6 +289,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-266](tasks/TASK-266.md) | render | Rail geometry load time: the polygon clipping in `railGeometry` (Sindelfingen 6.7 s) | `rail-geometry.ts` | 258 | identical output, times, budgets | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5477,6 +5478,19 @@ everywhere), while German rules give walkers no priority at unmarked crossings (
 drivers yield, §9(3)): a traffic-moving follow-up. Lead merge on TASK-255: Freiburg rebuilt (manifest
 4d1bb6f3...), V217's TASK-257 counts re-pinned (stop positions draw no crossing paint: without the field
 44 / 173 / 1,939, with it 28 / 97 / 2,023); gate hash 1024213382 unchanged.
+
+TASK-258 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `37ce41f`): Munich Donnersbergerbrücke and
+Sindelfingen A81 preloaded (owner's mixed slate). One builder, `bench/bundled-cities.ts [ids]` (Freiburg keeps
+its recipe and curation and rebuilds byte-identical; the new cities are the raw import, `loadAuditCity`'s
+options and cache key, Freiburg's showcase scenario, flat: with terrain 3D took 9.8 and 19.5 s). Staleness
+test `tests/city/bundled-cities.city.test.ts` (manifest hashes of a fresh build against each archive, 4 to
+12 s a city; checked both ways). The New city panel groups "Real places" (one-line notes) and "Test
+layouts"; `?city=munich|sindelfingen`; spec `real-places.spec.ts` (full suite). Showcase gate at 0.15 with
+choice on: Munich 5,313 / 2,574 completed, no failures, worst visit 589 s, 91.7 s; Sindelfingen 445 / 155,
+worst 86 s, 27.1 s. Budgets on a loaded machine: first frame Freiburg 3.5 to 4.7 s, Munich 3.6 to 7.0 s,
+Sindelfingen 8.4 to 12.9 s (6.8 s of it in `railGeometry`'s polygon clipping: TASK-266); frame times within
+budget. Archives 0.85 MB and 0.41 MB gzip. Lead merge: archives rebuilt on TASK-255 and 257 (Freiburg
+unchanged by the builder); `.prettierignore` lists the archives.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
