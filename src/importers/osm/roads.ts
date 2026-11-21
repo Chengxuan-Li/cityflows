@@ -41,6 +41,45 @@ export function osmLayer(tag: OsmTags): number | undefined {
   return 0;
 }
 
+const restricted = (value: string | undefined) =>
+  value === 'no_parking' || value === 'no_stopping' || value === 'no_standing';
+
+/**
+ * TASK-276 (D8): the UK yellow lines along a way's kerb, read from its street parking tags (the
+ * `parking:<side>` scheme and the older `parking:lane` and `parking:condition` one, a side's own
+ * key before `both`). Waiting restricted at stated times only (a `:conditional` restriction, or
+ * an old-scheme condition with a `time_interval`) is a single line; parking forbidden outright
+ * (`no_parking`, `no_stopping`, `no_standing`, or `parking:<side>=no`: on a UK street a kerb
+ * without parking is a restricted one) is a double line; any other kerb has none. Recorded on the
+ * directed road as `kerbLine:<left|right>:<single|double>`, sides in travel direction, for a UK
+ * import only (other themes draw no kerb restrictions, and their imports stay as they were).
+ */
+export function kerbLines(tag: OsmTags, reversed: boolean): string[] {
+  return (['left', 'right'] as const).flatMap((side) => {
+    const key = (pattern: (s: string) => string) => tag[pattern(side)] ?? tag[pattern('both')];
+    const parking = key((s) => `parking:${s}`);
+    const restriction = key((s) => `parking:${s}:restriction`);
+    const conditional = key((s) => `parking:${s}:restriction:conditional`);
+    const lane = key((s) => `parking:lane:${s}`);
+    const condition = key((s) => `parking:condition:${s}`);
+    const interval = key((s) => `parking:condition:${s}:time_interval`);
+    const always =
+      restricted(restriction) ||
+      restricted(condition) ||
+      (parking === 'no' && restriction === undefined) ||
+      lane === 'no' ||
+      lane === 'fire_lane' ||
+      restricted(lane);
+    const timed =
+      /\bno_(parking|stopping|standing)\s*@/.test(conditional ?? '') ||
+      (always && conditional !== undefined) ||
+      (restricted(condition) && interval !== undefined);
+    if (!timed && !always) return [];
+    const travel = reversed ? (side === 'left' ? 'right' : 'left') : side;
+    return [`kerbLine:${travel}:${timed ? 'single' : 'double'}`];
+  });
+}
+
 // The class keys are looked up through vehicleClasses; adding van there enables goods.
 const classTags: Record<string, string[]> = { van: ['goods'], truck: ['hgv'], bus: ['psv', 'bus'] };
 
@@ -261,8 +300,9 @@ export function createRoads(
     }) => {
       const inferred = [...sourceProvenance.inferred];
       const lanes = busLanes(sourceLanes, way.tag, direction, paired, city.drivingSide, inferred);
-      const provenance = { ...sourceProvenance, inferred: [...new Set(inferred)] };
       const reversed = direction === 'backward';
+      if (city.markingTheme === 'uk') inferred.push(...kerbLines(way.tag, reversed));
+      const provenance = { ...sourceProvenance, inferred: [...new Set(inferred)] };
       const sidewalk = sidewalkTags(way.tag, reversed);
       const centerline = offsetPolyline(
         part.points.map(({ pos }) => pos),

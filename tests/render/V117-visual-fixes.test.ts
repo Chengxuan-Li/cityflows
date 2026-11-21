@@ -94,6 +94,9 @@ unitTest.each(['right', 'left'] as const)(
       r.roadClass = 'primary';
     }
     if (drivingSide === 'left') for (const r of Object.values(b.city.roads)) r.lateralOffsetM *= -1;
+    // TASK-276: the yellow lines are the importer's (`kerbLine`), here on every nearside kerb.
+    for (const r of Object.values(b.city.roads))
+      r.provenance = { ...r.provenance, inferred: [`kerbLine:${drivingSide}:double`] };
     const result = compile(b.city);
     if (!result.ok) throw Error('compile');
     for (const r of result.compiled.roads) {
@@ -115,6 +118,8 @@ unitTest('V117 UK kerb lines leave out parking strip runs (lead, TASK-103 merge)
   b.city.drivingSide = 'left';
   const [road] = b.street(b.node(0, 0), b.node(120, 0));
   for (const r of Object.values(b.city.roads)) r.lateralOffsetM *= -1;
+  // TASK-276: a double line read from OSM (`kerbLine`); a single one runs on beside a strip.
+  road!.provenance = { ...road!.provenance, inferred: ['kerbLine:left:double'] };
   const yellow = (city: typeof b.city) => {
     const result = compile(city);
     if (!result.ok) throw Error('compile');

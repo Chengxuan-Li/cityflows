@@ -282,18 +282,24 @@ export function keepClearMarkings(
   }
   return shapes;
 }
-/** Side is relative to travel (-1 left, +1 right). Strip runs are cut by `besideNoStrip`. */
-export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, theme: MarkingTheme) {
-  if (theme.id === 'uk') {
-    const nearside = side === (city.drivingSide === 'right' ? 1 : -1);
-    return nearside && ['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass)
-      ? theme.colors.edge
-      : theme.colors.lane;
-  }
-  return theme.id === 'us' && side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
-    ? theme.colors.centre
-    : theme.colors.edge;
+/** The yellow lines of a UK kerb, as the importer read them (`kerbLines`). */
+export type KerbLine = 'single' | 'double';
+/** Side is relative to travel (-1 left, +1 right). */
+export function kerbLine(road: CRoad, side: number, source?: CrossingSource): KerbLine | undefined {
+  const prefix = `kerbLine:${side < 0 ? 'left' : 'right'}:`;
+  const entry = source?.roads?.[road.id]?.provenance.inferred?.find((v) => v.startsWith(prefix));
+  return entry?.slice(prefix.length) as KerbLine | undefined;
 }
+/** TASK-276 (D8): UK town roads carry no edge line of their own; their kerbs have the yellow
+ * lines the importer read from OSM, or none. */
+const ukTownRoad = (road: CRoad) =>
+  ['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass);
+/** Centre-line insets from the kerb and line widths of the UK theme's single and double yellow
+ * lines (TSRGD diagrams 1017 and 1018.1), drawn 0.1 m wide and 0.1 m apart. */
+const KERB_LINES: Record<KerbLine, { insetsM: number[]; widthM: number }> = {
+  single: { insetsM: [0.15], widthM: 0.1 },
+  double: { insetsM: [0.15, 0.35], widthM: 0.1 },
+};
 
 /** Lead (TASK-103 merge): the pieces of a kerb line beside no parking strip on that side; a
  * kerb with parking carries no UK no-waiting line. */
@@ -510,40 +516,56 @@ function buildRoadMarkings(
         if ((side < 0 ? lane.left : lane.right) >= 0) continue;
         const median = medianOnRight ? side > 0 : side < 0;
         if (median && road.streetGroupId !== null) continue;
+        // TASK-276 (D8): a UK kerb draws the yellow lines read from OSM (`kerbLine`); a double
+        // line stops beside a parking strip, a single one runs on (cars park over it out of its
+        // hours). A town road's kerb without them has no line; other UK edges, and the median
+        // edge of a divided town road, are white.
+        const yellow = markingTheme.id === 'uk' ? kerbLine(road, side, source) : undefined;
+        if (
+          markingTheme.id === 'uk' &&
+          !yellow &&
+          ukTownRoad(road) &&
+          !(median && road.corridorId !== null)
+        )
+          continue;
+        const color = yellow
+          ? markingTheme.colors.edge
+          : markingTheme.id === 'uk'
+            ? markingTheme.colors.lane
+            : side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
+              ? markingTheme.colors.centre
+              : undefined;
         // Compiled edges follow tapers and the road's lane-block normals.
         const boundary = side < 0 ? edges.left : edges.right;
-        const inset = parallelOffset(boundary, -side * 0.15);
-        const ratio = cumulativeLengths(inset).at(-1)! / lane.lengthM;
-        const edge = trimPolyline(
-          inset,
-          (startSpan ? startSpan.farM + LINE_CLEAR_M : 0) * ratio,
-          Math.max(lane.lengthM - lane.stopM, endSpan ? endFarM + LINE_CLEAR_M : 0) * ratio,
-        );
-        let sections = [edge];
-        if (median && partners.length) {
-          // Nearby opposing carriageways already carry the shared centre paint.
-          const kerb = (p: Vec2) => {
-            const boundaryPoint = nearestOnPolyline(boundary, p).point;
-            return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
-          };
-          // Separation can change between the vertices of a straight boundary.
-          sections = keepInside(edge, kerb, true);
+        for (const insetM of yellow ? KERB_LINES[yellow].insetsM : [0.15]) {
+          const inset = parallelOffset(boundary, -side * insetM);
+          const ratio = cumulativeLengths(inset).at(-1)! / lane.lengthM;
+          const edge = trimPolyline(
+            inset,
+            (startSpan ? startSpan.farM + LINE_CLEAR_M : 0) * ratio,
+            Math.max(lane.lengthM - lane.stopM, endSpan ? endFarM + LINE_CLEAR_M : 0) * ratio,
+          );
+          let sections = [edge];
+          if (median && partners.length) {
+            // Nearby opposing carriageways already carry the shared centre paint.
+            const kerb = (p: Vec2) => {
+              const boundaryPoint = nearestOnPolyline(boundary, p).point;
+              return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
+            };
+            // Separation can change between the vertices of a straight boundary.
+            sections = keepInside(edge, kerb, true);
+          }
+          for (const section of sections)
+            for (const clipped of clipOutside(section, centreClips, 0))
+              for (const points of yellow === 'double'
+                ? besideNoStrip(city, road, side, clipped)
+                : [clipped])
+                belowShapes.push({
+                  ...lineShape(road, 'edge', points, 0.85, markingTheme),
+                  ...(yellow ? { widthM: KERB_LINES[yellow].widthM } : {}),
+                  ...(color === undefined ? {} : { color }),
+                });
         }
-        const kerbLine =
-          markingTheme.id === 'uk' &&
-          edgeLineColor(city, road, side, markingTheme) === markingTheme.colors.edge;
-        for (const section of sections)
-          for (const clipped of clipOutside(section, centreClips, 0))
-            for (const points of kerbLine ? besideNoStrip(city, road, side, clipped) : [clipped])
-              belowShapes.push({
-                ...lineShape(road, 'edge', points, 0.85, markingTheme),
-                ...(markingTheme.id === 'uk' ||
-                (markingTheme.id === 'us' &&
-                  side < 0 &&
-                  (road.corridorId !== null || road.roadClass === 'ramp'))
-                  ? { color: edgeLineColor(city, road, side, markingTheme) }
-                  : {}),
-              });
       }
     }
     aboveShapes.push(
@@ -1735,6 +1757,10 @@ export function junctionGuides(
     groups.flat().flatMap((m) => [city.lanes[m.fromLane]!.road, city.lanes[m.toLane]!.road]),
   );
   const curb = city.drivingSide === 'right' ? 1 : -1;
+  // TASK-276 (D8): UK yellow lines stop at a side road's mouth, so a UK town road's kerb, which
+  // has no white edge line (`buildRoadMarkings`), has no guide across it either.
+  const kerbGuide = (m: CMovement) =>
+    markingTheme.id !== 'uk' || !ukTownRoad(city.roads[city.lanes[m.fromLane]!.road]!);
   for (const group of groups) {
     // At a split junction the dividers are the lined-up movements' (above).
     for (let i = 1; i < group.length && !lined; i++) {
@@ -1743,12 +1769,12 @@ export function junctionGuides(
       for (const line of midway(a, b, false)) lines.push({ kind: 'divider', line });
     }
     const outer = group.at(-1)!;
-    if (mouth(city, node, outer, major, curb))
+    if (kerbGuide(outer) && mouth(city, node, outer, major, curb))
       lines.push({ kind: 'edge', line: edge(city, outer, curb) });
   }
   // A one-way road has a curb on its median side too.
   const inner = groups[0]?.[0];
-  if (inner && groups.length === 1 && mouth(city, node, inner, major, -curb))
+  if (inner && groups.length === 1 && kerbGuide(inner) && mouth(city, node, inner, major, -curb))
     lines.push({ kind: 'edge', line: edge(city, inner, -curb) });
   if (groups.length === 2)
     for (const line of midway(groups[0]![0]!, groups[1]![0]!, true))
@@ -2256,6 +2282,8 @@ function buildNodeMarkings(
       alpha: 0.78,
       widthM: markingTheme.guide.widthM,
       dash: markingTheme.guide.dash,
+      // TASK-276: a UK edge guide continues a white edge line, never a yellow kerb line.
+      ...(markingTheme.id === 'uk' && g.kind === 'edge' ? { color: markingTheme.colors.lane } : {}),
     })),
   );
   return [
