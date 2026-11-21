@@ -360,6 +360,8 @@ const walkNetwork = z.object({
       line: z.array(vec2).min(2),
       kind: z.enum(['footway', 'pedestrian', 'path', 'steps', 'living_street', 'crossing']),
       marking: z.enum(['zebra', 'lines', 'none']).optional(),
+      covered: z.boolean().optional(),
+      handrail: z.array(z.enum(['left', 'right', 'center'])).optional(),
       layer: z.int().optional(),
       widthM: z.number().positive().nullable(),
       provenance,
