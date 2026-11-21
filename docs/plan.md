@@ -311,7 +311,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
 | [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | done 2026-11-21 (merged variant; York gate passes; York in the panel) |
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
-| [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | in progress 2026-11-21 (owner's go) |
+| [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | held for the owner 2026-11-21 (variant `0f3b4f1` passes the merge rule, Munich and Freiburg identical; Sindelfingen 280 to 890 trips a day) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5775,6 +5775,17 @@ Sindelfingen 27.2 s. Misses the merge rule by 0.1 point after its variant: parke
 Also carries a cache fix in `src/network/crossings.ts` (mapped crossings cached per compiled city); the lead checked
 main: a fresh import of the York extract gives the same crossing styles with and without it, so the stale read comes
 from v2's own `walk.ts` and the fix stays with the task.
+
+TASK-288 (Claude Code subagent, Opus 5.5 high, 2026-11-21; held for the owner, branch `task/288-reachable-gateways`
+`0f3b4f1`, lead merge `def77e4` ready, tiers green): a person drawn to a work place the home's own car cannot serve both
+ways draws again, by the same weights, among those it can; where none, the draw stands. v1 (`edf4099`, redraw within the
+same kind) failed York's gate (7 and 6 gridlocked, worst visit 5,869 s at George Street): a deadlock at the 17-space lot
+`pk:4462` (a car at the entry from 08:21 to 10:00 while two inside wait to leave), still in `src/sim`. Variant: trips a
+day Lübeck 12,959 to 13,602 (pre-283 13,516), Cambridge 3,867 to 4,674 (4,546); employed staying home 302 / 353 to 0 / 0;
+`no_route` 0. Munich (0.15 seeds 1 to 12, four configurations; full demand 1 to 5) and Freiburg state hashes identical;
+every showcase gate passes. Populations change in Lübeck, York, Philadelphia, Sindelfingen: Sindelfingen 280 to 890
+trips a day (gateway residents whose local work place their car could not reach now commute to another gateway; delay
+27.3 to 17.1 s), Philadelphia +10 to 24 s a seed within its gate. Held for the owner on the Sindelfingen demand.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
