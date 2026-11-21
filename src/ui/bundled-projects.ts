@@ -42,6 +42,11 @@ export const realPlaces = [
     name: 'Sindelfingen A81',
     note: 'A81 junction with roundabouts by the Mercedes-Benz plant',
   },
+  {
+    id: 'philadelphia',
+    name: 'Philadelphia Center City',
+    note: 'One-way grid around City Hall: right on red, trains below',
+  },
 ];
 
 export async function bundledProject(id: string): Promise<OpenResult> {

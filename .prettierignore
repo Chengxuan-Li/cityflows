@@ -13,3 +13,4 @@ fixtures/**/*.xml
 fixtures/projects/freiburg.cityflows.json
 fixtures/projects/munich.cityflows.json
 fixtures/projects/sindelfingen.cityflows.json
+fixtures/projects/philadelphia.cityflows.json

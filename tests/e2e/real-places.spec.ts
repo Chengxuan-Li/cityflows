@@ -19,6 +19,7 @@ const realPlaces = [
   { id: 'freiburg', name: 'Freiburg im Breisgau' },
   { id: 'munich', name: 'Munich Donnersbergerbrücke' },
   { id: 'sindelfingen', name: 'Sindelfingen A81' },
+  { id: 'philadelphia', name: 'Philadelphia Center City' },
 ];
 
 const opened = async (page: Page, name: string) => {

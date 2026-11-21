@@ -75,3 +75,16 @@ BBox of the polygon: 7.834, 47.9894, 7.8578, 48.001
 6,244,482 bytes, SHA-256 cdc4fe437d19320cfa27f41d630b67e009dd938f04f52b0d9c8c584c9d5b0bc4
 It replaces TASK-197's extract of 2026-11-17 (6,026,432 bytes, SHA-256
 b3af79c9fd7b73ecfd73de9c3959d36840bda40b574615cfc0d40784f3241882).
+
+philadelphia-center-city.osm — Center City, Vine Street Expressway to Spruce Street, 19th to 12th
+Street, Philadelphia, Pennsylvania (TASK-259 scouted it, TASK-285 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T07:03:49Z, finished
+07:04:42Z
+OSM snapshot: 2026-11-21T07:02:38Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 10) with
+every (s,w,n,e) filter replaced by (poly:"...") with the polygon below, [timeout:180]. Overpass
+returns every way that touches the polygon whole; the file has no bounds element.
+Polygon (lat lon): 39.9592 -75.159 39.9592 -75.17 39.9585 -75.1722 39.9566 -75.173 39.9465
+-75.173 39.9465 -75.159
+BBox of the polygon: -75.173, 39.9465, -75.159, 39.9592
+3,614,043 bytes, SHA-256 0dd8a433d90f8fa5ac064edf1cc38e1d67c8c146fcbe6d0bfcc03c779cc68ef4

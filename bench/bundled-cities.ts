@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { openProject } from '../src/project/open';
 import type { Project } from '../src/project/types';
+import { importOsmCached } from './city-cache';
 import { buildFreiburgProject, showcaseProject } from './freiburg';
 import { loadAuditCity } from './junction-audit';
 
@@ -25,11 +26,35 @@ async function rawImport(id: 'munich' | 'sindelfingen', name: string): Promise<s
   return showcaseProject(city, id, '2026-11-20T00:00:00.000Z');
 }
 
+/** TASK-285: Center City, Philadelphia, from the Vine Street Expressway to just south of Spruce
+ * Street and from 19th to 12th Street: TASK-259's polygon, [longitude, latitude]
+ * (docs/decisions/2026-11-20-more-cities.md, fixtures/osm/ATTRIBUTION.txt). */
+export const philadelphiaPolygon: [number, number][] = [
+  [-75.159, 39.9592],
+  [-75.17, 39.9592],
+  [-75.1722, 39.9585],
+  [-75.173, 39.9566],
+  [-75.173, 39.9465],
+  [-75.159, 39.9465],
+];
+
+/** The polygon import with Freiburg's options but not its curation, flat. */
+async function philadelphia(): Promise<string> {
+  const result = importOsmCached(
+    readFileSync('fixtures/osm/philadelphia-center-city.osm', 'utf8'),
+    { importerVersion: '1', drivingSide: 'right', polygon: philadelphiaPolygon, terrain: false },
+  );
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(-5)));
+  result.city.name = 'Philadelphia Center City';
+  return showcaseProject(result.city, 'philadelphia', '2026-11-21T00:00:00.000Z');
+}
+
 /** Builds each bundled real place by its id (`?city=<id>`, `src/ui/bundled-projects.ts`). */
 export const realPlaceBuilds: Record<string, () => Promise<string>> = {
   freiburg: buildFreiburgProject,
   munich: () => rawImport('munich', 'Munich Donnersbergerbrücke'),
   sindelfingen: () => rawImport('sindelfingen', 'Sindelfingen A81'),
+  philadelphia,
 };
 
 /** The committed bundled project, opened as the app opens it. */
