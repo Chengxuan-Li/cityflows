@@ -331,8 +331,8 @@ function heightField(rail: RailHeights, points: Sample[]) {
       sum += w * h;
       weights += w;
     }
-    // On overlapping beds (tracks leaving a switch at different grades) the lowest bed's height,
-    // so the sheet never covers a bed.
+    // On overlapping beds the lowest bed's height, so the sheet never covers a bed (TASK-280: the
+    // network gives tracks that share a bed one profile, so their heights agree to a few cm).
     if (onBed < Infinity) return onBed;
     return weights ? sum / weights : points[spatial.neighbors(p.x, p.y, 1)[0]!]!.h;
   };
@@ -552,15 +552,39 @@ function buildStructures(
   // Outward normals: the band lies on one side of every ring's direction (holes run the other
   // way round), the side the outer rings' signed area gives.
   const sign = banks.rings.length ? Math.sign(signedArea(largest(banks.rings))) : 1;
+  // TASK-280: track at grade beside an embankment, which its slope would bury.
+  const flat = samples(graph, rail, (t, h) => rail.grades[t.idx] !== 'tunnel' && h <= 0.2);
+  const flatIndex = new Flatbush(Math.max(1, flat.length));
+  for (const { p } of flat) flatIndex.add(p.x, p.y, p.x, p.y);
+  if (!flat.length) flatIndex.add(0, 0, 0, 0);
+  flatIndex.finish();
   for (const ring of banks.rings) {
     const n = ring.length;
     const normal = (a: Vec2, b: Vec2) => {
       const d = distance(a, b) || 1;
       return { x: (sign * (b.y - a.y)) / d, y: (-sign * (b.x - a.x)) / d };
     };
+    // A slope from `a`-`b` that would reach a bed at grade: a retaining wall stands instead.
+    const besideFlat = (a: Vec2, b: Vec2) => {
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        u = normal(a, b),
+        half = distance(a, b) / 2,
+        reach = structure.embankment * Math.max(0, sheet(a), sheet(b)),
+        r = reach + half + 2;
+      return flatIndex.search(m.x - r, m.y - r, m.x + r, m.y + r).some((i) => {
+        const q = flat[i];
+        if (!q) return false;
+        const dx = q.p.x - m.x,
+          dy = q.p.y - m.y,
+          out = dx * u.x + dy * u.y;
+        return (
+          out > -q.half && out < reach + q.half && Math.abs(dx * u.y - dy * u.x) < half + q.half
+        );
+      });
+    };
     const wall = ring.map((a, i) => {
       const b = ring[(i + 1) % n]!;
-      return onDeck(a, b) || isAcross(a, b, banks, structure.wingM);
+      return onDeck(a, b) || isAcross(a, b, banks, structure.wingM) || besideFlat(a, b);
     });
     // Each slope foot lies out along its vertex's normal, from the slope edges beside it only.
     const foot = ring.map((p, i) => {
