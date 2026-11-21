@@ -277,16 +277,18 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
 | [TASK-252](tasks/TASK-252.md) | render | Walk lights at crossings no signal phase serves draw dark | walk-light drawing, signal snapshot | 245, 249 | test, list, identical hashes, budgets | done 2026-11-20 (merged; hashes identical) |
 | [TASK-253](tasks/TASK-253.md) | 9 | TASK-223's missed-turn rule re-measured on five-seed full demand | `detourHeads` | 223, 249 | misses, traffic, merge rule | done 2026-11-20 (merged v2; full demand five-seed -1.1% / -1.0%) |
-| [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | parked 2026-11-21 (variant meets traffic, misses the audit tolerance: `n:828` +1.5 m², width counts, A 81 voids; `r:1179` no rule can tell) |
 | [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged; `r:1178` 9 m to 1.2 m, Freiburg gate 65.8 s, Munich identical) |
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | in progress 2026-11-20 (run 3) |
 | [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
-| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | queued (downloads approved 2026-11-21) |
-| [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
-| [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
-| [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | queued |
-| [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | queued |
+| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | in progress 2026-11-21 (downloads approved) |
+| [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-263](tasks/TASK-263.md) | render | Elevators drawn as elevators (owner bug 6) | `render3d` buildings, `lights.ts` | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-264](tasks/TASK-264.md) | 10 | Lane gains that start where the ground widens (D7, Friedrichstraße), by rule | `lanes.ts`, `lane-drop.ts`, `continuity.ts` | 216, 254 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
+| [TASK-265](tasks/TASK-265.md) | 10 | Zebras where OSM maps them: crossing placement from the crossing node (`n:211`) | `crossings.ts`, `stops.ts`, walk-link placement | 140, 217, 256 | imagery, audit, traffic, merge rule | in progress 2026-11-21 (run 3) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5440,6 +5442,27 @@ review asked for the arrows the move lost: follow-up `d277542` (stop-position ap
 TASK-240's plain-node approaches; `r:261` left | through | through | right | right as on the ground;
 `r:850`'s arrows on `r:1750`). Tram timetable hash c0bd7828 (seven stop ids shift). Lead merged it on
 TASK-256's rebuild: Freiburg rebuilt, manifest 59bcbb98..., gate 1,518 / 0, 65.8 s, hash 1024213382.
+
+TASK-254 (Claude Code subagent, Opus 5.5 high, 2026-11-20; parked under the owner's merge rule, branch
+`task/254-placement-widths`, first version `76c90e0`, variant `cfdb63c`, worktree `D:\cityflows-wt\254`):
+TASK-242's tagged widths (`width:lanes` complete, else `width` without street parking; Freiburg 12 roads,
+variant 10) and one-way `placement` (Freiburg 46 of 124 off-centre, Sindelfingen 3 on the A 81, Munich
+none; a road whose block would step against the next stays centred). Variant adds: at a two-end node where
+a one-way road gains or drops lanes, tagged widths that would change a continuing lane are not read
+(`r:1148`, `r:1149`; fixes `n:1146`'s fan, 0.5 m over the median grass in the first version). `r:1179`:
+its `right_of:3` agrees with the ways around it (`r:745`, `r:1078`, turn lanes); on the ground the new left
+lane opens from an unmapped hatch, so no general rule reads it; a "keep clear of mapped medians" rule
+changed 35 Freiburg roads (including `r:261`, already right) and was dropped. Imagery: `r:261` -7.0 /
++10.5 m against -6.5 / +9.5 m (the 1 m is the untagged 3.5 m lane, excluded here); Rotteckring `r:1690` 3.0
+to 4.0 m (ground 4 to 5). Audit (main / first / variant): Freiburg fold 3.47 / 1.46 / 1.46 m, lane overlap
+201 / 194 / 194 m², unrelated overlap 21.1 / 17.4 / 17.4, bulge 31.46 / 36.59 / 33.59 m² (`n:828` +1.5,
+`n:607` +0.75 from placement), widths off 380 / 380 / 383; Sindelfingen lane overlap 640 to 578, unrelated
+287 to 224, voids 1,335 to 2,075 m² (the A 81 carriageways no longer overlap), widths 358 to 361; Munich
+identical (city JSON byte-identical). Traffic: Munich and full demand identical by construction (seed 1
+hash checked); Freiburg gate first 1,491 / 11, 72.8 s (+6.7 s, gridlock), variant 1,528 / 0, 70.9 s
+(+4.8 s); seeds 2, 3 within 1 s. Parked: the first misses the gate, the variant the audit tolerance
+(`n:828` +1.5 m², the width counts, the A 81 voids). For the owner: accept the variant (its A 81 voids are
+the overlap removed, `n:828`'s bulge is 1.5 m²), or a later task with offset tapers in the network.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
