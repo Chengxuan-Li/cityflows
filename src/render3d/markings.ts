@@ -1,7 +1,18 @@
 import { cityMarkingTheme } from '../schema/marking-theme';
 import { booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { nearestOnPolyline } from '../geo/polyline';
-import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import {
+  BufferGeometry,
+  CylinderGeometry,
+  Float32BufferAttribute,
+  Group,
+  InstancedMesh,
+  MeshLambertMaterial,
+  Object3D,
+  ShapeUtils,
+  SphereGeometry,
+  Vector2,
+} from 'three';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import {
@@ -10,6 +21,7 @@ import {
   nodeMarkingGeometry,
   movementMarkings,
   markingPolygons,
+  zebraBeacons,
   type MarkingShape,
   type GoreSurface,
   type PaintedGore,
@@ -221,4 +233,41 @@ export function buildMarkings(
   geometry.userData.markingCounts = counts;
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/** TASK-269 (D16): the UK theme's Belisha beacons at its zebras (`zebraBeacons`): a 2.4 m pole in
+ * black and white bands of 0.3 m and an amber globe, standing on the road's surface height. */
+export function buildBeacons(
+  city: CompiledCity,
+  source: CityGeometry,
+  heights: ReturnType<typeof cityHeights>,
+): Group {
+  const beacons = zebraBeacons(city, source, markingThemes[cityMarkingTheme(source)]);
+  const group = new Group();
+  group.name = 'beacons';
+  if (!beacons.length) return group;
+  const band = new CylinderGeometry(0.06, 0.06, 0.3, 10);
+  const bands = [0x1c1c1c, 0xf4f4f0].map(
+    (color) => new InstancedMesh(band, new MeshLambertMaterial({ color }), beacons.length * 4),
+  );
+  const globes = new InstancedMesh(
+    new SphereGeometry(0.18, 16, 12),
+    new MeshLambertMaterial({ color: 0xf5a623, emissive: 0xf5a623, emissiveIntensity: 0.6 }),
+    beacons.length,
+  );
+  const transform = new Object3D();
+  beacons.forEach(({ pos, road }, i) => {
+    const base = roadSurfaceAt(city.roads[road]!, heights.roads[road]!, pos);
+    for (let k = 0; k < 8; k++) {
+      transform.position.set(pos.x, base + 0.15 + k * 0.3, pos.y);
+      transform.updateMatrix();
+      bands[k % 2]!.setMatrixAt(i * 4 + Math.floor(k / 2), transform.matrix);
+    }
+    transform.position.set(pos.x, base + 2.4 + 0.15, pos.y);
+    transform.updateMatrix();
+    globes.setMatrixAt(i, transform.matrix);
+  });
+  for (const mesh of [...bands, globes]) mesh.castShadow = true;
+  group.add(...bands, globes);
+  return group;
 }

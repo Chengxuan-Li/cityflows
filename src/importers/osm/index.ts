@@ -2,7 +2,7 @@ import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
 import { groupAngle, groupExits } from '../../network/groups';
-import { STOP_POSITION, STOP_POSITION_CROSSING } from '../../network/junctions';
+import { MINI_ROUNDABOUT, STOP_POSITION, STOP_POSITION_CROSSING } from '../../network/junctions';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
@@ -24,7 +24,13 @@ import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
 import { addStrips } from './strips';
 import { addBuildings } from './buildings';
-import { addGroupSignal, addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
+import {
+  addGroupSignal,
+  addSignal,
+  assignSignalLanes,
+  markMiniRoundabouts,
+  markRoundaboutEntries,
+} from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
 import { addOsmGarages } from './parking';
@@ -165,7 +171,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const roadBounds = roundaboutBounds(ways, positions, bounds);
   const splits = junctions(ways, [
     ...data.node
-      .filter(({ tag }) => ['traffic_signals', 'stop', 'give_way'].includes(tag.highway ?? ''))
+      .filter(({ tag }) =>
+        ['traffic_signals', 'stop', 'give_way', 'mini_roundabout'].includes(tag.highway ?? ''),
+      )
       .map(({ id }) => id),
     ...data.relation.flatMap(({ tag, member }) =>
       tag.type === 'restriction'
@@ -218,6 +226,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     // OSM defaults, not guesses.
     const inferred: string[] = [];
     if (control === 'stop' || control === 'yield') inferred.push('minorRoads');
+    if (tags?.highway === 'mini_roundabout') inferred.push(MINI_ROUNDABOUT);
     const id = allocateId(city, 'n');
     const node: Node = {
       id,
@@ -394,6 +403,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     );
   }
   markRoundaboutEntries(city, data);
+  markMiniRoundabouts(city);
   // One signal anywhere in a group makes the group signalised, as the merged node was.
   const signalGroups = Object.values(city.junctionGroups ?? {}).filter((g) =>
     g.nodes.some((id) => signalIds.includes(id)),

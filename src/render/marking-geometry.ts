@@ -428,7 +428,11 @@ function buildRoadMarkings(
   // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
   // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
   // than a dash left between two (a stub road inside a junction, Munich r:1172 at n:182).
-  const centreClips = junction.length ? [...clips, junction] : clips;
+  const zigZags = markingTheme.id === 'uk' ? zigZagZones(city, road, source) : [];
+  const centreClips = [
+    ...(junction.length ? [...clips, junction] : clips),
+    ...zigZagRings(city, zigZags),
+  ];
   const drawCentre = (lines: Vec2[][]) =>
     belowShapes.push(
       ...lines
@@ -552,6 +556,40 @@ function buildRoadMarkings(
               });
       }
     }
+    // TASK-269 (D16): a zebra's zig-zags at the kerbs, and on a two-way street at the centre
+    // where this road draws the centre line.
+    const zones = zigZags.filter((zone) => zone.lane === lane.idx);
+    if (zones.length) {
+      const median = medianOnRight ? 1 : -1;
+      const centre =
+        road.streetGroupId !== null &&
+        !sharedLane &&
+        !city.roads.some(
+          (other) => other.streetGroupId === road.streetGroupId && other.idx < road.idx,
+        );
+      for (const side of [-1, 1]) {
+        if ((side < 0 ? lane.left : lane.right) >= 0) continue;
+        if (side === median && road.streetGroupId !== null && !centre) continue;
+        const offset =
+          side === median && road.streetGroupId !== null
+            ? (side * lane.widthM) / 2
+            : side * (lane.widthM / 2 - 0.15 - ZIGZAG_ACROSS_M / 2);
+        for (const zone of zones)
+          belowShapes.push({
+            kind: 'line',
+            role: 'lane',
+            alpha: 0.85,
+            widthM: 0.15,
+            points: Array.from({ length: zone.marks + 1 }, (_, k) =>
+              laneOffsetPoint(
+                lane,
+                zone.fromM + k * ZIGZAG_MARK_M,
+                offset + ((k % 2) - 0.5) * ZIGZAG_ACROSS_M,
+              ),
+            ),
+          });
+      }
+    }
     aboveShapes.push(
       ...approachShapes(city, lane, endFarM, startSpan?.farM ?? 0, markingTheme, source),
     );
@@ -560,6 +598,139 @@ function buildRoadMarkings(
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
+}
+
+/** A point `offset` metres right of a lane's centreline (left when negative), `atM` along it. */
+function laneOffsetPoint(lane: CLane, atM: number, offset: number): Vec2 {
+  const s = Math.max(0, Math.min(lane.lengthM, atM));
+  const p = pointAtDistance(lane.polyline, lane.cumulative, s);
+  const h = headingAtDistance(lane.polyline, lane.cumulative, s);
+  return { x: p.x - Math.sin(h) * offset, y: p.y + Math.cos(h) * offset };
+}
+
+/** TASK-269 (D16): a UK zebra's zig-zag marks (diagram 1001.3): eight of 2 m on each side of the
+ * crossing where they fit, at least two, 0.4 m across, from 1 m beyond the stripes. */
+const ZIGZAG_MARK_M = 2;
+const ZIGZAG_MARKS = 8;
+const ZIGZAG_ACROSS_M = 0.4;
+const ZIGZAG_GAP_M = 1;
+
+/** TASK-269 (D16): the zebras a lane crosses, in lane metres: those its road's ends paint as
+ * stripes (`crossingStripes`' zebra style), whose zig-zags run on the road's side only, and the
+ * mapped zebras it paints midblock (`mappedStripes`), with zig-zags on both sides. */
+function laneZebras(
+  city: CompiledCity,
+  road: CRoad,
+  lane: CLane,
+  source?: CrossingSource,
+): { fromM: number; toM: number; before: boolean; after: boolean }[] {
+  return [false, true].flatMap((atEnd) => {
+    const span = crossingSpan(city, lane, atEnd, source);
+    const own =
+      span && crossingStyle(city, road, atEnd, source) === 'zebra'
+        ? [
+            {
+              fromM: Math.min(span.nearM, span.farM),
+              toM: Math.max(span.nearM, span.farM),
+              before: atEnd,
+              after: !atEnd,
+            },
+          ]
+        : [];
+    const first = city.lanes[road.lanes[0]!]!;
+    const mapped = paintedMapped(city, road, atEnd, source).flatMap(({ at, lines }) => {
+      const m = at.get(lane.idx);
+      if (m === undefined || lines) return [];
+      const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
+      const p = pointAtDistance(first.polyline, first.cumulative, Math.min(first.lengthM, mean));
+      return nearSignal(city, p)
+        ? []
+        : [{ fromM: m - 1.25, toM: m + 1.25, before: true, after: true }];
+    });
+    return [...own, ...mapped];
+  });
+}
+
+interface ZigZagZone {
+  lane: number;
+  fromM: number;
+  marks: number;
+}
+/** TASK-269 (D16): each lane's zig-zag runs, between its zebras and up to its stop position. */
+function zigZagZones(city: CompiledCity, road: CRoad, source?: CrossingSource): ZigZagZone[] {
+  return road.lanes.flatMap((index) => {
+    const lane = city.lanes[index]!;
+    const zebras = laneZebras(city, road, lane, source);
+    return zebras.flatMap((zebra) => {
+      const runs: ZigZagZone[] = [];
+      const room = (from: number, to: number) =>
+        Math.min(ZIGZAG_MARKS, Math.floor((to - from) / ZIGZAG_MARK_M + 1e-9));
+      if (zebra.before) {
+        const end = zebra.fromM - ZIGZAG_GAP_M;
+        const limit = Math.max(0, ...zebras.filter((z) => z.toM <= zebra.fromM).map((z) => z.toM));
+        const marks = room(limit, end);
+        if (marks >= 2) runs.push({ lane: index, fromM: end - marks * ZIGZAG_MARK_M, marks });
+      }
+      if (zebra.after) {
+        const start = zebra.toM + ZIGZAG_GAP_M;
+        const limit = Math.min(
+          lane.stopM,
+          ...zebras.filter((z) => z.fromM >= zebra.toM).map((z) => z.fromM),
+        );
+        const marks = room(start, limit);
+        if (marks >= 2) runs.push({ lane: index, fromM: start, marks });
+      }
+      return runs;
+    });
+  });
+}
+
+/** TASK-269 (D16): the areas of the zig-zag runs, 0.3 m beyond their lanes, where no centre or
+ * kerb line is drawn. */
+function zigZagRings(city: CompiledCity, zones: ZigZagZone[]): Vec2[][] {
+  return zones.map((zone) => {
+    const lane = city.lanes[zone.lane]!;
+    const stations = Array.from(
+      { length: zone.marks + 1 },
+      (_, k) => zone.fromM + k * ZIGZAG_MARK_M,
+    );
+    const half = lane.widthM / 2 + 0.3;
+    return [
+      ...stations.map((s) => laneOffsetPoint(lane, s, -half)),
+      ...stations.reverse().map((s) => laneOffsetPoint(lane, s, half)),
+    ];
+  });
+}
+
+/** TASK-269 (D16): the Belisha beacons of the UK theme's zebras, 0.5 m beyond each kerb at the
+ * middle of the stripes (not at the centre of a two-way street), one per spot within 2 m. */
+export function zebraBeacons(
+  city: CompiledCity,
+  source: CrossingSource | undefined,
+  markingTheme: MarkingTheme,
+): { pos: Vec2; road: number }[] {
+  if (markingTheme.id !== 'uk') return [];
+  city = paintedCity(city);
+  const beacons: { pos: Vec2; road: number }[] = [];
+  const median = city.drivingSide === 'left' ? 1 : -1;
+  for (const road of city.roads) {
+    if (road.group !== undefined) continue;
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      for (const zebra of laneZebras(city, road, lane, source))
+        for (const side of [-1, 1]) {
+          if ((side < 0 ? lane.left : lane.right) >= 0) continue;
+          if (side === median && road.streetGroupId !== null) continue;
+          const pos = laneOffsetPoint(
+            lane,
+            (zebra.fromM + zebra.toM) / 2,
+            side * (lane.widthM / 2 + 0.5),
+          );
+          if (beacons.every((b) => distance(b.pos, pos) > 2)) beacons.push({ pos, road: road.idx });
+        }
+    }
+  }
+  return beacons;
 }
 
 /**
@@ -2292,7 +2463,55 @@ function buildNodeMarkings(
         gore: g,
       })),
     ),
+    ...miniRoundaboutMarkings(city, node, markingTheme),
   ];
+}
+
+/**
+ * TASK-269 (D4): a mini-roundabout's paint (its give-way lines are the entries' own, as at any
+ * yield node): a white disc at the node, a third of the junction's inscribed radius, 0.75 to 2 m;
+ * under the UK theme also its three arrows round the disc (diagram 1003.4 with 1014), 0.15 m
+ * wide, 0.9 m outside it, in the circulating sense: clockwise in left-hand traffic,
+ * anticlockwise in right-hand (with y south, clockwise is increasing angle).
+ */
+function miniRoundaboutMarkings(
+  city: CompiledCity,
+  node: CNode,
+  markingTheme: MarkingTheme,
+): MarkingShape[] {
+  if (!node.miniRoundabout) return [];
+  const { pos } = node;
+  const ring = node.outline;
+  const inscribed = ring.length
+    ? Math.min(...ring.map((p, i) => segmentDistance(pos, p, ring[(i + 1) % ring.length]!)))
+    : node.radiusM;
+  const discM = Math.min(2, Math.max(0.75, inscribed / 3));
+  const at = (r: number, angle: number): Vec2 => ({
+    x: pos.x + r * Math.cos(angle),
+    y: pos.y + r * Math.sin(angle),
+  });
+  const arc = (r: number, from: number, to: number, steps: number) =>
+    Array.from({ length: steps + 1 }, (_, i) => at(r, from + ((to - from) * i) / steps));
+  const shapes = [fillShape('arrow', arc(discM, 0, 2 * Math.PI, 36).slice(0, -1))];
+  if (markingTheme.id !== 'uk') return shapes;
+  const sense = city.drivingSide === 'left' ? 1 : -1;
+  const r = discM + 0.9,
+    half = 0.075,
+    span = 1.2;
+  for (let k = 0; k < 3; k++) {
+    const from = (k * 2 * Math.PI) / 3,
+      to = from + sense * span;
+    shapes.push(
+      fillShape('arrow', [
+        ...arc(r + half, from, to, 12),
+        at(r + 0.3, to),
+        at(r, to + (sense * 0.5) / r),
+        at(r - 0.3, to),
+        ...arc(r - half, to, from, 12),
+      ]),
+    );
+  }
+  return shapes;
 }
 
 export function transitionMarkings(

@@ -46,6 +46,7 @@ import { Basemap3D } from './basemap';
 import { buildGeometry, buildMapContext, buildPlaces } from './geometry';
 import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
+import { buildBeacons } from './markings';
 import { buildingMaterial, groundMaterial, setBuildingLights } from './context';
 import {
   defaultLighting,
@@ -408,6 +409,7 @@ export class Scene3D {
     this.canvas.dataset.streetCounts = JSON.stringify(furniture.counts);
     this.canvas.dataset.streetPlacementMs = String(performance.now() - streetStart);
     this.street = buildStreet(furniture, city, geometry.heights);
+    this.street.signs.add(buildBeacons(city, renderedSource, geometry.heights));
     this.content.add(this.street.group);
     this.night = {
       lampPools: buildPools(this.street.lampLights.map((l) => l.pool)),

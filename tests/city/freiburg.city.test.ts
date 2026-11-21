@@ -226,7 +226,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // move down by 2.
     // TASK-264: rebuilt; 40 roads from ways tagged placement=transition are marked
     // `placementTransition`; r:1175's widened surface moves two car-park exits on it by 0.05 mm.
-    'bb42a5b6b8fd64deb60707ae98077eb2d5ab8e10b9dbafd05373e4dec599f91c',
+    // TASK-269: rebuilt; the mini-roundabout n:347 (7099586035, Wilhelmstraße and Faulerstraße)
+    // gives way on its four entries (`miniRoundabout`); nothing else changes.
+    '16eac73d7330b3c27df05628a60e7cee2ba1096c91120f7a360e580f08411c53',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -261,7 +263,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
   // TASK-270: Lessingstraße's way in shares Schnewlinstraße's gateway and the dead B 31 link out
   // has no connector (1,518 to 1,530 completed, 65.8 to 62.6 s).
-  expect(morning.stateHash).toBe(2336162246);
+  // TASK-269: the mini-roundabout n:347: no arm or turn above another, and cars arriving together
+  // give way to the left (1,518 completed, 65.8 to 65.3 s).
+  // Lead merge: TASK-270 and 269 together, 1,530 completed, 61.4 s.
+  expect(morning.stateHash).toBe(3949968739);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
