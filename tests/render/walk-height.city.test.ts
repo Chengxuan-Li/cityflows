@@ -15,9 +15,10 @@ import { limit } from '../timeouts';
 const pins = {
   // Lead merge: re-pinned on TASK-275's canopies and handrails (the same hashes with and without
   // TASK-278's lookups on the merged tree).
-  freiburg: '853e54608e31f6916aa5a405c0b5c5e6659b92e4888daa3b9fb59fe4f3009072',
-  munich: '5389be4bbb864ce2cc7ac816c6383754e013373d79944c5bb0b78f2b4039da03',
-  sindelfingen: '6bb02c52f5fa278a97666b3908bc4667d4fbfe253ba354671b107cd929cc36b2',
+  // Lead merge: re-pinned on TASK-271 (passages and covered ways at grade change the walk).
+  freiburg: '09b27fc15dd96f5df2fcaaec4d925d8c7751743849f82322bcbd335d927cd9ec',
+  munich: '15bab3954dfa57a1bd897bf6ad9291e4973a36068cdb3510cca36c2c0275efaa',
+  sindelfingen: 'b5ae4105b3a362ced824c74d4b6878ceaeb94385fb22a2ca098530f47fc9fc24',
 };
 
 for (const [name, pin] of Object.entries(pins))

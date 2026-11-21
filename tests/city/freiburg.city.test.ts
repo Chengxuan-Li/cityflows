@@ -242,7 +242,7 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-271: rebuilt; building passages and covered ways read at grade by the importer, not
     // by curation: the same roads and walk links, with 3 road nodes and 21 walk nodes where a
     // passage meets a tagged layer -1 way at grade (the importer's portal rule).
-    'PENDING_MANIFEST',
+    'b9b2611e35f9b03890d6f4210dfadf7af579f4c8696bb50bba6ae5afb5f993a3',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -285,7 +285,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // Lead merge: TASK-273, 276, 278, 281, 282 on main, 1,533 completed, 60.5 s.
   // TASK-271: passages read at grade by the importer; 3 road nodes and 21 walk nodes at the
   // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
-  expect(morning.stateHash).toBe(PENDING_HASH);
+  // Lead merge: TASK-277 and 271 on main, 1,532 completed, 59.8 s.
+  expect(morning.stateHash).toBe(883105405);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
