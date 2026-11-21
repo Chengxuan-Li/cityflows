@@ -139,7 +139,9 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   expect(census.unservedStops).toEqual([]);
   // TASK-214's rebuild: the renumbered ids' offsets no longer fitted 10 an hour, so the lead's
   // salted retry in `buildTimetable` picks other offsets (same routes and headways).
-  expect(table.hash).toBe('90e3ff6f');
+  // TASK-255: seven more junction groups move the tram stop ids allocated after them by seven
+  // (ts:13306 to ts:13313); same routes, stops and headways.
+  expect(table.hash).toBe('c0bd7828');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -214,7 +216,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-238: rebuilt; Bismarckallee's halves r:1251/r:2215 are one carriageway (TASK-231's D5).
     // TASK-239 (landed as TASK-248): rebuilt; 9 crossing links from marked crossings mapped only
     // as nodes, with the last ids (the tram timetable stays 90e3ff6f).
-    'eda9414182fc7c4e511a594c5eed4f50d048abbd13bee8a03362d87e4d54a202',
+    // TASK-255: rebuilt; 18 signals mapped at their stop positions join their junctions' groups
+    // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
+    '05f1473017905b36548713eb6a5ceb3665ea2e2c11d72430cfb45a22ce991124',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -245,7 +249,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // rounding error held it), and signal crossings no phase serves are crossed in a gap (1,464 to
   // 1,523 completed, 68.1 to 68.2 s).
   // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
-  expect(morning.stateHash).toBe(4228017009);
+  // TASK-255: stop lines at the signals mapped before their junctions (TASK-218's D4), whose
+  // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
+  expect(morning.stateHash).toBe(1024213382);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

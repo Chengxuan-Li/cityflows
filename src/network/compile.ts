@@ -13,6 +13,7 @@ import {
   junctionCuts,
   junctionPolygon,
   MAX_SHIFT_M,
+  STOP_POSITION,
   throughAlignments,
   throughPath,
 } from './junctions';
@@ -111,6 +112,11 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     signal: null,
   }));
   const nodeIndex = indices(nodes);
+  const stopPositions = new Set(
+    sourceNodes.flatMap((node, idx) =>
+      node.provenance.inferred?.includes(STOP_POSITION) ? [idx] : [],
+    ),
+  );
   const incoming = nodes.map((): CRoad[] => []);
   const outgoing = nodes.map((): CRoad[] => []);
   const headings: { start: number; end: number }[] = [];
@@ -197,7 +203,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   // each direction's two carriageways join as a through pair (`convergingFlows`).
   const drawn = [...references];
   const unshifted = nodes.map(
-    (node) => junctionCuts(node, incident[node.idx]!, sourceRoads, drawn).setbacks,
+    (node) => junctionCuts(node, incident[node.idx]!, sourceRoads, drawn, stopPositions).setbacks,
   );
   const converging = convergingShifts(
     nodes,
@@ -212,7 +218,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   const flows = convergingFlows(converging, sourceRoads);
   // B43: a through road may keep its line farther from the node where the side roads' cuts move
   // with it by at most 2 m (T38.4's storage allowance).
-  const far = farThrough(nodes, incident, sourceRoads, references, 2);
+  const far = farThrough(nodes, incident, sourceRoads, references, 2, stopPositions);
   const through = throughAlignments(
     nodes,
     incident,
@@ -244,7 +250,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   const approaches = nodes.map(() => ({ approaches: [] as number[][], hidden: [] as number[] }));
   const trims = roads.map(() => ({ start: 0, end: 0 }));
   for (const node of nodes) {
-    const cuts = junctionCuts(node, incident[node.idx]!, sourceRoads, references);
+    const cuts = junctionCuts(node, incident[node.idx]!, sourceRoads, references, stopPositions);
     node.setbacks = cuts.setbacks;
     approaches[node.idx] = cuts;
     node.radiusM = Math.max(0, ...node.setbacks);
@@ -432,6 +438,16 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   const innerRoads = new Set<string>(
     Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads),
   );
+  // TASK-255: a road from a stop position to its junction is the approach's last stretch, not a
+  // median between the group's carriageways: its corners are an approach's (`corner`'s median
+  // rule drew Freiburg's n:1350 curb 6 m inside Schreiberstraße's edge).
+  const medianRoads = new Set(
+    [...innerRoads].filter((id) =>
+      [city.roads[id]!.from, city.roads[id]!.to].every(
+        (node) => !stopPositions.has(nodeIndex.get(node)!),
+      ),
+    ),
+  );
   const movements: CMovement[] = [];
   for (const node of nodes) {
     const pairs = new Set(through[node.idx]!.map((p) => `${p.from}>${p.to}`));
@@ -461,7 +477,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
       through[node.idx]!,
       lanes,
       movements,
-      innerRoads,
+      medianRoads,
     );
     populateConflicts(node, movements, lanes);
   }

@@ -111,8 +111,18 @@ const shifted = (road: CRoad) => road.startShift.length > 0 || road.endShift.len
 // ---------------------------------------------------------------------------------------------
 // Through nodes: two ends of one street, setback 0, no outline (TASK-061, unchanged).
 
-function isThroughNode(node: CNode, roads: Road[]): boolean {
-  if (node.control !== 'uncontrolled') return false;
+/** TASK-255: `Provenance.inferred` of a node the importer put in a junction group as a signal's
+ * stop position before the junction (TASK-218's D4, `formJunctionGroups`). Its control is the
+ * group's, but where one street runs on through it the node is cut and laid out as a plain node
+ * (`isThroughNode`, `continuationLayout`): as a junction it took a floor and cuts, so the entry
+ * lost its last 10 m (Freiburg r:261 at n:260) and the inner road after it folded (J1, r:1185). */
+export const STOP_POSITION = 'stopPosition';
+/** TASK-255: a `STOP_POSITION` mapped on its signalised crossing (`crossing=traffic_signals`):
+ * the stop line lies before the crossing (`populateStops`), not at the node. */
+export const STOP_POSITION_CROSSING = 'stopPositionCrossing';
+
+function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boolean {
+  if (node.control !== 'uncontrolled' && !stopPosition) return false;
   const arms = new Map<string, { road: Road; heading: number; width: number }[]>();
   for (const road of roads) {
     const outgoing = road.from === node.id;
@@ -431,6 +441,7 @@ export function farThrough(
   sources: Road[],
   references: readonly Reference[],
   storageM: number,
+  stopPositions: ReadonlySet<number>,
 ): Set<number> {
   const near = [...references],
     far = [...references];
@@ -451,8 +462,8 @@ export function farThrough(
       }),
     );
     if (fork) continue;
-    const before = junctionCuts(node, incident[node.idx]!, sources, near).setbacks;
-    const after = junctionCuts(node, incident[node.idx]!, sources, far).setbacks;
+    const before = junctionCuts(node, incident[node.idx]!, sources, near, stopPositions).setbacks;
+    const after = junctionCuts(node, incident[node.idx]!, sources, far, stopPositions).setbacks;
     if (after.every((s, i) => s - before[i]! <= storageM)) allowed.add(node.idx);
   }
   return allowed;
@@ -611,11 +622,13 @@ export function junctionCuts(
   incident: CRoad[],
   sources: Road[],
   references: Reference[],
+  stopPositions: ReadonlySet<number>,
 ): { setbacks: number[]; approaches: number[][]; hidden: number[] } {
   if (
     isThroughNode(
       node,
       incident.map((r) => sources[r.idx]!),
+      stopPositions.has(node.idx),
     )
   )
     return { setbacks: incident.map(() => 0), approaches: [], hidden: [] };

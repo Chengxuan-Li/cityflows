@@ -7,7 +7,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { Node, Road } from '../schema';
 import type { Reference } from './corridor';
-import { SETBACK_CAP_M, type ThroughPair } from './junctions';
+import { SETBACK_CAP_M, STOP_POSITION, type ThroughPair } from './junctions';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 import {
   CONVERGING,
@@ -167,7 +167,8 @@ export function continuationLayout(
   for (const node of nodes) {
     const legal = node.movements.map((i) => movements[i]!);
     if (
-      node.control !== 'uncontrolled' ||
+      (node.control !== 'uncontrolled' &&
+        !sourceNodes[node.idx]!.provenance.inferred?.includes(STOP_POSITION)) ||
       !legal.length ||
       legal.some((m) => !['through', 'merge', 'diverge'].includes(m.turn))
     )

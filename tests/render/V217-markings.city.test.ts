@@ -59,8 +59,10 @@ const striped = () =>
 
 test('M1: a group entry lane shows its turns through the group, not its first inner link', () => {
   const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
-  // Each enters an inner road straight on and turns left at the next member.
-  for (const id of ['r:1277#0', 'r:1514#0', 'r:850#0', 'r:130#0', 'r:1396#0'])
+  // Each enters an inner road straight on and turns left at the next member. TASK-255: r:850 is
+  // an inner road now (its signal, n:848, stands 22 m before the junction); the entry r:1832 before
+  // it, 11 m, has no room for arrows.
+  for (const id of ['r:1277#0', 'r:1514#0', 'r:130#0', 'r:1396#0'])
     expect(turns(id), id).toEqual(['left']);
   // Through to r:873 and left to r:845 through the group; right at the first member.
   expect(turns('r:1396#1')).toEqual(['left', 'through']);
@@ -78,8 +80,9 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
     if (r.group === undefined || r.lanes.every((i) => net.lanes[i]!.lengthM >= 15)) continue;
     if (laneLines(r.id)) lines.push(r.id);
   }
-  // TASK-226: r:1149 and r:475 leave the Hauptbahnhof group (D2), 81 to 79.
-  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(79);
+  // TASK-226: r:1149 and r:475 leave the Hauptbahnhof group (D2), 81 to 79. TASK-255: the roads
+  // from signals mapped at their stop positions to their junctions join the groups, 79 to 90.
+  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(90);
   // Runs of 15 m or more node to node through plain joins, crossed at one end at most; the
   // other short inner roads lie inside junctions (TASK-217's M2).
   expect(lines.sort()).toEqual(
@@ -89,6 +92,7 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
       ...['r:816', 'r:1225'],
       ...['r:1484', 'r:1881'],
       ...['r:1372', 'r:2167', 'r:770'],
+      'r:1953', // TASK-255: the 11 m from the signal n:499 to its junction, on carriageway
     ].sort(),
   );
 });
@@ -139,7 +143,9 @@ test('TASK-240: an approach ending at a plain node or a median crossover shows t
   expect(arrows('r:1148')).toBe(5);
   for (const id of ['r:1149', 'r:475']) expect(arrows(id), id).toBe(0);
   // Others before a road too short for arrows, as their ways' turn:lanes.
-  expect(turns('r:261')).toEqual(['left', 'through', 'through', 'right', 'right']);
+  // TASK-255: r:261 enters the Hauptbahnhof group itself at its signal n:260; #0 has no path
+  // through the group and shows its own movement onto the inner road (N2), not the left at n:970.
+  expect(turns('r:261')).toEqual(['through', 'through', 'through', 'right', 'right']);
   expect(turns('r:296')).toEqual(['left', 'through', 'through']);
   expect(turns('r:500')).toEqual(['left', 'left+right']);
   expect(turns('r:904')).toEqual(['left+through', 'through']);
