@@ -499,6 +499,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     canvas.dataset.terrain = String(Boolean(hillshade && layerVisibility.terrain));
     if (surroundings && surroundings.container.visible !== layerVisibility.context) {
       surroundings.container.visible = layerVisibility.context;
+      surroundings.walls.visible = layerVisibility.context;
       const grade = visibleGrades[0]!;
       const bounds = grade.terrain.getLocalBounds();
       grade.terrainSize = Math.max(bounds.width, bounds.height);
@@ -797,6 +798,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
+      // Walls go above the street grade's place tints (the bottom grade may be a tunnel grade).
+      const street = grades.get(0)!;
+      street.terrain.addChildAt(
+        surroundings.walls,
+        street.terrain.getChildIndex(street.placeFills) + 1,
+      );
       lots = drawLots(compiled, source, palette.context.parking);
       visibleGrades[0]!.terrain.addChildAt(lots.container, 1);
       if (source?.terrain) {
@@ -1219,8 +1226,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       if (!surroundings || !lots) return;
       const terrain = visibleGrades[0]!.terrain;
       const context = drawContext(contextFeatures, palette);
-      context.container.visible = surroundings.container.visible;
+      context.container.visible = context.walls.visible = surroundings.container.visible;
       terrain.addChildAt(context.container, terrain.getChildIndex(surroundings.container));
+      const walls = surroundings.walls.parent!;
+      walls.addChildAt(context.walls, walls.getChildIndex(surroundings.walls));
       surroundings.container.destroy({ children: true, context: true });
       surroundings = context;
       const fresh = drawLots(city!, sourceGeometry, palette.context.parking);

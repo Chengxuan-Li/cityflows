@@ -353,7 +353,7 @@ identical with terrain present or absent.
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
 type ContextPoint = 'tree' | 'street_lamp';
-type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row' | 'city_wall' | 'city_gate';
 
 type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
   | 'gambrel' | 'half-hipped' | 'round' | 'dome' | 'onion';
@@ -363,7 +363,8 @@ type ContextFeature =
                material?: string; orientation?: 'along' | 'across'; directionDeg?: number };
       colour?: string; material?: string; minHeightM?: number;
       parts?: BuildingPart[] }  // TASK-201, buildings only
-  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number;
+      heightM?: number; walkway?: true; bridge?: true }  // the last three: TASK-273, walls and gates
   | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
 // An area's own fields without kind, class and parts; `sub` is the `building:part` value.
 type BuildingPart = { rings: Vec2[][]; sub?: string; heightM?: number; levels?: number; roof?: …;
@@ -393,6 +394,27 @@ TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
 are derived display geometry and never enter the project or compiled network.
+
+TASK-273 adds city walls and gate arches as context lines, without a schema-version bump. A
+`city_wall` line is a way tagged `barrier=city_wall` or the older `historic=citywalls`, but not
+its stairs (`highway=steps`, which stay walk) nor a way that is also a `building` (a gatehouse or
+tower over the wall, which stays a building); clipped and rounded as every context line, with
+optional `heightM` from `height`, `widthM` from `width`, `layer`, `walkway` when the way is also a
+`highway=footway`, `path`, `pedestrian`, `cycleway` or `bridleway` (York maps the wall walk on the
+wall's own way), and `bridge` when it is tagged `bridge` (it spans an opening). A wall footway is
+the wall, never a wooded path area. A gate mapped as a building stays that building (the
+gatehouse); a `historic=city_gate` node that lies on a way and in no building outline is a
+`city_gate` line: square to the way through the node, spanning the way's `width` (else 3 m a lane,
+else 6 m for a road and 3 m for a path) and a 1.5 m pier each side, with `heightM` from the node's
+`height`; a gate node on no way is left out. Drawing (display only): 3D draws a wall as a stone body
+of its height (default 4 m) and width (default 2 m) in the building meshes; a `bridge` wall keeps
+a 1.2 m lintel over its opening; a walkway at grade is paved between two 1 m parapets, and a walkway
+on a raised `layer` meets the underside of the walk's own footbridge deck (layer x 5 m), whose paving
+and handrails are the walkway. A gate arch is two piers and a lintel with haunches, 8 m high and
+3 m deep by default, clear to 4.5 m. 2D draws a wall as a band of its width with edges, a gate arch
+as a darker band. Walls and arches count as neither buildings nor ground. Query version 11 adds
+`way[barrier=city_wall]`, `way[historic=citywalls]` and `nwr[historic=city_gate]` to the
+surroundings.
 
 TASK-107 adds `street_lamp` context points: optional `heightM` from `height` and `sub`
 from `lamp_mount`, falling back to `support`. No schema-version bump; old files still open.

@@ -336,6 +336,9 @@ export const style = {
     } as Record<string, number>,
     rail: 0xa7aaa5,
     tram: 0xb2b5af,
+    // TASK-273: city walls, limestone, and their copings and gate piers.
+    wall: 0xc2b498,
+    wallEdge: 0x998b70,
   },
   buildings: {
     taggedColourStrength: 0.28,
@@ -444,7 +447,7 @@ export interface MapPalette {
    * tints and the halo. */
   label: Record<'street' | 'place' | 'area' | 'station' | 'halo', number>;
   context: Record<
-    'building' | 'buildingEdge' | 'water' | 'green' | 'parking' | 'landuse',
+    'building' | 'buildingEdge' | 'water' | 'green' | 'parking' | 'landuse' | 'wall' | 'wallEdge',
     number
   > & {
     landuseSub: Record<string, number>;
@@ -492,6 +495,8 @@ export const mapPalettes: Record<'light' | 'dark', MapPalette> = {
         railway: 0x29292b,
         construction: 0x2b2a27,
       },
+      wall: 0x5a554b,
+      wallEdge: 0x6d675b,
     },
     buildings: {
       walls: darkMaterial(darkBuilding, style.buildings.walls),

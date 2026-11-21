@@ -244,7 +244,7 @@ export interface GeoSource {
 
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
 export type ContextPoint = 'tree' | 'street_lamp';
-export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row' | 'city_wall' | 'city_gate';
 export type RoofShape =
   | 'flat'
   | 'gabled'
@@ -292,6 +292,12 @@ export type ContextFeature =
       widthM?: number;
       layer?: number;
       spacingM?: number;
+      /** TASK-273, walls and gate arches: the tagged `height`. */
+      heightM?: number;
+      /** TASK-273: a wall that carries a mapped footway on its top. */
+      walkway?: true;
+      /** TASK-273: a wall tagged `bridge`, spanning an opening (a road, a river) below its top. */
+      bridge?: true;
     }
   | {
       kind: 'point';

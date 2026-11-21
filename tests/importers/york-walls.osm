@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="cityflows TASK-273 excerpt">
+<note>© OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright). York city walls at Micklegate Bar and Bootham Bar, Victoria Bar and an Abbey Wall way, cut from TASK-273's Overpass extract york-walls-v11.osm (OSM snapshot 2026-11-21T09:51:52Z).</note>
+  <node id="27422641" lat="53.9557419" lon="-1.0904920"/>
+  <node id="27422645" lat="53.9560207" lon="-1.0911316"/>
+  <node id="27422647" lat="53.9562679" lon="-1.0917462"/>
+  <node id="27422649" lat="53.9564504" lon="-1.0922426"/>
+  <node id="27422757" lat="53.9626245" lon="-1.0852118"/>
+  <node id="27422760" lat="53.9628624" lon="-1.0848286"/>
+  <node id="27422764" lat="53.9631721" lon="-1.0843649"/>
+  <node id="27424590" lat="53.9626896" lon="-1.0849996"/>
+  <node id="27424636" lat="53.9625562" lon="-1.0853061"/>
+  <node id="316208754" lat="53.9627741" lon="-1.0850618"/>
+  <node id="316208755" lat="53.9627152" lon="-1.0851446"/>
+  <node id="316208756" lat="53.9626629" lon="-1.0850371"/>
+  <node id="316208757" lat="53.9627218" lon="-1.0849543"/>
+  <node id="316210514" lat="53.9559175" lon="-1.0908877"/>
+  <node id="316210515" lat="53.9558446" lon="-1.0909744"/>
+  <node id="316210517" lat="53.9558050" lon="-1.0908783"/>
+  <node id="316210518" lat="53.9558780" lon="-1.0907916"/>
+  <node id="716860793" lat="53.9631260" lon="-1.0860770"/>
+  <node id="716860801" lat="53.9634895" lon="-1.0868778"/>
+  <node id="716860907" lat="53.9633174" lon="-1.0864655"/>
+  <node id="716860917" lat="53.9630947" lon="-1.0860078"/>
+  <node id="716860922" lat="53.9636457" lon="-1.0871594"/>
+  <node id="1409087049" lat="53.9541965" lon="-1.0868351"/>
+  <node id="1414952991" lat="53.9559866" lon="-1.0910537"/>
+  <node id="1415475569" lat="53.9628273" lon="-1.0854427"/>
+  <node id="1415475617" lat="53.9633606" lon="-1.0866115"/>
+  <node id="1415573528" lat="53.9636555" lon="-1.0871794"/>
+  <node id="1417678682" lat="53.9634773" lon="-1.0868526"/>
+  <node id="1417712996" lat="53.9629574" lon="-1.0857247"/>
+  <node id="1435298613" lat="53.9629058" lon="-1.0856169"/>
+  <node id="1443986388" lat="53.9627500" lon="-1.0850957"/>
+  <node id="1467648940" lat="53.9541304" lon="-1.0866778"/>
+  <node id="1644324908" lat="53.9558257" lon="-1.0906934"/>
+  <node id="1843446897" lat="53.9559403" lon="-1.0909703"/>
+  <node id="1843446906" lat="53.9558555" lon="-1.0907670"/>
+  <node id="1843446909" lat="53.9558296" lon="-1.0909380"/>
+  <node id="1843446911" lat="53.9558682" lon="-1.0908032"/>
+  <node id="1843446920" lat="53.9559069" lon="-1.0909003"/>
+  <node id="2649099705" lat="53.9631951" lon="-1.0843671"/>
+  <node id="2649099708" lat="53.9627874" lon="-1.0849822"/>
+  <node id="2649099710" lat="53.9629679" lon="-1.0846742"/>
+  <node id="2649099714" lat="53.9632096" lon="-1.0843112"/>
+  <node id="2649099717" lat="53.9630102" lon="-1.0846691"/>
+  <node id="2649099718" lat="53.9632077" lon="-1.0843494"/>
+  <node id="2649099722" lat="53.9630004" lon="-1.0846263"/>
+  <node id="2649099726" lat="53.9629917" lon="-1.0846988"/>
+  <node id="2650284460" lat="53.9561915" lon="-1.0915469"/>
+  <node id="2650284515" lat="53.9561697" lon="-1.0915729"/>
+  <node id="2650284549" lat="53.9561901" lon="-1.0916221"/>
+  <node id="2650284554" lat="53.9562120" lon="-1.0915959"/>
+  <node id="2650284603" lat="53.9554913" lon="-1.0899106"/>
+  <node id="2650284626" lat="53.9565424" lon="-1.0924555"/>
+  <node id="2651888555" lat="53.9627291" lon="-1.0851254"/>
+  <node id="2651888558" lat="53.9627569" lon="-1.0850858"/>
+  <node id="2651888560" lat="53.9627597" lon="-1.0850310"/>
+  <node id="2651888561" lat="53.9626998" lon="-1.0851129"/>
+  <node id="2651888568" lat="53.9626765" lon="-1.0850183"/>
+  <node id="2651888571" lat="53.9627043" lon="-1.0849788"/>
+  <node id="2653313416" lat="53.9628580" lon="-1.0855108"/>
+  <node id="3797357417" lat="53.9559029" lon="-1.0908521"/>
+  <node id="4954475816" lat="53.9634419" lon="-1.0867795"/>
+  <node id="5656756317" lat="53.9562019" lon="-1.0916080"/>
+  <node id="6860276041" lat="53.9560030" lon="-1.0910840"/>
+  <node id="6860276042" lat="53.9558052" lon="-1.0906430"/>
+  <node id="6919726204" lat="53.9562320" lon="-1.0916556"/>
+  <node id="11985725470" lat="53.9629190" lon="-1.0856440"/>
+  <node id="12726363508" lat="53.9626812" lon="-1.0851374"/>
+  <node id="14158597434" lat="53.9626095" lon="-1.0852333"/>
+  <node id="14158597435" lat="53.9626002" lon="-1.0852461"/>
+  <node id="14159738623" lat="53.9558121" lon="-1.0908954"/>
+  <way id="4473788">
+    <nd ref="27424636"/>
+    <nd ref="14158597435"/>
+    <nd ref="14158597434"/>
+    <nd ref="27422757"/>
+    <nd ref="12726363508"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="28759622">
+    <nd ref="316208754"/>
+    <nd ref="2651888558"/>
+    <nd ref="1443986388"/>
+    <nd ref="2651888555"/>
+    <nd ref="316208755"/>
+    <nd ref="2651888561"/>
+    <nd ref="316208756"/>
+    <nd ref="2651888568"/>
+    <nd ref="27424590"/>
+    <nd ref="2651888571"/>
+    <nd ref="316208757"/>
+    <nd ref="2651888560"/>
+    <nd ref="316208754"/>
+    <tag k="building" v="castle"/>
+    <tag k="building:levels" v="3"/>
+    <tag k="historic" v="city_gate"/>
+    <tag k="name" v="Bootham Bar"/>
+    <tag k="ref:GB:uprn" v="10007239430"/>
+  </way>
+  <way id="28759787">
+    <nd ref="316210514"/>
+    <nd ref="1843446920"/>
+    <nd ref="316210515"/>
+    <nd ref="1843446909"/>
+    <nd ref="14159738623"/>
+    <nd ref="316210517"/>
+    <nd ref="1843446911"/>
+    <nd ref="316210518"/>
+    <nd ref="3797357417"/>
+    <nd ref="316210514"/>
+    <tag k="attraction" v="historic"/>
+    <tag k="building" v="gatehouse"/>
+    <tag k="building:material" v="sandstone"/>
+    <tag k="description" v="Southern gateway or &quot;bar&quot; to the medieval city of York."/>
+    <tag k="historic" v="city_gate"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="name" v="Micklegate Bar"/>
+    <tag k="tourism" v="attraction"/>
+    <tag k="wheelchair" v="no"/>
+    <tag k="wikidata" v="Q102185955"/>
+    <tag k="wikipedia" v="en:York city walls#Micklegate Bar"/>
+  </way>
+  <way id="57867248">
+    <nd ref="1415573528"/>
+    <nd ref="716860922"/>
+    <nd ref="716860801"/>
+    <nd ref="1417678682"/>
+    <nd ref="4954475816"/>
+    <nd ref="1415475617"/>
+    <nd ref="716860907"/>
+    <nd ref="716860793"/>
+    <nd ref="716860917"/>
+    <nd ref="1417712996"/>
+    <nd ref="11985725470"/>
+    <nd ref="1435298613"/>
+    <nd ref="2653313416"/>
+    <nd ref="1415475569"/>
+    <tag k="barrier" v="wall"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="name" v="Abbey Wall"/>
+  </way>
+  <way id="133326570">
+    <nd ref="1467648940"/>
+    <nd ref="1409087049"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="bridge" v="yes"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="city_gate"/>
+    <tag k="layer" v="1"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="Victoria Bar"/>
+    <tag k="old_name" v="Lounelith"/>
+    <tag k="smoothness" v="intermediate"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q102185753"/>
+  </way>
+  <way id="173550443">
+    <nd ref="1843446897"/>
+    <nd ref="1414952991"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="173550447">
+    <nd ref="1843446920"/>
+    <nd ref="1843446897"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="bridge" v="yes"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="city_gate"/>
+    <tag k="layer" v="1"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="oneway" v="no"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="173550448">
+    <nd ref="1843446906"/>
+    <nd ref="1843446911"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="bridge" v="yes"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="oneway" v="no"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="180889608">
+    <nd ref="12726363508"/>
+    <nd ref="2651888561"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="covered" v="yes"/>
+    <tag k="dog" v="no"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="lit" v="no"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="259489179">
+    <nd ref="2649099710"/>
+    <nd ref="2649099726"/>
+    <nd ref="2649099717"/>
+    <nd ref="2649099722"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="259489182">
+    <nd ref="27422764"/>
+    <nd ref="2649099705"/>
+    <nd ref="2649099718"/>
+    <nd ref="2649099714"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="259489198">
+    <nd ref="2649099722"/>
+    <nd ref="27422764"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="dog" v="no"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="lit" v="no"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="259595296">
+    <nd ref="2650284460"/>
+    <nd ref="2650284515"/>
+    <nd ref="2650284549"/>
+    <nd ref="5656756317"/>
+    <nd ref="2650284554"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="material" v="limestone"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="259595317">
+    <nd ref="2650284603"/>
+    <nd ref="27422641"/>
+    <nd ref="6860276042"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="smoothness" v="intermediate"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="259595368">
+    <nd ref="2650284554"/>
+    <nd ref="6919726204"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="handrail" v="no"/>
+    <tag k="highway" v="steps"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="incline" v="down"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="ramp" v="no"/>
+    <tag k="step_count" v="3"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="tactile_paving" v="no"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="259734651">
+    <nd ref="2651888560"/>
+    <nd ref="2649099708"/>
+    <nd ref="27422760"/>
+    <nd ref="2649099710"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="dog" v="no"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="lit" v="no"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="259734653">
+    <nd ref="2651888561"/>
+    <nd ref="2651888560"/>
+    <tag k="covered" v="yes"/>
+    <tag k="dog" v="no"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="layer" v="1"/>
+    <tag k="lit" v="no"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="450095812">
+    <nd ref="1644324908"/>
+    <nd ref="1843446906"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="732608153">
+    <nd ref="27422645"/>
+    <nd ref="2650284460"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="732608154">
+    <nd ref="6860276042"/>
+    <nd ref="1644324908"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="handrail" v="yes"/>
+    <tag k="highway" v="steps"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="incline" v="down"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="ramp" v="no"/>
+    <tag k="step_count" v="17"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="tactile_paving" v="no"/>
+    <tag k="two_sided" v="yes"/>
+    <tag k="wikidata" v="Q4205980"/>
+    <tag k="wikipedia" v="en:York city walls"/>
+  </way>
+  <way id="732608156">
+    <nd ref="1414952991"/>
+    <nd ref="6860276041"/>
+    <nd ref="27422645"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="handrail" v="yes"/>
+    <tag k="highway" v="steps"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="incline" v="up"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="ramp" v="no"/>
+    <tag k="step_count" v="22"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="tactile_paving" v="no"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+  <way id="739038789">
+    <nd ref="6919726204"/>
+    <nd ref="27422647"/>
+    <nd ref="27422649"/>
+    <nd ref="2650284626"/>
+    <tag k="barrier" v="city_wall"/>
+    <tag k="highway" v="footway"/>
+    <tag k="historic" v="citywalls"/>
+    <tag k="listed_status" v="Grade I"/>
+    <tag k="lit" v="no"/>
+    <tag k="material" v="limestone"/>
+    <tag k="name" v="City Walls"/>
+    <tag k="surface" v="paving_stones"/>
+    <tag k="two_sided" v="yes"/>
+  </way>
+</osm>
