@@ -998,6 +998,13 @@ function noJunction(city: CompiledCity, node: CNode): boolean {
   });
 }
 
+/** TASK-255: a signal's stop position before its junction (TASK-218's D4): a member of a signalised
+ * group laid out as the plain node it is, with no floor (`STOP_POSITION` in the compiler). The
+ * approach's arrows read past it, as past a node that is no junction (`aheadTurns`). */
+function stopPosition(city: CompiledCity, node: CNode): boolean {
+  return node.group !== undefined && city.groups![node.group]!.signalised && !node.outline.length;
+}
+
 /**
  * TASK-240: on an approach that ends at no junction (`noJunction`: a plain node or a median
  * crossover), each lane's turns at the junction its path reaches next, where no lane on the way
@@ -1016,9 +1023,17 @@ function noJunction(city: CompiledCity, node: CNode): boolean {
  * no junction or inside a group, or a lane on the way with room for arrows of its own; and when
  * the junction gives a lane no arrow (all its paths u-turns, Freiburg `r:1059#0` and `#1`), so an
  * approach keeps its arrows rather than show the junction's on some lanes only (`r:1285`).
+ * TASK-255: an approach ending at a signal's stop position (`stopPosition`), whose road on to the
+ * junction is an inner road that draws no arrows, is read the same way: the stop position is the
+ * group entry, so each lane shows its paths through the group, or where it has none the first turn
+ * its movements make inside it, the junction's movement as its turn:lanes give it. Zur
+ * Unterführung's r:261 enters the Hauptbahnhof group at its signal n:260: #0 has no path and its
+ * movements turn left after two links straight on, so it reads left, as on the ground and as before
+ * the signal joined the group, not through (N2's stand-in, its link onto the inner r:1185).
  */
 function aheadTurns(city: CompiledCity, road: CRoad): Turn[][] | null {
-  if (road.group !== undefined || !noJunction(city, city.nodes[road.to]!)) return null;
+  const end = city.nodes[road.to]!;
+  if (road.group !== undefined || !(noJunction(city, end) || stopPosition(city, end))) return null;
   const turns: Turn[][] = [];
   for (const index of road.lanes) {
     let lane = city.lanes[index]!;

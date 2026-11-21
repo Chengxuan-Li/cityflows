@@ -143,9 +143,7 @@ test('TASK-240: an approach ending at a plain node or a median crossover shows t
   expect(arrows('r:1148')).toBe(5);
   for (const id of ['r:1149', 'r:475']) expect(arrows(id), id).toBe(0);
   // Others before a road too short for arrows, as their ways' turn:lanes.
-  // TASK-255: r:261 enters the Hauptbahnhof group itself at its signal n:260; #0 has no path
-  // through the group and shows its own movement onto the inner road (N2), not the left at n:970.
-  expect(turns('r:261')).toEqual(['through', 'through', 'through', 'right', 'right']);
+  expect(turns('r:261')).toEqual(['left', 'through', 'through', 'right', 'right']);
   expect(turns('r:296')).toEqual(['left', 'through', 'through']);
   expect(turns('r:500')).toEqual(['left', 'left+right']);
   expect(turns('r:904')).toEqual(['left+through', 'through']);
@@ -155,6 +153,27 @@ test('TASK-240: an approach ending at a plain node or a median crossover shows t
   // The Lessingstraße group gives r:1059#0 and #1 no arrow (their paths are u-turns): r:1285
   // keeps its own movements' arrows rather than show the junction's on two lanes.
   expect(turns('r:1285')).toEqual(['through', 'through', 'through', 'right']);
+});
+
+test('TASK-255: approaches into a stop-position group show the arrows on the ground before the stop line', () => {
+  const turns = (id: string) =>
+    road(id).lanes.map((i) => [...approachMarkings(net, net.lanes[i]!).turns].sort().join('+'));
+  const arrows = (id: string) => {
+    const { below, above } = roadMarkingGeometry(net, road(id), city);
+    return [...below, ...above].filter((s) => s.role === 'arrow').length;
+  };
+  // Zur Unterführung's r:261 enters the Hauptbahnhof group at its signal n:260 (TASK-218's D4) and
+  // keeps way 23024402's turn:lanes: #0 has no path through the group and shows the left its
+  // movements make after two links straight on, not its link onto the inner r:1185 (N2's stand-in).
+  expect(turns('r:261')).toEqual(['left', 'through', 'through', 'right', 'right']);
+  expect(arrows('r:261')).toBe(5);
+  // Fahnenbergplatz: r:850, the 22 m from the signal n:848 to its junction, is an inner road and
+  // draws no arrows; the entry r:1832 (11 m) has no room, so the road before it, r:1750, shows
+  // the approach's arrows, as r:850 did before the signal joined the group.
+  expect(arrows('r:850')).toBe(0);
+  expect(arrows('r:1832')).toBe(0);
+  expect(turns('r:1750')).toEqual(['left', 'right+through']);
+  expect(arrows('r:1750')).toBe(3);
 });
 
 test('TASK-241: no hatched taper where lanes of one carriageway widen or fan', () => {
