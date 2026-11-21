@@ -413,7 +413,9 @@ Invariants (checked by compile, section 5):
 TASK-114 adds optional display-only `City.markingTheme` without a schema-version bump.
 Compile, routing and simulation ignore it. Import uses explicit OSM country tags first,
 then coarse offline bounds: US/Canada → `us`, UK/Ireland → `uk`, elsewhere → `de`.
-Files without the field resolve from their geographic bounding box, else `de`.
+Files without the field resolve from their geographic bounding box, else `de`. TASK-268: an
+OSM import without `ImportOptions.drivingSide` drives on the left where the theme it infers is
+`uk`, on the right elsewhere; the import wizard proposes the same from the area.
 The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
 absent override. A pure marking-style edit retains the city version and compiled object.
 
@@ -1049,8 +1051,8 @@ the OSM `lanes` tags carry one.
 - `priority = majorRank * 10 + turnRank` where `majorRank` is the incoming road's classRank,
   except that roads listed in `node.minorRoads` (yield/stop) get rank 0, and `turnRank` is 2
   for through and right, 1 for left, merge and diverge, 0 for uturn. Ties are broken in the
-  simulation by the right-before-left rule (left-before-right under left-hand traffic), then by
-  waiting time, then by vehicle id.
+  simulation by the right-before-left rule (none under left-hand traffic, TASK-268: the UK gives
+  way by the road hierarchy, which the rank holds), then by waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
   below the maximum rank among the node's incoming roads.
 
@@ -1927,9 +1929,9 @@ Step sequence, in this order every step:
 4. Resolution:
    - Lane changes are accepted in proposal order when the target gap is still free given
      already accepted changes this step.
-   - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
-     desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
-     no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
+   - Per node, entry candidates are sorted by (priority desc, right-before-left under right-hand
+     traffic, waiting time desc, id asc). A candidate is granted when its movement is green or
+     uncontrolled-allowed, no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
      holds a grant on a conflicting movement while still on its approach lane, or drives on
      it with its rear not yet past the end of that movement's conflict zone with the
      candidate's movement, `position < endM + occupant.lengthM`; a vehicle that has cleared the
@@ -3745,8 +3747,9 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    order. Two one-way carriageways of one name meeting at more than 90 degrees are a U-turn.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
-   road-pair group that conflicts with its phase, or a left turn at a node with four or more
-   approaches, gets an extra 15 s (left) or 30 s phase. TASK-048 resolves conflicting lanes
+   road-pair group that conflicts with its phase, or a far-side turn (left, right under
+   left-hand traffic, TASK-268) or U-turn at a node with four or more approaches, gets an extra
+   15 s (far-side turn) or 30 s phase. TASK-048 resolves conflicting lanes
    within a road-pair group before generating the program: keep the first nonconflicting
    movement in deterministic compiler order, explicitly ban conflicting pairs and record
    `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
