@@ -5796,6 +5796,10 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-21 (owner): "we may start the queued tasks together ... no need to limit": the four-agent cap
+  is lifted; queued tasks start in parallel (TASK-259, 261, 262, 263 now; D7 still waits for TASK-254,
+  which works on the same junction). Agents keep the free-memory check before heavy runs.
+
 - 2026-11-21 (owner): "osm downloads approved": TASK-259 may fetch four Overpass extracts (Lübeck
   Altstadt, York inside the walls, Cambridge centre, Philadelphia Center City as a polygon), OSM data
   under ODbL; nothing else.
