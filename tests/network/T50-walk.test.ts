@@ -148,3 +148,48 @@ test('T50 car-only motorway worlds still compile when no walk links exist', () =
   place('Gateway', 'gateway', { x: 60, y: 5 }, [{ road: r, direction: 'both', positionM: 60 }]);
   expect(graph(city).links).toEqual([]);
 });
+
+test('T50 a place takes access from the nearest path of its rank; of two as near, the first', () => {
+  // TASK-287: the access search tries paths by rank and distance and stops early; the answer is
+  // still the nearest probe, ties going to the lower path index as in a scan in index order.
+  const access = (y0: number) => {
+    const { city, node, road } = buildCity('Access ties', 1);
+    const corners = [node(0, 0), node(120, 0), node(120, 60), node(0, 60)];
+    corners.forEach((n, i) => road(n, corners[(i + 1) % 4]!));
+    const id = 'p:900';
+    city.places[id] = {
+      id,
+      name: 'Courtyard',
+      kind: 'work',
+      shape: {
+        kind: 'polygon',
+        ring: [
+          { x: 50, y: y0 },
+          { x: 70, y: y0 },
+          { x: 70, y: y0 + 20 },
+          { x: 50, y: y0 + 20 },
+        ],
+      },
+      population: 0,
+      jobs: 10,
+      attraction: 1,
+      capacity: null,
+      profile: null,
+      events: [],
+      provenance: { source: 'authored' },
+      connectors: [],
+    };
+    const g = graph(city);
+    const link = g.links.find(
+      (l) => l.kind === 'access' && l.id.startsWith(`access:places:${id}:`),
+    );
+    const sidewalk = (y: number) =>
+      g.links.find((l) => l.kind === 'sidewalk' && l.line[0]!.y === y);
+    return { at: link!.line.at(-1)!, north: sidewalk(2.5)!, south: sidewalk(57.5)! };
+  };
+  const tie = access(20);
+  expect(tie.north.idx).toBeLessThan(tie.south.idx);
+  expect(tie.at.y).toBeCloseTo(2.5, 9);
+  expect(access(21).at.y).toBeCloseTo(57.5, 9);
+  expect(access(19).at.y).toBeCloseTo(2.5, 9);
+});
