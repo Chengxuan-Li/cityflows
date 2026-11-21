@@ -32,7 +32,8 @@ export function WalkerInspector({
           <dt>State</dt>
           <dd>
             {states[detail.state]}
-            {detail.crossing && ` at a ${detail.crossing === 'signal' ? 'signal' : 'zebra'}`}
+            {detail.crossing &&
+              ` at ${detail.crossing === 'unmarked' ? 'an unmarked crossing' : `a ${detail.crossing}`}`}
           </dd>
           {detail.state === 'waiting' && (
             <>

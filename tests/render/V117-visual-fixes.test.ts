@@ -195,7 +195,8 @@ const pins = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
-    compile: 'd2959e1ab01640a549a333aaae2995abd30b0e4c3a0e27f734b29c15daacb280',
+    // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
+    compile: '42faea0afacf40125bb9b95a537ab7db6782b1bc049b841bcd19771a6f906b79',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
@@ -224,7 +225,8 @@ const pins = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    compile: '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
+    // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
+    compile: '5eb17204765fd41f6b85818cebc8687b6815ad600f617cbb1e064c89ffceb9eb',
     lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',

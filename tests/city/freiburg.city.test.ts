@@ -259,7 +259,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
   // TASK-270: Lessingstraße's way in shares Schnewlinstraße's gateway and the dead B 31 link out
   // has no connector (1,518 to 1,530 completed, 65.8 to 62.6 s).
-  expect(morning.stateHash).toBe(2336162246);
+  // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
+  // turning drivers (1,530 to 1,532 completed, 62.6 to 62.0 s).
+  expect(morning.stateHash).toBe(4283944330);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
