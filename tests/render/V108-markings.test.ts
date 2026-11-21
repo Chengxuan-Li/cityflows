@@ -69,8 +69,10 @@ const baseline = {
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-240: r:1057 and r:821, before roads too short for arrows, show the junction's ahead.
-    compile: 'a5607f2bfacea83ae6413eed313d53a94aaa050aed809be10599c1e71e53f308',
-    arrows: '44567c220d7c56744267a9b443d72d2a0f0685e3a5cfdeb44cf95685337ae93b',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    compile: '22cf3bbaf19e10864793fd34dcf797fb2c503c4559da9d222531bd784aaeb06a',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -87,7 +89,8 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
-    compile: 'cdb919be6cf54234e80b8f65227cac01f0e126b1878179f05dc1f2c76e356a2b',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    compile: 'b526b9643db0da013ce7d4a0f4d2e3c0fb64c52271426700fc7ede7367937c07',
     arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
   },
 } as const;

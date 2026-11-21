@@ -222,7 +222,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
     // TASK-257: rebuilt; crossing walk links carry their OSM `marking` (none 37, lines 124, zebra
     // 40); nothing else changes.
-    '4d1bb6f353c8a78cbc5c76a51c47a17cd72578f0cc325015aef89dbfa79fddb6',
+    // TASK-271: rebuilt; building passages and covered ways read at grade by the importer, not
+    // by curation: the same roads and walk links, with 3 road nodes and 21 walk nodes where a
+    // passage meets a tagged layer -1 way at grade (the importer's portal rule).
+    '4c662b68702cfc6d3b4783d4e0d74e8db720492343c9ab4b63c38beed6d0328f',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -255,7 +258,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
   // TASK-255: stop lines at the signals mapped before their junctions (TASK-218's D4), whose
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
-  expect(morning.stateHash).toBe(1024213382);
+  // TASK-271: passages read at grade by the importer; 3 road nodes and 21 walk nodes at the
+  // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
+  expect(morning.stateHash).toBe(1864020293);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

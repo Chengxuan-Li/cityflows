@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
-import { parseOsm, type OsmData } from '../src/importers/osm/parse';
 import type { ImportOptions } from '../src/importers/types';
 import { openProject } from '../src/project/open';
 import { saveProjectJson } from '../src/project/save';
@@ -89,7 +88,7 @@ function removeRoads(city: City, ids: string[]) {
 
 /** TASK-198: the edits that make the polygon import the showcase, each keyed to OSM ids so it
  * fails loudly if a rebuilt import moves. */
-export function curateFreiburg(city: City, data: OsmData): void {
+export function curateFreiburg(city: City): void {
   city.name = 'Freiburg im Breisgau';
   // Stefan-Meier-Straße widens from one lane to five in the last 40 m before the Bismarckallee
   // junctions, over OSM ways too short to change lanes on: the single lane feeds them all.
@@ -110,38 +109,6 @@ export function curateFreiburg(city: City, data: OsmData): void {
   const boundary = osmNode(city, 2427358469);
   const before = osmRoad(city, 309990768, boundary.id, 'to');
   boundary.turnRules = boundary.turnRules.filter((rule) => rule.from !== before.id);
-
-  // Building passages and covered streets (the Bismarckallee under the Hauptbahnhof's
-  // concourse, Schwabentorplatz, Raustraße) run at grade under a roof, as rail already reads
-  // them; the importer puts them a level down. Their nodes and walk links come up with them.
-  const atGrade = new Set(
-    data.way
-      .filter(
-        ({ tag }) =>
-          tag.layer === undefined &&
-          (tag.tunnel === 'building_passage' || (tag.covered === 'yes' && !tag.tunnel)),
-      )
-      .map(({ id }) => id),
-  );
-  const raised = new Set<string>();
-  for (const road of Object.values(city.roads))
-    if ((road.layer ?? 0) < 0 && road.provenance.osmIds?.some((id) => atGrade.has(id))) {
-      road.layer = 0;
-      raised.add(road.from).add(road.to);
-    }
-  for (const id of raised)
-    if (Object.values(city.roads).every((r) => (r.from !== id && r.to !== id) || !r.layer))
-      city.nodes[id]!.layer = 0;
-  const walk = city.walk!;
-  const walkNodes = new Set<string>();
-  for (const link of Object.values(walk.links))
-    if ((link.layer ?? 0) < 0 && link.provenance.osmIds?.some((id) => atGrade.has(id))) {
-      link.layer = 0;
-      walkNodes.add(link.from).add(link.to);
-    }
-  for (const id of walkNodes)
-    if (Object.values(walk.links).every((l) => (l.from !== id && l.to !== id) || !l.layer))
-      walk.nodes[id]!.layer = 0;
 
   // TASK-201: the Münster, St. Martin, the gates and the Kaufhaus stand in 3D on their
   // `building:part` areas (the Münster's openwork spire is its 37 to 116 m part), so TASK-198's
@@ -214,11 +181,8 @@ export function curateFreiburg(city: City, data: OsmData): void {
 /** The bundled project, as the app opens it: the curated city, the showcase demand (0.15
  * persons per resident, mode choice on) and its population, paused at 07:00. */
 export async function buildFreiburgProject(): Promise<string> {
-  const xml = readFileSync(freiburgExtract, 'utf8');
-  const data = parseOsm(xml);
-  if (typeof data === 'string') throw new Error(data);
   const city = importFreiburg();
-  curateFreiburg(city, data);
+  curateFreiburg(city);
   const scenario = defaultScenario('grid5x5');
   scenario.id = 'freiburg';
   scenario.name = city.name;

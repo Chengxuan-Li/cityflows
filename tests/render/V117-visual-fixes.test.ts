@@ -195,11 +195,13 @@ const pins = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
-    compile: 'd2959e1ab01640a549a333aaae2995abd30b0e4c3a0e27f734b29c15daacb280',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    compile: '9546701887629ab0ffcdef5605e24b6d76f552aa49d51585836fabf62f8ddcf3',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-    curbs: '6b6e45b5328cf9c3f9b05a12e73a172c90637a56a8f1ebf76066a9e1c22249b5',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    curbs: 'abfd1ae1fe3e4c6787c3f9fe8b2b37efd2fd7c745173025fd8d8625a3fdd15aa',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
@@ -224,20 +226,25 @@ const pins = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    compile: '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
-    lamps: '0bc62e5425ca95efc6a5354e3fed4b6b0e4c61b58798952a9cf36c78cda0a141',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    compile: 'f0857a99470c223fdeb9349d63a77a2f0dd2fdd652c4e52bf6de51a954320df2',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    curbs: 'b106cc51797f6654a5098d7f022b8af9377c9176e2331ad4450740f5a185029c',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    curbs: 'e2ec9fd8f902e8ef063d5d490af65e79157be6d6156567b5570753cd0b4ab342',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
-    de: '96ca872a12eeef4aa7a1b08e5b4845ed17e05b5436e3bdefc829f27906647462',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    de: '27166f0115cc2f96e4817143b35877a66af174f6c878cbcdffd9bbd357849072',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
-    us: 'af49c2ebb855cc91d3b4d299b0fa947b9c2415fb0ecf34fafb0b10c3d88fab08',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    us: 'c7783c0792c0ca146715ba43b82c5947c6d1d204580f9147b16ec8a565076bec',
   },
 } as const;
 const hash = (value: unknown) =>

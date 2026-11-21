@@ -37,31 +37,140 @@ export function osmLayer(tag: OsmTags): number | undefined {
     return Number.isSafeInteger(layer) ? layer : undefined;
   }
   if (isBridge(tag)) return 1;
-  if ((tag.tunnel !== undefined && tag.tunnel !== 'no') || tag.covered === 'yes') return -1;
+  // TASK-271 (TASK-259 D6, TASK-197 finding 8): a building passage or a covered street runs at
+  // grade under a roof, not underground; only a tagged `layer` puts it elsewhere.
+  if (tag.tunnel !== undefined && !['no', 'building_passage'].includes(tag.tunnel)) return -1;
   return 0;
 }
 
 // The class keys are looked up through vehicleClasses; adding van there enables goods.
 const classTags: Record<string, string[]> = { van: ['goods'], truck: ['hgv'], bus: ['psv', 'bus'] };
 
+const accessValue = (raw: string): AccessValue | undefined =>
+  raw === 'yes' || raw === 'permissive' || raw === 'designated'
+    ? 'yes'
+    : raw === 'no' || raw === 'destination' || raw === 'delivery' || raw === 'private'
+      ? raw
+      : raw === 'customers'
+        ? 'private'
+        : undefined;
+
+/** Splits on `separator` outside parentheses. */
+const splitTop = (text: string, separator: string) => {
+  const parts = [''];
+  let depth = 0;
+  for (const char of text) {
+    depth += char === '(' ? 1 : char === ')' ? -1 : 0;
+    if (char === separator && depth === 0) parts.push('');
+    else parts[parts.length - 1] += char;
+  }
+  return parts.map((part) => part.trim());
+};
+/** Drops the parentheses round the whole text, as in `(08:00-10:30, 17:00-18:00)`. */
+const unwrap = (text: string) => {
+  let depth = 0;
+  for (const [i, char] of [...text].entries()) {
+    depth += char === '(' ? 1 : char === ')' ? -1 : 0;
+    if (depth === 0) return i === text.length - 1 && i > 0 ? text.slice(1, -1).trim() : text;
+  }
+  return text;
+};
+
+const dayStartMin = 7 * 60;
+const dayMinutes = 12 * 60;
+const weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+/** The minutes of the simulated day (07:00 to 19:00, a working day) an opening-hours time
+ * condition (`Mo-Sa 08:00-18:00`, `08:00-10:30, 17:00-18:00; 18:00-08:00`) covers, or
+ * undefined for any other condition (dates, holidays, occupancy). */
+function conditionMinutes(text: string): boolean[] | undefined {
+  const minutes = new Array<boolean>(dayMinutes).fill(false);
+  for (const rule of unwrap(text)
+    .split(';')
+    .map((r) => r.trim())) {
+    const match = /^(?:([A-Z][a-z](?:-[A-Z][a-z])?(?:,[A-Z][a-z](?:-[A-Z][a-z])?)*)\s+)?(.+)$/.exec(
+      rule,
+    )!;
+    const days = match[1]
+      ?.split(',')
+      .map((range) => range.split('-').map((d) => weekdays.indexOf(d)));
+    if (days?.flat().includes(-1)) return undefined;
+    const working = !days || days.some(([a, b = a]) => a! <= 4 || b! < a! || b! <= 4);
+    for (const range of match[2]!.split(',')) {
+      const time = /^(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?$/.exec(range.trim());
+      if (!time) return undefined;
+      const from = Number(time[1]) * 60 + Number(time[2] ?? 0);
+      const to = Number(time[3]) * 60 + Number(time[4] ?? 0);
+      if (!working) continue;
+      for (let i = 0; i < dayMinutes; i++) {
+        const at = dayStartMin + i;
+        if (from <= to ? at >= from && at < to : at >= from || at < to) minutes[i] = true;
+      }
+    }
+  }
+  return minutes;
+}
+
+/**
+ * TASK-271 (TASK-259 D12): a `*:conditional` access tag read into the schema's single value per
+ * road. Each minute of 07:00 to 19:00 takes the last time condition holding then (else `base`);
+ * the road takes the value of most minutes (ties to the stricter). A road closed for most of the
+ * day that admits deliveries in some of it (`delivery @ (08:00-10:30); no @ (10:30-17:00)`, or
+ * `yes @ (10:00-16:00 AND loading)`) reads as `delivery`. Conditions on anything but the time of
+ * day and the delivery purpose (dates, holidays, occupancy, hotel guests) are not read.
+ */
+function conditionalAccess(raw: string, base: AccessValue): AccessValue {
+  const general = new Array<AccessValue>(dayMinutes).fill(base);
+  let deliveries = false;
+  for (const item of splitTop(raw, ';')) {
+    const at = item.indexOf('@');
+    const value = at < 0 ? undefined : accessValue(item.slice(0, at).trim());
+    if (!value) continue;
+    for (const alternative of splitTop(unwrap(item.slice(at + 1).trim()), ';')) {
+      const parts = alternative.split(/\s+AND\s+/).map((part) => unwrap(part.trim()));
+      const purpose = parts.some((part) => part === 'delivery' || part === 'loading');
+      const times = parts.filter((part) => part !== 'delivery' && part !== 'loading');
+      const minutes = times.map(conditionMinutes);
+      if (minutes.includes(undefined)) continue;
+      for (let i = 0; i < dayMinutes; i++) {
+        if (!minutes.every((m) => m![i])) continue;
+        if (!purpose) general[i] = value;
+        else if (value !== 'no') deliveries = true;
+      }
+    }
+  }
+  const order: AccessValue[] = ['no', 'delivery', 'private', 'destination', 'yes'];
+  const count = (value: AccessValue) => general.filter((v) => v === value).length;
+  const most = order.reduce((best, value) => (count(value) > count(best) ? value : best));
+  return most === 'no' && (deliveries || general.includes('delivery')) ? 'delivery' : most;
+}
+
 function roadAccess(tag: OsmTags, direction: string, inferred: string[]): Road['access'] {
   const access: NonNullable<Road['access']> = {};
   const keyFor = (key: string) =>
     tag[`${key}:${direction}`] !== undefined ? `${key}:${direction}` : key;
   const value = (key: string): AccessValue => {
-    const raw = tag[key]!;
-    if (raw === 'yes' || raw === 'permissive' || raw === 'designated') return 'yes';
-    if (raw === 'no' || raw === 'destination' || raw === 'delivery' || raw === 'private')
-      return raw;
-    if (raw === 'customers') return 'private';
-    inferred.push(key);
-    return 'yes';
+    const read = accessValue(tag[key]!);
+    if (!read) inferred.push(key);
+    return read ?? 'yes';
   };
-  for (const key of ['access', 'vehicle', 'motor_vehicle', 'motorcar'].map(keyFor))
-    if (tag[key] !== undefined) access.all = value(key);
+  const conditional = (key: string, base: AccessValue) => {
+    const raw = tag[`${key}:${direction}:conditional`] ?? tag[`${key}:conditional`];
+    return raw === undefined ? base : conditionalAccess(raw, base);
+  };
+  for (const key of ['access', 'vehicle', 'motor_vehicle', 'motorcar']) {
+    if (tag[keyFor(key)] !== undefined) access.all = value(keyFor(key));
+    const base = access.all ?? 'yes';
+    const read = conditional(key, base);
+    if (read !== base) access.all = read;
+  }
   for (const kind of vehicleClasses)
-    for (const key of (classTags[kind] ?? []).map(keyFor))
-      if (tag[key] !== undefined) access[kind] = value(key);
+    for (const key of classTags[kind] ?? []) {
+      if (tag[keyFor(key)] !== undefined) access[kind] = value(keyFor(key));
+      const base = access[kind] ?? access.all ?? 'yes';
+      const read = conditional(key, base);
+      if (read !== base) access[kind] = read;
+    }
 
   for (const attribute of ['maxweight', 'maxheight']) {
     const key = keyFor(attribute);
@@ -159,7 +268,20 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
       message: `Unsupported ${key}=${tag[key]} on OSM way ${id}`,
     });
   const oneway = tag.oneway;
-  const supportedOneway = ['yes', 'no', '1', '0', 'true', 'false', '-1'].includes(oneway ?? '');
+  // TASK-271 (TASK-259 D12, D18): `faux` signs a two-way street as one-way at one end;
+  // `alternating` passes one direction at a time over one lane, read as two directions sharing
+  // it (the schema has no alternation: both directions may pass at once).
+  const supportedOneway = [
+    'yes',
+    'no',
+    '1',
+    '0',
+    'true',
+    'false',
+    '-1',
+    'faux',
+    'alternating',
+  ].includes(oneway ?? '');
   if (oneway !== undefined && !supportedOneway) {
     unsupported('oneway');
   }
@@ -199,7 +321,8 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   // width: TASK-231's 4.5 m (RASt 06, a car meeting a lorry) narrowed Freiburg's promenade, whose
   // ground is about 10 m, and moved its traffic (the gate +14.5 s).
   const shared =
-    directions.length === 2 && total === 1 && forward === undefined && backward === undefined;
+    directions.length === 2 &&
+    ((total === 1 && forward === undefined && backward === undefined) || oneway === 'alternating');
 
   return directions.map((direction) => {
     const direct = direction === 'forward' ? forward : backward;

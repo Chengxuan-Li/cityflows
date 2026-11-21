@@ -1,0 +1,13 @@
+© OpenStreetMap contributors
+https://www.openstreetmap.org/copyright
+
+The data in these extracts is made available under the Open Data Commons
+Open Database License (ODbL) 1.0.
+https://opendatacommons.org/licenses/odbl/1-0/
+
+york-passages.osm — TASK-271's test excerpt: York's drivable building passages, covered ways,
+conditional-access ways and Leeman Road, with their nodes, unchanged from york-walls.osm
+(docs/decisions/2026-11-20-more-cities.md, Data sources)
+Inside the city walls, with the station, York, North Yorkshire
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T07:01:49Z
+OSM snapshot: 2026-11-21T07:01:36Z
