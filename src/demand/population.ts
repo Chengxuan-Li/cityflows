@@ -38,9 +38,8 @@ export function generatePopulation(city: City, config: DemandConfig): Person[] {
     const totalWeight = cumulativeWeights.at(-1) ?? 0;
     // TASK-288: a work place with a gateway end is kept only if the home's own car can drive
     // there and back (the legs `scheduleTrips` judges). A person drawn to one their car cannot
-    // serve draws again among the work places of the same side, gateways or local, that it can,
-    // so out-commuters stay out-commuters; where there is none, the draw stands and the person
-    // stays home, as `scheduleTrips` leaves them.
+    // serve draws again, by the same weights, among the work places it can; where there is none,
+    // the draw stands and the person stays home, as `scheduleTrips` leaves them.
     const checked = new Map<number, boolean>();
     const servable = (index: number) => {
       let ok = checked.get(index);
@@ -51,15 +50,7 @@ export function generatePopulation(city: City, config: DemandConfig): Person[] {
       }
       return ok;
     };
-    const redraw = new Map<boolean, number[]>();
-    const redrawWeights = (gateway: boolean) => {
-      let result = redraw.get(gateway);
-      if (!result) {
-        result = cumulative((i) => (workplaces[i]!.kind === 'gateway') === gateway && servable(i));
-        redraw.set(gateway, result);
-      }
-      return result;
-    };
+    let servedWeights: number[] | undefined;
 
     for (let i = 0; i < count; i++) {
       const id = `person:${home.id}:${i}`;
@@ -68,11 +59,11 @@ export function generatePopulation(city: City, config: DemandConfig): Person[] {
       const draw = personRandom.uniform(0, totalWeight);
       let workIndex = cumulativeWeights.findIndex((weight) => draw < weight);
       if (workIndex !== -1 && !servable(workIndex)) {
-        const again = redrawWeights(workplaces[workIndex]!.kind === 'gateway');
-        const total = again.at(-1)!;
+        servedWeights ??= cumulative(servable);
+        const total = servedWeights.at(-1)!;
         if (total > 0) {
-          const second = personRandom.uniform(0, total);
-          workIndex = again.findIndex((weight) => second < weight);
+          const again = personRandom.uniform(0, total);
+          workIndex = servedWeights.findIndex((weight) => again < weight);
         }
       }
       persons.push({

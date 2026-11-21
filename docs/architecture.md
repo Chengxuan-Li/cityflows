@@ -2465,8 +2465,8 @@ variant. Saving a baseline captures current editor state, including unapplied li
   gravity: probability proportional to `jobs * exp(-distance / gravityScaleM)` over places with
   jobs, using straight-line distance between centroids. TASK-288: a person drawn to a work place
   that the TASK-155 rule below does not serve both ways (from home by their own car, and back)
-  draws again, by the same weights, among the served work places of the same side (gateways, or
-  local places); with none, the first draw stands. A person keeps the same home, work and
+  draws again, by the same weights, among the work places it serves; with none, the first draw
+  stands. A person keeps the same home, work and
   car access until the population is regenerated on purpose.
 - Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
   Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.

@@ -83,12 +83,13 @@ test('TASK-155 a cut-off gateway component generates no unservable trips and say
 
   const scenario = morning();
   const persons = generatePopulation(city, scenario.demand);
-  // The unchanged population still assigns cut-off commuters to the loop's offices.
-  expect(
-    persons.some(
-      (p) => p.homePlaceId === places['Cut west']!.id && p.workPlaceId === places.Offices!.id,
-    ),
-  ).toBe(true);
+  // TASK-288: the population no longer sends cut-off commuters to the loop's offices; a
+  // population saved before it may, and such a commuter stays home.
+  const fromCutWest = persons.filter((p) => p.homePlaceId === places['Cut west']!.id);
+  expect(fromCutWest.length).toBeGreaterThan(0);
+  expect(fromCutWest.some((p) => p.workPlaceId === places.Offices!.id)).toBe(false);
+  const stranded = fromCutWest[0]!;
+  stranded.workPlaceId = places.Offices!.id;
   const trips = scheduleTrips(city, persons, scenario);
   // The caller's compiled city gives the same trips without compiling again.
   expect(scheduleTrips(city, persons, scenario, result.compiled)).toEqual(trips);
@@ -111,9 +112,6 @@ test('TASK-155 a cut-off gateway component generates no unservable trips and say
   expect(through).toHaveLength(30);
   expect(new Set(ends(city, through))).toEqual(new Set(['Cut west>Cut east', 'Cut east>Cut west']));
   // A commuter whose first leg no car can serve stays home all day.
-  const stranded = persons.find(
-    (p) => p.homePlaceId === places['Cut west']!.id && p.workPlaceId === places.Offices!.id,
-  )!;
   expect(stranded.agenda).toEqual([
     { kind: 'home', placeId: stranded.homePlaceId, startS: 0, durationS: 86400 },
   ]);
@@ -303,6 +301,14 @@ test('TASK-283 a gateway in a pocket behind a destination street gets only the t
   const scenario = morning(283);
   scenario.demand.throughTripsPerHour[7] = 0;
   const persons = generatePopulation(city, scenario.demand);
+  // TASK-288: the residents whose car cannot leave home for the pocket no longer draw its
+  // gateway; those of a population saved before it stay home.
+  const sent = ['Homes', 'Split homes'].map((home) => {
+    const residents = persons.filter((p) => p.homePlaceId === places[home]!.id);
+    expect(residents.some((p) => p.workPlaceId === places['Pocket gateway']!.id)).toBe(false);
+    residents[0]!.workPlaceId = places['Pocket gateway']!.id;
+    return residents[0]!;
+  });
   const trips = scheduleTrips(city, persons, scenario, result.compiled);
   const legs = ends(city, trips);
   const servable = new Set([
@@ -319,14 +325,7 @@ test('TASK-283 a gateway in a pocket behind a destination street gets only the t
   ]);
   expect(legs.filter((leg) => !servable.has(leg))).toEqual([]);
   expect(legs).toContain('Lane homes>Pocket gateway');
-  // The residents whose car cannot leave home for the pocket stay home.
-  for (const home of ['Homes', 'Split homes']) {
-    const kept = persons.filter(
-      (p) => p.homePlaceId === places[home]!.id && p.workPlaceId === places['Pocket gateway']!.id,
-    );
-    expect(kept.length).toBeGreaterThan(0);
-    for (const person of kept) expect(person.agenda).toHaveLength(1);
-  }
+  for (const person of sent) expect(person.agenda).toHaveLength(1);
 
   const engine = createEngine();
   engine.load({ compiled: result.compiled, trips, scenario, population: persons });
@@ -335,10 +334,11 @@ test('TASK-283 a gateway in a pocket behind a destination street gets only the t
   expect(failedByReason.no_route + failedByReason.no_parking).toBe(0);
 });
 
-test('TASK-288 a person drawn to a gateway their car cannot reach works at one it can', () => {
+test('TASK-288 a person drawn to a gateway their car cannot reach draws again where it can', () => {
   // A loop of public streets with homes, offices and a gateway; east of it Lane, a destination
   // street, leads to a pocket with a public car park and a second gateway (TASK-283's pocket).
-  // Loop homes reach only the loop gateway, Lane homes both; a cut-off gateway reaches nothing.
+  // Loop homes reach only the loop gateway, Lane homes both; a cut-off gateway, whose own
+  // residents can go nowhere, reaches nothing.
   const { city, node, street, place } = buildCity('Reachable gateways', 288);
   const [a, b, c, d] = [node(0, 0), node(300, 0), node(300, 300), node(0, 300)];
   const loop = [street(a, b), street(b, c), street(c, d), street(d, a)];
@@ -376,6 +376,7 @@ test('TASK-288 a person drawn to a gateway their car cannot reach works at one i
   places['Pocket gateway']!.jobs = 200;
   places['Loop gateway']!.jobs = 20;
   places.Isolated!.jobs = 100;
+  places.Isolated!.population = 20;
   const parkId = allocateId(city, 'pk');
   city.parking = {
     [parkId]: {
@@ -416,20 +417,22 @@ test('TASK-288 a person drawn to a gateway their car cannot reach works at one i
     }
     return counts;
   };
-  // Loop homes draw only the loop gateway, as often as they drew any gateway: the pocket
-  // gateway's commuters move there, and the cut-off one's.
+  // Loop homes no longer draw the pocket or the cut-off gateway: their draws there move to the
+  // work places their car serves, the loop gateway among them.
   const loopHomes = works('Homes');
   expect(loopHomes['Pocket gateway']).toBeUndefined();
   expect(loopHomes.Isolated).toBeUndefined();
-  expect(loopHomes['Loop gateway']).toBeGreaterThan(from('Homes').length / 2);
-  // Lane homes reach the pocket too; the cut-off gateway is redrawn among the two.
+  expect(loopHomes['Loop gateway']).toBeGreaterThan(0);
+  // Lane homes reach the pocket too.
   const laneHomes = works('Lane homes');
   expect(laneHomes['Pocket gateway']).toBeGreaterThan(0);
   expect(laneHomes.Isolated).toBeUndefined();
+  // Where no work place is served, the draw stands.
+  expect(works('Isolated')['-']).toBeUndefined();
 
   const trips = scheduleTrips(city, persons, scenario, result.compiled);
   for (const person of persons.filter((p) => p.workPlaceId !== null))
-    expect(person.agenda.length).toBeGreaterThan(1);
+    expect(person.agenda.length > 1).toBe(person.homePlaceId !== places.Isolated!.id);
   expect(ends(city, trips)).toContain('Homes>Loop gateway');
   expect(ends(city, trips)).toContain('Lane homes>Pocket gateway');
 
