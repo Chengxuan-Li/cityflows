@@ -278,7 +278,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-252](tasks/TASK-252.md) | render | Walk lights at crossings no signal phase serves draw dark | walk-light drawing, signal snapshot | 245, 249 | test, list, identical hashes, budgets | done 2026-11-20 (merged; hashes identical) |
 | [TASK-253](tasks/TASK-253.md) | 9 | TASK-223's missed-turn rule re-measured on five-seed full demand | `detourHeads` | 223, 249 | misses, traffic, merge rule | done 2026-11-20 (merged v2; full demand five-seed -1.1% / -1.0%) |
 | [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
-| [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | done 2026-11-21 (merged; `r:1178` 9 m to 1.2 m, Freiburg gate 65.8 s, Munich identical) |
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | in progress 2026-11-20 (run 3) |
 | [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
@@ -5423,6 +5423,23 @@ fixed off 800.3 to 802.6 s (+0.3%), fixed on identical. Full demand five-seed me
 1,858.4 s to 3,316.4 / 168.0 / 1.8, 1,840.3 s (-1.0%). Freiburg seeds 1 to 3 and Sindelfingen identical;
 audit identical. Passes the merge rule on the five-seed reading; noted: actuated stalled heads mean +1,
 fixed full demand 49 fewer completed. Parked branch `task/223-remaining-misses-2` can retire.
+
+TASK-255 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `d277542`): TASK-218's D4 with J1.
+(1) D4 (TASK-218's code, `split.ts` rule (d)): a signal kept at its stop position up to 30 m before the
+junction its control moved to joins that group; the entry and stop line stand at the signal; marked
+`stopPosition` (`stopPositionCrossing` on a crossing). (2) J1: a marked node takes the group's control
+but draws as the plain node it was (no floor, no cuts; inner-road median curb skipped), so `r:261`
+keeps its 10 m and `r:1185` does not fold. (3) Without a drawn crossing, the stop line sits at the node,
+or 3 m before it on a crossing. Freiburg groups 39 to 46 (18 stop positions); Munich and Sindelfingen
+byte-identical. Imagery: `r:1178` 9 m past to about 1.2 m; `r:1185` about 1 m before the painted line.
+Audit: every measure identical bar overlap 21.06 to 15.50 m²; `markingLinesOver5cm` 1 to 2 (`r:838`'s
+8 cm kink now under a solid line) and `markingOutsideM` +20 m (stop lines on approaches) accepted under
+the lead's tolerance. Traffic: Freiburg seeds 1 to 3 66.1/65.9/62.4 to 65.8/65.5/60.2 s; Munich and full
+demand identical (no marked nodes; five-seed mean equals main's by construction, as TASK-234). Lead's
+review asked for the arrows the move lost: follow-up `d277542` (stop-position approaches read arrows as
+TASK-240's plain-node approaches; `r:261` left | through | through | right | right as on the ground;
+`r:850`'s arrows on `r:1750`). Tram timetable hash c0bd7828 (seven stop ids shift). Lead merged it on
+TASK-256's rebuild: Freiburg rebuilt, manifest 59bcbb98..., gate 1,518 / 0, 65.8 s, hash 1024213382.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
