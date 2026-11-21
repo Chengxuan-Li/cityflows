@@ -2463,7 +2463,10 @@ variant. Saving a baseline captures current editor state, including unapplied li
 - Persons are created per residential place (and gateway places, which stand in for external
   commuters) in proportion to `population * personsPerResident`. Work places are drawn by
   gravity: probability proportional to `jobs * exp(-distance / gravityScaleM)` over places with
-  jobs, using straight-line distance between centroids. A person keeps the same home, work and
+  jobs, using straight-line distance between centroids. TASK-288: a person drawn to a work place
+  that the TASK-155 rule below does not serve both ways (from home by their own car, and back)
+  draws again, by the same weights, among the work places it serves; with none, the first draw
+  stands. A person keeps the same home, work and
   car access until the population is regenerated on purpose.
 - Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
   Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.
@@ -2494,9 +2497,9 @@ variant. Saving a baseline captures current editor state, including unapplied li
   Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
   on car-legal lanes: public roads and the trip end's own private/destination zone, entering
   another zone only to end in it; lane-change distances and stations are ignored, so only
-  trips no route can serve are removed. Population and its draws are unchanged: a person
-  whose next leg is unserved stays at the activity before it for the rest of the day, and
-  that leg and the rest of the agenda generate no trips. Through destinations are drawn among
+  trips no route can serve are removed. Population is unchanged apart from TASK-288's work
+  draw above: a person whose next leg is unserved stays at the activity before it for the
+  rest of the day, and that leg and the rest of the agenda generate no trips. Through destinations are drawn among
   the gateways the origin serves. Event visitors are drawn among gateways that serve their
   inbound and outbound legs, falling back to residential places when none does. Served trips
   are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
