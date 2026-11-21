@@ -276,8 +276,10 @@ export interface ContextAreaFeature {
   colour?: string;
   material?: string;
   minHeightM?: number;
-  /** TASK-201: a building's `building:part` areas (`sub` is the part's value). 3D draws these
-   * instead of the outline; 2D draws the outline. Absent for a building without parts. */
+  /** TASK-201: a building's `building:part` areas (`sub` is the part's value). 3D draws these,
+   * and (TASK-272) the outline's area no part covers when the outline is a body of its own rather
+   * than a wrapper as tall as its tallest part; 2D draws the outline. Absent for a building without
+   * parts. */
   parts?: BuildingPart[];
 }
 export type BuildingPart = Omit<ContextAreaFeature, 'kind' | 'class' | 'parts'>;
