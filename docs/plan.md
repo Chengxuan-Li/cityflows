@@ -282,7 +282,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-257](tasks/TASK-257.md) | render | Unmarked crossings: a marking field on walk links (owner-approved schema) | `src/schema`, `walk.ts`, crossing paint | 217, 248 | tests, counts, close-ups, identical hashes | in progress 2026-11-20 (run 3) |
 | [TASK-258](tasks/TASK-258.md) | UI | Munich and Sindelfingen preloaded in the New city panel; one builder, a staleness test | `bench/`, `fixtures/projects`, `bundled-projects.ts`, `top-bar.tsx` | 198 | showcase gates, staleness test, e2e, budgets | in progress 2026-11-20 (run 3) |
-| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | waits for the owner's download approval |
+| [TASK-259](tasks/TASK-259.md) | UI | Scout more preloaded cities: Lübeck, a UK centre, Philadelphia | decision doc, findings | 197, 258 | gates, budgets, shots, defects per city | queued (downloads approved 2026-11-21) |
 | [TASK-260](tasks/TASK-260.md) | render | Rail bridges in 3D: walls and decks cutting into each other (owner bugs 1, 2) | `render3d/rail.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
 | [TASK-261](tasks/TASK-261.md) | render | Walkways and stairs in 3D: broken edges, twisted stairs (owner bugs 3, 4) | `render3d/walk.ts`, `geometry.ts`, `heights.ts` | owner 2026-11-20 | tests, close-ups, hashes, budgets | queued |
 | [TASK-262](tasks/TASK-262.md) | render | Footbridges with piers, railings, canopies (owner bugs 5, 7) | `render3d` footbridges | owner 2026-11-20 | tests, counts, close-ups, hashes, budgets | queued |
@@ -5795,6 +5795,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-21 (owner): "osm downloads approved": TASK-259 may fetch four Overpass extracts (Lübeck
+  Altstadt, York inside the walls, Cambridge centre, Philadelphia Center City as a polygon), OSM data
+  under ODbL; nothing else.
 
 - 2026-11-20 (owner): seven 3D bugs logged in Freiburg (shots in `docs/findings/2026-11-20-owner-3d-bugs/`):
   rail bridge walls and decks cutting into each other (1, 2), broken walkway edges (3), twisted stairs (4),
