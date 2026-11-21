@@ -37,7 +37,7 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
 // Munich's and Sindelfingen's own traffic tests pin theirs.
-describe.for(['munich', 'sindelfingen'])('%s at the showcase demand', (id) => {
+describe.for(['munich', 'sindelfingen', 'philadelphia'])('%s at the showcase demand', (id) => {
   test(
     'drains: no gridlock, no stalled head, no unroutable trip, no visit adds 900 s',
     async () => {
