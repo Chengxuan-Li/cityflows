@@ -310,7 +310,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | done 2026-11-21 (merged; Lübeck in the panel; York held out: TASK-286, 287) |
 | [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
 | [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | in progress 2026-11-21 (run 3) |
-| [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | in progress 2026-11-21 (run 3) |
+| [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5741,6 +5741,14 @@ TASK-284 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `2ae278a`): L�
 Freiburg (TASK-287): bundled, `?city=york`, held out of the panel (`heldOutOfPanel`; its gate test expects failure).
 Archives 9.15 MB (1.55 MB gzip) and 6.77 MB (1.19). Lead merge with TASK-285: the builder, panel, attribution,
 staleness test and real-places spec combined; archives rebuilt unchanged.
+
+TASK-287 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `24d6afc`): load-time hot paths, identical output (ten
+outputs hashed in five cities): `crossingArms` and `crossingStyle` cached per city, `placeCrossing` skipping far
+curbs, UK centre lines and zig-zags from one street-group index, `curbTaper`/`curbBands` reading the node's own
+roads, the walk compile's `attach` trying paths by rank and distance, lot-path bay boxes, `placeStreet` edge runs.
+Quiet-machine medians (main to branch): York first frame 2.93 to 2.80 s, ready 6.42 to 6.09; Freiburg 2.26 to
+2.17, ready 5.14 to 4.37; Munich 2.24 to 2.13. York stays at 1.29x Freiburg's first frame (TASK-284's 1.6x was
+measured before TASK-277); left: `junctionPolygon`, seams, `walkGeometry` unions, Pixi batching.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
