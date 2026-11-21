@@ -306,11 +306,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-280](tasks/TASK-280.md) | wave A | One height profile for rail tracks sharing a bridge | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; covered bed points 148 to 0; hashes identical) |
 | [TASK-281](tasks/TASK-281.md) | wave A | Lübeck's parking failures under 2% (D17) | see contract | 259 to 270 | tests, counts, gates | done 2026-11-21 (merged; unreachable lots left out; Freiburg 60.1 s) |
 | [TASK-282](tasks/TASK-282.md) | wave B | Left-hand turn ranking: the far-side right yields like a left (architecture 5.3) | movement priority | 268 | York, right-hand identity | done 2026-11-21 (merged; turn rank by driving side) |
-| [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | held for the owner 2026-11-21 (passes the merge rule; Lübeck -557 and Cambridge -679 trips a day until populations draw reachable gateways) |
+| [TASK-283](tasks/TASK-283.md) | wave B | Gateways into restricted pockets: gateway trips judged by the person's own car | `src/demand`, `places.ts` | 270 | Lübeck, Cambridge, traffic, merge rule | done 2026-11-21 (merged on the owner's go; Lübeck -557 and Cambridge -679 trips a day until TASK-288) |
 | [TASK-284](tasks/TASK-284.md) | wave B | Lübeck and York as preloaded cities | builder, fixtures, panel | 258, 259 to 282 | gates, budgets, e2e | done 2026-11-21 (merged; Lübeck in the panel; York held out: TASK-286, 287) |
 | [TASK-285](tasks/TASK-285.md) | wave B | Philadelphia as a preloaded city | builder, fixtures, panel | 258, 270, 272, 277 | gates, budgets, e2e | done 2026-11-21 (merged; passes the gate and budgets) |
 | [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | done 2026-11-21 (merged variant; York gate passes; York in the panel) |
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
+| [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | in progress 2026-11-21 (owner's go) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5719,13 +5720,15 @@ Lead merge of TASK-277 and 271: `polyline.ts` (`Box` exported, TASK-278's `polyl
 (`curateFreiburg(city)`) resolved; bundled cities rebuilt (Freiburg manifest b9b2611e...), gate 1,532 / 0, 59.8 s, hash
 883105405 (main 60.5 s); walk mesh, Sindelfingen rail and V275 pins re-pinned on TASK-271's passages at grade.
 
-TASK-283 (Claude Code subagent, Opus 5.5 high, 2026-11-21; held for the owner, branch `task/283-pocket-gateways` `414ee33`):
+TASK-283 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged on the owner's go, `414ee33`):
 a trip leaving home is judged by the home's own car (every owned facility with an exit must reach the gateway);
 polygon gateways may reach the core over `destination` and `private` lanes as well as `yes`. Lübeck gets Wallstraße
 back (8 to 9 gateways), Cambridge three north-east exits (5 to 8); `no_route` 0 in both. Munich, Freiburg, Sindelfingen
 trip lists and traffic identical (passes the merge rule). Cost: people assigned to unreachable exits stay home
 (Lübeck 13,516 to 12,959 trips a day, Cambridge 4,546 to 3,867); the fix is drawing workplaces only among gateways the
-home's car reaches, which changes populations (owner's call).
+home's car reaches, which changes populations (owner's call). Lead merge (`d44658e`): `places.ts` keeps
+TASK-286's lane-change modes with TASK-283's car-only access (`yes`, `destination`, `private`) as `carOnly`; Lübeck and
+York archives rebuilt (more gateways), the other four byte-identical. Populations: TASK-288.
 
 TASK-285 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `e8e6833`): Philadelphia Center City preloaded (raw
 polygon import, right-hand, flat; extract committed with attribution; `?city=philadelphia`; panel note "One-way grid
@@ -6127,6 +6130,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-21 (owner): "We may keep task 279 parked and merge 283 now and arrange fixing and populations in the
+  follow-up." TASK-279 stays parked (v2 `af007d4`); TASK-283 merged; TASK-288 (populations draw reachable gateways)
+  started. Before and after shots of the seven 3D bugs: `docs/findings/2026-11-20-owner-3d-bugs/before-after/`.
 
 - 2026-11-21 05:10 (owner): "Both waves": wave A starts now (TASK-276 to 281); wave B as the merges land
   (bundle Lübeck and York, left-hand turn ranking, gateways into restricted pockets, bundle Philadelphia).
