@@ -692,10 +692,14 @@ export function createIntersections(
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
 
+  // TASK-269 (D4): on a mini-roundabout the favoured side is the one the circulating traffic
+  // comes from, the other side from an equal junction's.
+  const mini = Uint8Array.from(compiled.nodes, (node) => Number(!!node.miniRoundabout));
   function yieldsTo(id: number, other: number) {
     const angle = headings[vehicles.lane[id]!]! - headings[vehicles.lane[other]!]!;
     const side = Math.sin(angle);
-    return compiled.drivingSide === 'right' ? side > 1e-9 : side < -1e-9;
+    const right = (compiled.drivingSide === 'right') !== (mini[movementOf(id).node] === 1);
+    return right ? side > 1e-9 : side < -1e-9;
   }
 
   function resolve() {

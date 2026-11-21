@@ -1,5 +1,5 @@
 import { distance, polylineLength } from '../../geo/polyline';
-import { STOP_POSITION } from '../../network/junctions';
+import { MINI_ROUNDABOUT, STOP_POSITION } from '../../network/junctions';
 import { allocateId, type City, type Road } from '../../schema';
 import { vehicleClasses } from '../../schema';
 import type { OsmWay } from './parse';
@@ -138,7 +138,8 @@ export function formJunctionGroups(
   const boundaries = new Set(
     Object.values(city.nodes)
       .filter((node) => {
-        if (node.control !== 'uncontrolled') return true;
+        if (node.control !== 'uncontrolled' || node.provenance.inferred?.includes(MINI_ROUNDABOUT))
+          return true;
         const here = incident.get(node.id) ?? [];
         if (here.some(({ road }) => road.roadClass === 'motorway')) return true;
         const neighbors = new Set(

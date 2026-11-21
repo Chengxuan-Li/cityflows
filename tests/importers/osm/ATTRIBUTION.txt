@@ -1,0 +1,17 @@
+© OpenStreetMap contributors
+https://www.openstreetmap.org/copyright
+
+The data in these extracts is made available under the Open Data Commons
+Open Database License (ODbL) 1.0.
+https://opendatacommons.org/licenses/odbl/1-0/
+
+Excerpts cut (TASK-269) from TASK-259's Overpass extracts, downloaded 2026-11-21
+(OSM base 2026-11-21T07:01:36Z): every highway way with a node inside the bbox,
+whole, with its nodes and tags. Bboxes are west, south, east, north in WGS84 degrees.
+
+york-piccadilly.osm — Piccadilly and The Stonebow, York (two mini-roundabouts, zebras)
+BBox: -1.0798, 53.9563, -1.0765, 53.9597
+
+cambridge-trumpington.osm — Trumpington Road at Lensfield Road and The Fen Causeway,
+Cambridge (two mini-roundabouts)
+BBox: 0.1202, 52.1966, 0.1240, 52.1989

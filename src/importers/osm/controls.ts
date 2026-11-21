@@ -1,5 +1,6 @@
 import { polylineLength } from '../../geo/polyline';
 import { intoInnerLane, type CompiledCity, type Diagnostic } from '../../network';
+import { MINI_ROUNDABOUT } from '../../network/junctions';
 import type { City, Node, Road } from '../../schema';
 import { generateGroupSignalProgram, generateSignalProgram } from '../../network/signal-program';
 import type { OsmData } from './parse';
@@ -237,6 +238,22 @@ export function markRoundaboutEntries(city: City, data: OsmData): void {
     if (!minor.length || node.control === 'signal') continue;
     node.control = 'yield';
     node.minorRoads = minor;
+  }
+}
+
+/** TASK-269 (D4): a mini-roundabout (`MINI_ROUNDABOUT`, from `highway=mini_roundabout`) is a
+ * painted disc, not a ring: one node where every entry gives way (to the traffic already on it,
+ * and to cars arriving together from the side the circulating traffic comes from,
+ * `CNode.miniRoundabout`). A signal keeps its program. */
+export function markMiniRoundabouts(city: City): void {
+  for (const node of Object.values(city.nodes)) {
+    if (!node.provenance.inferred?.includes(MINI_ROUNDABOUT) || node.control === 'signal') continue;
+    const entries = Object.values(city.roads)
+      .filter((r) => r.to === node.id)
+      .map((r) => r.id);
+    if (!entries.length) continue;
+    node.control = 'yield';
+    node.minorRoads = entries;
   }
 }
 

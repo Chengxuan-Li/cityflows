@@ -222,7 +222,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // (groups 39 to 46) and are marked `stopPosition` (`stopPositionCrossing` on a crossing).
     // TASK-257: rebuilt; crossing walk links carry their OSM `marking` (none 37, lines 124, zebra
     // 40); nothing else changes.
-    '4d1bb6f353c8a78cbc5c76a51c47a17cd72578f0cc325015aef89dbfa79fddb6',
+    // TASK-269: rebuilt; the mini-roundabout n:347 (7099586035, Wilhelmstraße and Faulerstraße)
+    // gives way on its four entries (`miniRoundabout`); nothing else changes.
+    'c78c1c782112a709dc3153b7cb5b055ab44cabfcf970004591bbd15ac802454f',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -255,7 +257,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // With TASK-248 (lead, at the merge): 1,522 completed, 66.1 s.
   // TASK-255: stop lines at the signals mapped before their junctions (TASK-218's D4), whose
   // groups now include them (1,522 to 1,518 completed, 66.1 to 65.8 s).
-  expect(morning.stateHash).toBe(1024213382);
+  // TASK-269: the mini-roundabout n:347: no arm or turn above another, and cars arriving together
+  // give way to the left (1,518 completed, 65.8 to 65.3 s).
+  expect(morning.stateHash).toBe(2917341778);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

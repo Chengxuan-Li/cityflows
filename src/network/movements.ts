@@ -157,7 +157,8 @@ export function generateMovements(
       lengthM: cumulative.at(-1)!,
       conflicts: [],
       conflictZones: [],
-      priority,
+      // TASK-269 (D4): no road ranks above another on a mini-roundabout, and no turn above another.
+      priority: node.miniRoundabout ? 0 : priority,
       neverGreen: false,
     });
     node.movements.push(idx);
