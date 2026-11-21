@@ -24,8 +24,11 @@ export function scheduleTrips(
   for (const person of persons) {
     const agenda = buildAgenda(city, person, scenario, random.derive(person.id));
     // TASK-155: a person whose next leg no car can serve stays at the activity before it for the
-    // day.
-    const stop = agenda.findIndex((to, i) => i > 0 && !served(agenda[i - 1]!.placeId, to.placeId));
+    // day. TASK-283: a leg from home is judged by the person's own car there.
+    const stop = agenda.findIndex(
+      (to, i) =>
+        i > 0 && !served(agenda[i - 1]!.placeId, to.placeId, agenda[i - 1]!.kind === 'home'),
+    );
     if (stop !== -1) {
       agenda.length = stop;
       const last = agenda.at(-1)!;
