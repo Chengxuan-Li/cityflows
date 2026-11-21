@@ -276,10 +276,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-250](tasks/TASK-250.md) | 9 | Full demand after TASK-247: four stalled heads and 164 fewer trips | `signals.ts` | 247 | trace, repro test, traffic, merge rule | done 2026-11-20 (diagnosis only: seed-1 full demand is divergence; no change) |
 | [TASK-251](tasks/TASK-251.md) | 9 | Reroute checks skip the lane search when no switch is possible (optional bound on `RouteProvider.route`) | `src/routing/**`, engine reroute check, architecture 5.x | 243 | identical hashes, timings | done 2026-11-20 (merged; route requests about 34% less, hashes identical) |
 | [TASK-252](tasks/TASK-252.md) | render | Walk lights at crossings no signal phase serves draw dark | walk-light drawing, signal snapshot | 245, 249 | test, list, identical hashes, budgets | done 2026-11-20 (merged; hashes identical) |
-| [TASK-253](tasks/TASK-253.md) | 9 | TASK-223's missed-turn rule re-measured on five-seed full demand | `detourHeads` | 223, 249 | misses, traffic, merge rule | in progress 2026-11-20 (run 3) |
+| [TASK-253](tasks/TASK-253.md) | 9 | TASK-223's missed-turn rule re-measured on five-seed full demand | `detourHeads` | 223, 249 | misses, traffic, merge rule | done 2026-11-20 (merged v2; full demand five-seed -1.1% / -1.0%) |
 | [TASK-254](tasks/TASK-254.md) | 10 | `placement` and tagged widths read by rule; `r:1179` and `n:1146` (TASK-242's split) | `roads.ts`, `corridors.ts` | 242 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
 | [TASK-255](tasks/TASK-255.md) | 10 | Stop lines at the painted line where a signal sits ahead of its junction (TASK-218's D4 with J1) | `controls.ts`, `split.ts`, `junctions.ts`, `groups.ts` | 218, 234 | imagery, audit, traffic, merge rule | in progress 2026-11-20 (run 3) |
-| [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | in progress 2026-11-20 (run 3) |
+| [TASK-256](tasks/TASK-256.md) | render | Visual leftovers: `n:211` zebra, promenade parking hatch, `rt:12944` ballast | markings, rail drawing | 232, 233, 248 | tests, close-ups, hashes | done 2026-11-20 (merged; promenade and ballast fixed, hashes identical; `n:211` needs a placement task) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5392,6 +5392,30 @@ none. Hashes identical; render p95 2D 3.0 ms, 3D 3.8 ms (budgets 4 and 6). Test 
 `style.signalDark`, one sentence in `docs/architecture.md` section 5.4 (the new value; within the contract's
 "snapshot field"). Lead check: check (1,612), city (222), traffic light and guard, light e2e (61); full
 demand identical (actuated 3,420 / 157, 3501316164; fixed 3,504 / 153, 2862775104).
+
+TASK-256 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `d54a8e1`, Full run 44874861895):
+visual leftovers. (1) The promenade's "parking hatch" was a keep-clear box at garage `pk:2736`'s mouth on
+`r:225#0`: no keep-clear box on a shared one-lane carriageway (TASK-233's `sharedLane`); boxes Freiburg
+138 to 137, Munich 153 to 150, Sindelfingen 74 to 72; simulation zones unchanged. (2) An inferred ballast
+tram section under 20 m whose ends join only other beds, one embedded, is embedded (`assignTramForms`):
+Freiburg 7 sections, 93 m (`rt:12944`, `rt:12948` checked on the imagery); Munich, Sindelfingen none, so
+Arnulfstraße stays as mapped. (3) `n:211` not landed: the band follows TASK-091's curb rule and TASK-140
+moves the walk link onto it, so moving paint alone would split zebra from crossing; a placement rule in
+`crossings.ts` moves traffic at 5 arms and needs its own task. Hashes identical (Munich 0.15 four
+configurations, Freiburg 4228017009, Sindelfingen, both full demands); frame p95 2D 2.6, 3D 4.4 ms. Lead
+tiers on the merge: check 1,613 passed; city 223 passed; traffic light 5 passed, 1 expected fail; e2e
+light 61 passed. Outside scope: Freiburg rebuild and pin, V117 paint pins.
+
+TASK-253 (Claude Code subagent, Opus 5.5 high, 2026-11-20; merged `57e7ef7`): TASK-223's v2 ported onto
+ef0f2b4 (a blocked head does not detour into a lane of its next road that needs two or more more later
+lane changes; `src/sim/engine.ts`, and TASK-223's paragraph in `docs/architecture.md`). Misses 12 seeds
+choice off: `r:654` actuated 91 to 10, fixed 319 to 9; `r:639` actuated 58 to 105 (seed 2 0 to 87),
+fixed 808 to 602. Munich 0.15 seeds 1 to 12: actuated off 628.7 to 624.6 s (-0.7%), on 86.9 to 86.6 s,
+fixed off 800.3 to 802.6 s (+0.3%), fixed on identical. Full demand five-seed means: actuated 3,457.8 /
+167.4 / 1.6 stalled, 1,767.5 s to 3,525.2 / 157.2 / 2.6, 1,748.4 s (-1.1%); fixed 3,365.8 / 173.4 / 2.0,
+1,858.4 s to 3,316.4 / 168.0 / 1.8, 1,840.3 s (-1.0%). Freiburg seeds 1 to 3 and Sindelfingen identical;
+audit identical. Passes the merge rule on the five-seed reading; noted: actuated stalled heads mean +1,
+fixed full demand 49 fewer completed. Parked branch `task/223-remaining-misses-2` can retire.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
