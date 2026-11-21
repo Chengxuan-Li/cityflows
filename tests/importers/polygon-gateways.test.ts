@@ -12,26 +12,33 @@ const square: [number, number][] = [
   [-0.001, 0.001],
 ];
 
-test('a polygon gateway is made only where its lanes reach the public network', () => {
+test('a polygon gateway is made only where a car lane reaches the network, destination streets included', () => {
   // Main crosses the ring both sides round a block of public streets. Pocket enters from the
-  // north and joins the block only through Gate, a destination street: no car may drive through
-  // it, so Pocket's cut end would be a gateway no route reaches (Lübeck's Wallstraße).
+  // north and joins the block only through Gate, a destination street (Lübeck's Wallstraße):
+  // TASK-283 keeps its gateway, and demand gives it only the trips a car can drive. Busway joins
+  // the block on a bus-only road: no car lane of it reaches the network, so it gets no gateway
+  // (TASK-270).
   const osm = `<osm>
     <node id="1" lat="0" lon="-0.003"/><node id="2" lat="0" lon="-0.0005"/>
     <node id="3" lat="0" lon="0.0005"/><node id="4" lat="0" lon="0.003"/>
     <node id="5" lat="0.0005" lon="-0.0005"/><node id="6" lat="0.0005" lon="0.0005"/>
     <node id="7" lat="0.003" lon="0.0005"/><node id="8" lat="0.0008" lon="0.0005"/>
+    <node id="15" lat="0.003" lon="-0.0005"/>
     <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><tag k="highway" v="primary"/><tag k="name" v="Main"/></way>
     <way id="11"><nd ref="2"/><nd ref="5"/><nd ref="6"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Block"/></way>
     <way id="12"><nd ref="7"/><nd ref="8"/><tag k="highway" v="secondary"/><tag k="name" v="Pocket"/></way>
     <way id="13"><nd ref="8"/><nd ref="6"/><tag k="highway" v="residential"/><tag k="name" v="Gate"/><tag k="access" v="destination"/></way>
+    <way id="17"><nd ref="15"/><nd ref="5"/><tag k="highway" v="secondary"/><tag k="access" v="no"/><tag k="bus" v="yes"/><tag k="name" v="Busway"/></way>
   </osm>`;
   const result = importOsm(osm, { importerVersion: 'test', polygon: square });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const { city } = result;
-  expect(Object.values(city.roads).some((r) => r.name === 'Pocket')).toBe(true);
+  for (const name of ['Pocket', 'Busway'])
+    expect(Object.values(city.roads).some((r) => r.name === name)).toBe(true);
   const gateways = Object.values(city.places).filter((p) => p.kind === 'gateway');
-  expect(gateways.map((g) => g.provenance.osmIds)).toEqual([[10], [10]]);
+  expect(gateways.map((g) => g.provenance.osmIds)).toEqual([[10], [10], [12]]);
+  const pocket = gateways.find((g) => g.provenance.osmIds![0] === 12)!;
+  expect(pocket.connectors.map((c) => c.direction).sort()).toEqual(['in', 'out']);
   expect(compile(city).ok).toBe(true);
 });
 

@@ -2488,6 +2488,9 @@ variant. Saving a baseline captures current editor state, including unapplied li
   facilities it could park at (own, public, or an unowned lot, without the distance limit),
   and a place serves a gateway when one of its departure connectors or such facilities reaches
   the gateway's arrival lanes; between gateways, departure lanes must reach arrival lanes.
+  TASK-283: a leg from the person's home is judged by their own car instead: every facility the
+  home owns with an exit (its own connectors when it owns none) must reach the gateway's arrival
+  lanes, since the car may stand in any of them.
   Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
   on car-legal lanes: public roads and the trip end's own private/destination zone, entering
   another zone only to end in it; lane-change distances and stations are ignored, so only

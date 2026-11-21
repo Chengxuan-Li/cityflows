@@ -34,9 +34,11 @@ const gatewayDemand: Record<RoadClass, number> = {
 // Place access uses actual movement paths, not a road-level approximation that can require
 // an impossible lane change on a short section. Keep disconnected roads, but do not seed
 // unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
-// TASK-270: `publicCar` keeps only what a car may drive through, as the router does (car lanes on
-// roads with car access `yes`, no lane drops), so the core is the public network and a lane only
-// reaches it through public roads, not through a destination or private zone.
+// TASK-270: `carOnly` keeps only what some car trip may drive, as the router does: car lanes, no
+// lane drops. TASK-283: destination and private roads count too (a trip may start or end in
+// their zone), so a pocket of public streets behind them keeps its gateways (Lübeck's south loop
+// by Wallstraße; the exits of Cambridge's north-east, which cars enter past its bus gates but leave
+// only by them); demand then gives such a gateway only the trips a car can drive (`carService`).
 // `laneChanges`: `none`; `long` on roads whose every lane is long enough for all of them;
 // `every` on every road (TASK-270's polygon rule); `router` as the router makes them (TASK-286:
 // `reachableLanes`, the lane search's edges): a lane entered at its road's start leaves by the
@@ -48,19 +50,22 @@ const gatewayDemand: Record<RoadClass, number> = {
 export function networkAccess(
   compiled: CompiledCity,
   laneChanges: 'none' | 'long' | 'every' | 'router',
-  publicCar = false,
+  carOnly = false,
 ) {
   const car = vehicleClasses.indexOf('car');
-  const open = compiled.lanes.map(
-    (lane) =>
-      !publicCar ||
-      (lane.allowed.includes('car') && compiled.roads[lane.road]!.access[car] === 'yes'),
-  );
+  const open = compiled.lanes.map((lane) => {
+    const access = compiled.roads[lane.road]!.access[car];
+    return (
+      !carOnly ||
+      (lane.allowed.includes('car') &&
+        (access === 'yes' || access === 'destination' || access === 'private'))
+    );
+  });
   const out = compiled.lanes.map((): number[] => []);
   const incoming = compiled.lanes.map((): number[] => []);
   for (const m of compiled.movements) {
     if (m.neverGreen || !open[m.fromLane] || !open[m.toLane]) continue;
-    if (publicCar && isLaneDrop(compiled, m)) continue;
+    if (carOnly && isLaneDrop(compiled, m)) continue;
     out[m.fromLane]!.push(m.toLane);
     incoming[m.toLane]!.push(m.fromLane);
   }
@@ -192,10 +197,9 @@ export function addPlace(
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
   const polygon = Boolean(city.geo!.boundary);
-  // TASK-270: a polygon import's gateway connector is made only on a lane that reaches the public
-  // network (out) or is reached from it (in). Lübeck's Wallstraße reached only a pocket of the
-  // Altstadt behind destination streets, and a cut end whose lanes lead nowhere had connectors
-  // anyway: every `no_route` of TASK-259's scout.
+  // TASK-270: a polygon import's gateway connector is made only on a car lane that reaches the
+  // network (out) or is reached from it (in): a cut end whose lanes lead nowhere had connectors
+  // anyway. TASK-283: through destination streets too (see `networkAccess`).
   const access = networkAccess(compiled, polygon ? 'router' : 'long', polygon);
   const reach = polygon ? networkAccess(compiled, 'every', true) : access;
   const inset = (lengthM: number) => Math.min(5, lengthM / 2);
