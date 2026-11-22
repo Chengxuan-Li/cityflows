@@ -113,7 +113,8 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     const errors = pageErrors(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/?city=${id}`);
-    await opened(page, name);
+    // Zurich is held out of the panel for its load time (TASK-302); CI runners need longer.
+    await opened(page, name, id === 'zurich-airport' ? 180_000 : undefined);
     // TASK-295: an airport's airside is drawn as paving (aprons, taxiways, the runway).
     if (id === 'london-city-airport' || id === 'zurich-airport')
       expect(
