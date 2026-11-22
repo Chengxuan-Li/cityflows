@@ -309,9 +309,28 @@ export function addLots(
     }
     if (!lot.aisles!.some((id) => traversed.has(id))) {
       const ring = lot.shape!.kind === 'polygon' ? close(lot.shape!.ring) : [];
+      const box = (points: Vec2[]) => ({
+        minX: Math.min(...points.map((p) => p.x)),
+        minY: Math.min(...points.map((p) => p.y)),
+        maxX: Math.max(...points.map((p) => p.x)),
+        maxY: Math.max(...points.map((p) => p.y)),
+      });
+      const near = box(ring);
       const candidates = withAisles.compiled.lanes
         .flatMap((lane) => {
           const road = city.roads[withAisles.compiled.roads[lane.road]!.id]!;
+          // Every candidate measure below is a distance between the ring and the lane, so a lane
+          // whose box lies over 30 m from the ring's box cannot come within 30 m.
+          if (ring.length) {
+            const own = box(lane.polyline);
+            if (
+              own.minX > near.maxX + 30 ||
+              own.maxX < near.minX - 30 ||
+              own.minY > near.maxY + 30 ||
+              own.maxY < near.minY - 30
+            )
+              return [];
+          }
           if (
             aisleIds.has(road.id) ||
             !lane.allowed.includes('car') ||

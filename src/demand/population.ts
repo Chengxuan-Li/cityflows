@@ -6,7 +6,8 @@ import { withHouseholds } from './households';
 import { servedTrips } from './served';
 
 export function generatePopulation(city: City, config: DemandConfig): Person[] {
-  const result = compile(city);
+  // Population placement only asks about car access to jobs and gateways.
+  const result = compile(city, () => {});
   if (!result.ok) {
     throw new Error(`Cannot generate population: ${result.diagnostics[0]!.message}`);
   }

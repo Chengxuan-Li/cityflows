@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { syntheticAirport, syntheticAirportBacktrack } from '../../src/fixtures/synthetic-airport';
-import { routeAirside, arcEdge } from '../../src/routing/airside';
+import { routeAirside, arcEdge, createAirsideRouteFinder } from '../../src/routing/airside';
 import { aircraftCodes } from '../../src/schema/aircraft';
 import {
   createAircraftFleet,
@@ -180,6 +180,11 @@ test('a code E aircraft is never routed onto a code C edge or stand', () => {
   expect(viaC.arcs.some((a) => graph.edges[arcEdge(a)]!.maxCode === code('C'))).toBe(true);
   expect(viaE.arcs.every((a) => graph.edges[arcEdge(a)]!.maxCode >= code('E'))).toBe(true);
   expect(viaE.cost).toBeGreaterThan(viaC.cost);
+  const findRoute = createAirsideRouteFinder(graph);
+  expect(findRoute({ code: code('C'), turnRadiusM: 15, from, goal })).toEqual(viaC);
+  const sameRadius = { code: code('E'), turnRadiusM: 15, from, goal };
+  expect(findRoute(sameRadius)).toEqual(routeAirside(graph, sameRadius));
+  expect(findRoute({ code: code('E'), turnRadiusM: 28, from, goal })).toEqual(viaE);
   expect(fleet.requestArrival({ typeId: 'A333', runwayEnd: '27', stand: stands.C1 })).toEqual({
     ok: false,
     reason: 'stand C1 admits code C',

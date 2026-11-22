@@ -104,15 +104,6 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
       '51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356',
       'London City Airport',
     ),
-  'boston-logan': () =>
-    // The checked-in archive is from TASK-303's apron importer. Use this recipe when
-    // TASK-312 adopts that rule and regenerates the bundle.
-    polygonImport(
-      'boston-logan',
-      'boston-logan.osm',
-      '42.3439 -71.0368 42.3439 -70.9817 42.3823 -70.9817 42.3823 -71.0368',
-      'Boston Logan Airport',
-    ),
   heathrow: () =>
     polygonImport(
       'heathrow',
@@ -120,20 +111,26 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
       '51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948',
       'London Heathrow Airport',
     ),
+  // TASK-302: the aerodrome with Kloten, Rümlang and Oberglatt's edges, the A51 and the rail
+  // station under the terminal (TASK-309's extract polygon, fixtures/osm/ATTRIBUTION.txt).
+  'zurich-airport': () =>
+    polygonImport(
+      'zurich-airport',
+      'zurich-airport.osm',
+      '47.438 8.5307 47.438 8.5802 47.4858 8.5802 47.4858 8.5307',
+      'Zurich Airport',
+    ),
 };
 
-/** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New
- * city panel because they fail the showcase gate or the load budget; each with why. TASK-286:
- * York passes its gate (no `no_route` at the Layerthorpe gateway); its load remains (TASK-287). */
+/** TASK-284: bundles available by `?city=<id>` while their showcase gates are pending.
+ * Boston is byte-pinned to TASK-303's apron-rule archive until that importer rule lands. */
 export const heldOutOfPanel: Record<string, string> = {
-  'boston-logan': 'Airside throughput (TASK-312). Uses the parked TASK-303 apron import.',
-  heathrow: 'Airside throughput (TASK-312).',
-};
-
-/** Use the exact parked builds until TASK-312 brings these airports into the showcase. */
-export const parkedProjectHashes: Record<string, string> = {
-  'boston-logan': 'c80805bdc46c6f3b593a8a0072599db2016357be560992690d44c070f6392866',
-  heathrow: 'bad6f00cfe54a59ab749b1dc323d778cd577d2127b306290537cd3912cff68e6',
+  'boston-logan': 'Airport throughput gate',
+  heathrow: 'Airport throughput gate',
+  // TASK-302: its showcase morning (0.15, mode choice on) ends with 2 trips gridlocked, a stalled
+  // head and a 10,260 s visit on Flughafenstrasse (r:3407, landside, no airside crossing), and the
+  // morning takes 172 s against the city tier's 60 s per airport; ready 31 to 42 s after the click.
+  'zurich-airport': 'showcase gate: gridlock on Flughafenstrasse; load over budget',
 };
 
 /** The committed bundled project, opened as the app opens it. */
@@ -145,9 +142,7 @@ export async function openBundled(id: string): Promise<Project> {
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('bench/bundled-cities.ts')) {
   const ids = process.argv.slice(2);
-  for (const id of ids.length
-    ? ids
-    : Object.keys(realPlaceBuilds).filter((id) => !(id in parkedProjectHashes))) {
+  for (const id of ids.length ? ids : Object.keys(realPlaceBuilds)) {
     const build = realPlaceBuilds[id];
     if (!build) throw new Error(`Unknown real place ${id}: ${Object.keys(realPlaceBuilds)}`);
     const json = await build();

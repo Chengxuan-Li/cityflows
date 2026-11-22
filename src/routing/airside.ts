@@ -25,19 +25,42 @@ export function arcLine(graph: AirsideGraph, arc: number): Vec2[] {
   return arcForward(arc) ? line : line.toReversed();
 }
 
-/** Arcs leaving `node`; a oneway edge only along its line. */
-export function arcsFrom(graph: AirsideGraph, node: number) {
-  const arcs: number[] = [];
-  for (const e of graph.nodes[node]!.edges) {
-    const edge = graph.edges[e]!;
-    if (edge.from === node) arcs.push(arcOf(e, true));
-    if (edge.to === node && !edge.oneway) arcs.push(arcOf(e, false));
+const leaving = new WeakMap<AirsideGraph, (readonly number[])[]>();
+
+/** Arcs leaving `node`; a oneway edge only along its line. Kept per graph: do not modify. */
+export function arcsFrom(graph: AirsideGraph, node: number): readonly number[] {
+  let all = leaving.get(graph);
+  if (!all) {
+    all = graph.nodes.map(({ idx, edges }) => {
+      const arcs: number[] = [];
+      for (const e of edges) {
+        const edge = graph.edges[e]!;
+        if (edge.from === idx) arcs.push(arcOf(e, true));
+        if (edge.to === idx && !edge.oneway) arcs.push(arcOf(e, false));
+      }
+      return arcs;
+    });
+    leaving.set(graph, all);
   }
-  return arcs;
+  return all[node]!;
 }
 
-/** Direction of travel over the first (or last) `windowM` of an arc. */
+const directions = new WeakMap<AirsideGraph, Map<number, Float64Array>>();
+
+/** Direction of travel over the first (or last) `windowM` of an arc, kept per graph and window
+ * (routing asks for the same turns again and again). */
 function arcDirection(graph: AirsideGraph, arc: number, atEnd: boolean, windowM: number) {
+  let byWindow = directions.get(graph);
+  if (!byWindow) directions.set(graph, (byWindow = new Map()));
+  let cache = byWindow.get(windowM);
+  if (!cache) byWindow.set(windowM, (cache = new Float64Array(graph.edges.length * 4).fill(NaN)));
+  const slot = arc * 2 + Number(atEnd);
+  const known = cache[slot]!;
+  if (!Number.isNaN(known)) return known;
+  return (cache[slot] = measureDirection(graph, arc, atEnd, windowM));
+}
+
+function measureDirection(graph: AirsideGraph, arc: number, atEnd: boolean, windowM: number) {
   const { line, cumulative, lengthM } = graph.edges[arcEdge(arc)]!;
   const window = Math.min(windowM, lengthM);
   const at = (travelM: number) =>
@@ -87,10 +110,40 @@ export interface AirsideRouteQuery {
 
 /** Least-cost route by length times each arc's factor; null when the goal cannot be reached. */
 export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
+  return search(graph, query);
+}
+
+/** Reuse static turns across the many stand checks during flight setup. Access and costs
+ * still belong to each search (aircraft code, stand lead-in, runway exit and direction). */
+export function createAirsideRouteFinder(graph: AirsideGraph) {
+  const byRadius = new Map<number, (number[] | undefined)[]>();
+  return (query: AirsideRouteQuery) => {
+    let turns = byRadius.get(query.turnRadiusM);
+    if (!turns) byRadius.set(query.turnRadiusM, (turns = []));
+    const cached = turns;
+    return search(
+      graph,
+      query,
+      (arc) =>
+        (cached[arc] ??= arcsFrom(graph, arcEnd(graph, arc)).filter((b) =>
+          turnAllowed(graph, arc, b, query.turnRadiusM),
+        )),
+    );
+  };
+}
+
+function search(
+  graph: AirsideGraph,
+  query: AirsideRouteQuery,
+  preparedTurns?: (arc: number) => readonly number[],
+) {
   const count = graph.edges.length * 2;
   const cost = new Float64Array(count).fill(Infinity);
   const previous = new Int32Array(count).fill(-1);
   const heap = new MinHeap();
+  const successors = (arc: number) => preparedTurns?.(arc) ?? arcsFrom(graph, arcEnd(graph, arc));
+  const canTurn = (a: number, b: number) =>
+    preparedTurns !== undefined || turnAllowed(graph, a, b, query.turnRadiusM);
   const admits = (arc: number) => {
     const edge = graph.edges[arcEdge(arc)]!;
     if (edge.maxCode < query.code) return false;
@@ -112,10 +165,10 @@ export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
   const start = 'arc' in query.from ? query.from.arc : -1;
   if ('arc' in query.from) {
     const runway = graph.edges[arcEdge(start)]!.kind === 'runway';
-    for (const b of arcsFrom(graph, arcEnd(graph, start)))
+    for (const b of successors(start))
       if (
         admits(b) &&
-        turnAllowed(graph, start, b, query.turnRadiusM) &&
+        canTurn(start, b) &&
         !(query.exitRunway && runway && graph.edges[arcEdge(b)]!.kind === 'runway')
       )
         relax(b, -1, 0);
@@ -128,8 +181,7 @@ export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
       while (previous[route[0]!]! !== -1) route.unshift(previous[route[0]!]!);
       return { arcs: route, cost: reached };
     }
-    for (const b of arcsFrom(graph, arcEnd(graph, arc)))
-      if (admits(b) && turnAllowed(graph, arc, b, query.turnRadiusM)) relax(b, arc, reached);
+    for (const b of successors(arc)) if (admits(b) && canTurn(arc, b)) relax(b, arc, reached);
   }
   return null;
 }

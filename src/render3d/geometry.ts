@@ -127,14 +127,14 @@ export function buildGeometry(
       for (const stripe of crossingStripes(city, road, atEnd, source))
         polygon(crossingTarget, stripe, z);
     if (Math.max(height.fromM, height.toM, height.deckM) > 0) {
+      // Midpoint between the two compiled surface edges, including carriageway shifts.
+      const left = road.surface.slice(0, road.surface.length / 2);
+      const right = road.surface.slice(road.surface.length / 2).reverse();
+      let i = 1;
       for (let s = 15; s < height.lengthM; s += 30) {
         const top = heightAt(height, s) - 0.8;
         if (top <= 0) continue;
-        // Midpoint between the two compiled surface edges, including carriageway shifts.
-        const left = road.surface.slice(0, road.surface.length / 2);
-        const right = road.surface.slice(road.surface.length / 2).reverse();
         const station = s + road.stations[0]!;
-        let i = 1;
         while (i < road.stations.length - 1 && road.stations[i]! < station) i++;
         const t = (station - road.stations[i - 1]!) / (road.stations[i]! - road.stations[i - 1]!);
         const a = mix(left[i - 1]!, left[i]!, t),
@@ -249,9 +249,11 @@ export function buildPlaces(
 export function buildAirside(source: CityGeometry, heights: Heights) {
   // Overlapping kinds a few millimetres apart, so a runway never fights its taxiways for depth.
   const lift = { apron: -0.016, taxiway: -0.013, runway: -0.01 };
+  const areas = airsideAreas(source.airport!);
   const parts = (['apron', 'taxiway', 'runway'] as const).map((kind) => {
     const positions: number[] = [];
-    for (const area of airsideAreas(source.airport!).filter((a) => a.kind === kind)) {
+    for (const area of areas) {
+      if (area.kind !== kind) continue;
       const vectors = area.rings.map((ring) => ring.map((p) => new Vector2(p.x, p.y)));
       const points = area.rings.flat();
       for (const triangle of ShapeUtils.triangulateShape(vectors[0]!, vectors.slice(1)))
@@ -260,7 +262,12 @@ export function buildAirside(source: CityGeometry, heights: Heights) {
     }
     const geometry = buffer(positions);
     const { r, g, b } = new Color(style.airside[kind]);
-    const colors = Array.from({ length: positions.length / 3 }, () => [r, g, b]).flat();
+    const colors = new Float32Array(positions.length);
+    for (let i = 0; i < colors.length; i += 3) {
+      colors[i] = r;
+      colors[i + 1] = g;
+      colors[i + 2] = b;
+    }
     geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
     return source.terrain ? drape(geometry, heights.terrain, lift[kind], false, true) : geometry;
   });

@@ -1868,7 +1868,9 @@ carry no persons and generate no road trips.
   stand and whose predicted exit is free when the arrival books it. The exit is checked again
   before landing clearance. A reversing loop at the far end permits a backtrack when needed.
 - **Line-up and take-off.** A departure lines up at the first runway node from its end up to the
-  threshold that a route turns onto in the take-off direction (centre half its length or its
+  threshold (or within 60 m of the end, half the runway at most: a full-length line-up past a
+  threshold at the end itself, Zurich 32's entry 11 m in; TASK-302) that a route turns onto in the
+  take-off direction (centre half its length or its
   turning radius past it, plus 5 m); otherwise it backtracks: onto the runway toward the end at
   the nearest node far enough out, along it, and round a reversing loop (right 60, left 300, right
   60 degrees at its turning radius, reaching (1 + sqrt 3) R) back to the centreline. It pauses 5 s,
@@ -1879,7 +1881,10 @@ carry no persons and generate no road trips.
   engines) to a stand or a node (`requestTow(id, { stand } | { node } | { hangar })`). A stand
   admits a type only up to its code and only with a way out (a push arc and a turn on from it).
 - **Helicopters** land vertically on a helipad from a stated heading, leave climbing vertically
-  then forward, and hover-taxi between helipads.
+  then forward, and hover-taxi between helipads. The flight operations give the heading of the
+  helicopter runway's end with the most headwind where the airport has one (a runway with no
+  fixed-wing code, Zurich's H01/H19; TASK-302), else the fixed-wing flow's; helicopter runways
+  are not in the fixed-wing configurations.
 - **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
   `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
   parked, off-block, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
@@ -1942,8 +1947,9 @@ carry no persons and generate no road trips.
 - **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
   airport's runway ends, with the configurations and time-of-day concepts of the airport's own
   `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
-  code (London City has none: derived configurations, wind only), field by field, the airport's
-  tailwind limit or 5 kt and the strictest maximum demonstrated crosswind of the types in
+  code (London City has none: derived configurations, wind only; Zurich's north, east and south
+  concepts and night closure, TASK-302), field by field, the airport's tailwind limit or 5 kt
+  and the strictest maximum demonstrated crosswind of the types in
   the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
   figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
   (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
@@ -2752,7 +2758,9 @@ or assumes four turns per usable stand per day, bounded by 40 movements per runw
 hour. It weights both legs by the hourly profile, applies the curfew to both movement times,
 and uses the synthetic turnaround minutes in the aircraft catalogue. Times are seconds from
 midnight: an overnight carry-in arrives before 0 and a carry-out departs at or after 86400. An
-odd count adds a carry-in. Helicopter movements are additional and require helipads.
+odd count adds a carry-in. Helicopter movements are additional and require helipads. The flight
+operations take the profile of `airportSchedules` by ICAO code (London City, Zurich; TASK-302),
+else the large-airport default.
 `src/sim/runway-configuration.ts` derives single ends and co-directional pairs within three
 degrees when no configurations are supplied. Explicit configurations can name ends on crossing
 runways. The chooser honours concept closures, prefers a concept within the wind limits, then
@@ -4389,7 +4397,8 @@ editor re-runs, TASK-305):
   the last graph node before a free end to that end, the aircraft's heading being its last
   segment's (a way with both ends on the graph is a drive-through stand stopping at its middle). A
   `parking_position` node is the stop of a lead-in way of its `ref` (or of none) ending within
-  30 m, else a stand of its own. A stand or lead-in that shares no node with the graph joins the
+  30 m or passing through it (TASK-302: Zurich's 700s, whose node is the way's end on the
+  taxiway), else a stand of its own. A stand or lead-in that shares no node with the graph joins the
   nearest taxiway or taxilane edge within 150 m by a straight generated lead-in that crosses no
   building (`provenance.source: 'generated'`); farther ones are left out (`airport_unjoined`).
   The gate is the `aeroway=gate` of the stand's `ref` within 250 m. Kind: cargo or general aviation
@@ -4402,19 +4411,28 @@ editor re-runs, TASK-305):
   the span) from the nose back along the heading, a wing of the full span across it 45% of the
   length back and a tailplane of 35% of the span at the tail: nose-in stands side by side then
   need the span plus the clearance between them, and angled stands (London City's) fit as their
-  wings stagger. A lead-in edge takes its stand's code.
+  wings stagger. Stands so close that two code A aircraft could not stand on them together are
+  alternatives (TASK-302: the positions of a multiple-aircraft ramp, Zurich's E32 and E34):
+  neither limits the other's code, and aircraft keep apart by their parked bodies and push sweeps
+  (`standPairSafe`, section 8). A lead-in edge takes its stand's code.
 - **Taxi edge codes.** Start at the code whose taxiway width (A 7.5, B 10.5, C 15, D 18, E 23,
   F 25 m) a mapped width meets. Without a mapped width, start at the largest fixed-wing runway
   code in the airport (F when no fixed-wing runway code is known). Limit that code by the
   separations at 5 m intervals from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
   B 31.5, C 44, D 63, E 76, F 91 m; two taxilanes A 19.5, B 28.5, C 40.5, D 59.5, E 72.5, F 87.5
   m), and from buildings (taxiway to object A 15.5, B 20, C 26, D 37, E 43.5, F 51 m; taxilane to
-  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. A parallel
-  neighbour is another edge on the same layer within 20 degrees of the edge's direction that the
+  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. Where
+  every segment of a taxiway edge lies within 20 degrees of the chord, remove the allowance for
+  lateral tracking error from its fixed-object distance (A 1.5, B 2.25, C 3, D–F 4 m, per ICAO
+  Doc 9157 Part 2, Table 1-4). The simulation follows the centreline and keeps the full allowance
+  on bends for wingtip sweep. A parallel neighbour is another edge on the same layer within
+  20 degrees of the edge's direction that the
   graph does not join to the sample within their distance plus 120 m of travel. At junctions
   aircraft use the same pavement in turn. Two taxi edges running side by side for 20 m, separated
   by at least the code A minimum, still impose clearance limits when connected by a short link.
-  A runway counts as a parallel taxiway (wingtip clearance). The runway-strip separations of
+  A runway counts as a parallel taxiway (wingtip clearance), except to the taxi edges that meet
+  it (TASK-302): an exit or entry, a rapid exit included, runs close to its runway by design
+  (Zurich's H1 and H2 read null before). The runway-strip separations of
   Table 3-1 are operating restrictions, left to the operations tasks. An unmapped width is the
   width of the edge's code.
 - **Terminals, gates, hangars.** Terminals are `aeroway=terminal` or `building=terminal` outlines;

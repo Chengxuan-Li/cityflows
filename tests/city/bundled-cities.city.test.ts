@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import {
   heldOutOfPanel,
   openBundled,
-  parkedProjectHashes,
   projectFile,
   realPlaceBuilds,
 } from '../../bench/bundled-cities';
@@ -26,6 +25,16 @@ test('the panel lists every bundled real place not held out of it, and each has 
   );
 });
 
+test.for([
+  ['london-city-airport', '19bab63b0627b1e367191fadfd2cfd7e8232af397a677c7cf7d49efac57dc3c3'],
+  ['zurich-airport', '4ccf6ed18192886f1087ab4dbd90a6f6f612a3ff4c15a3ec8e36f2dcc577a85d'],
+  ['boston-logan', 'c80805bdc46c6f3b593a8a0072599db2016357be560992690d44c070f6392866'],
+  ['heathrow', 'b5b35d984ff0fbc542f4901ead3d8a5543f9afd4da207dc655a93b404241e837'],
+] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
+  const archive = readFileSync(projectFile(id));
+  expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
+});
+
 // TASK-284: the driving side is the importer's inference from the location (TASK-268), not an
 // option of the build: York, the first left-hand place, drives on the left with UK markings.
 test.for([
@@ -42,9 +51,7 @@ test.for([
 // imports come from the import cache tests/warm-cache.ts fills, so each check costs 3 to 4 s;
 // after an importer change it imports afresh (4 to 12 s). On failure, rebuild with
 //   node --experimental-strip-types --import ./bench/register.ts bench/bundled-cities.ts
-test.for(
-  Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg' && !(id in parkedProjectHashes)),
-)(
+test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
   '%s: the bundled archive is a fresh build of its extract',
   { timeout: limit(120_000) },
   async (id) => {
@@ -56,20 +63,13 @@ test.for(
   },
 );
 
-test.for(Object.entries(parkedProjectHashes))(
-  '%s uses the exact parked archive',
-  ([id, sha256]) => {
-    const archive = readFileSync(projectFile(id));
-    expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
-  },
-);
-
 // The showcase gate (TASK-258), as Freiburg's: the morning at the showcase demand (0.15 persons
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
 // gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
 // since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
+// TASK-302: Zurich Airport, held out, is not run here: its morning takes 172 s (2 gridlocked).
 describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york', 'london-city-airport'])(
   '%s at the showcase demand',
   (id) => {

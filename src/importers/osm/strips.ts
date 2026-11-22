@@ -270,6 +270,12 @@ export function addStrips(
   for (const { box } of buildings) buildingIndex.add(box.minX, box.minY, box.maxX, box.maxY);
   if (!buildings.length) buildingIndex.add(0, 0, 0, 0);
   buildingIndex.finish();
+  const directed = new Map<string, string[]>();
+  for (const road of Object.values(city.roads))
+    if (road.streetGroupId !== null) {
+      const key = `${road.streetGroupId}|${road.from}|${road.to}`;
+      directed.set(key, [...(directed.get(key) ?? []), road.id]);
+    }
   for (const road of Object.values(city.roads).sort((a, b) => a.id.localeCompare(b.id))) {
     const way = road.provenance.osmIds?.map((id) => ways.get(id)).find(Boolean);
     if (!way) continue;
@@ -290,13 +296,9 @@ export function addStrips(
       const tag = parkingSide(way.tag, originalSide);
       const paired =
         road.streetGroupId !== null &&
-        Object.values(city.roads).some(
-          (other) =>
-            other.id !== road.id &&
-            other.streetGroupId === road.streetGroupId &&
-            other.from === road.to &&
-            other.to === road.from,
-        );
+        !!directed
+          .get(`${road.streetGroupId}|${road.to}|${road.from}`)
+          ?.some((id) => id !== road.id);
       const inferSide = paired || side === 'right';
       if (tag.mapped ? !tag.enabled : !(inferred && inferSide)) continue;
       const padding =
