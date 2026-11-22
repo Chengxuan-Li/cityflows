@@ -4416,6 +4416,7 @@ editor re-runs, TASK-305):
   GA, general aviation, business aviation, executive, FBO); else contact with a gate; else
   maintenance by tags or name (maintenance, hangar) or within 60 m of a hangar; else remote.
 - **Jet bridges.** Complete linear `aeroway=jet_bridge` ways retain their projected geometry.
+  The aeroway tag excludes the way from road and pedestrian import and from ground path drawing.
   The terminal end is the endpoint shared with a gate node, or the one nearest a terminal
   footprint, with distance from the stands breaking ties. The apron end selects the nearest stop
   position among stands serving that mapped gate, or among all stands if the gate has none.

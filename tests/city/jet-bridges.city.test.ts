@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { openBundled } from '../../bench/bundled-cities';
 import { distance, segmentDistance } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
+import { walkComponents } from '../../src/network/walk-joins';
 import {
   apronLayout,
   bridgeSize,
@@ -84,4 +85,15 @@ test.each([
   expect(
     bridges.some((bridge, i) => bridge.stand === stand.id && states.progress(i, 0) === 1),
   ).toBe(true);
+
+  if (id === 'boston-logan') {
+    // The parking lot under the elevated ramp keeps its ground entrance. The ramp's car
+    // connector cannot offer an isolated walk link that masks that entrance for parked cars.
+    const lot = Object.values(city.parking!).find((p) => p.provenance.osmIds?.includes(517101127))!;
+    const walk = result.compiled.walk;
+    const { labels, core } = walkComponents(walk);
+    expect(walk.parking.get(lot.id)?.some((node) => labels[node] === core)).toBe(true);
+    const ramp = walk.connectors.get(lot.connectors[0]!.id);
+    if (ramp !== undefined) expect(labels[ramp]).toBe(core);
+  }
 });

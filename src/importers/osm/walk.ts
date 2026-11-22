@@ -16,7 +16,7 @@ import {
   type WalkNode,
 } from '../../schema';
 import { clipPart, contains, type Bounds, type RoadPoint } from './clip';
-import { drivableClass } from './filter';
+import { drivableClass, isJetBridge } from './filter';
 import type { OsmData, OsmTags } from './parse';
 import { osmLayer } from './roads';
 
@@ -41,8 +41,11 @@ export function sidewalkTags(tags: OsmTags, backward: boolean): Road['sidewalk']
 const walkWays = (data: OsmData) =>
   data.way.filter(
     (way) =>
-      ['footway', 'pedestrian', 'path', 'steps', 'living_street'].includes(way.tag.highway ?? '') ||
-      way.tag.footway === 'crossing',
+      !isJetBridge(way) &&
+      (['footway', 'pedestrian', 'path', 'steps', 'living_street'].includes(
+        way.tag.highway ?? '',
+      ) ||
+        way.tag.footway === 'crossing'),
   );
 
 export function importWalk(
@@ -309,9 +312,10 @@ export function addNodeCrossings(
   // Cycle tracks too: a crossing node on one is the cycle crossing (Freiburg 5268773652, Munich
   // 9344476700), whose pedestrian crossing OSM maps as its own way beside it.
   const onPath = new Set(
-    [...walkWays(data), ...data.way.filter((way) => way.tag.highway === 'cycleway')].flatMap(
-      (way) => way.nd,
-    ),
+    [
+      ...walkWays(data),
+      ...data.way.filter((way) => way.tag.highway === 'cycleway' && !isJetBridge(way)),
+    ].flatMap((way) => way.nd),
   );
   const roadWays = new Map<number, number[]>();
   for (const way of data.way)

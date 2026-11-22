@@ -33,7 +33,7 @@ import {
   type StandKind,
 } from '../../schema/airport';
 import { polygonSources } from './buildings';
-import { drivableClass } from './filter';
+import { drivableClass, isJetBridge } from './filter';
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags, OsmWay } from './parse';
 import { osmLayer } from './roads';
@@ -1160,7 +1160,7 @@ export function readJetBridges(
   bounds: Bounds,
   airport: Pick<Airport, 'terminals' | 'stands' | 'gates'>,
 ): NonNullable<Airport['jetBridges']> {
-  const ways = data.way.filter((w) => w.tag.aeroway === 'jet_bridge' && w.tag.area !== 'yes');
+  const ways = data.way.filter((w) => isJetBridge(w) && w.tag.area !== 'yes');
   if (!ways.length) return [];
   const gates = new Set(data.node.filter((n) => n.tag.aeroway === 'gate').map((n) => n.id));
   const importedGates = new Map(Object.values(airport.gates).map((gate) => [gate.osmId, gate.id]));

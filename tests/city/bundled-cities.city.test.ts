@@ -28,7 +28,7 @@ test('the panel lists every bundled real place not held out of it, and each has 
 test.for([
   ['london-city-airport', '19bab63b0627b1e367191fadfd2cfd7e8232af397a677c7cf7d49efac57dc3c3'],
   ['zurich-airport', '4ccf6ed18192886f1087ab4dbd90a6f6f612a3ff4c15a3ec8e36f2dcc577a85d'],
-  ['boston-logan', '500708ff942d4a4d6aa6eb9191b0b894f61250c24e7c1bc113b513a13a6e3138'],
+  ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
   ['heathrow', '32ddbf2f896959cb45a46a1c0127a08a7689629a787164b4a351067fbe289733'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
