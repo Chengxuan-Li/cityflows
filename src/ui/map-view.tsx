@@ -107,9 +107,10 @@ function showcase3D(project: Session['project']) {
 /** TASK-203: what framing fits, in metres: the city's boundary ring when it has one (TASK-198),
  *  else the corners of everything it draws. */
 function cityOutline({ project, compiled }: Preview): Vec2[] {
-  const { geo } = project.city;
+  const { geo, airport } = project.city;
   if (geo?.boundary) return geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
   const points = [
+    ...(!geo ? (airport?.boundary?.[0] ?? []) : []),
     ...compiled.roads.flatMap(({ surface }) => surface),
     ...compiled.nodes.map(({ pos }) => pos),
     ...Object.values(project.city.places).flatMap(({ shape }) =>
