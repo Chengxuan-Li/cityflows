@@ -18,6 +18,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftLayout } from '../render/aircraft-outline';
 import type { AircraftType } from '../schema/aircraft';
+import { fixedWingGearStations } from '../sim/aircraft-motion';
 
 type Point = [x: number, y: number, z: number];
 type Layout = ReturnType<typeof aircraftLayout>;
@@ -36,6 +37,7 @@ export interface AircraftLightMounts {
 export interface AircraftMesh {
   root: Group;
   gear: Group;
+  noseGear: Group | null;
   /** Each returned group spins about its own local Y axis, irrespective of the mount orientation. */
   propellers: Group[];
   rotors: Group[];
@@ -47,8 +49,8 @@ export interface AircraftMesh {
 /** Bake rigid parts in the frame that moves them. Windows keep their compact pane instances,
  * and gear and rotors retain their own visibility and animation. */
 export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
-  const { root, gear, propellers, rotors } = mesh;
-  const frames = new Set([root, gear, ...propellers, ...rotors]);
+  const { root, gear, noseGear, propellers, rotors } = mesh;
+  const frames = new Set([root, gear, ...(noseGear ? [noseGear] : []), ...propellers, ...rotors]);
   const rigid = new Map<Group, Mesh<BufferGeometry, MeshLambertMaterial>[]>();
   const outlined = new Set(['fuselage', 'wings', 'tailplane', 'fin', 'engine']);
   root.updateMatrixWorld(true);
@@ -285,14 +287,14 @@ function landingGear(
   const gear = new Group();
   gear.name = 'landing-gear';
   const up = new Vector3(0, 1, 0);
-  function strut(from: Point, to: Point, width: number) {
+  function strut(from: Point, to: Point, width: number, frame = gear) {
     const a = new Vector3(...from);
     const b = new Vector3(...to);
     const direction = b.clone().sub(a);
     const mesh = new Mesh(new CylinderGeometry(width, width, direction.length(), 8), metal);
     mesh.position.copy(a).lerp(b, 0.5);
     mesh.quaternion.setFromUnitVectors(up, direction.normalize());
-    gear.add(mesh);
+    frame.add(mesh);
   }
   if (type.id === 'EC45') {
     for (const z of [-radius * 1.15, radius * 1.15]) {
@@ -303,12 +305,12 @@ function landingGear(
         strut([x, y, z], [x, bodyY - radius * 0.68, z * 0.62], y * 0.75);
       }
     }
-    return gear;
+    return { gear, noseGear: null };
   }
   const wheelR = radius * 0.21;
   const tyre = new CylinderGeometry(wheelR, wheelR, wheelR * 0.67, 12).rotateX(Math.PI / 2);
-  function bogie(x: number, z: number, y: number, axles: number) {
-    strut([x, wheelR, z], [x, y, z], wheelR * 0.27);
+  function bogie(x: number, z: number, y: number, axles: number, frame = gear) {
+    strut([x, wheelR, z], [x, y, z], wheelR * 0.27, frame);
     if (axles > 1)
       strut([x - wheelR * 1.3, wheelR, z], [x + wheelR * 1.3, wheelR, z], wheelR * 0.25);
     for (let i = 0; i < axles; i++) {
@@ -319,21 +321,30 @@ function landingGear(
           wheelR,
           z + side * wheelR * 0.5,
         );
-        gear.add(wheel);
+        frame.add(wheel);
       }
     }
   }
   const helicopter = category === 'helicopter';
-  bogie(length * (helicopter ? 0.23 : 0.34), 0, bodyY - radius * 0.65, 1);
+  const { noseX, mainX } = fixedWingGearStations(length);
+  const noseGear = helicopter ? null : new Group();
+  if (noseGear) {
+    noseGear.name = 'nose-gear';
+    noseGear.position.x = noseX;
+    bogie(0, 0, bodyY - radius * 0.65, 1, noseGear);
+    gear.add(noseGear);
+  } else {
+    bogie(length * 0.23, 0, bodyY - radius * 0.65, 1);
+  }
   const mainY = helicopter ? bodyY - radius * 0.42 : layout.wing[0]!.y;
   const axles = category === 'widebody' || category === 'double_decker' ? 2 : 1;
   for (const side of [-1, 1]) {
-    bogie(-length * 0.08, side * (helicopter ? radius * 0.74 : span * 0.09), mainY, axles);
+    bogie(mainX, side * (helicopter ? radius * 0.74 : span * 0.09), mainY, axles);
     if (category === 'double_decker') {
       bogie(-length * 0.147, side * radius * 0.54, bodyY - radius * 0.77, 2);
     }
   }
-  return gear;
+  return { gear, noseGear };
 }
 
 function lightMounts(type: AircraftType, layout: Layout): AircraftLightMounts {
@@ -475,11 +486,12 @@ export function buildAircraftMesh(type: AircraftType, accentColor = 0x31657f): A
   }
 
   const { rows, cockpit } = windowRows(type, layout, glass);
-  const gear = landingGear(type, layout, metal, rubber);
+  const { gear, noseGear } = landingGear(type, layout, metal, rubber);
   root.add(cockpit, ...rows, gear);
   return {
     root,
     gear,
+    noseGear,
     propellers,
     rotors,
     windowRows: rows,

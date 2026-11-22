@@ -794,7 +794,7 @@ export class Scene3D {
     this.updateParkedDataset();
     this.invalidate();
   }
-  setSnapshot(snapshot: PresentationSnapshot) {
+  setSnapshot(snapshot: PresentationSnapshot, playbackSpeed = 0) {
     this.signalStates = snapshot.signals;
     this.crossingStates = snapshot.rail?.crossings;
     this.levelCrossings?.setSnapshot(this.crossingStates, snapshot.timeS, snapshot.rail?.railReady);
@@ -802,7 +802,7 @@ export class Scene3D {
       this.railVisible ? Array.from(this.crossingStates ?? []) : [],
     );
     this.vehicles.setSnapshot(snapshot);
-    this.aircraft?.update(snapshot.aircraft ?? [], snapshot.timeS);
+    this.aircraft?.update(snapshot.aircraft ?? [], snapshot.timeS, playbackSpeed);
     this.canvas.dataset.aircraft = String(this.aircraft?.count ?? 0);
     if (this.airfieldLights) {
       this.airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
@@ -1230,7 +1230,7 @@ export class Scene3D {
     this.invalidate();
   }
 
-  private animateAircraft(elapsedS: number, advancing: boolean) {
+  private animateAircraft(elapsedS: number, advancing: boolean, playing: boolean) {
     const aircraft = this.aircraft!;
     const now = performance.now();
     const dtS = advancing ? Math.min(0.1, (now - this.aircraftFrameMs) / 1000) : 0;
@@ -1239,7 +1239,7 @@ export class Scene3D {
     const scale = pixelScale(this.camera, this.canvas.clientHeight);
     aircraft.setPixelScale(scale);
     this.airfieldLights?.setPixelScale(scale);
-    aircraft.animate(elapsedS, dtS);
+    aircraft.animate(elapsedS, dtS, playing);
     if (this.followed === null) return;
     const at = aircraft.positionOf(this.followed);
     if (!at) {
@@ -1256,7 +1256,7 @@ export class Scene3D {
     this.followFrom = at.clone();
   }
 
-  render(elapsedS: number, timeS: number) {
+  render(elapsedS: number, timeS: number, playing: boolean) {
     const renderStart = performance.now();
     this.controls.update();
     this.setSignals(timeS);
@@ -1275,7 +1275,7 @@ export class Scene3D {
     const advancing = this.vehicleAgeS !== elapsedS;
     if (advancing && this.vehicles.mesh.count) this.invalidate();
     this.vehicleAgeS = elapsedS;
-    if (this.aircraft) this.animateAircraft(elapsedS, advancing);
+    if (this.aircraft) this.animateAircraft(elapsedS, advancing, playing);
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
     const distance = this.camera.position.distanceTo(this.controls.target);
     this.camera.near = Math.max(0.2, distance / 10);

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { openBundled } from '../../bench/bundled-cities';
 import { compile } from '../../src/network';
+import { aircraftTypes } from '../../src/schema/aircraft';
 import { createEngine } from '../../src/sim/engine';
 import { overlaps, onRunway } from '../sim/aircraft-checks';
 import { limit } from '../timeouts';
@@ -14,6 +15,8 @@ test(
     const project = await openBundled('london-city-airport');
     const result = compile(project.city);
     if (!result.ok) throw new Error('London City must compile');
+    const { airside } = result.compiled;
+    if (!airside) throw new Error('Expected London City airside');
     const scenario = project.scenarios[0]!;
     const engine = createEngine();
     engine.load({
@@ -28,6 +31,7 @@ test(
     let conflicts = 0;
     const touched = new Set<string>();
     const appeared = new Map<number, number>();
+    const parked = new Set<number>();
     for (let step = 0; step < 36_000; step++) {
       engine.step();
       if (step % 10) continue;
@@ -37,6 +41,16 @@ test(
       for (const a of aircraft) {
         touched.add(`${a.state}:${a.runwayEnd}`);
         if (a.state === 'approach' && !appeared.has(a.id)) appeared.set(a.id, a.heightM);
+        if (a.state === 'parked' && a.stand && !parked.has(a.id)) {
+          parked.add(a.id);
+          const stand = airside.stands[airside.index.stand.get(a.stand)!]!;
+          const type = aircraftTypes.find(({ id }) => id === a.typeId)!;
+          const pose = a.visual!;
+          expect(Math.cos(pose.heading)).toBeCloseTo(Math.cos(stand.heading), 8);
+          expect(Math.sin(pose.heading)).toBeCloseTo(Math.sin(stand.heading), 8);
+          expect(pose.x + (type.lengthM / 2) * Math.cos(pose.heading)).toBeCloseTo(stand.pos.x, 5);
+          expect(pose.y + (type.lengthM / 2) * Math.sin(pose.heading)).toBeCloseTo(stand.pos.y, 5);
+        }
       }
     }
     const metrics = engine.metrics().aircraft!;

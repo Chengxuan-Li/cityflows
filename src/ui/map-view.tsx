@@ -615,8 +615,9 @@ export function MapView() {
         );
         if (snapshot.timeS !== snapshotTime) {
           const presentation = snapshotForMap(snapshot, session);
-          if (active3D) three!.setSnapshot(presentation);
-          else view.setSnapshot(presentation);
+          const playbackSpeed = current.run?.status === 'playing' ? current.run.speed : 0;
+          if (active3D) three!.setSnapshot(presentation, playbackSpeed);
+          else view.setSnapshot(presentation, playbackSpeed);
           if (window.cityflows) {
             drawnSnapshot = pausedSnapshot(
               snapshot,
@@ -923,17 +924,20 @@ export function MapView() {
             ? followAircraft
             : null;
         if (active3D) three!.follow(followed);
-        else if (followed !== null) {
-          const pose = latestSnapshot?.aircraft?.find((a) => a.id === followed);
-          if (pose) {
-            const at = view.camera.worldToScreen(pose);
-            const dx = canvas.clientWidth / 2 - at.x,
-              dy = canvas.clientHeight / 2 - at.y;
-            if (Math.hypot(dx, dy) > 0.5) view.camera.pan(dx, dy);
+        const playing = run?.status === 'playing';
+        if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0, playing);
+        else {
+          view.animateVehicles(snapshotAgeS, playing);
+          if (followed !== null) {
+            const pose = view.aircraftPosition(followed);
+            if (pose) {
+              const at = view.camera.worldToScreen(pose);
+              const dx = canvas.clientWidth / 2 - at.x,
+                dy = canvas.clientHeight / 2 - at.y;
+              if (Math.hypot(dx, dy) > 0.5) view.camera.pan(dx, dy);
+            }
           }
         }
-        if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0);
-        else view.animateVehicles(snapshotAgeS, run?.status === 'playing');
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
