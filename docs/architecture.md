@@ -520,9 +520,11 @@ none); compiled `RailGraph.masts` carries them. No schema-version bump: older pr
 and draw every track wired with generated supports.
 
 TASK-295 adds optional `City.airport: Airport` (`schema/airport.ts`, validated by
-`airport.schema.ts`) without a version bump. It is present only where the import read aeroway
-features (an aerodrome outline alone is none), so every other city, its archive and its hashes are
-unchanged; older projects omit it. Ids use the shared counter after every other import step:
+`airport.schema.ts`) without a version bump. Imports include it when they read aeroway features
+(an aerodrome outline alone is none). TASK-296 also generates it for the two synthetic airport
+layouts. Holding positions, gates, terminals, helipads, surfaces, hangars and turn pads retain their
+`osmId` from OSM. The synthetic layouts omit it. The map frames a synthetic airport using its
+local outline along with the landside roads and places. Airport ids use the city's shared counter:
 `tm:` terminals, `gt:` gates, `rw:` runways, `st:` stands, `an:` airside nodes, `ae:` edges, `hp:`
 holding positions, `hl:` helipads. Units are metres and radians in the local frame; a heading is
 `atan2(dy, dx)` (x east, y south). The aircraft size scale is the ICAO aerodrome reference code
@@ -538,14 +540,14 @@ interface Airport {
   runways: Record<string, Runway>;           // rw:
   holdingPositions: Record<string, HoldingPosition>; // hp:
   stands: Record<string, Stand>;             // st:
-  gates: Record<string, Gate>;               // gt:  { ref?, pos, terminal: tm: | null, osmId }
-  terminals: Record<string, Terminal>;       // tm:  { name?, rings, group, osmId }
-  helipads: Record<string, Helipad>;         // hl:  { pos, ring?, ref?, name?, osmId }
-  surfaces: AirsideSurface[];                // mapped aprons and runway, taxiway, turn-pad areas
-  hangars: { rings; name?; ref?; osmId }[];
+  gates: Record<string, Gate>;               // gt:  { ref?, pos, terminal: tm: | null, osmId? }
+  terminals: Record<string, Terminal>;       // tm:  { name?, rings, group, osmId? }
+  helipads: Record<string, Helipad>;         // hl:  { pos, ring?, ref?, name?, osmId? }
+  surfaces: AirsideSurface[];                // aprons, runway, taxiway, turn-pad and helipad areas
+  hangars: { rings; name?; ref?; osmId? }[];
   windsocks: { pos; lit?; osmId }[];
   approachAids: { kind; pos; facing?; runway?; end?; osmId }[]; // aeroway=navigationaid
-  turnPads: { pos; node?; osmId }[];
+  turnPads: { pos; node?; osmId? }[];
   roadCrossings: RoadCrossing[];
 }
 interface AirsideEdge {
@@ -573,7 +575,7 @@ interface HoldingPosition {
   runway: string | null;                     // the protected runway
   side: 'left' | 'right' | null;             // of the runway, looking from ends[0] to ends[1]
   toward: string | null;                     // the edge at the hold leading to that runway
-  osmId; provenance;
+  osmId?; provenance;
 }
 interface Stand {
   id; ref?; kind: 'contact' | 'remote' | 'cargo' | 'general_aviation' | 'maintenance';

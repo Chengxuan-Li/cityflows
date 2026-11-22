@@ -88,7 +88,7 @@ export const airportSchema = z
         runway: runwayId.nullable(),
         side: z.enum(['left', 'right']).nullable(),
         toward: edgeId.nullable(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
         provenance,
       }),
     ),
@@ -114,7 +114,7 @@ export const airportSchema = z
         ref: z.string().optional(),
         pos: point,
         terminal: terminalId.nullable(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
       }),
     ),
     terminals: z.record(
@@ -124,7 +124,7 @@ export const airportSchema = z
         name: z.string().optional(),
         rings: z.array(ring).min(1),
         group: z.int().nonnegative(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
       }),
     ),
     helipads: z.record(
@@ -135,7 +135,7 @@ export const airportSchema = z
         ring: ring.optional(),
         ref: z.string().optional(),
         name: z.string().optional(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
       }),
     ),
     surfaces: z.array(
@@ -145,7 +145,7 @@ export const airportSchema = z
         name: z.string().optional(),
         ref: z.string().optional(),
         surface: z.string().optional(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
       }),
     ),
     hangars: z.array(
@@ -153,7 +153,7 @@ export const airportSchema = z
         rings: z.array(ring).min(1),
         name: z.string().optional(),
         ref: z.string().optional(),
-        osmId: z.int(),
+        osmId: z.int().optional(),
       }),
     ),
     windsocks: z.array(z.object({ pos: point, lit: z.boolean().optional(), osmId: z.int() })),
@@ -167,7 +167,7 @@ export const airportSchema = z
         osmId: z.int(),
       }),
     ),
-    turnPads: z.array(z.object({ pos: point, node: nodeId.optional(), osmId: z.int() })),
+    turnPads: z.array(z.object({ pos: point, node: nodeId.optional(), osmId: z.int().optional() })),
     roadCrossings: z.array(
       z.object({
         edge: edgeId,

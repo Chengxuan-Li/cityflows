@@ -10,6 +10,8 @@ const names = {
   dividedHighway: 'Divided highway',
   shortTurnLane: 'Short turn lane',
   disconnected: 'Disconnected network',
+  syntheticAirport: 'Synthetic airport',
+  syntheticAirportBacktrack: 'Synthetic airport (backtrack)',
 } as const;
 
 export type FixtureId = keyof typeof names;
@@ -46,4 +48,6 @@ export const scenarios = [
   defaultScenario('dividedHighway'),
   defaultScenario('shortTurnLane'),
   defaultScenario('disconnected'),
+  defaultScenario('syntheticAirport'),
+  defaultScenario('syntheticAirportBacktrack'),
 ];
