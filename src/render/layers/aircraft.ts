@@ -3,7 +3,9 @@ import type { Box } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import type { AirsideGraph } from '../../network/airside';
 import { aircraftTypes, type AircraftType } from '../../schema/aircraft';
+import { fixedWingGearStations } from '../../sim/aircraft-motion';
 import { buildAircraftOutline, type AircraftOutlinePart } from '../aircraft-outline';
+import { pushbackDrawbarM } from '../aircraft-pose';
 import { style } from '../style';
 import type { AircraftPose, Pick } from '../types';
 
@@ -55,6 +57,29 @@ export function drawAircraft(
   for (const pose of shown) {
     const at = place(pose);
     const colors = style.aircraft;
+    const type = typeOf(pose.typeId);
+    if (pose.state === 'pushback') {
+      const { noseX } = fixedWingGearStations(type.lengthM);
+      const nose = at({ x: noseX, y: 0 });
+      const tugAt = place({
+        ...pose,
+        ...nose,
+        heading: pose.heading + (pose.visual?.steering ?? 0),
+      });
+      const drawbar = pushbackDrawbarM(type.lengthM);
+      g.poly([nose, tugAt({ x: drawbar, y: 0 })], false).stroke({
+        width: 0.22,
+        color: colors.edge,
+      });
+      g.poly([
+        tugAt({ x: drawbar, y: -1.1 }),
+        tugAt({ x: drawbar + 3.2, y: -1.1 }),
+        tugAt({ x: drawbar + 3.2, y: 1.1 }),
+        tugAt({ x: drawbar, y: 1.1 }),
+      ])
+        .fill(colors.fuselage)
+        .stroke({ width: 0.25, color: colors.edge });
+    }
     for (const part of outline(pose.typeId)) {
       if ('points' in part) {
         g.poly(part.points.map(at))
@@ -68,7 +93,7 @@ export function drawAircraft(
       }
     }
     if (pose.id === selected) {
-      const { lengthM, spanM } = typeOf(pose.typeId);
+      const { lengthM, spanM } = type;
       g.circle(pose.x, pose.y, Math.max(lengthM, spanM) / 2 + 3).stroke({
         width: 1.5,
         color: style.selection,

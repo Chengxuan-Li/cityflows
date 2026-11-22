@@ -72,7 +72,7 @@ export class AirfieldLights2D {
     });
   }
 
-  update(state: AirfieldState | undefined, poses: readonly AircraftPose[], bounds: Box | null) {
+  update(state: AirfieldState | undefined, poses: readonly AircraftPose[]) {
     if (!this.graph) return;
     const colors = airfieldLightColors(
       this.graph,
@@ -90,6 +90,10 @@ export class AirfieldLights2D {
     });
     this.colors = colors;
     if (changed) this.points.update();
+  }
+
+  updateAircraft(poses: readonly AircraftPose[], bounds: Box | null) {
+    if (!this.graph) return;
     const craft: Particle[] = [];
     for (const pose of poses) {
       if (

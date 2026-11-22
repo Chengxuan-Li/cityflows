@@ -33,11 +33,15 @@ import {
   type HelicopterPerformance,
 } from '../schema/aircraft';
 import {
+  airborneAttitude,
   aircraftPath,
   approachProfile,
+  goAroundAttitude,
+  groundAttitude,
   helicopterLandingProfile,
   helicopterTakeoffProfile,
   hoverTaxiProfile,
+  lineUpAttitude,
   pushbackProfile,
   takeoffProfile,
   taxiEntrySpeedMps,
@@ -46,6 +50,7 @@ import {
   type AircraftMotionProfile,
   type AircraftPath,
   type AircraftPose,
+  type AircraftVisualPose,
 } from './aircraft-motion';
 import type { RunwayConfiguration } from './runway-configuration';
 
@@ -133,6 +138,8 @@ export interface AircraftPoseSnapshot {
   onRunway: boolean;
   airborne: boolean;
   gearDown: boolean;
+  /** Render-only pose. Physical positions and reservations use the fields above. */
+  visual?: AircraftVisualPose;
   /** The stand it stands at or is bound for; the runway end it uses. */
   stand: string | null;
   runwayEnd: string | null;
@@ -228,6 +235,7 @@ interface Gate {
 
 interface Leg {
   mode: 'taxi' | 'pushback' | 'tow';
+  pushStand?: number;
   path: AircraftPath;
   pieces: Piece[];
   /** Path ranges on a runway. */
@@ -1118,8 +1126,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ...returnArcs.map((a, i) => (i === 0 ? arcSegment(a, back.endE) : arcSegment(a))),
         ...tail(route.arcs),
       ];
+      const push = buildLeg(craft, 'pushback', pushSegments);
+      push.pushStand = craft.stand;
       best = {
-        legs: [buildLeg(craft, 'pushback', pushSegments), buildLeg(craft, mode, taxiSegments)],
+        legs: [push, buildLeg(craft, mode, taxiSegments)],
         cost,
       };
     }
@@ -2292,9 +2302,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       },
     ]);
     const h0 = pose.heightM;
+    const arrival = craft.air!;
+    const initialAttitude = arrival.profile.attitudeAt!(timeS - arrival.startS, pose);
     // A go-around climbs straight ahead at approach speed and the type's climb gradient.
     const profile: AircraftMotionProfile = {
       durationS: path.lengthM / p.approachSpeedMps,
+      attitudeAt: (elapsedS, pose) => ({
+        ...goAroundAttitude(elapsedS, initialAttitude, p.climbGradient),
+        heightM: pose.heightM,
+      }),
       sample(elapsedS) {
         const stationM = Math.min(path.lengthM, Math.max(0, elapsedS) * p.approachSpeedMps);
         return {
@@ -2581,6 +2597,44 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           for (const piece of next.leg.pieces)
             if (route.at(-1) !== piece.edge) route.push(piece.edge);
       const climbing = craft.air?.kind === 'takeoff' || craft.air?.kind === 'go-around';
+      const gearDown = !airborne || pose.heightM < (climbing ? GEAR_CLIMB_M : GEAR_APPROACH_M);
+      let visual: AircraftVisualPose = {
+        ...pose.position,
+        heightM: pose.heightM,
+        heading: pose.headingRad,
+        pitch: 0,
+        roll: 0,
+        steering: 0,
+        gear: Number(gearDown),
+      };
+      if (craft.mode === 'air') {
+        const { path, profile, startS } = craft.air!;
+        const bank = airborneAttitude(path, pose.stationM, pose.speedMps, pose.heightM);
+        visual = { ...visual, ...bank, ...profile.attitudeAt?.(nowS - startS, pose) };
+      } else if (craft.leg && craft.type.performance.kind === 'fixedWing') {
+        const { path, mode, pushStand, endM } = craft.leg;
+        const next = craft.next[0];
+        const standIndex =
+          pushStand ??
+          (craft.mode === 'parked' ? craft.stand : next?.kind === 'park' ? next.stand : -1);
+        const stand = graph.stands[standIndex];
+        const ground = groundAttitude(
+          path,
+          craft.stationM,
+          craft.lengthM,
+          mode === 'pushback',
+          stand && {
+            pos: stand.pos,
+            heading: stand.heading,
+            centreM: pushStand === undefined ? Math.max(0, endM) : craft.lengthM / 2,
+          },
+        );
+        const taxi =
+          craft.mode === 'waiting'
+            ? lineUpAttitude(ground, craft.air!.path, 1 - (craft.pauseUntilS - nowS) / LINEUP_S)
+            : ground;
+        visual = { ...visual, ...taxi };
+      }
       result.push({
         id: craft.id,
         registration: craft.registration,
@@ -2594,7 +2648,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         enginesRunning: state !== 'parked' && !craft.towing,
         onRunway: onRunway(craft),
         airborne,
-        gearDown: !airborne || pose.heightM < (climbing ? GEAR_CLIMB_M : GEAR_APPROACH_M),
+        gearDown,
+        visual,
         stand: craft.stand >= 0 ? graph.stands[craft.stand]!.id : null,
         runwayEnd:
           craft.runway >= 0 && craft.end >= 0

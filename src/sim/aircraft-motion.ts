@@ -49,6 +49,153 @@ export interface AircraftPose extends AircraftMotion {
 export interface AircraftMotionProfile {
   durationS: number;
   sample(elapsedS: number): AircraftPose;
+  attitudeAt?(
+    elapsedS: number,
+    pose: AircraftPose,
+  ): Pick<AircraftVisualPose, 'pitch' | 'gear' | 'heightM'>;
+}
+
+export interface AircraftVisualPose {
+  x: number;
+  y: number;
+  heightM: number;
+  heading: number;
+  pitch: number;
+  roll: number;
+  steering: number;
+  /** Landing gear extension, from stowed (0) to fully down (1). */
+  gear: number;
+}
+
+const radians = (degrees: number) => (degrees * Math.PI) / 180;
+const angle = (value: number) => Math.atan2(Math.sin(value), Math.cos(value));
+
+function ease(progress: number) {
+  const t = Math.max(0, Math.min(1, progress));
+  return t * t * (3 - 2 * t);
+}
+
+export function goAroundAttitude(
+  elapsedS: number,
+  initial: Pick<AircraftVisualPose, 'pitch' | 'gear'>,
+  climbGradient: number,
+) {
+  const pitch = Math.atan(climbGradient) + radians(6);
+  return {
+    pitch: initial.pitch + (pitch - initial.pitch) * ease(elapsedS / 3),
+    gear: initial.gear * (1 - ease((elapsedS - 3) / 5)),
+  };
+}
+
+/** Longitudinal gear stations in the model's frame, measured from its centre. */
+export function fixedWingGearStations(lengthM: number) {
+  return { noseX: 0.34 * lengthM, mainX: -0.08 * lengthM };
+}
+
+/** Follow the centreline with the nose wheel and let the main gear track inside the turn.
+ * Integrate the bicycle model in forward body direction even when the tug pushes backwards. */
+export function groundAttitude(
+  path: AircraftPath,
+  centreM: number,
+  lengthM: number,
+  reverse: boolean,
+  stand?: { pos: Vec2; heading: number; centreM: number },
+) {
+  const { noseX, mainX } = fixedWingGearStations(lengthM);
+  const wheelbase = noseX - mainX;
+  const direction = reverse ? -1 : 1;
+  const noseM = Math.max(0, Math.min(path.lengthM, centreM + direction * noseX));
+  const { points, stationsM } = path;
+  const nose = pointAtDistance(points, stationsM, noseM);
+  // The initial heading's influence decays exponentially over the preceding wheelbases.
+  let at = Math.max(0, Math.min(path.lengthM, noseM - direction * 6 * wheelbase));
+  let lo = 0;
+  let hi = stationsM.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >>> 1;
+    if (stationsM[mid]! < at || (!reverse && stationsM[mid] === at)) lo = mid;
+    else hi = mid;
+  }
+  const trackHeading = (i: number) => {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    return Math.atan2(direction * (b.y - a.y), direction * (b.x - a.x));
+  };
+  let heading = trackHeading(lo);
+  for (let i = lo; direction * (noseM - at) > 0; i += direction) {
+    const end = reverse ? Math.max(noseM, stationsM[i]!) : Math.min(noseM, stationsM[i + 1]!);
+    const tangent = trackHeading(i);
+    // d(heading)/ds = sin(tangent - heading) / wheelbase on each straight chord.
+    const error = angle(tangent - heading);
+    heading =
+      tangent - 2 * Math.atan(Math.tan(error / 2) * Math.exp(-Math.abs(end - at) / wheelbase));
+    at = end;
+  }
+  const before = pointAtDistance(points, stationsM, noseM - direction * 1.5);
+  const after = pointAtDistance(points, stationsM, noseM + direction * 1.5);
+  const tangent = Math.atan2(after.y - before.y, after.x - before.x);
+  let { x, y } = nose;
+  const alignment = stand ? ease(1 - Math.abs(centreM - stand.centreM) / (2 * wheelbase)) : 0;
+  if (stand && alignment > 0) {
+    // Short lead-ins may end before the trailing main gear has straightened. Settle into
+    // the mapped stand pose, using the same alignment while moving off it in reverse.
+    const end = pointAtDistance(points, stationsM, stand.centreM + direction * noseX);
+    const fromTip = lengthM / 2 - noseX;
+    x += alignment * (stand.pos.x - fromTip * Math.cos(stand.heading) - end.x);
+    y += alignment * (stand.pos.y - fromTip * Math.sin(stand.heading) - end.y);
+    heading += alignment * angle(stand.heading - heading);
+  }
+  const steering = Math.max(-radians(75), Math.min(radians(75), angle(tangent - heading)));
+  return {
+    x: x - noseX * Math.cos(heading),
+    y: y - noseX * Math.sin(heading),
+    heading,
+    steering: steering * (1 - alignment),
+  };
+}
+
+/** Finish aligning with the runway over the existing line-up pause. */
+export function lineUpAttitude(
+  ground: Pick<AircraftVisualPose, 'x' | 'y' | 'heading' | 'steering'>,
+  runway: AircraftPath,
+  progress: number,
+) {
+  const t = ease(progress);
+  const start = runway.points[0]!;
+  const heading = headingAtDistance(runway.points, runway.stationsM, 0);
+  return {
+    x: ground.x + (start.x - ground.x) * t,
+    y: ground.y + (start.y - ground.y) * t,
+    heading: ground.heading + angle(heading - ground.heading) * t,
+    steering: ground.steering * (1 - t),
+  };
+}
+
+/** Coordinated bank from signed path curvature. Short chords smooth the tangent across vertices. */
+export function airborneAttitude(
+  path: AircraftPath,
+  stationM: number,
+  speedMps: number,
+  heightM: number,
+) {
+  const { points, stationsM } = path;
+  const at = (s: number) => pointAtDistance(points, stationsM, s);
+  const centre = at(stationM);
+  const lookM = Math.max(10, speedMps * 0.65);
+  const a = at(stationM - lookM);
+  const b = at(stationM + lookM);
+  const inbound = Math.atan2(centre.y - a.y, centre.x - a.x);
+  const outbound = Math.atan2(b.y - centre.y, b.x - centre.x);
+  const curvature =
+    a !== centre && b !== centre
+      ? (2 * angle(outbound - inbound)) /
+        Math.max(1, Math.min(path.lengthM, stationM + lookM) - Math.max(0, stationM - lookM))
+      : 0;
+  const bank = Math.atan((speedMps ** 2 * curvature) / 9.81);
+  return {
+    heading: Math.atan2(b.y - a.y, b.x - a.x),
+    roll: Math.max(-radians(25), Math.min(radians(25), bank)) * ease(heightM / 15),
+  };
 }
 
 function profile(
@@ -322,7 +469,7 @@ export function hoverTaxiProfile(
 }
 
 /** The path starts at brake release and includes the extended departure centreline. */
-export function takeoffProfile(path: AircraftPath, p: FixedWingPerformance): AircraftMotionProfile {
+export function takeoffProfile(path: AircraftPath, p: FixedWingPerformance) {
   const roll = leg(0, p.takeoffRollM, 0, p.rotationSpeedMps);
   const rotationS = 3;
   const rotationM = p.rotationSpeedMps * rotationS;
@@ -341,7 +488,7 @@ export function takeoffProfile(path: AircraftPath, p: FixedWingPerformance): Air
   const climbStartS = roll.durationS + rotation.durationS;
   const accelerationEndS = climbStartS + acceleration.durationS;
   const durationS = accelerationEndS + climb.durationS;
-  return profile(path, durationS, (timeS) => {
+  const motionProfile = profile(path, durationS, (timeS) => {
     if (timeS < roll.durationS) return { ...roll.at(timeS), phase: 'takeoff-roll', heightM: 0 };
     if (timeS < climbStartS) {
       const motion = rotation.at(timeS - roll.durationS);
@@ -365,6 +512,21 @@ export function takeoffProfile(path: AircraftPath, p: FixedWingPerformance): Air
       heightM: p.climbGradient * (motion.stationM - climbStartM + rotationM / 2),
     };
   });
+  const climbPitch = Math.atan(p.climbGradient) + radians(6);
+  return {
+    ...motionProfile,
+    attitudeAt(elapsedS: number, pose: AircraftPose) {
+      const rotatingS = elapsedS - roll.durationS;
+      const liftOffS = 0.8;
+      return {
+        pitch: climbPitch * ease(rotatingS / rotationS),
+        // During the first part of rotation the body pivots on the main wheels. Meet
+        // the climb profile again by the end of rotation.
+        heightM: pose.heightM * ease((rotatingS - liftOffS) / (rotationS - liftOffS)),
+        gear: 1 - ease((pose.heightM - 150) / 30),
+      };
+    },
+  };
 }
 
 export interface ApproachProfileOptions {
@@ -386,7 +548,7 @@ export function approachProfile(
     exitStationM = aimingStationM + p.landingRollM,
     exitSpeedMps = p.taxiStraightMps,
   }: ApproachProfileOptions,
-): AircraftMotionProfile {
+) {
   if (!(
     0 < flareDistanceM &&
     flareDistanceM <= aimingStationM &&
@@ -405,7 +567,7 @@ export function approachProfile(
   const touchdownS = aimingStationM / p.approachSpeedMps;
   const rollout = leg(aimingStationM, exitStationM, p.approachSpeedMps, exitSpeedMps);
   const durationS = touchdownS + rollout.durationS;
-  return profile(path, durationS, (timeS) => {
+  const motionProfile = profile(path, durationS, (timeS) => {
     if (timeS >= touchdownS) {
       const motion =
         timeS >= durationS
@@ -426,6 +588,23 @@ export function approachProfile(
       phase: flaring ? 'flare' : 'approach',
     };
   });
+  const approachPitch = Math.min(radians(2), radians(5) - glideAngleRad);
+  const flarePitch = radians(6);
+  const flareS = flareDistanceM / p.approachSpeedMps;
+  return {
+    ...motionProfile,
+    attitudeAt(elapsedS: number, pose: AircraftPose) {
+      return {
+        heightM: pose.heightM,
+        pitch:
+          elapsedS < touchdownS
+            ? approachPitch +
+              (flarePitch - approachPitch) * ease(1 + (elapsedS - touchdownS) / flareS)
+            : flarePitch * (1 - ease((elapsedS - touchdownS) / Math.min(3, rollout.durationS))),
+        gear: ease((600 - pose.heightM) / 80),
+      };
+    },
+  };
 }
 
 function helicopterProfile(
