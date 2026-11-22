@@ -19,6 +19,36 @@ const prevailingWind = { fromDeg: 240, speedKt: 8 };
 const isHelicopter = (typeId: string) =>
   aircraftTypes.find(({ id }) => id === typeId)!.class === 'helicopter';
 
+/** Limit bursts at the single runway while retaining the seeded ordering and the two banks.
+ * Published fixed-wing times are touchdown and off-block, so allow taxi-in before turnaround. */
+function paceLondonDay(schedule: ScheduledFlight[]) {
+  const { startS: closeS, endS: openS } = londonCitySchedule.curfew;
+  const rows = schedule.flatMap((flight) =>
+    flight.standKind === 'helipad'
+      ? []
+      : (['arrivalS', 'departureS'] as const).flatMap((kind) =>
+          flight[kind] >= openS && flight[kind] < closeS
+            ? [{ flight, kind, timeS: flight[kind] }]
+            : [],
+        ),
+  );
+  rows.sort((a, b) => a.timeS - b.timeS);
+  for (const [i, { flight, kind, timeS }] of rows.entries()) {
+    const slotS = openS + ((i + 0.5) * (closeS - openS)) / rows.length;
+    flight[kind] = 0.85 * slotS + 0.15 * timeS;
+  }
+  for (const flight of schedule) {
+    if (flight.overnight || flight.standKind === 'helipad') continue;
+    const betweenS = aircraftTurnaroundMinutes[flight.typeId]! * 60 + 180;
+    flight.departureS = Math.min(
+      closeS - 1,
+      Math.max(flight.departureS, flight.arrivalS + betweenS),
+    );
+    flight.arrivalS = Math.max(openS, Math.min(flight.arrivalS, flight.departureS - betweenS));
+  }
+  return schedule;
+}
+
 type FlightState =
   | AircraftState
   | 'scheduled'
@@ -58,6 +88,7 @@ interface Turn {
   pad: number;
   arrivalStand: string | null;
   arrivedS?: number;
+  offBlockS?: number;
   departedS?: number;
   divertedS?: number;
   readyS: number;
@@ -66,6 +97,7 @@ interface Turn {
   holdSinceS?: number;
   wasHeld?: boolean;
   leftStand?: number;
+  dispatchS: number;
 }
 
 function flightStandKinds(kind: ScheduledFlight['standKind']): StandKind[] {
@@ -163,7 +195,7 @@ export function createFlightOperations(
         ? [item, { ...item, kind: 'maintenance' as const }]
         : [item];
     });
-    schedule = generateFlightSchedule(
+    const generated = generateFlightSchedule(
       {
         ...profile,
         typeMix: mix,
@@ -174,6 +206,7 @@ export function createFlightOperations(
       },
       seed,
     );
+    schedule = graph.icao === 'EGLC' ? paceLondonDay(generated) : generated;
   }
 
   const turns: Turn[] = schedule
@@ -196,10 +229,13 @@ export function createFlightOperations(
           ? 'out'
           : 'done',
       returnS: Infinity,
+      dispatchS: midnight + flight.arrivalS - fleet.arrivalLeadS(flight.typeId),
     }))
-    .sort((a, b) => a.flight.arrivalS - b.flight.arrivalS);
+    .sort((a, b) => a.dispatchS - b.dispatchS);
   const inDay = (timeS: number) => timeS >= midnight && timeS < midnight + dayS;
-  const arrivals = turns.filter(({ flight }) => inDay(flight.arrivalS));
+  const arrivals = turns
+    .filter(({ flight }) => inDay(flight.arrivalS))
+    .sort((a, b) => a.flight.arrivalS - b.flight.arrivalS);
   const departures = turns
     .filter(({ flight }) => inDay(flight.departureS))
     .sort((a, b) => a.flight.departureS - b.flight.departureS);
@@ -219,10 +255,6 @@ export function createFlightOperations(
   let worstDelayS = 0;
   let tows = 0;
   let peakOccupied = 0;
-  // A fixed-wing clearance covers a whole ground route. Taxi routes may share a stretch of
-  // runway or use the same apron lane in opposite directions. A climb clear of the runway
-  // and a helicopter's separate pad operation may continue while the next clearance is used.
-  let clearance: Turn | undefined;
 
   function standLabel(stand: number, pad: number) {
     const position = stand >= 0 ? graph.stands[stand] : graph.helipads[pad];
@@ -243,15 +275,10 @@ export function createFlightOperations(
 
   function standAvailable(turn: Turn, idx: number) {
     if (!fleet.standFree(idx)) return false;
-    const { pos } = graph.stands[idx]!;
-    const span = aircraftTypes.find(({ id }) => id === turn.flight.typeId)!.spanM;
-    // A pushback swings the wingtip outside the lead-in. Keep that room between occupied
-    // positions on tight aprons, including positions already reserved for another aircraft.
     return graph.stands.every((stand) => {
       if (stand.idx === turn.stand || fleet.standFree(stand.idx)) return true;
       const id = Math.max(fleet.standOccupant(stand.idx), fleet.standReservation(stand.idx));
-      const other = fleet.typeOf(id)!;
-      return Math.hypot(pos.x - stand.pos.x, pos.y - stand.pos.y) >= (span + other.spanM) / 2 + 10;
+      return fleet.standPairSafe(turn.flight.typeId, idx, id, stand.idx);
     });
   }
 
@@ -274,7 +301,11 @@ export function createFlightOperations(
       turn.id = result.id;
     } else {
       const regular = arrivalStands(turn);
-      const overnight = carryIn && flight.overnight && flight.departureS - startS > returnLeadS;
+      const overnight =
+        carryIn &&
+        flight.overnight &&
+        flight.standKind !== 'remote' &&
+        flight.departureS - startS > returnLeadS;
       const candidates = overnight
         ? [...findStands(turn, ['remote']), ...maintenanceStands(turn), ...regular]
         : regular;
@@ -322,7 +353,6 @@ export function createFlightOperations(
       if (idx === turn.stand || !standAvailable(turn, idx)) continue;
       if (!fleet.requestTow(turn.id!, { stand: graph.stands[idx]!.id }).ok) continue;
       turn.phase = 'towing';
-      clearance = turn;
       turn.stand = idx;
       return true;
     }
@@ -338,14 +368,21 @@ export function createFlightOperations(
     } else if (turn.service === 'out' && turn.stand >= 0) {
       const remote = findStands(turn, ['remote']);
       turn.leftStand = turn.stand;
-      if (flight.overnight && flight.departureS - timeS > returnLeadS * 2) {
+      if (
+        flight.overnight &&
+        flight.standKind !== 'remote' &&
+        flight.departureS - timeS > returnLeadS * 2
+      ) {
         if (tow(turn, [...remote, ...maintenanceStands(turn)])) {
           turn.service = 'away';
           turn.returnS = flight.departureS - returnLeadS;
         }
       } else if (flight.maintenance && flight.departureS - timeS > returnLeadS) {
         if (tow(turn, maintenanceStands(turn))) turn.service = 'away';
-      } else if (flight.departureS - timeS > returnLeadS * 2 || flight.irregularTow) {
+      } else if (
+        (!flight.overnight && flight.departureS - timeS > returnLeadS * 2) ||
+        flight.irregularTow
+      ) {
         if (tow(turn, flight.irregularTow ? [...remote, ...arrivalStands(turn)] : remote))
           turn.service = 'done';
       }
@@ -360,12 +397,14 @@ export function createFlightOperations(
       if (event.kind === 'landed') {
         turn.arrivedS = event.timeS;
         countMovement(event.timeS, flight.arrivalS);
+      } else if (event.kind === 'off-block') {
+        turn.offBlockS = event.timeS;
       } else if (event.kind === 'departed') {
         turn.departedS = event.timeS;
         turn.phase = 'done';
         active.delete(turn);
         byId.delete(event.id);
-        countMovement(event.timeS, flight.departureS);
+        countMovement(turn.offBlockS!, flight.departureS);
       } else if (event.kind === 'parked') {
         turn.phase = 'parked';
         turn.readyS = Math.max(
@@ -381,25 +420,15 @@ export function createFlightOperations(
     }
     if (timeS < nextUpdateS) return;
     nextUpdateS = Math.floor(timeS) + 1;
-    while (next < turns.length && turns[next]!.flight.arrivalS <= timeS) {
+    while (next < turns.length && turns[next]!.dispatchS <= timeS) {
       const turn = turns[next++]!;
       if (turn.flight.arrivalS >= startS || turn.flight.departureS >= startS) active.add(turn);
     }
 
-    if (
-      clearance &&
-      (clearance.phase === 'parked' ||
-        clearance.phase === 'done' ||
-        (clearance.phase === 'departing' && fleet.departureClear(clearance.id!)))
-    )
-      clearance = undefined;
-
-    // Clear ready departures first to free stands. Service moves use spare ground capacity,
-    // except that a due return tow is part of preparing its departure.
+    // Request departures first so that the fleet can free stands for arrivals.
     const parked = [...active].filter(({ phase }) => phase === 'parked');
     parked.sort((a, b) => a.flight.departureS - b.flight.departureS);
     for (const turn of parked) {
-      if (turn.pad < 0 && clearance) continue;
       if (turn.service === 'away') {
         serviceStand(turn, timeS);
         continue;
@@ -412,26 +441,12 @@ export function createFlightOperations(
       if (result.ok) {
         turn.phase = 'departing';
         if (turn.pad >= 0) pads.delete(turn.pad);
-        else clearance = turn;
       }
     }
     for (const turn of active) {
       if (turn.phase !== 'scheduled' && turn.phase !== 'holding') continue;
       const carryIn = turn.flight.arrivalS < startS;
-      const helicopter = turn.flight.standKind === 'helipad';
-      const precedingTakeoff =
-        clearance?.phase === 'departing' && fleet.takeoffUnderway(clearance.id!);
-      // Allow a new aircraft to appear 10 km out once the preceding take-off roll has started.
-      const canArrive = carryIn || helicopter || !clearance || precedingTakeoff;
-      if (canArrive && requestArrival(turn, carryIn)) {
-        if (!carryIn && !helicopter) clearance = turn;
-        continue;
-      }
-      if (!canArrive && arrivalStands(turn).some((idx) => standAvailable(turn, idx))) {
-        turn.phase = 'scheduled';
-        turn.holdSinceS = undefined;
-        continue;
-      }
+      if (requestArrival(turn, carryIn)) continue;
       if (!turn.wasHeld) {
         turn.wasHeld = true;
         held++;
@@ -445,7 +460,6 @@ export function createFlightOperations(
       } else turn.phase = 'holding';
     }
     for (const turn of parked) {
-      if (clearance) break;
       if (turn.phase === 'parked' && turn.service === 'out') serviceStand(turn, timeS);
     }
     holding = [...active].filter(({ phase }) => phase === 'holding').length;
@@ -483,14 +497,16 @@ export function createFlightOperations(
       delayS:
         state === 'before start' || state === 'cancelled'
           ? null
-          : Math.max(0, (actualS ?? turn.divertedS ?? timeS) - plannedS),
+          : Math.max(
+              0,
+              ((arrival ? actualS : turn.offBlockS) ?? turn.divertedS ?? timeS) - plannedS,
+            ),
     };
   }
 
   // Populate the apron before the initial paused snapshot. New arrivals start on the first step.
-  while (next < turns.length && turns[next]!.flight.arrivalS < startS) {
-    const turn = turns[next++]!;
-    if (turn.flight.departureS < startS) continue;
+  for (const turn of turns) {
+    if (turn.flight.arrivalS >= startS || turn.flight.departureS < startS) continue;
     active.add(turn);
     requestArrival(turn, true);
   }
