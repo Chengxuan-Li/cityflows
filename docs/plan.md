@@ -319,12 +319,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
 | [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | merged 2026-11-22 (`12ba734`; owner accepted Lübeck delay +21 to 34 s) |
 | [TASK-295](tasks/TASK-295.md) | airports | Airport schema, OSM import, airside topology; London City bundled | schema, importer, topology, surfaces | - | LCY counts, every stand reaches the runway, cities identical | merged 2026-11-22 (`4d98bcf`, wave A) |
-| [TASK-296](tasks/TASK-296.md) | airports | Synthetic one-runway airport and topology regression tests | fixtures, tests | 295 | graph, code limits, backtrack variant | reviewed 2026-11-22 (`c040a60`, wave B, Codex) |
-| [TASK-297](tasks/TASK-297.md) | airports | Airside markings and aircraft shapes in 2D | render, markings | 295 | marking rules, screenshots | reviewed 2026-11-22 (`342f20b`, wave B, Codex) |
-| [TASK-298](tasks/TASK-298.md) | airports | Aircraft as a vehicle: types, airside routing, taxi, runway, approach, climb | schema catalogue, sim, routing, render | 296 | no overlap, one per runway, code limits, determinism | in progress 2026-11-22 (wave B, Claude) |
-| [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | planned (Codex) |
+| [TASK-296](tasks/TASK-296.md) | airports | Synthetic one-runway airport and topology regression tests | fixtures, tests | 295 | graph, code limits, backtrack variant | merged 2026-11-22 (`c040a60`, wave B) |
+| [TASK-297](tasks/TASK-297.md) | airports | Airside markings and aircraft shapes in 2D | render, markings | 295 | marking rules, screenshots | merged 2026-11-22 (`342f20b`, wave B) |
+| [TASK-298](tasks/TASK-298.md) | airports | Aircraft as a vehicle: types, airside routing, taxi, runway, approach, climb | schema catalogue, sim, routing, render | 296 | no overlap, one per runway, code limits, determinism | merged 2026-11-22 (`4c41a79`, wave B) |
+| [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | in progress 2026-11-22 (wave C, Codex) |
 | [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | planned (Claude) |
-| [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | planned (Claude) |
+| [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | in progress 2026-11-22 (wave C, Claude) |
 | [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | planned (Claude) |
 | [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | planned (Codex) |
 | [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | planned (Codex) |
@@ -332,7 +332,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-306](tasks/TASK-306.md) | airports | Aircraft performance figures and motion profiles | schema catalogue, sim motion | catalogue | profiles within figures, determinism | merged 2026-11-22 (`761b6bd`, wave A) |
 | [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | merged 2026-11-22 (`931cb56`, wave A) |
 | [TASK-308](tasks/TASK-308.md) | airports | Flight schedule generator and runway configuration chooser | demand, sim | catalogue | seeded volumes, tailwind limit | merged 2026-11-22 (`6540ebb`, wave A) |
-| [TASK-309](tasks/TASK-309.md) | airports | Airside import rules on the Zurich, Boston and Heathrow extracts | importer, fixtures | 295 | counts, every stand reaches a runway | in progress 2026-11-22 (wave B, Codex) |
+| [TASK-309](tasks/TASK-309.md) | airports | Airside import rules on the Zurich, Boston and Heathrow extracts | importer, fixtures | 295 | counts, every stand reaches a runway | merged 2026-11-22 (`7b82aae`, wave B) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5867,6 +5867,29 @@ it. Lübeck facilities without a car exit 24 (140 spaces) to 8 (14), York 4 to 3
 showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more trips, Kanalstraße r:1288 waits 2,630 to
 8,455 s; no gridlock, worst visit 111 s): outside the merge rule, accepted by the owner. Lead tiers green on
 `716df32`; archives rebuild unchanged.
+
+Airports wave B (2026-11-22; lead tiers green on each merge, existing archives, the Freiburg gate hash 1710089250 and
+the Munich 0.15 and full-demand seed 1 hashes identical):
+- TASK-296 (Codex; merged `c040a60`): synthetic airports `syntheticAirport` (parallel taxiway, one rapid exit each way)
+  and `syntheticAirportBacktrack` (one midfield entrance, turn pads), 2,800 x 45 m runway 09/27, code C and E contact
+  stands, remote and maintenance stands, helipad, landside loop; New city > Test layouts. Generated airports carry no
+  OSM ids (`osmId` optional in the airport schema).
+- TASK-297 (Codex; merged `342f20b`): runway, taxiway, holding-position (pattern A), stand and apron paint shared by 2D
+  and 3D; dock water above the aerodrome tint. Existing cities' 16 fixed-camera captures identical. A thin straight
+  line across London City's apron in 2D is left to check.
+- TASK-309 (Codex; merged `7b82aae`): Zurich, Boston and Heathrow extracts committed; short taxi gaps bridged,
+  crossing runways split, full displaced thresholds (Boston 15R 84 to 270 m), helicopter runway kept; untagged widths
+  start at the largest runway code, so London City's taxiways read code C (54 F before) while Zurich and Heathrow stay
+  mostly F. Boston: five code F stands lack an all-F path, nine stands unreachable (six 33 to 37 m off the network,
+  14C to 14K over 150 m with no mapped lane), for TASK-303.
+- TASK-298 (Claude Code subagent, Opus 5.5 high; merged `4c41a79`): compiled airside (`src/network/airside.ts`), routing
+  with code limits and turn radius (runway taxiing costs four times), aircraft (`src/sim/aircraft.ts`) on TASK-306's
+  profiles: edge-stretch and junction reservations, whole-route one-way locks, one aircraft per runway, holds until
+  cleared, booked arrivals, go-around 30 s out; 10 km finals (London City 5.5 degrees by a published steep-approach
+  table) and climb-outs; backtrack with an end loop; tows; minimal helicopters; road vehicles give way at recorded
+  crossings. Operations API for TASK-299; a scripted rotation stands in. London City scripted hour: 5 landed, 5
+  departed, no overlap, conflict or stuck aircraft; six hours: 34 departures. Notes: London City stand 21 (code C)
+  has a code B taxilane beside it; whole-route locks will need refining at Heathrow's volume.
 
 Airports wave A (2026-11-22; lead tiers green on each merge, existing archives and the Freiburg gate hash 1710089250
 identical, no engine path changed):
