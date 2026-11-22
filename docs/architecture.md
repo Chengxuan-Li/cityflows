@@ -618,6 +618,15 @@ join the same zone. Zones are assigned deterministically in compiled road order.
 zone separate from non-lot roads and other lots, even when the adjoining street is private.
 An aisle listed by overlapping facilities belongs to the first facility in compiled id order
 for zone assignment. Thus a neighbouring private-road origin cannot grant aisle access.
+TASK-294 (`src/network/zones.ts`): a pocket, a component of a class's open roads (`yes`, a
+lane the class may use) other than the largest that a car reaches only through zones, becomes
+a zone too, numbered after the others; roads carrying a gateway's connector join no pocket.
+Zones and pockets are ranked by the fewest zones a car passes from the open roads outside
+pockets (a pocket counts none), and each reaches itself and what the zones and pockets it
+touches on those ways in reach (`zoneReach(compiled, class)`, derived). A zone the outside
+touches reaches only itself, so a lot on a public street, a private street beside a lot and a
+city without pockets keep their rules; a lot or street only another zone reaches, and a pocket
+behind "Anlieger frei" streets, take the zones on their way in.
 
 TASK-104 derives `CompiledCity.lots?: CLot[]` only when lots exist. Each lot has its
 facility id, entry node ids, aisle road ids, `stalls` and `stallCount`. A stall stores `position`, `heading`,
@@ -1270,7 +1279,7 @@ the trapped connectors and their lanes (or reports that no departure connector e
 The check uses TASK-122's largest movement SCC per origin access zone, excluding
 `neverGreen` and lane-drop fallback movements; adjacent-lane changes need 30 m each,
 measured from the connector's actual station. Car access is `yes`, or `private`/`destination`
-in the origin's own zone. Tied largest SCCs all seed the check. Strips retain their mapped
+in a zone the origin's zone reaches (TASK-294). Tied largest SCCs all seed the check. Strips retain their mapped
 roads and are counted separately by the import probe. Warnings do not move saved connectors
 or prevent compilation; re-import repairs the source portals.
 
@@ -1588,12 +1597,13 @@ travel times and add bounded, hysteretic rerouting; the provider contract does n
 
 TASK-101 removes `no` roads from the class graph, including its origin and destination
 checks. Each request filters road-search and lane-search edges: destination/private roads
-are allowed only in the origin road's or destination connector road's zone; delivery roads
+are allowed only in a zone the origin road's or destination connector road's zone reaches
+(itself, and since TASK-294 the zones on its way in, section 5); delivery roads
 require `purpose: 'delivery'`. The same checks apply to endpoints. A topologically possible
 route that requires violating access returns `class_forbidden`, including when lane
 feasibility forces a restricted detour. No successful fallback relaxes access. A vehicle
 already in a local zone can route out of it through that origin zone.
-Live patches compare effective access and zone arrays. A remaining route crossing an
+Live patches compare effective access and zone arrays, and the zones that reach each zone. A remaining route crossing an
 access-changed road is checked immediately as invalid, bypassing congestion hysteresis;
 otherwise an edit could retain a faster but forbidden route.
 Missed-turn fallback candidates use that same access filter with the vehicle's actual

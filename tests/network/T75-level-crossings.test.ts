@@ -175,7 +175,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
           // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
-          '1502d6c7f2a8d050062126781b2c8978b2d77423276ce45d1768e71e71901a28',
+          // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+          '2a1177263f24fe71098c676118cecfc777e1c291182ac1c6d78ee9d68832cbfb',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -193,7 +194,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
-          '7fa84ae483abd23eba2ea583620fe33d4bfb26a547b674a2023669c6c75a93bf',
+          // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+          'ceccfd1b198a2a6d4db3b038c95ecafdbb1f243596661ab45d6d95158a43bb20',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

@@ -5,6 +5,7 @@ import { expect } from 'vitest';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
 import { buildCity } from '../../src/fixtures/build-city';
 import { compile } from '../../src/network';
+import { zoneReach } from '../../src/network/zones';
 import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 import { vehicleClasses, type AccessValue, type City } from '../../src/schema';
 import { tierCities, unitTest } from '../tier';
@@ -202,3 +203,80 @@ unitTest('T47 lane fallback never bypasses delivery or local access filters', ()
     );
   }
 });
+
+unitTest(
+  'T47 a pocket behind destination streets is reached by its own trips and crossed by none',
+  () => {
+    // TASK-294: a public street (D-M-F) that only two "Anlieger frei" streets reach (B-D, F-C), a
+    // private cul-de-sac off it (M-K), and the long way round (B-G-H-C) for through traffic.
+    const { city, node, street, place } = buildCity('Anlieger pocket', 1);
+    const west = node(-200, 0),
+      b = node(0, 0),
+      c = node(300, 0),
+      east = node(500, 0),
+      d = node(0, -100),
+      m = node(150, -100),
+      f = node(300, -100),
+      k = node(150, -200),
+      g = node(0, 300),
+      h = node(300, 300);
+    const [westIn, westOut] = street(west, b);
+    street(b, g);
+    street(g, h);
+    street(h, c);
+    const [eastIn, eastOut] = street(c, east);
+    const entries = [...street(b, d), ...street(f, c)];
+    for (const road of entries) road.access = { all: 'destination' };
+    const [pocket] = street(d, m);
+    const far = street(m, f);
+    const cul = street(m, k);
+    for (const road of cul) road.access = { all: 'private' };
+    place('West', 'residential', west.pos, [
+      { road: westIn, direction: 'out' },
+      { road: westOut, direction: 'in' },
+    ]);
+    place('East', 'work', east.pos, [
+      { road: eastOut, direction: 'out' },
+      { road: eastIn, direction: 'in' },
+    ]);
+    place('Pocket', 'residential', d.pos, [{ road: pocket, direction: 'both', positionM: 100 }]);
+    place('Cul-de-sac', 'residential', k.pos, [
+      { road: cul[1], direction: 'out', positionM: 50 },
+      { road: cul[0], direction: 'in', positionM: 50 },
+    ]);
+    const result = compile(city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const compiled = result.compiled;
+    const connector = (name: string, direction: 'connectorsOut' | 'connectorsIn') => {
+      const id = Object.values(city.places).find((p) => p.name === name)!.id;
+      return compiled.connectors[compiled.places[compiled.index.place.get(id)!]![direction][0]!]!;
+    };
+    const provider = createRouteProvider();
+    const costs = freeFlowLinkCosts(compiled);
+    const trip = (from: string, to: string) => {
+      const start = connector(from, 'connectorsOut');
+      const routed = provider.route(compiled, costs, {
+        fromLane: start.lane,
+        fromPosM: start.positionM,
+        toConnector: connector(to, 'connectorsIn').idx,
+        vehicleClass: 'car',
+        desiredSpeedFactor: 1,
+        noise: 0,
+        seed: 1,
+      });
+      if (!routed.ok) throw new Error(`${from} to ${to}: ${routed.reason}`);
+      return routed.route.roads.map((idx) => compiled.roads[idx]!.id);
+    };
+    const closed = [...entries, pocket, ...far, ...cul].map((road) => road.id);
+    expect(trip('West', 'East').filter((id) => closed.includes(id))).toEqual([]);
+    expect(trip('East', 'West').filter((id) => closed.includes(id))).toEqual([]);
+    expect(trip('West', 'Pocket')).toContain(pocket.id);
+    expect(trip('Pocket', 'East')).toContain(entries[2]!.id);
+    expect(trip('East', 'Cul-de-sac')).toContain(cul[0]!.id);
+    expect(trip('Cul-de-sac', 'West')).toContain(entries[1]!.id);
+    // The pocket's own trips do not open the cul-de-sac: its zone reaches only the ways in.
+    const zone = (id: string) => compiled.roads[compiled.index.road.get(id)!]!.zone[0]!;
+    expect(zoneReach(compiled, 0)[zone(pocket.id)]).not.toContain(zone(cul[0]!.id));
+    expect(zoneReach(compiled, 0)[zone(cul[0]!.id)]).toContain(zone(entries[0]!.id));
+  },
+);

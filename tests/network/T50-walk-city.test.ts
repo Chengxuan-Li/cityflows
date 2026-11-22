@@ -42,7 +42,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
-          '21138856cbfa6ee26b8efe9b481e05bf09046cc236b3208dc8130980c8134279',
+          // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+          '1219db65df29a0ebc77b27794c431f163a5f59dfae154b5a70f769eff7226fef',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

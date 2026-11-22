@@ -17,7 +17,8 @@ const pins = {
   // TASK-278's lookups on the merged tree).
   // Lead merge: re-pinned on TASK-271 (passages and covered ways at grade change the walk).
   // TASK-290: Freiburg's nine mapped garage entrances change the 3D sidewalk mesh.
-  freiburg: '483ac21ae773737a5e475326c6eeb42535268e3c45efc0fa2245a0fb3e915451',
+  // TASK-294: three Freiburg places keep their driveways in pockets behind destination streets.
+  freiburg: '13c55b32c4b7048d2f4de26849a0180b76a63c33eb2581268df60a75b8ec3936',
   // TASK-290: Munich's garage connector moves to r:1070 and changes the 3D footway mesh.
   munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
   // TASK-290: Sindelfingen's garage connector moves to r:954 and changes the 3D sidewalk mesh.
