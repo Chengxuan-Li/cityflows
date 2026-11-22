@@ -4409,8 +4409,12 @@ editor re-runs, TASK-305):
   separations at 5 m intervals from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
   B 31.5, C 44, D 63, E 76, F 91 m; two taxilanes A 19.5, B 28.5, C 40.5, D 59.5, E 72.5, F 87.5
   m), and from buildings (taxiway to object A 15.5, B 20, C 26, D 37, E 43.5, F 51 m; taxilane to
-  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. A parallel
-  neighbour is another edge on the same layer within 20 degrees of the edge's direction that the
+  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. Where
+  every segment of a taxiway edge lies within 20 degrees of the chord, remove the allowance for
+  lateral tracking error from its fixed-object distance (A 1.5, B 2.25, C 3, D–F 4 m, per ICAO
+  Doc 9157 Part 2, Table 1-4). The simulation follows the centreline and keeps the full allowance
+  on bends for wingtip sweep. A parallel neighbour is another edge on the same layer within
+  20 degrees of the edge's direction that the
   graph does not join to the sample within their distance plus 120 m of travel. At junctions
   aircraft use the same pavement in turn. Two taxi edges running side by side for 20 m, separated
   by at least the code A minimum, still impose clearance limits when connected by a short link.
