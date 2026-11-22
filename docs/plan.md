@@ -340,6 +340,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | planned (wave F, Codex) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | planned (wave F, Claude) |
 | [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | planned (wave G, Claude) |
+| [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | in progress 2026-11-22 (wave E, Codex) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6328,6 +6329,11 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): "resume zurich and at the same time start with the taxi speed increase and measure delays etc.
+  if that may be the cause - if not, dispatch performance upgrade agents and 3d rendering upgrade agents". TASK-302 resumed on a
+  fresh agent from its WIP; TASK-317 (taxi speeds, delay attribution) started. Executors (owner): Claude model and effort
+  at the lead's choice; Codex gpt-6.2-sol high by default, gpt-6.2-astra if required.
 
 - 2026-11-22 (owner, after testing London City): "load time and 3d rendering are good tasks for performance
   optimization (start them before testing higher taxiing speeds)"; issues: a London City taxiway section wrongly
