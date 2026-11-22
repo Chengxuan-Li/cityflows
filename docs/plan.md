@@ -6223,6 +6223,9 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-22 (owner): "switch to don't wait for gh": the next wave starts from the locally verified merge commit;
+  the wave's Full run is watched in the background, a red run blocks the next merge and is fixed forward.
+
 - 2026-11-22 (owner): "yes apply": the airports batch runs in waves A to D with TASK-306 to 309 split off
   (`docs/decisions/2026-11-22-airports.md`); one Full run per wave on the lead merge branch before main moves; the
   cheaper unchanged-cities evidence, a test-time budget, no pixel assertions; the nightly Full skips verified heads.
