@@ -1148,7 +1148,62 @@ export function importAirport(
     ...(nodeIds.has(graphKey(n.id)) ? { node: nodeIds.get(graphKey(n.id))! } : {}),
     osmId: n.id,
   }));
+  const jetBridges = readJetBridges(data, positions, bounds, airport);
+  if (jetBridges.length) airport.jetBridges = jetBridges;
   city.airport = airport;
+}
+
+/** TASK-319: orient each mapped bridge from its gate or terminal toward the apron. */
+export function readJetBridges(
+  data: OsmData,
+  positions: ReadonlyMap<number, Vec2>,
+  bounds: Bounds,
+  airport: Pick<Airport, 'terminals' | 'stands' | 'gates'>,
+): NonNullable<Airport['jetBridges']> {
+  const ways = data.way.filter((w) => w.tag.aeroway === 'jet_bridge' && w.tag.area !== 'yes');
+  if (!ways.length) return [];
+  const gates = new Set(data.node.filter((n) => n.tag.aeroway === 'gate').map((n) => n.id));
+  const importedGates = new Map(Object.values(airport.gates).map((gate) => [gate.osmId, gate.id]));
+  const terminals = Object.values(airport.terminals);
+  const stands = Object.values(airport.stands);
+  const terminalDistance = (p: Vec2) =>
+    terminals.reduce((d, t) => Math.min(d, pointToRing(p, t.rings[0]!)), Infinity);
+  const nearestStand = (p: Vec2, gate?: string) => {
+    let id: string | null = null;
+    let away = Infinity;
+    for (const stand of stands) {
+      if (gate && stand.gate !== gate) continue;
+      const d = distance(p, stand.pos);
+      if (d < away) {
+        away = d;
+        id = stand.id;
+      }
+    }
+    return { id, away };
+  };
+  return ways.flatMap((w) => {
+    const points = w.nd.map((id) => positions.get(id));
+    if (points.some((p) => !p) || !points.some((p) => contains(bounds, p!))) return [];
+    const line = (points as Vec2[]).filter((p, i, all) => i === 0 || distance(p, all[i - 1]!) > 0);
+    if (line.length < 2 || distance(line[0]!, line.at(-1)!) === 0) return [];
+    const firstGate = gates.has(w.nd[0]!);
+    const lastGate = gates.has(w.nd.at(-1)!);
+    const firstTerminal = terminalDistance(line[0]!);
+    const lastTerminal = terminalDistance(line.at(-1)!);
+    const firstStand = nearestStand(line[0]!);
+    const lastStand = nearestStand(line.at(-1)!);
+    const reverse =
+      firstGate !== lastGate
+        ? lastGate
+        : lastTerminal < firstTerminal ||
+          (lastTerminal === firstTerminal && firstStand.away < lastStand.away);
+    if (reverse) line.reverse();
+    const gate = importedGates.get(reverse ? w.nd.at(-1)! : w.nd[0]!);
+    // The mapped gate distinguishes adjacent stands whose noses are close to the bridge tip.
+    const stand =
+      (gate ? nearestStand(line.at(-1)!, gate).id : null) ?? (reverse ? firstStand : lastStand).id;
+    return [{ osmId: w.id, line, stand }];
+  });
 }
 
 /** Roads crossing airside edges at grade: at a node a road's OSM way shares with an edge's, the

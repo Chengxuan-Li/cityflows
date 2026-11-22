@@ -54,6 +54,7 @@ export interface AircraftPose {
   heading: number;
   speedMps: number;
   state: string;
+  pushbackReadySinceS?: number;
   enginesRunning: boolean;
   onRunway: boolean;
   airborne: boolean;

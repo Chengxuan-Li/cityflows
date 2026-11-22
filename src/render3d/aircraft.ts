@@ -314,7 +314,7 @@ export class Aircraft3D {
       placeAircraft(mesh, pose, this.elevationM, model.mainX, model.gearStowY);
       const { x, z: y } = root.position;
       if (tug) {
-        tug.visible = pose.state === 'pushback';
+        tug.visible = pose.state === 'pushback' || pose.state === 'ready-for-pushback';
         if (tug.visible) tug.rotation.y = -visual.steering;
       }
       const matrix = root.matrix;

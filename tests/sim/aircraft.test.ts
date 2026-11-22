@@ -98,6 +98,7 @@ test('a departure pushes back, taxis, holds for a landing, lines up and climbs o
   );
   const track = poses.get(parked.id)!;
   expect(states(track)).toEqual([
+    'ready-for-pushback',
     'pushback',
     'taxi',
     'holding',
