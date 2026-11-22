@@ -40,6 +40,13 @@ import {
 import type { AircraftPose, Pick } from '../render/types';
 import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
 import { placeAircraft } from './aircraft-attitude';
+import {
+  modelInfo,
+  modelLodObject,
+  selectLod,
+  type AircraftModels,
+  type ModelLivery,
+} from './aircraft-models';
 import { beamTexture } from './lights';
 import { pointHalos } from './airfield-lights';
 
@@ -74,6 +81,43 @@ interface Model {
   lights: AircraftLightState;
   /** 0 to 1: how far the propellers and rotors have spun up. */
   spin: number;
+  livery: ModelLivery;
+  /** TASK-318: the procedural mesh, drawn as the far level and for types without a model. */
+  far: Group;
+  /** The real model's levels once built, with their spinning parts and discs. */
+  levels: ({ group: Group; spinners: Object3D[]; discs: Disc[] } | null)[];
+  /** 0 near, 1 middle, 2 far. */
+  lod: number;
+}
+
+type Disc = Mesh<CircleGeometry, MeshBasicMaterial>;
+
+/** Translucent discs that stand in for spinning blades, one in each spinner's plane. */
+function spinnerDiscs(spinners: readonly Object3D[]) {
+  return spinners.map((spinner) => {
+    let radius = 0;
+    spinner.traverse((o) => {
+      if (o instanceof Mesh) {
+        o.geometry.computeBoundingSphere();
+        radius = Math.max(radius, o.geometry.boundingSphere!.radius);
+      }
+    });
+    const disc = new Mesh(
+      new CircleGeometry(radius, 24).rotateX(-Math.PI / 2),
+      new MeshBasicMaterial({
+        color: 0x4d5964,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
+    );
+    disc.material.userData.lit = true;
+    disc.position.copy(spinner.position);
+    disc.visible = false;
+    spinner.parent!.add(disc);
+    return disc;
+  });
 }
 
 /** Towbar and tug are attached at the nose axle and turn with its steering. */
@@ -147,7 +191,15 @@ export class Aircraft3D {
   private playing = false;
   private clockS = 0;
   private on = 0;
-  constructor(private readonly elevationM: number) {
+  private readonly modelMaterial = new MeshLambertMaterial({ vertexColors: true });
+  private readonly requested = new Set<string>();
+  /** TASK-318: `models` loads the real models (none: procedural meshes only); `onLoad` asks
+   * for a frame when a model file has arrived. */
+  constructor(
+    private readonly elevationM: number,
+    private readonly loader: AircraftModels | null = null,
+    private readonly onLoad: () => void = () => {},
+  ) {
     this.group.name = 'aircraft';
     this.halos.mesh.name = 'aircraft-lights';
     this.halos.centres.setUsage(DynamicDrawUsage);
@@ -190,33 +242,19 @@ export class Aircraft3D {
 
   private build(pose: AircraftPose, timeS: number): Model {
     const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
-    const mesh = buildAircraftMesh(type, aircraftAccent(pose.registration));
+    const accent = aircraftAccent(pose.registration);
+    const mesh = buildAircraftMesh(type, accent);
     mesh.root.userData.aircraft = pose.id;
-    const discs = [...mesh.propellers, ...mesh.rotors].map((spinner) => {
-      let radius = 0;
-      spinner.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.computeBoundingSphere();
-          radius = Math.max(radius, o.geometry.boundingSphere!.radius);
-        }
-      });
-      const disc = new Mesh(
-        new CircleGeometry(radius, 24).rotateX(-Math.PI / 2),
-        new MeshBasicMaterial({
-          color: 0x4d5964,
-          transparent: true,
-          opacity: 0,
-          depthWrite: false,
-          side: DoubleSide,
-        }),
-      );
-      disc.material.userData.lit = true;
-      disc.position.copy(spinner.position);
-      disc.visible = false;
-      spinner.parent!.add(disc);
-      return disc;
-    });
+    const discs = spinnerDiscs([...mesh.propellers, ...mesh.rotors]);
     batchAircraftMesh(mesh, this.outline);
+    // Everything but the landing gear is the far level; the real model's levels share the gear.
+    const far = new Group();
+    far.name = 'procedural';
+    far.matrixAutoUpdate = false;
+    for (const part of [...mesh.root.children]) if (part !== mesh.gear) far.add(part);
+    mesh.root.add(far);
+    const info = modelInfo(type.id);
+    if (info) mesh.lightMounts = info.lights;
     const { bodyY, radius } = aircraftLayout(type);
     const { noseX, mainX } = fixedWingGearStations(type.lengthM);
     const tug = mesh.noseGear ? pushbackTug(noseX, pushbackDrawbarM(type.lengthM)) : null;
@@ -259,6 +297,10 @@ export class Aircraft3D {
       tug,
       lights: aircraftLights(pose),
       spin: pose.enginesRunning ? 1 : 0,
+      livery: { style: 'tail', tail: accent, trim: null, engines: 0xf0f1f3, belly: null },
+      far,
+      levels: [null, null],
+      lod: 2,
     };
   }
 
@@ -279,7 +321,7 @@ export class Aircraft3D {
         model.shadow.removeFromParent();
         model.drop.removeFromParent();
         model.mesh.root.traverse((object) => {
-          if (!(object instanceof Mesh)) return;
+          if (!(object instanceof Mesh) || object.userData.shared) return;
           object.geometry.dispose();
           if (!object.userData.outline) (object.material as MeshLambertMaterial).dispose();
           if (object instanceof InstancedMesh) object.dispose();
@@ -316,6 +358,8 @@ export class Aircraft3D {
       const { heightM, heading, visual } = pose;
       const root = mesh.root;
       placeAircraft(mesh, pose, this.elevationM, model.mainX, model.gearStowY);
+      // A real helicopter model carries its own skids.
+      if (model.lod < 2 && !mesh.noseGear) mesh.gear.visible = false;
       const { x, z: y } = root.position;
       if (tug) {
         tug.visible = pose.state === 'pushback';
@@ -342,7 +386,13 @@ export class Aircraft3D {
       mesh.rotors.forEach((rotor, i) => {
         rotor.rotation.y += (i === 0 ? SPIN.rotor : SPIN.tailRotor) * model.spin * dtS;
       });
-      for (const disc of model.discs) {
+      const level = model.lod < 2 ? model.levels[model.lod] : null;
+      for (const blades of level?.spinners ?? [])
+        blades.rotation.y +=
+          SPIN[blades.name === 'propeller' ? 'propeller' : blades.name === 'rotor' ? 'rotor' : 'tailRotor'] *
+          model.spin *
+          dtS;
+      for (const disc of level ? level.discs : model.discs) {
         disc.visible = model.spin > 0.3;
         disc.material.opacity = 0.2 * model.spin;
       }
@@ -401,13 +451,51 @@ export class Aircraft3D {
    * even the near side of the aircraft projects each pane to less than a tenth of a pixel. */
   setDetail(camera: PerspectiveCamera, scale: number) {
     const view = camera.matrixWorldInverse.elements;
-    for (const { mesh, type, radiusM } of this.models.values()) {
-      if (type.class === 'helicopter') continue;
+    for (const model of this.models.values()) {
+      const { mesh, type, radiusM } = model;
       const { x, y, z } = mesh.root.position;
       const depth = -(view[2]! * x + view[6]! * y + view[10]! * z + view[14]!);
-      const detailed = (depth - radiusM) * scale < 5.4;
-      for (const row of mesh.windowRows) row.visible = detailed;
+      if (type.class !== 'helicopter') {
+        const detailed = (depth - radiusM) * scale < 5.4;
+        for (const row of mesh.windowRows) row.visible = detailed;
+      }
+      if (this.loader && modelInfo(type.id)) this.chooseLevel(model, (2 * radiusM) / (Math.max(depth, radiusM) * scale));
     }
+  }
+
+  /** TASK-318: the real model's level by on-screen size, loading levels as they are first
+   * needed; until one has loaded the nearest loaded level, or the procedural mesh, stands in. */
+  private chooseLevel(model: Model, px: number) {
+    const loader = this.loader!;
+    const wanted = selectLod(model.lod, px);
+    let lod = 2;
+    if (wanted < 2) {
+      for (const level of wanted === 0 ? ([0, 1] as const) : ([1] as const)) {
+        const key = `${model.type.id}:${level}`;
+        if (this.requested.has(key)) continue;
+        this.requested.add(key);
+        void loader.load(model.type.id, model.type.lengthM, level)!.then(this.onLoad);
+      }
+      const loaded = loader.get(model.type.id);
+      lod = wanted === 0 && loaded?.lods[0] ? 0 : loaded?.lods[1] ? 1 : 2;
+    }
+    if (lod === model.lod) return;
+    if (lod < 2 && !model.levels[lod]) {
+      const level = modelLodObject(
+        loader.get(model.type.id)!,
+        lod as 0 | 1,
+        model.livery,
+        this.modelMaterial,
+        this.outline,
+      );
+      model.mesh.root.add(level.group);
+      model.levels[lod] = { ...level, discs: spinnerDiscs(level.spinners) };
+    }
+    model.lod = lod;
+    model.far.visible = lod === 2;
+    model.levels.forEach((level, i) => {
+      if (level) level.group.visible = i === lod;
+    });
   }
 
   /** Where an aircraft is drawn now, or null. */
@@ -422,6 +510,14 @@ export class Aircraft3D {
 
   get count() {
     return this.models.size;
+  }
+
+  /** TASK-318: aircraft drawn at each level: real model near and middle, procedural far. */
+  levels() {
+    const counts = { near: 0, middle: 0, far: 0 };
+    for (const { lod } of this.models.values())
+      counts[lod === 0 ? 'near' : lod === 1 ? 'middle' : 'far']++;
+    return counts;
   }
 
   /** Lit aircraft lights by kind, and spinning parts, for tests and the canvas dataset. */

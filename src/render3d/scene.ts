@@ -77,6 +77,7 @@ import { buildRail, pickRail3D } from './rail';
 import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
 import { Aircraft3D } from './aircraft';
+import { AircraftModels } from './aircraft-models';
 import { AirfieldLights3D, pixelScale } from './airfield-lights';
 import { Stations3D } from './stations';
 import { TramStops3D } from './tram-stops';
@@ -138,6 +139,8 @@ export class Scene3D {
   private overheadVisible = true;
   private trains: Trains3D | undefined;
   private aircraft: Aircraft3D | undefined;
+  /** TASK-318: real aircraft models, kept across cities once loaded. */
+  private readonly aircraftModels = new AircraftModels();
   /** TASK-301: airfield lights, the aircraft the camera follows, and the aircraft animation's
    * wall clock (it stands still while the run is paused). */
   private airfieldLights: AirfieldLights3D | undefined;
@@ -336,7 +339,11 @@ export class Scene3D {
     const runway = city.airside?.runways[0];
     const middle = runway?.line[Math.floor(runway.line.length / 2)];
     this.aircraft = city.airside
-      ? new Aircraft3D(middle ? terrain.groundAt(middle.x, middle.y) : 0)
+      ? new Aircraft3D(
+          middle ? terrain.groundAt(middle.x, middle.y) : 0,
+          this.aircraftModels,
+          this.invalidate,
+        )
       : undefined;
     if (this.aircraft) this.content.add(this.aircraft.group);
     this.airfieldLights = city.airside
@@ -1311,7 +1318,13 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
-    this.aircraft?.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
+    if (this.aircraft) {
+      this.aircraft.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
+      this.canvas.dataset.aircraftModels = JSON.stringify({
+        levels: this.aircraft.levels(),
+        loads: this.aircraftModels.loads,
+      });
+    }
     this.parking?.update(this.getView().zoom, this.selectedParking);
     this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
     if (this.city && this.geometry)
