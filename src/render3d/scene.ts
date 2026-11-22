@@ -76,6 +76,7 @@ import { buildFootbridges } from './footbridges';
 import { buildRail, pickRail3D } from './rail';
 import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
+import { Aircraft3D } from './aircraft';
 import { Stations3D } from './stations';
 import { TramStops3D } from './tram-stops';
 import { LevelCrossings3D } from './level-crossings';
@@ -135,6 +136,7 @@ export class Scene3D {
   private catenary: ReturnType<typeof buildCatenary> | undefined;
   private overheadVisible = true;
   private trains: Trains3D | undefined;
+  private aircraft: Aircraft3D | undefined;
   private stations: Stations3D | undefined;
   private tramStops: TramStops3D | undefined;
   private levelCrossings: LevelCrossings3D | undefined;
@@ -323,6 +325,13 @@ export class Scene3D {
     } else this.trains = this.stations = this.tramStops = this.levelCrossings = undefined;
     this.trainTimeS = NaN;
     this.railSelection = undefined;
+    // TASK-298: aircraft, at the airfield's elevation (the middle of its first runway).
+    const runway = city.airside?.runways[0];
+    const middle = runway?.line[Math.floor(runway.line.length / 2)];
+    this.aircraft = city.airside
+      ? new Aircraft3D(middle ? terrain.groundAt(middle.x, middle.y) : 0)
+      : undefined;
+    if (this.aircraft) this.content.add(this.aircraft.group);
     this.content.add(this.rail.group);
     this.catenary = buildCatenary(city, geometry.heights, this.rail.heights);
     this.catenary.setBelowGround(this.belowGround);
@@ -774,6 +783,8 @@ export class Scene3D {
       this.railVisible ? Array.from(this.crossingStates ?? []) : [],
     );
     this.vehicles.setSnapshot(snapshot);
+    this.aircraft?.update(snapshot.aircraft ?? []);
+    this.canvas.dataset.aircraft = String(this.aircraft?.count ?? 0);
     this.trainTimeS = NaN;
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
     this.canvas.dataset.walkers = String(this.walkers.mesh.count);
@@ -1096,6 +1107,14 @@ export class Scene3D {
         );
   }
   pick(x: number, y: number): Pick | null {
+    const aircraft = this.aircraft?.pick(
+      this.camera,
+      x,
+      y,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+    );
+    if (aircraft) return aircraft;
     if (this.trains && this.railVisible) {
       const car = pickVehicle3D(
         this.trains.body,
@@ -1190,7 +1209,8 @@ export class Scene3D {
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
     const distance = this.camera.position.distanceTo(this.controls.target);
     this.camera.near = Math.max(0.2, distance / 10);
-    this.camera.far = Math.max(5000, distance * 10);
+    // TASK-298: approaches and climbs reach some 10 km beyond an airport's runway ends.
+    this.camera.far = Math.max(this.aircraft ? 15_000 : 5000, distance * 10);
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
     const now = performance.now();

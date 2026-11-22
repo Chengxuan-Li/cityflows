@@ -1,6 +1,7 @@
 import type Flatbush from 'flatbush';
 import type { WalkGraph } from './walk';
 import type { RailGraph } from './rail';
+import type { AirsideGraph } from './airside';
 import type { Vec2 } from '../geo/vec2';
 import type {
   Control,
@@ -34,6 +35,8 @@ export interface Diagnostic {
 
 export interface CompiledCity {
   rail?: RailGraph;
+  /** TASK-298: the compiled airside, where the city has an airport section. */
+  airside?: AirsideGraph;
   walk: WalkGraph;
   version: number;
   drivingSide: DrivingSide;

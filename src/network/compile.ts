@@ -1,4 +1,5 @@
 import { compileRail } from './rail';
+import { compileAirside } from './airside';
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass, SignalProgram } from '../schema';
@@ -639,6 +640,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
   if (city.rail) compiled.rail = compileRail(city, compiled);
+  if (city.airport) compiled.airside = compileAirside(city.airport, city, compiled);
   if (deferWalk)
     // Filled in place: views made of the compiled city before (paintedCity) share the graph.
     deferWalk(() => {

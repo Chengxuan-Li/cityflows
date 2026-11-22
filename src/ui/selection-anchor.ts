@@ -52,5 +52,9 @@ export function selectionAnchor(
     }
     case 'train':
       return null;
+    case 'aircraft': {
+      const pose = snapshot?.aircraft?.find((a) => a.id === pick.id);
+      return pose ? { x: pose.x, y: pose.y } : null;
+    }
   }
 }

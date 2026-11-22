@@ -595,8 +595,8 @@ held. `RoadCrossing.roads` are the directed roads at the crossing as imported; a
 them, so a reader resolves by `pos` and `roadOsmIds` as rail crossings do by OSM way. Nothing in
 the section bounds aircraft to the map: runway ends, headings and thresholds define the extended
 centrelines that approaches and climbs (TASK-298, TASK-301) follow some 10 km past the polygon.
-Compile ignores the section; no lane, connector, route or simulation hash reads it (TASK-298
-compiles the airside graph). The 2D and 3D maps draw it as paving (`render/airside-geometry.ts`):
+Compile reads it only into `CompiledCity.airside` (TASK-298, below); no lane, connector or road
+route reads it. The 2D and 3D maps draw it as paving (`render/airside-geometry.ts`):
 mapped aprons, then taxiways and taxilanes buffered to their widths with round ends, then each
 runway along its edges and stopways with square ends, over the place tints and under the roads, at
 grade 0; terminals and hangars are the buildings the context already draws.
@@ -1446,6 +1446,20 @@ existing walk IDs. Entrance association uses a matching name when present, then 
 station within 250 m, excluding foot/access=no. The existing 150 m, same-grade, no-road-crossing
 access attachment above supplies streets; stations without doors use the platform/building shape.
 
+### 5.7 Airside graph (TASK-298)
+
+Where the city has an airport section, `compile` adds `CompiledCity.airside`
+(`network/airside.ts`): the section in dense indices, sorted by id. Nodes carry their incident
+edges and the runways whose edges meet there; edges their line, cumulative stations, kind, width,
+code as an index into `aircraftCodes` (-1 admits none), runway and stand; runways their edges and
+nodes in order from `ends[0]` with stations, centreline, and each end's node, threshold and
+stations; holds their node, protected runway and `toward` edge; stands their lead-in edges, root
+(network end) and stop node; hangars their centroid and the nearest node a taxi edge reaches;
+`maxSpanM`, the span limit of the largest stand code. Each road crossing gets the lanes of its
+recorded roads whose drawn line passes within a lane width of it, with a stop `clearance` short of
+it: the larger of half the edge's width and half its code's span, plus 7.5 m; a stop before a
+lane's start falls on the lanes leading in. Cities without the section compile unchanged.
+
 ## 6. Editing
 
 TASK-131: patches carry `junctionGroups` (set and remove), so undo restores a group. A topology
@@ -1725,6 +1739,16 @@ weights)` scans the events in time order once (within two hours of the departure
 `weights.ride`, `weights.transferS` per transfer. The plan lists its rides (route, run, stops,
 times), transfer walks, access and egress stops, and walking, waiting and riding seconds.
 
+TASK-298 routes aircraft on the airside graph (`routing/airside.ts`). An arc is an edge in one
+direction (`2e` along its line, `2e + 1` against; a oneway edge only along). Dijkstra over arcs
+from an arc (continuing from its end) or a node, to the first arc a goal accepts; cost is length,
+four times on runway edges, times a caller's factor (the sim makes edges another aircraft has
+locked the other way cost 20 times). An arc is admitted when its edge's code admits the aircraft's
+and, for a lead-in, when it is the goal stand's. A turn from arc a into b (never b's reverse) is
+taken when its deflection, measured over a turning radius on each side, is under 165 degrees and
+needs a tangent `R tan(θ/2)` no longer than the shorter of the two edges or 1.5 R, whichever is
+more.
+
 ## 8. Simulation
 
 TASK-306 prepares aircraft motion profiles over a metric polyline with cumulative stations.
@@ -1735,6 +1759,77 @@ using the catalogue's minimum radius and supplies extended runway centrelines fo
 approach, and flare. Approach samples reach zero height at the aiming station and end at the
 requested exit speed. Helicopter profiles use vertical pad motion, forward transition, and
 hover taxi. The profiles use nominal catalogue figures and have no engine dependency.
+TASK-298 adds `taxiEntrySpeedMps` (the fastest a path can be entered and still keep its limits
+and stop) and lets a replanned ground profile start up to 1e-6 m/s above its envelope (rounding).
+
+TASK-298 moves aircraft (`sim/aircraft.ts`, `createAircraftFleet(graph, seed)`), created by the
+engine only where `CompiledCity.airside` exists; its state enters `stateHash` only then. Aircraft
+carry no persons and generate no road trips.
+- **Legs.** A ground leg is a run of arcs (and runway stretches) as one polyline, its corners
+  rounded with the type's turning radius where the segments leave room (tangent at most 45% of
+  either); the aircraft's centre follows it from its tail at the start to its centre at the end.
+  Motion is TASK-306's taxi, pushback or tow profile from the current station and speed to the
+  current stop, replanned when the stop moves forward; air legs are its approach, take-off,
+  climb and helicopter profiles.
+- **Claims.** A moving aircraft claims the stretch of its leg from its tail less a margin to its
+  nose plus braking distance plus the margin (extended 80 m ahead before it binds), as edge
+  intervals and the nodes inside (runway edges and nodes excluded); no two aircraft's claims share
+  an edge interval or a node, and an aircraft's stop is its claim's end less the margin. The
+  margin is half `maxSpanM` plus 12 m. A parked aircraft, and one standing at a hold, claims only
+  its body (and 10 m ahead), so it closes no junction another aircraft's leg crosses.
+- **Direction locks.** A departure or tow starts only when every edge of its legs can be locked
+  in its direction of travel (an edge locked one way by another aircraft is closed the other
+  way); an arrival locks its exit stretch (to its vacating point plus its length and the margin)
+  when it appears and the rest when free, waiting past the vacating point until then. Locks are
+  released as the tail passes; so two aircraft never meet head-on.
+- **Runways.** One aircraft holds a runway (and every runway sharing a node with it) at a time.
+  A ground leg stops at the mapped runway hold within 300 m before the runway node it enters
+  (else 75 m short of it) until granted; it asks when first in line there, and is granted if no
+  aircraft holds the runway and no arrival's booking falls before its estimated clear time
+  (line-up and take-off to the far end, or the crossing) plus 20 s. A crossing releases the runway
+  when its tail passes the next hold beyond (else 75 m past the runway). An arrival appears about
+  10 km out (`FINAL_M`) on the extended centreline when its window (30 s before the threshold
+  less 20 s, to its estimated vacating plus 20 s) is free of bookings and holders, books it, and
+  takes the runway 30 s before the threshold, going around (straight ahead at approach speed and
+  its climb gradient, then queued again) if another aircraft holds it then; it releases the
+  runway when its tail passes the first hold of that runway after its exit (else 75 m past it). A
+  departure releases it passing the far end.
+- **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
+  (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
+  roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
+  first runway node past touchdown plus the type's landing roll whose turn-off has a route to the
+  stand, preferring at touchdown one whose whole leg locks, then one whose wait blocks no locked
+  leg, else the booked one; with none, a reversing loop at the far end and a backtrack.
+- **Line-up and take-off.** A departure lines up at the first runway node from its end up to the
+  threshold that a route turns onto in the take-off direction (centre half its length or its
+  turning radius past it, plus 5 m); otherwise it backtracks: onto the runway toward the end at
+  the nearest node far enough out, along it, and round a reversing loop (right 60, left 300, right
+  60 degrees at its turning radius, reaching (1 + sqrt 3) R) back to the centreline. It pauses 5 s,
+  rolls, rotates and climbs 10 km past the far end, then leaves.
+- **Pushback and tow.** From a stand whose stop is a dead end, the tug pushes it back along the
+  lead-in and onto the straightest admissible arc at the root until the nose is 10 m past the
+  root; a departure then waits 20 s (tug off, engines on) and taxis; a tow continues as a tow (no
+  engines) to a stand or a node (`requestTow(id, { stand } | { node } | { hangar })`). A stand
+  admits a type only up to its code and only with a way out (a push arc and a turn on from it).
+- **Helicopters** land vertically on a helipad from a stated heading, leave climbing vertically
+  then forward, and hover-taxi between helipads.
+- **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
+  `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
+  parked, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
+  `engine.load({ airsideOperations })` supplies the driver; by default a scripted rotation
+  (`sim/airside-rotation.ts`): every other stand holds a parked aircraft at the start, and every
+  5 minutes it alternates the departure of the aircraft parked longest past its turnaround with
+  an arrival to a free stand, on the runway end TASK-308's chooser picks for a 240-degree 8 kt
+  wind (London City's schedule mix there, else every fixed-wing type the runway takes).
+- **Snapshot.** `VehicleSnapshot.aircraft`: id, registration-like id (by ICAO prefix), type,
+  position, height, heading, speed, state (approach, flare, landing-roll, go-around, taxi,
+  holding, line-up, takeoff-roll, rotation, climb, parked, pushback, tow and the helicopter
+  phases), engines running, on runway, airborne, gear down (on the ground, below 600 m on
+  approach, below 150 m climbing), stand, runway end and the airside edges ahead.
+- **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
+  100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
+  road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
+  can at its comfortable deceleration, else clears. Aircraft never stop for road vehicles.
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
 adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
@@ -2976,6 +3071,13 @@ type HostEvent =
   canonical program offsets. The engine's `PatchResult` remains unchanged.
 
 ## 11. Rendering and UI
+
+TASK-298: aircraft are drawn from the snapshot with TASK-307's outlines in 2D (over the map,
+under the evening tint; one off the ground casts a shadow displaced by its height; drawn only
+within the map's node extent) and its meshes in 3D (heights above the first runway's middle,
+gear by the snapshot, a plain pitch by state; the far plane reaches 15 km where an airport
+exists). Both pick an aircraft; the inspector shows its registration, type, status, stand,
+runway, speed, height and route by taxiway names.
 
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,

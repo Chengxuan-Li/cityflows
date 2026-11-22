@@ -8,6 +8,7 @@ import {
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
+import { AircraftInspector } from './inspector/aircraft';
 import { ParkingInspector, ParkedSpaceInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
@@ -56,6 +57,8 @@ function Inspector() {
   switch (selection.kind) {
     case 'train':
       return <TrainInspector id={selection.id} route={selection.route} />;
+    case 'aircraft':
+      return <AircraftInspector id={selection.id} />;
     case 'track':
       return <RailInspector kind="track" index={selection.track} />;
     case 'platform':

@@ -19,6 +19,8 @@ import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
+import { drawAircraft, pickAircraft } from './layers/aircraft';
+import { boxOf, type Box } from '../geo/polyline';
 import { drawStations } from './layers/stations';
 import { createLabelLayer } from './layers/labels';
 import { labelCandidates } from './labels';
@@ -71,7 +73,14 @@ import {
   sceneLight,
   type LightingSettings,
 } from './lighting';
-import type { Pick, CityGeometry, Scene, SignalStates, WalkerSnapshot } from './types';
+import type {
+  AircraftPose,
+  Pick,
+  CityGeometry,
+  Scene,
+  SignalStates,
+  WalkerSnapshot,
+} from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
@@ -223,8 +232,32 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let lightMinute = 0;
   let light = sceneLight(defaultLighting, 0);
   let drawnLight = '';
+  // TASK-298: aircraft over the map, under the evening tint.
+  const aircraft = new Graphics();
+  let aircraftPoses: AircraftPose[] = [];
+  let mapBounds: Box | null = null;
+  const redrawAircraft = () => {
+    drawAircraft(
+      aircraft,
+      aircraftPoses,
+      mapBounds,
+      selection?.kind === 'aircraft' ? selection.id : null,
+      city?.airside,
+    );
+    canvas.dataset.aircraft = String(
+      aircraftPoses.filter(
+        (p) =>
+          mapBounds &&
+          p.x >= mapBounds.minX &&
+          p.x <= mapBounds.maxX &&
+          p.y >= mapBounds.minY &&
+          p.y <= mapBounds.maxY,
+      ).length,
+    );
+  };
   world.addChild(
     map,
+    aircraft,
     night.container,
     labels.container,
     routeOverlay,
@@ -683,6 +716,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       previewLoaded = undefined;
       const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
       city = compiled;
+      // The map's edge: its nodes' extent (aircraft beyond it are not drawn in 2D).
+      mapBounds = compiled.nodes.length ? boxOf(compiled.nodes.map((n) => n.pos)) : null;
+      aircraftPoses = [];
       parkingCounts = null;
       drawParking(parking, city, parkingCounts, camera.zoom);
       vehicles.setLights(null);
@@ -1147,6 +1183,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
       redrawWalkers();
+      aircraftPoses = snapshot.aircraft ?? [];
+      redrawAircraft();
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
       for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);
@@ -1185,6 +1223,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateVehicleRing();
       selectedWalker = selection?.kind === 'walker' ? selection.id : -1;
       redrawWalkers();
+      redrawAircraft();
     },
     setMultiSelection(roads) {
       invalidate();
@@ -1351,6 +1390,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             )
           : null;
       return (
+        pickAircraft(aircraftPoses, point, mapBounds) ??
         train ??
         vehicle ??
         (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??

@@ -113,22 +113,16 @@ export interface GroundProfileOptions {
 
 const travelAccelerationMps2 = 0.8;
 
-function groundProfile(
+/** Stations of the path's vertices from start to stop, each segment's speed limit, and the
+ * fastest speed at each station that still keeps every later limit and stops at the stop. */
+function groundEnvelope(
   path: AircraftPath,
-  phase: GroundPhase,
   speedLimitMps: number,
   brakeMps2: number,
-  options: GroundProfileOptions,
+  startStationM: number,
+  stopStationM: number,
   performance?: FixedWingPerformance,
-): AircraftMotionProfile {
-  const { startStationM = 0, stopStationM = path.lengthM, startSpeedMps = 0 } = options;
-  if (!(0 <= startStationM && startStationM <= stopStationM && stopStationM <= path.lengthM))
-    throw new Error('Aircraft start and stop must be ordered stations on the path');
-  const heightM = phase === 'hover-taxi' ? 1.5 : 0;
-  const stopped = { stationM: stopStationM, heightM, speedMps: 0, phase };
-  if (startStationM === stopStationM && startSpeedMps === 0)
-    return profile(path, 0, () => stopped, phase === 'pushback');
-
+) {
   const stations = [startStationM];
   const segmentLimits: number[] = [];
   const nodeLimits = [speedLimitMps];
@@ -189,9 +183,38 @@ function groundProfile(
     const distanceM = stations[i + 1]! - stations[i]!;
     speeds[i] = Math.min(speeds[i]!, Math.sqrt(speeds[i + 1]! ** 2 + 2 * brakeMps2 * distanceM));
   }
-  if (!(startSpeedMps >= 0 && startSpeedMps <= speeds[0]!))
+  return { stations, segmentLimits, speeds };
+}
+
+function groundProfile(
+  path: AircraftPath,
+  phase: GroundPhase,
+  speedLimitMps: number,
+  brakeMps2: number,
+  options: GroundProfileOptions,
+  performance?: FixedWingPerformance,
+): AircraftMotionProfile {
+  const { startStationM = 0, stopStationM = path.lengthM, startSpeedMps = 0 } = options;
+  if (!(0 <= startStationM && startStationM <= stopStationM && stopStationM <= path.lengthM))
+    throw new Error('Aircraft start and stop must be ordered stations on the path');
+  const heightM = phase === 'hover-taxi' ? 1.5 : 0;
+  const stopped = { stationM: stopStationM, heightM, speedMps: 0, phase };
+  if (startStationM === stopStationM && startSpeedMps === 0)
+    return profile(path, 0, () => stopped, phase === 'pushback');
+
+  const { stations, segmentLimits, speeds } = groundEnvelope(
+    path,
+    speedLimitMps,
+    brakeMps2,
+    startStationM,
+    stopStationM,
+    performance,
+  );
+  // TASK-298: a replanned aircraft starts at its sampled speed, which may exceed the envelope by
+  // rounding.
+  if (!(startSpeedMps >= 0 && startSpeedMps <= speeds[0]! + 1e-6))
     throw new Error('Aircraft cannot stop or meet the curve speed from the given start speed');
-  speeds[0] = startSpeedMps;
+  speeds[0] = Math.min(startSpeedMps, speeds[0]!);
   const legs: (ReturnType<typeof leg> & { startS: number })[] = [];
   let durationS = 0;
   const addLeg = (fromM: number, toM: number, fromMps: number, toMps: number) => {
@@ -255,6 +278,23 @@ export function taxiProfile(
   options: GroundProfileOptions = {},
 ) {
   return groundProfile(path, 'taxi', p.taxiStraightMps, p.brakingDecelerationMps2, options, p);
+}
+
+/** TASK-298: the fastest an aircraft may enter `path` at its start station (a landing's handover
+ * to taxi) and still meet every turn limit and stop at the stop station. */
+export function taxiEntrySpeedMps(
+  path: AircraftPath,
+  p: FixedWingPerformance,
+  { startStationM = 0, stopStationM = path.lengthM }: GroundProfileOptions = {},
+) {
+  return groundEnvelope(
+    path,
+    p.taxiStraightMps,
+    p.brakingDecelerationMps2,
+    startStationM,
+    stopStationM,
+    p,
+  ).speeds[0]!;
 }
 
 export function pushbackProfile(

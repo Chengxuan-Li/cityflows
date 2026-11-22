@@ -464,6 +464,7 @@ export const useAppStore = create<AppState>((set, get) => {
           selection?.kind === 'walker' ||
           selection?.kind === 'track' ||
           selection?.kind === 'train' ||
+          selection?.kind === 'aircraft' ||
           selection?.kind === 'platform' ||
           (selection?.kind === 'place' &&
             Boolean(
