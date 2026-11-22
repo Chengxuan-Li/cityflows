@@ -70,6 +70,7 @@ const baseline = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-240: r:1057 and r:821, before roads too short for arrows, show the junction's ahead.
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     compile: 'cd57ee9d0c002aa50f3f253be15cf06023c63ab664058cba7e4535aa2984a7ce',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
@@ -90,6 +91,7 @@ const baseline = {
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     compile: '87f70d2b101fd0828488b651f54419bfd2f0311321e052fe686124978d2aec3f',
     arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
   },

@@ -57,6 +57,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // tram `form` stripped the city equals b3bcde6's.
             // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+            // TASK-290: Munich's mapped garage entrance moves c:1911 from r:1071 to r:1070.
             'a2e06370cf98fc75825ad8c06d4dfc3435eb2fa55401b24d2ebb7e457e4284b4',
             // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
@@ -71,6 +72,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+            // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
             'c5eef03505f646be3109cef34406e93ebdfc6551fd8562de1d721fbf4829bae2',
           ]
         : [
@@ -79,6 +81,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
             // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+            // TASK-290: Sindelfingen's mapped garage entrance moves c:1449 from r:97 to r:954.
             '9bf821bcb35d4ca0de8f1a43d4e0e3a15d8ab16e135175794f5b6a935ab14e28',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -88,6 +91,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
             // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+            // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
             '44f058f02a545bb130b582a8db6fa5925bb286d5a8a8b25ce37633d8f9c23e62',
           ];
     // V114 adds a display-only setting; retain the original network hash.
