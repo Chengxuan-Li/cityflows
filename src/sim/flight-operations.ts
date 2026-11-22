@@ -1,4 +1,5 @@
 import {
+  airportSchedules,
   generateFlightSchedule,
   largeAirportSchedule,
   londonCitySchedule,
@@ -12,6 +13,7 @@ import {
   airportRunwayConcepts,
   createRunwayChooser,
   demonstratedCrosswindKt,
+  windComponents,
   type AirportWind,
   type RunwayConfiguration,
   type RunwayConfigurationInput,
@@ -142,10 +144,16 @@ export function createFlightOperations(
 ) {
   const { graph } = fleet;
   const midnight = Math.floor(startS / dayS) * dayS;
-  const ends = graph.runways.flatMap((runway) =>
+  // Fixed-wing runways; a helicopter runway (no fixed-wing code, Zurich's H01/H19) serves the
+  // helicopters' approaches and climb-outs.
+  const fixedWing = graph.runways.filter(({ maxCode }) => maxCode >= 0);
+  const ends = fixedWing.flatMap((runway) =>
     runway.ends.map((end) => ({ designator: end.designator, headingRad: end.heading })),
   );
-  const profile = graph.icao === 'EGLC' ? londonCitySchedule : largeAirportSchedule;
+  const helicopterEnds = graph.runways
+    .filter(({ maxCode }) => maxCode < 0)
+    .flatMap((runway) => runway.ends.map((end) => end.heading));
+  const profile = airportSchedules[graph.icao ?? ''] ?? largeAirportSchedule;
   const typeMix: FlightScheduleInput['typeMix'] = [
     ...profile.typeMix.filter(({ typeId }) => !isHelicopter(typeId)),
     ...(graph.helipads.length
@@ -226,6 +234,16 @@ export function createFlightOperations(
   }
   const headingOf = (designator: string | undefined) =>
     ends.find((end) => end.designator === designator)?.headingRad ?? 0;
+  /** Helicopters fly in and out along the helicopter runway's end with the most headwind, or
+   * along the fixed-wing flow. */
+  const helicopterHeading = (designator: string | undefined) =>
+    helicopterEnds.length
+      ? helicopterEnds.reduce((best, heading) =>
+          windComponents(heading, wind).headwindKt > windComponents(best, wind).headwindKt
+            ? heading
+            : best,
+        )
+      : headingOf(designator);
 
   const eligible = new Map<string, number[]>();
   function standsFor(typeId: string) {
@@ -276,9 +294,9 @@ export function createFlightOperations(
         ...profile,
         typeMix: mix,
         stands,
-        runwayCount: graph.runways.length,
+        runwayCount: fixedWing.length,
         helipadCount: graph.helipads.length,
-        helicopterMovements: Math.min(12, graph.helipads.length * 6),
+        helicopterMovements: Math.min(profile.helicopterMovements ?? 12, graph.helipads.length * 6),
       },
       seed,
     );
@@ -373,7 +391,7 @@ export function createFlightOperations(
         : fleet.requestHelicopterArrival({
             typeId: flight.typeId,
             helipad,
-            headingRad: headingOf(lastOpen?.arrivalEnds[0]),
+            headingRad: helicopterHeading(lastOpen?.arrivalEnds[0]),
           });
       if (!result.ok) return false;
       pads.add(pad);
@@ -525,7 +543,10 @@ export function createFlightOperations(
       if (turn.pad < 0 && !runwayEnd) continue;
       const result =
         turn.pad >= 0
-          ? fleet.requestHelicopterDeparture(turn.id!, headingOf(lastOpen?.departureEnds[0]))
+          ? fleet.requestHelicopterDeparture(
+              turn.id!,
+              helicopterHeading(lastOpen?.departureEnds[0]),
+            )
           : fleet.requestDeparture(turn.id!, runwayEnd!.departure);
       if (result.ok) {
         turn.phase = 'departing';

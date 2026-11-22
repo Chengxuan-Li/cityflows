@@ -585,10 +585,11 @@ export function importAirport(
   }
 
   // Stands: `parking_position` lead-in ways, which end at the stop position, and stop nodes. A
-  // node is the stop of a lead-in way of its ref ending within 30 m, else a stand of its own. A
-  // stand or lead-in off the graph is joined to the nearest taxi edge within 150 m by a
-  // generated lead-in that crosses no building.
+  // node is the stop of a lead-in way of its ref ending within 30 m or passing through it, else a
+  // stand of its own. A stand or lead-in off the graph is joined to the nearest taxi edge within
+  // 150 m by a generated lead-in that crosses no building.
   const stands: DraftStand[] = [];
+  const standWay = new Map<DraftStand, OsmWay>();
   const join = (stand: DraftStand, target: string) => {
     const p = nodes.get(target)!.pos;
     const skip = containing([stand.pos]);
@@ -660,6 +661,7 @@ export function importAirport(
     }
     edges.push(edge);
     stands.push(stand);
+    standWay.set(stand, w);
   }
   for (const n of aeroNodes('parking_position')) {
     const p = positions.get(n.id)!;
@@ -668,7 +670,7 @@ export function importAirport(
         (s) => s.osmIds.length === 1 && (s.ref === undefined || norm(s.ref) === norm(n.tag.ref)),
       )
       .map((s) => ({ s, away: distance(s.pos, p) }))
-      .filter(({ away }) => away <= rules.standMatchM)
+      .filter(({ s, away }) => away <= rules.standMatchM || standWay.get(s)?.nd.includes(n.id))
       .sort(
         (a, b) => Number(b.s.ref !== undefined) - Number(a.s.ref !== undefined) || a.away - b.away,
       )[0];

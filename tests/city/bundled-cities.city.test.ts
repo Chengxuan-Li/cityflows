@@ -58,6 +58,7 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
 // gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
 // since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
+// TASK-302: Zurich Airport, held out, is not run here: its morning takes 172 s (2 gridlocked).
 describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york', 'london-city-airport'])(
   '%s at the showcase demand',
   (id) => {
