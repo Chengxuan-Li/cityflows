@@ -1333,10 +1333,12 @@ export class Scene3D {
     if (!this.demand.consume(renderContinuously())) return;
     if (this.aircraft) {
       this.aircraft.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
-      this.canvas.dataset.aircraftModels = JSON.stringify({
+      const models = JSON.stringify({
         levels: this.aircraft.levels(),
         loads: this.aircraftModels.loads,
       });
+      if (this.canvas.dataset.aircraftModels !== models)
+        this.canvas.dataset.aircraftModels = models;
     }
     this.parking?.update(this.getView().zoom, this.selectedParking);
     this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);

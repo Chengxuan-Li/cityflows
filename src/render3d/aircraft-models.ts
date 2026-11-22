@@ -13,6 +13,7 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import models from '../../fixtures/aircraft/models.json';
+import { hull, type AircraftLivery } from '../render/aircraft-livery';
 import type { AircraftLightMounts } from './aircraft-mesh';
 
 // TASK-318: real aircraft models, Flightradar24's fr24-3d-models (GPL-2.0, from the FlightGear
@@ -51,15 +52,6 @@ async function fetchModelFile(file: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`aircraft model ${file}: HTTP ${response.status}`);
   return response.arrayBuffer();
-}
-
-/** TASK-315's livery fields that the real models take. */
-export interface ModelLivery {
-  style: 'tail' | 'cheatline' | 'belly' | 'tailcone' | 'crown';
-  tail: number;
-  trim: number | null;
-  engines: number;
-  belly: number | null;
 }
 
 interface Part {
@@ -115,35 +107,31 @@ export async function parseModelLod(data: ArrayBuffer): Promise<ModelLod> {
   return { parts, spinners, triangles };
 }
 
-const hull = 0xf0f1f3;
-
 /** A fuselage triangle's livery colour (sRGB hex) from its place along the length (a fraction,
- * positive forward) and its angle around the fuselage from the crown (0) to the keel (pi),
- * after TASK-315's procedural bands. */
-export function liveryAt(livery: ModelLivery, along: number, angle: number) {
+ * positive forward) and its angle around the fuselage from the crown (0) to the keel (pi), after
+ * TASK-315's procedural bands. The thin bands are strips of their own (`bandColor`). */
+export function liveryAt(livery: AircraftLivery, along: number, angle: number) {
   const inside = (from: number, to: number) => along >= from && along <= to;
-  if (livery.belly !== null && inside(-0.42, 0.43) && angle > 2.02) return livery.belly;
-  switch (livery.style) {
-    case 'cheatline':
-      if (inside(-0.44, 0.395) && angle > 1.45 && angle < 1.58) return livery.tail;
-      if (livery.trim !== null && inside(-0.42, 0.39) && angle > 1.62 && angle < 1.665)
-        return livery.trim;
-      break;
-    case 'belly':
-      if (inside(-0.45, 0.47) && angle > 1.8) return livery.tail;
-      if (livery.trim !== null && inside(-0.43, 0.45) && angle > 1.7 && angle < 1.75)
-        return livery.trim;
-      break;
-    case 'tailcone':
-      if (along < -0.27 && angle < 1.45) return livery.tail;
-      if (livery.trim !== null && inside(-0.27, 0.395) && angle > 1.5 && angle < 1.555)
-        return livery.trim;
-      break;
-    case 'crown':
-      if (inside(-0.36, 0.395) && angle < 1.02) return livery.tail;
-      break;
+  if (livery.style === 'belly' && inside(-0.45, 0.47) && angle > 1.8) return livery.tail;
+  if (livery.style === 'tailcone' && along < -0.27 && angle < 1.45) return livery.tail;
+  if (livery.style === 'crown' && inside(-0.36, 0.395) && angle < 1.02) return livery.tail;
+  // The light belly lies under the scheme's own bands.
+  return livery.belly !== null && inside(-0.42, 0.43) && angle > 2.02 ? livery.belly : hull;
+}
+
+/** A thin band's colour in this livery, or null where the scheme has no such band. */
+export function bandColor(livery: AircraftLivery, band: string): number | null {
+  switch (band) {
+    case 'band-cheatline':
+      return livery.style === 'cheatline' ? livery.tail : null;
+    case 'band-cheatline-trim':
+      return livery.style === 'cheatline' ? livery.trim : null;
+    case 'band-belly-trim':
+      return livery.style === 'belly' ? livery.trim : null;
+    case 'band-tailcone-trim':
+      return livery.style === 'tailcone' ? livery.trim : null;
   }
-  return hull;
+  throw new Error(`unknown livery band ${band}`);
 }
 
 export interface AircraftModel {
@@ -156,14 +144,17 @@ export interface AircraftModel {
 }
 
 /** One geometry per level and livery: every part merged and coloured per triangle. */
-export function modelBody(model: AircraftModel, lod: ModelLodIndex, livery: ModelLivery) {
+export function modelBody(model: AircraftModel, lod: ModelLodIndex, livery: AircraftLivery) {
   const key = `${lod}:${livery.style}:${livery.tail}:${livery.trim}:${livery.engines}:${livery.belly}`;
   let body = model.bodies.get(key);
   if (body) return body;
   const { profile } = model.info;
   const length = model.lengthM;
   const color = new Color();
-  const geometries = model.lods[lod]!.parts.map((part) => {
+  const parts = model.lods[lod]!.parts.filter(
+    (part) => !part.name.startsWith('band-') || bandColor(livery, part.name) !== null,
+  );
+  const geometries = parts.map((part) => {
     const geometry = part.geometry.index ? part.geometry.toNonIndexed() : part.geometry.clone();
     const position = geometry.getAttribute('position');
     const colors = new Float32Array(position.count * 3);
@@ -180,7 +171,8 @@ export function modelBody(model: AircraftModel, lod: ModelLodIndex, livery: Mode
         color.setHex(
           liveryAt(livery, x / length, Math.atan2(Math.abs(z) / width, (y - cy) / height)),
         );
-      } else if (part.name === 'tail') color.setHex(livery.tail);
+      } else if (part.name.startsWith('band-')) color.setHex(bandColor(livery, part.name)!);
+      else if (part.name === 'tail') color.setHex(livery.tail);
       else if (part.name === 'engine') color.setHex(livery.engines);
       else color.copy(part.color);
       for (let k = 0; k < 9; k += 3) {
@@ -203,7 +195,7 @@ export function modelBody(model: AircraftModel, lod: ModelLodIndex, livery: Mode
 export function modelLodObject(
   model: AircraftModel,
   lod: ModelLodIndex,
-  livery: ModelLivery,
+  livery: AircraftLivery,
   material: Material,
   outline: Material,
 ) {
@@ -246,7 +238,7 @@ function spinnerMaterial(color: Color) {
  * takes over (`enter`) and gives way again (`leave`); the gap keeps a level from flickering. */
 export const lodPixels = [
   { enter: 260, leave: 210 },
-  { enter: 14, leave: 11 },
+  { enter: 8, leave: 6 },
 ] as const;
 
 /** The level to draw: 0 near, 1 middle, 2 far (the procedural mesh). */

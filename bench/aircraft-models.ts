@@ -3,9 +3,10 @@
 //   node --experimental-strip-types --import ./bench/register.ts bench/aircraft-models.ts <fr24 models dir>
 // The sources are glTF 1.0 binaries, which three's GLTFLoader no longer reads (it accepts glTF 2.0
 // only), so a small reader below turns them into triangles. The rest is three's own tooling: the
-// meshoptimizer simplifier bundled with three (what SimplifyModifier wraps), BufferGeometryUtils for
-// welding and creased normals, Raycaster for placing window panes, and GLTFExporter for glTF 2.0
-// output. Textures are dropped: every part gets a flat colour, and the fuselage, fin and engines are
+// meshoptimizer simplifier bundled with three (SimplifyModifier wraps it but takes neither locked
+// vertices nor the sloppy mode, so it is called directly), BufferGeometryUtils for welding and
+// creased normals, Raycaster for placing window panes and door panels, and GLTFExporter for
+// glTF 2.0 output. Textures are dropped: every part gets a flat colour, and the fuselage, fin and engines are
 // tinted per flight at run time with TASK-315's seeded liveries (`src/render3d/aircraft-models.ts`).
 // Each type is turned to +x forward, +y up, +z starboard, scaled to its catalogue length and span
 // (span by stretching the wings outside the fuselage only) and set on TASK-307's procedural gear
@@ -327,6 +328,13 @@ function priorAt(layout: ReturnType<typeof aircraftLayout>, x: number) {
 
 const wingGrey = [0.82, 0.84, 0.86] as const;
 const glass = [0.137, 0.216, 0.278] as const;
+/** TASK-315's thin livery bands: part name, fractions of the length and section angles. */
+const liveryStrips = [
+  ['band-cheatline', -0.44, 0.395, 1.45, 1.58],
+  ['band-cheatline-trim', -0.42, 0.39, 1.62, 1.665],
+  ['band-belly-trim', -0.43, 0.45, 1.7, 1.75],
+  ['band-tailcone-trim', -0.27, 0.395, 1.5, 1.555],
+] as const;
 /** TASK-315's door seam colour. */
 const doorPart = 'cd3d8dd';
 
@@ -339,13 +347,13 @@ const hex = (c: readonly number[]) =>
 
 interface Prepared {
   type: AircraftType;
-  /** Triangles in the final frame. */
+  /** Triangles in the final frame, wound outward by the sources' normals. */
   position: Float32Array;
-  normal: Float32Array;
   /** Per triangle: a part name ('hull', 'tail', 'engine', 'wing', 'glass', 'c<rrggbb>'). */
   part: string[];
   spinners: { kind: SpinKind; hub: Vector3; position: Float32Array }[];
   profile: [x: number, y: number, height: number, width: number][];
+  /** Scale along the length, of the fuselage section, and of the wings outside it. */
   scale: { x: number; body: number; wing: number };
 }
 
@@ -404,12 +412,6 @@ function prepare(source: Source, dir: string): Prepared {
     position[i + 1] = position[i + 1]! * body;
     position[i + 2] = (position[i + 2]! - zMid) * body;
   }
-  const scaleNormals = (sxN: number, syN: number, szN: number) => {
-    for (let i = 0; i < normal.length; i += 3) {
-      v.set(normal[i]! / sxN, normal[i + 1]! / syN, normal[i + 2]! / szN).normalize();
-      v.toArray(normal, i);
-    }
-  };
   if (!helicopter) {
     // Body scale: the length scale, or less where the source spans less than the catalogue
     // type (an ATR 42 drawn as an ATR 72 keeps its fuselage section); the wings outside the
@@ -425,7 +427,6 @@ function prepare(source: Source, dir: string): Prepared {
       position[i + 2] =
         Math.abs(z) <= r ? z * ratio : Math.sign(z) * (r * ratio + (Math.abs(z) - r) * k);
     }
-    scaleNormals(1, ratio, (ratio + k) / 2);
     body *= ratio;
     wing *= k;
   }
@@ -458,6 +459,15 @@ function prepare(source: Source, dir: string): Prepared {
       const h = Math.max(0.05, (top - bottom) / 2);
       profile[i] = [x, Math.min(top, bottom + 2 * h) - h, h, Math.min(width, nw)];
     }
+  // Along the cabin, a median over five stations drops the wing box, sponsons and fairings
+  // that the sections catch.
+  const raw = profile.map((row) => [...row]);
+  for (let i = 16; i <= 36; i++)
+    for (const k of [1, 2, 3])
+      profile[i]![k] = raw
+        .slice(i - 2, i + 3)
+        .map((row) => row[k]!)
+        .sort((a, b) => a - b)[2]!;
   const profileAt = (x: number) => {
     const f = Math.min(40, Math.max(0, (x / L + 0.5) * 40));
     const a = profile[Math.floor(f)]!,
@@ -483,8 +493,7 @@ function prepare(source: Source, dir: string): Prepared {
   const face = new Vector3(),
     e1 = new Vector3(),
     e2 = new Vector3();
-  const keepPosition: number[] = [],
-    keepNormal: number[] = [];
+  const keepPosition: number[] = [];
   const spinTriangles = new Map<
     string,
     { kind: SpinKind; position: number[]; rotated: number[] }
@@ -569,9 +578,6 @@ function prepare(source: Source, dir: string): Prepared {
     }
     part.push(name);
     keepPosition.push(...vertices);
-    keepNormal.push(
-      ...order.flatMap((k) => [normal[o + k * 3]!, normal[o + k * 3 + 1]!, normal[o + k * 3 + 2]!]),
-    );
   }
   // Spinning parts keep their shape: scaled uniformly by the body scale about their hub, which
   // goes where the airframe's mapping puts it.
@@ -596,7 +602,6 @@ function prepare(source: Source, dir: string): Prepared {
   return {
     type,
     position: Float32Array.from(keepPosition),
-    normal: Float32Array.from(keepNormal),
     part,
     spinners,
     profile: profile.map(
@@ -620,7 +625,7 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
   });
   const helicopter = type.class === 'helicopter';
   const doors: number[] = [];
-  if (helicopter) return { glass: [], doors };
+  if (helicopter) return { glass: [], doors, bands: new Map<string, number[]>() };
   const mesh = surface;
   const raycaster = new Raycaster();
   const L = type.lengthM;
@@ -693,7 +698,41 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
         }
     }
   }
-  if (modelled) return { glass: [], doors };
+  // Thin livery bands (TASK-315's cheatline and pinstripes, fractions of the length and section
+  // angles from the crown) as strips cast onto the skin: a colour per facet cannot draw a band
+  // narrower than the model's facets. The flight's livery picks the strips it uses.
+  const bands = new Map<string, number[]>();
+  const step = lod === 0 ? 0.5 : 2;
+  for (const [name, x0, x1, a0, a1] of liveryStrips) {
+    const strip: number[] = [];
+    for (const side of [-1, 1]) {
+      let previous: Vector3[] | null = null;
+      for (let x = x0 * L; x <= x1 * L + 1e-6; x += step) {
+        const top = hit(x, a0, side),
+          bottom = hit(x, a1, side);
+        const pair =
+          top && bottom && top.point.distanceTo(bottom.point) < 1
+            ? [top, bottom].map((h) => h.point.clone().addScaledVector(h.normal, 0.03))
+            : null;
+        if (previous && pair && previous[0]!.distanceTo(pair[0]!) < step * 1.6) {
+          const [a, d] = previous as [Vector3, Vector3];
+          const [b, c] = pair as [Vector3, Vector3];
+          const centre = new Vector3(x, profileAt(x).y, 0);
+          for (const [p, q, r] of [
+            [a, b, c],
+            [a, c, d],
+          ] as const) {
+            const outward = p.clone().sub(centre).setX(0);
+            const n = q.clone().sub(p).cross(r.clone().sub(p));
+            for (const v of n.dot(outward) < 0 ? [p, r, q] : [p, q, r]) strip.push(v.x, v.y, v.z);
+          }
+        }
+        previous = pair;
+      }
+    }
+    if (strip.length) bands.set(name, strip);
+  }
+  if (modelled) return { glass: [], doors, bands };
   for (const [deck, angle] of decks.entries()) {
     const upper = type.class === 'double_decker' && deck === 1;
     const from = (type.id === 'B748' && deck === 1 ? 0.235 : -0.33) * L;
@@ -774,7 +813,7 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
       }
     }
   }
-  return { glass: out, doors };
+  return { glass: out, doors, bands };
 }
 
 // ---- simplification and export ----------------------------------------------------------------
@@ -896,18 +935,23 @@ async function exportLod(prepared: Prepared, lod: number) {
     return { parts, ...windowPanes(prepared, lod, surface) };
   };
   const first = pass(0);
-  const reserve = (first.glass.length + first.doors.length) / 9;
+  const reserve =
+    (first.glass.length +
+      first.doors.length +
+      [...first.bands.values()].reduce((sum, b) => sum + b.length, 0)) /
+    9;
   const {
     parts,
     glass: panes,
     doors,
-  } = prepared.part.length > budgets[lod]! - spinTarget * prepared.spinners.length
+    bands,
+  } = prepared.part.length + reserve > budgets[lod]! - spinTarget * prepared.spinners.length
     ? pass(reserve)
     : first;
-  for (const [name, position] of [
-    ['glass', panes],
-    [doorPart, doors],
-  ] as const) {
+  for (const [name, position] of [['glass', panes], [doorPart, doors], ...bands] as [
+    string,
+    number[],
+  ][]) {
     if (!position.length) continue;
     const geometry = detail(position);
     const existing = parts.get(name);

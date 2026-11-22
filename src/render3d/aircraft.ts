@@ -30,19 +30,13 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftTypes, type AircraftType } from '../schema/aircraft';
 import { fixedWingGearStations } from '../sim/aircraft-motion';
 import { aircraftLayout, buildAircraftOutline } from '../render/aircraft-outline';
-import { aircraftLivery } from '../render/aircraft-livery';
+import { aircraftLivery, type AircraftLivery } from '../render/aircraft-livery';
 import { AircraftPoseTrack, pushbackDrawbarM } from '../render/aircraft-pose';
 import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
 import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
 import { placeAircraft } from './aircraft-attitude';
-import {
-  modelInfo,
-  modelLodObject,
-  selectLod,
-  type AircraftModels,
-  type ModelLivery,
-} from './aircraft-models';
+import { modelInfo, modelLodObject, selectLod, type AircraftModels } from './aircraft-models';
 import { beamTexture } from './lights';
 import { pointHalos } from './airfield-lights';
 
@@ -77,7 +71,7 @@ interface Model {
   lights: AircraftLightState;
   /** 0 to 1: how far the propellers and rotors have spun up. */
   spin: number;
-  livery: ModelLivery;
+  livery: AircraftLivery;
   /** TASK-318: the procedural mesh, drawn as the far level and for types without a model. */
   far: Group;
   /** The real model's levels once built, with their spinning parts and discs. */
@@ -192,7 +186,7 @@ export class Aircraft3D {
     side: DoubleSide,
   });
   private readonly requested = new Set<string>();
-  /** TASK-318: `models` loads the real models (none: procedural meshes only); `onLoad` asks
+  /** TASK-318: `loader` loads the real models (null: procedural meshes only); `onLoad` asks
    * for a frame when a model file has arrived. */
   constructor(
     private readonly elevationM: number,

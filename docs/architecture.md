@@ -3256,6 +3256,24 @@ while the run is paused. The camera follows the selected aircraft (`Scene3D.foll
 switch "Follow with camera"), and a distant aircraft picks within 12 px. In 2D the night layer
 shows the same lights steadily (`render/layers/airfield-lights.ts`).
 
+TASK-318: real aircraft models in 3D. `bench/aircraft-models.ts` prepares Flightradar24's
+GPL-2.0 glTF set (FlightGear FGMEMBERS models; NOTICE) offline into `fixtures/aircraft`: per
+mapped catalogue type two glTF 2.0 files, LOD0 (at most 15,000 triangles) and LOD1 (at most
+2,000), with flat part colours (`hull`, `tail`, `engine` take the flight's livery; `wing`,
+`glass` and `c<rrggbb>` parts keep theirs), spinning parts as `mount-<kind>-<n>` nodes turning
+about their local +y, and `models.json` (files, triangles, bytes, scale, a fuselage profile every
+2.5% of the length, light mounts on the model). Each model is turned to +x forward, +y up, +z
+starboard, scaled to the catalogue length and span (the wings outside the fuselage stretched to
+the span, the fuselage section scaled no more than the length), and set with its belly on the
+procedural body's so that TASK-307's procedural landing gear, drawn with every level, reaches it.
+`render3d/aircraft-models.ts` fetches a file the first time an aircraft of its type needs that
+level and shares each level's geometry, merged and coloured per livery, between aircraft.
+`Aircraft3D.setDetail` picks the level by the aircraft's on-screen size across its length and
+span (`lodPixels`: LOD0 from 260 px down to 210, LOD1 from 8 px down to 6, else TASK-315's
+procedural mesh, which also stands in while a file loads and for types without a model). The
+real levels use the model's light mounts, the model's own skids on a helicopter, and
+`boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
+
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
 switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
