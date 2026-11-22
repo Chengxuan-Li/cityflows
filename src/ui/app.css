@@ -1566,6 +1566,18 @@ input[type='file']::file-selector-button {
   font-size: var(--text-small);
 }
 
+.flight-board table {
+  font-size: var(--text-small);
+}
+
+.flight-board :is(th, td):not(:nth-child(4)) {
+  white-space: nowrap;
+}
+
+.flight-board td:nth-child(4) {
+  overflow-wrap: normal;
+}
+
 .inspector th:first-child {
   padding-left: 0;
   text-align: left;

@@ -9,6 +9,11 @@ import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
 import { AircraftInspector } from './inspector/aircraft';
+import {
+  FlightBoardInspector,
+  FlightBoardProvider,
+  StandInspector,
+} from './inspector/flight-board';
 import { ParkingInspector, ParkedSpaceInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
@@ -51,7 +56,7 @@ function Inspector() {
         roads={selectedRoads.map((id) => city.roads[id]!)}
       />
     );
-  if (!selection) return null;
+  if (!selection) return compiled.airside ? <FlightBoardInspector /> : null;
   if (personId)
     return <PersonInspector id={personId} detail={person} city={city} compiled={compiled} />;
   switch (selection.kind) {
@@ -59,6 +64,10 @@ function Inspector() {
       return <TrainInspector id={selection.id} route={selection.route} />;
     case 'aircraft':
       return <AircraftInspector id={selection.id} />;
+    case 'stand':
+      return <StandInspector index={selection.stand} />;
+    case 'flight-board':
+      return <FlightBoardInspector />;
     case 'track':
       return <RailInspector kind="track" index={selection.track} />;
     case 'platform':
@@ -169,6 +178,14 @@ function useDocumentAppearance() {
 }
 
 export function App() {
+  return (
+    <FlightBoardProvider>
+      <AppContent />
+    </FlightBoardProvider>
+  );
+}
+
+function AppContent() {
   useDocumentAppearance();
   useEffect(() => {
     if (window.cityflows) {
@@ -189,6 +206,7 @@ export function App() {
   const error = useAppStore((state) => state.error);
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
   const selection = useAppStore((state) => state.selection);
+  const airport = useAppStore((state) => state.session?.compiled.airside !== undefined);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
   const phone = usePhone();
@@ -197,36 +215,37 @@ export function App() {
 
   useEffect(installShortcuts, []);
 
-  const inspector = selection ? (
-    <aside className="inspector" id="inspector" aria-label="Inspector">
-      {!phone && (
-        <CloseButton
-          label="Close inspector"
-          className="close-sheet"
-          onClick={() => useAppStore.getState().select(null)}
-        />
-      )}
-      <Inspector />
-      <NodeTopologyActions />
-      {rejectedEdit.length > 0 && (
-        <div className="edit-diagnostics" role="alert">
-          <strong>Edit rejected</strong>
-          <ul>
-            {rejectedEdit
-              .filter(({ severity }) => severity === 'error')
-              .map(({ message }, index) => (
-                <li key={index}>{message}</li>
-              ))}
-          </ul>
-        </div>
-      )}
-    </aside>
-  ) : (
-    <div className="no-selection">
-      <p>No selection</p>
-      <ShowHints />
-    </div>
-  );
+  const inspector =
+    selection || (airport && !phone) ? (
+      <aside className="inspector" id="inspector" aria-label="Inspector">
+        {!phone && selection && (
+          <CloseButton
+            label="Close inspector"
+            className="close-sheet"
+            onClick={() => useAppStore.getState().select(null)}
+          />
+        )}
+        <Inspector />
+        <NodeTopologyActions />
+        {rejectedEdit.length > 0 && (
+          <div className="edit-diagnostics" role="alert">
+            <strong>Edit rejected</strong>
+            <ul>
+              {rejectedEdit
+                .filter(({ severity }) => severity === 'error')
+                .map(({ message }, index) => (
+                  <li key={index}>{message}</li>
+                ))}
+            </ul>
+          </div>
+        )}
+      </aside>
+    ) : (
+      <div className="no-selection">
+        <p>No selection</p>
+        <ShowHints />
+      </div>
+    );
 
   return (
     <div

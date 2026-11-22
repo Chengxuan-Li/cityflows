@@ -36,7 +36,11 @@ import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
 import { createAircraftFleet, type AircraftFleet } from './aircraft';
 import { createAirsideGiveWay } from './airside-give-way';
-import { createAirsideRotation } from './airside-rotation';
+import {
+  createFlightOperations,
+  type FlightBoard,
+  type FlightOperationsMetrics,
+} from './flight-operations';
 import { mouthAt, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
@@ -82,9 +86,12 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
    * kept lane plan, the lot stop looked up only on the way to the destination's lane) and check
    * each against the full computation, so a run with it gives the same results. */
   debugSkips?: boolean;
-  /** TASK-298: what drives the aircraft each step, where the city has an airport section; the
-   * scripted rotation by default (flight operations, TASK-299, supply their own). */
-  airsideOperations?: (fleet: AircraftFleet) => { step(timeS: number): void };
+  /** Optional fleet driver for scripted scenarios. */
+  airsideOperations?: (fleet: AircraftFleet) => {
+    step(timeS: number): void;
+    metrics?(): FlightOperationsMetrics;
+    board?(timeS: number): FlightBoard;
+  };
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -111,7 +118,7 @@ function createRun({
   debugParkingClaims = false,
   debugLaneOrder = false,
   debugSkips = false,
-  airsideOperations = (fleet) => createAirsideRotation(fleet, scenario.seed, scenario.startS),
+  airsideOperations = (fleet) => createFlightOperations(fleet, scenario.seed, scenario.startS),
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -257,8 +264,7 @@ function createRun({
     undefined,
     debugSkips,
   );
-  // TASK-298: aircraft, where the city has an airport section; a scripted rotation drives them
-  // until flight operations (TASK-299) do.
+  // Airports run their own seeded flight day when the city carries an airside graph.
   const fleet = compiled.airside ? createAircraftFleet(compiled.airside, scenario.seed) : null;
   const operations = fleet ? airsideOperations(fleet) : null;
   const airsideGiveWay = (city: CompiledCity) =>
@@ -1926,6 +1932,7 @@ function createRun({
   return {
     patch,
     time,
+    flightBoard: () => operations?.board?.(time()) ?? null,
     snapshot,
     inspect,
     metrics: () => {
@@ -1935,6 +1942,7 @@ function createRun({
       if (persons.enabled) metrics.persons = persons.metrics();
       if (transit) metrics.transit = transit.metrics();
       if (fleet) metrics.aircraft = fleet.metrics();
+      if (operations?.metrics) metrics.flights = operations.metrics();
       return metrics;
     },
     inspectWalker: (id: number): WalkerDetail | null => {
@@ -2102,10 +2110,11 @@ export function createEngine() {
     },
     snapshot: () => loaded().snapshot(),
     metrics: () => loaded().metrics(),
+    flightBoard: () => loaded().flightBoard(),
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
     inspectPerson: (id) => loaded().inspectPerson(id),
     signalTiming: () => loaded().signalTiming(),
     stateHash: () => loaded().stateHash(),
-  } satisfies TrafficEngine;
+  } satisfies TrafficEngine & { flightBoard(): FlightBoard | null };
 }

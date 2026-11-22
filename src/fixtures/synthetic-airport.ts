@@ -218,6 +218,7 @@ export function syntheticAirport(seed = 1, layout: 'parallel' | 'backtrack' = 'p
     ref: string,
     maxCode: 'C' | 'E',
     stops: [number, string, StandKind, 'C' | 'E'][],
+    endX: number,
   ) {
     let previous = apronEntry;
     for (const [x, standRef, standKind, standCode] of stops) {
@@ -226,20 +227,34 @@ export function syntheticAirport(seed = 1, layout: 'parallel' | 'backtrack' = 'p
       stand(root, standRef, standKind, standCode);
       previous = root;
     }
+    // Clearance beyond the last lead-in for a pushback facing the apron exit.
+    edge(previous, airNode(endX, apronY), kind, ref, maxCode);
   }
-  apronLane('taxiway', 'C', 'E', [
-    [1140, '3', 'contact', 'E'],
-    [1050, '2', 'contact', 'E'],
-    [960, '1', 'contact', 'E'],
-    [765, 'R2', 'remote', 'C'],
-    [675, 'R1', 'remote', 'C'],
-  ]);
-  apronLane('taxilane', 'T', 'C', [
-    [1600, '4', 'contact', 'C'],
-    [1660, '5', 'contact', 'C'],
-    [1720, '6', 'contact', 'C'],
-    [2000, 'M1', 'maintenance', 'C'],
-  ]);
+  apronLane(
+    'taxiway',
+    'C',
+    'E',
+    [
+      [1140, '3', 'contact', 'E'],
+      [1050, '2', 'contact', 'E'],
+      [960, '1', 'contact', 'E'],
+      [765, 'R2', 'remote', 'C'],
+      [675, 'R1', 'remote', 'C'],
+    ],
+    580,
+  );
+  apronLane(
+    'taxilane',
+    'T',
+    'C',
+    [
+      [1600, '4', 'contact', 'C'],
+      [1660, '5', 'contact', 'C'],
+      [1720, '6', 'contact', 'C'],
+      [2000, 'M1', 'maintenance', 'C'],
+    ],
+    2100,
+  );
 
   const helipad = allocateId(city, 'hl');
   const helipadRing = rectangle(2131, 376, 2159, 404);

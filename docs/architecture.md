@@ -1816,11 +1816,30 @@ carry no persons and generate no road trips.
 - **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
   `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
   parked, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
-  `engine.load({ airsideOperations })` supplies the driver; by default a scripted rotation
-  (`sim/airside-rotation.ts`): every other stand holds a parked aircraft at the start, and every
-  5 minutes it alternates the departure of the aircraft parked longest past its turnaround with
-  an arrival to a free stand, on the runway end TASK-308's chooser picks for a 240-degree 8 kt
-  wind (London City's schedule mix there, else every fixed-wing type the runway takes).
+  `engine.load({ airsideOperations })` can supply a scripted driver. The default driver
+  (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
+  starting day. It uses the ends chosen for a 240-degree, 8 kt wind. A fixed-wing clearance
+  covers the ground route from approach to stand, stand to runway, or stand to stand. Another
+  arrival may enter the 10 km final approach after the preceding take-off roll begins. This
+  keeps opposite taxi and runway crossings from competing on a shared apron. Helicopters use
+  separate pad slots and a shorter schedule.
+- **Stands and service.** Stand selection checks that the type can land, reach the stand,
+  push back and depart on the chosen ends. Passenger flights prefer contact stands. Private
+  and cargo flights prefer their designated stands where available. Within each kind the
+  allocator prefers the smallest suitable code, then the shorter combined surface route. It
+  keeps wingtip clearance for pushback around occupied and reserved stands. Arrivals with no
+  stand wait off-map at the entry to the final approach for up to 30 minutes. A diversion
+  cancels the paired departure. Turnaround starts when the aircraft parks. Long turns can
+  move to a remote stand, maintenance uses a maintenance or nearest hangar-apron stand, and
+  overnight aircraft use remote parking where available, with a return tow due 20 minutes
+  before departure. A scenario opened partway through the schedule places aircraft whose
+  turns are already in progress on compatible stands. The bundled airports' browser showcases
+  run to midnight from the stored start time. The archives remain unchanged.
+- **Flight board.** The worker exposes the day's schedule, movement states, delays and stand
+  occupancy separately from the per-frame pose snapshot. Counts cover movements scheduled
+  at or after the scenario start. Arrival delay is measured at touchdown and departure delay
+  at the end of climb. The status bar shows the movement count, and the inspector shows the
+  board and the code, kind and occupancy of a picked stand.
 - **Snapshot.** `VehicleSnapshot.aircraft`: id, registration-like id (by ICAO prefix), type,
   position, height, heading, speed, state (approach, flare, landing-roll, go-around, taxi,
   holding, line-up, takeoff-roll, rotation, climb, parked, pushback, tow and the helicopter

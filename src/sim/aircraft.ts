@@ -1312,6 +1312,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return null;
   }
 
+  function standLeg(craft: Craft, stand: number) {
+    const s = graph.stands[stand]!;
+    let node = s.root;
+    const segments = s.leadIn.map((e) => {
+      const edge = graph.edges[e]!;
+      const forward = edge.from === node;
+      node = forward ? edge.to : edge.from;
+      return arcSegment(arcOf(e, forward));
+    });
+    return buildLeg(craft, 'taxi', segments);
+  }
+
   function spawnParked(input: { typeId: string; stand: string }, timeS = nowS): AircraftResult {
     const craft = newCraft(input.typeId);
     if (typeof craft === 'string') return { ok: false, reason: craft };
@@ -1321,15 +1333,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (stand === undefined) return { ok: false, reason: `no stand ${input.stand}` };
     const check = standCheck(craft, stand);
     if (check) return { ok: false, reason: check };
-    const s = graph.stands[stand]!;
-    let node = s.root;
-    const segments = s.leadIn.map((e) => {
-      const edge = graph.edges[e]!;
-      const forward = edge.from === node;
-      node = forward ? edge.to : edge.from;
-      return arcSegment(arcOf(e, forward));
-    });
-    const leg = buildLeg(craft, 'taxi', segments);
+    const leg = standLeg(craft, stand);
     crafts.push(craft);
     park(craft, leg, stand, timeS);
     return { ok: true, id: craft.id };
@@ -1395,12 +1399,54 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (stand < 0) return { ok: false, reason: `no stand ${target.stand}` };
       const check = standCheck(craft, stand);
       if (check) return { ok: false, reason: check };
-      standBound[stand] = craft.id;
     } else node = 'node' in target ? target.node : (graph.hangars[target.hangar]?.node ?? -1);
     if (stand < 0 && node < 0) return { ok: false, reason: 'no tow target' };
+    if (!towLegs(craft, stand, node)) return { ok: false, reason: 'no route to tow target' };
+    if (stand >= 0) standBound[stand] = craft.id;
     craft.request = { kind: 'tow', stand, node };
     craft.retryS = -Infinity;
     return { ok: true, id };
+  }
+
+  function towLegs(craft: Craft, stand: number, node: number) {
+    const goal = stand >= 0 ? standGoal(stand) : (arc: number) => arcEnd(graph, arc) === node;
+    return legsFromStand(craft, 'tow', goal, stand, (arcs) => arcs.map((a) => arcSegment(a)));
+  }
+
+  function departurePlan(craft: Craft, runway: AirsideRunwayC, end: number) {
+    for (const option of lineUps(craft, runway, end)) {
+      const legs = legsFromStand(
+        craft,
+        'taxi',
+        (a) => a === option.goal,
+        -1,
+        (arcs) => [...arcs.slice(0, -1).map((a) => arcSegment(a)), ...option.after()],
+      );
+      if (legs) return { ...legs, lineUpU: option.lineUpU };
+    }
+    return null;
+  }
+
+  /** A stand must have both a landing route and a pushback/taxi route for the selected ends. */
+  function standTurnCost(stand: number, typeId: string, arrivalEnd: string, departureEnd: string) {
+    const craft = newCraft(typeId);
+    if (typeof craft === 'string' || craft.code < 0) return Infinity;
+    if (graph.stands[stand]!.maxCode < craft.code || !standExit(craft, stand)) return Infinity;
+    const arrival = findEnd(arrivalEnd);
+    const departure = findEnd(departureEnd);
+    if (!arrival || !departure) return Infinity;
+    const inbound = graph.runways[arrival.runway]!;
+    const outbound = graph.runways[departure.runway]!;
+    if (Math.min(inbound.maxCode, outbound.maxCode) < craft.code) return Infinity;
+    craft.stand = stand;
+    craft.leg = standLeg(craft, stand);
+    const outboundPlan = departurePlan(craft, outbound, departure.end);
+    if (!outboundPlan) return Infinity;
+    for (const option of landings(craft, inbound, arrival.end, stand)) {
+      const landing = option();
+      if (landing) return landing.leg.endM + outboundPlan.legs.reduce((m, leg) => m + leg.endM, 0);
+    }
+    return Infinity;
   }
 
   /** Starts a parked aircraft's departure or tow once its legs can be locked. */
@@ -1411,31 +1457,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     let plan: { legs: Leg[]; cost: number; next: Next[] } | null = null;
     if (request.kind === 'departure') {
       const runway = graph.runways[craft.runway]!;
-      for (const option of lineUps(craft, runway, request.end)) {
-        const legs = legsFromStand(
-          craft,
-          'taxi',
-          (a) => a === option.goal,
-          -1,
-          (arcs) => [...arcs.slice(0, -1).map((a) => arcSegment(a)), ...option.after()],
-        );
-        if (!legs) continue;
-        const last = legs.legs.at(-1)!;
-        addGates(craft, last, runway.idx);
+      const departure = departurePlan(craft, runway, request.end);
+      if (departure) {
+        addGates(craft, departure.legs.at(-1)!, runway.idx);
         plan = {
-          ...legs,
-          next: [{ kind: 'takeoff', end: request.end, lineUpU: option.lineUpU, pauseS: LINEUP_S }],
+          ...departure,
+          next: [
+            { kind: 'takeoff', end: request.end, lineUpU: departure.lineUpU, pauseS: LINEUP_S },
+          ],
         };
-        break;
       }
     } else if (request.kind === 'tow') {
-      const goal =
-        request.stand >= 0
-          ? standGoal(request.stand)
-          : (arc: number) => arcEnd(graph, arc) === request.node;
-      const legs = legsFromStand(craft, 'tow', goal, request.stand, (arcs) =>
-        arcs.map((a) => arcSegment(a)),
-      );
+      const legs = towLegs(craft, request.stand, request.node);
       if (legs) {
         addGates(craft, legs.legs.at(-1)!, -1);
         plan = {
@@ -1488,6 +1521,28 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return { ok: false, reason: 'not a parked helicopter' };
     craft.request = { kind: 'helicopter-departure', heading: headingRad };
     return { ok: true, id };
+  }
+  function spawnHelicopterParked(typeId: string, helipad: string, timeS: number): AircraftResult {
+    const craft = newCraft(typeId);
+    if (typeof craft === 'string') return { ok: false, reason: craft };
+    if (craft.type.performance.kind !== 'helicopter')
+      return { ok: false, reason: 'not a helicopter' };
+    const pad = graph.helipads.findIndex(({ id }) => id === helipad);
+    if (pad < 0 || helipadOccupant[pad] !== -1) return { ok: false, reason: 'helipad unavailable' };
+    craft.helipad = pad;
+    craft.mode = 'parked';
+    craft.stillSinceS = timeS;
+    craft.pose = {
+      position: graph.helipads[pad]!.pos,
+      headingRad: 0,
+      stationM: 0,
+      heightM: 0,
+      speedMps: 0,
+      phase: 'hover-taxi',
+    };
+    crafts.push(craft);
+    helipadOccupant[pad] = craft.id;
+    return { ok: true, id: craft.id };
   }
   function requestHoverTaxi(id: number, helipad: string): AircraftResult {
     const craft = crafts[id - 1];
@@ -1621,6 +1676,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return;
     }
     if (air.kind === 'helicopter' && craft.next[0]?.kind === 'rest') {
+      if (pose.phase === 'vertical-descent') {
+        events.push({ timeS, id: craft.id, kind: 'landed' });
+        counts.landed++;
+      }
+      events.push({ timeS, id: craft.id, kind: 'parked' });
       craft.next = [];
       craft.air = null;
       craft.mode = 'parked';
@@ -1972,6 +2032,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   return {
     graph,
     spawnParked,
+    spawnHelicopterParked,
     requestArrival,
     requestDeparture,
     requestTow,
@@ -1986,6 +2047,29 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     drainEvents: () => events.splice(0),
     /** The aircraft parked at a stand, or -1. */
     standOccupant: (stand: number) => standOccupant[stand]!,
+    standReservation: (stand: number) => standBound[stand]!,
+    standTurnCost,
+    helipadFree: (pad: number) => helipadOccupant[pad] === -1,
+    registrationOf: (id: number) => crafts[id - 1]?.registration,
+    takeoffUnderway(id: number) {
+      const craft = crafts[id - 1]!;
+      return craft.mode === 'air' && craft.air?.kind === 'takeoff';
+    },
+    departureClear(id: number) {
+      const craft = crafts[id - 1]!;
+      return (
+        craft.mode === 'air' &&
+        craft.air?.kind === 'takeoff' &&
+        craft.pose !== null &&
+        craft.pose.stationM > craft.air.clearM
+      );
+    },
+    statusOf: (id: number) => {
+      const craft = crafts[id - 1];
+      return craft?.pose && craft.mode !== 'done' && craft.mode !== 'queued'
+        ? stateOf(craft)
+        : undefined;
+    },
     /** Whether a stand is free and not bound for an arrival or a tow. */
     standFree: (stand: number) => standOccupant[stand] === -1 && standBound[stand] === -1,
     /** A parked aircraft with no request. */

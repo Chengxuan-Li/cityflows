@@ -139,6 +139,8 @@ test('both synthetic airports open from Test layouts and fit the runway on the m
     await expect(button(page, 'Play')).toBeEnabled();
 
     const source = await city(page);
+    await expect(page.getByRole('table', { name: 'Departures' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Arrivals' })).toBeVisible();
     expect(source.airport?.turnPads).toHaveLength(pads);
     const ends = Object.values(source.airport!.runways)[0]!.ends.map(({ pos }) => pos);
     const canvas = page.locator('canvas[data-airside-areas]');
@@ -154,6 +156,26 @@ test('both synthetic airports open from Test layouts and fit the runway on the m
         }, ends),
       )
       .toBe(true);
+    const stand = Object.values(source.airport!.stands).find(({ ref }) => ref === 'M1')!;
+    const point = await canvas.evaluate((element, pos) => {
+      const { left, top } = element.getBoundingClientRect();
+      const { x, y } = window.cityflows!.worldToScreen!(pos);
+      return { x: left + x, y: top + y };
+    }, stand.pos);
+    await page.mouse.click(point.x, point.y);
+    const inspector = page.getByRole('region', { name: 'Stand inspector' });
+    await expect(inspector.getByRole('heading', { name: 'Stand M1' })).toBeVisible();
+    await expect(inspector).toContainText('Maintenance');
+    await expect(inspector).toContainText('Occupancy');
+    await button(page, 'Open flight board').click();
+    const departures = page.getByRole('table', { name: 'Departures' });
+    await expect(departures).toBeVisible();
+    const firstFlight = await departures.locator('tbody tr').first().innerText();
+    await page
+      .getByRole('region', { name: 'Departures' })
+      .getByRole('button', { name: 'Later' })
+      .click();
+    await expect(departures.locator('tbody tr').first()).not.toHaveText(firstFlight);
     await page.screenshot({ path: info.outputPath(`${id}.png`) });
 
     await page.goto(`/?city=${id}`);

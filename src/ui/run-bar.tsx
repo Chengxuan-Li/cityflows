@@ -2,6 +2,7 @@ import { speeds, useAppStore } from './store';
 import { useEnabled } from './commands';
 import { MenuItem, ToolbarButton, type ToolbarAction } from './controls';
 import { labels } from './shortcuts';
+import { useFlightBoard } from './flight-board-data';
 
 function clock(timeS: number) {
   const pad = (value: number) => String(Math.floor(value)).padStart(2, '0');
@@ -116,6 +117,7 @@ export function RunControls({ inMenu = false }: { inMenu?: boolean }) {
 /** Clock, trip counts, run notices, the synthetic-traffic notice and map attribution. */
 export function StatusBar() {
   const run = useAppStore((state) => state.run);
+  const flights = useFlightBoard();
   const attribution = useAppStore((state) => state.session?.project.city.geo?.source.attribution);
   const counts = run?.counts;
   return (
@@ -123,6 +125,19 @@ export function StatusBar() {
       <output className="clock" aria-label="Simulation clock">
         {run ? clock(run.timeS) : '—'}
       </output>
+      {flights && (
+        <button
+          aria-label="Open flight board"
+          aria-description={`${flights.completed} of ${flights.scheduled} movements complete`}
+          onClick={() => {
+            const { inspectorOpen, select, toggleInspector } = useAppStore.getState();
+            select({ kind: 'flight-board' });
+            if (!inspectorOpen) toggleInspector();
+          }}
+        >
+          {flights.completed} / {flights.scheduled} movements
+        </button>
+      )}
       {counts && (
         <>
           <span className="status-counts">
