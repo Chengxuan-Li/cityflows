@@ -58,6 +58,11 @@ export const realPlaces = [
     name: 'York city centre',
     note: 'City walls and station: left-hand traffic, mini-roundabouts',
   },
+  {
+    id: 'london-city-airport',
+    name: 'London City Airport',
+    note: 'One runway between the docks: taxiways, stands, the DLR',
+  },
 ];
 
 export async function bundledProject(id: string): Promise<OpenResult> {

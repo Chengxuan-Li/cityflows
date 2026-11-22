@@ -3,7 +3,8 @@ import { writeFile } from 'node:fs/promises';
 import { button, pageErrors, toolbarAction } from './helpers';
 import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 
-// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck; TASK-286 York). Each opens from the
+// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck; TASK-286 York; TASK-295
+// London City Airport). Each opens from the
 // panel and by `?city=<id>`, paused at 07:00, and every place but Freiburg reports its frame
 // figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
 // morning plays, and the 3D build).
@@ -25,6 +26,7 @@ const realPlaces = [
   { id: 'philadelphia', name: 'Philadelphia Center City' },
   { id: 'luebeck', name: 'Lübeck Altstadt' },
   { id: 'york', name: 'York city centre' },
+  { id: 'london-city-airport', name: 'London City Airport' },
 ];
 /** Bundled, opened by `?city=`, not in the panel. */
 const heldOut: { id: string; name: string }[] = [];
@@ -91,6 +93,11 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/?city=${id}`);
     await opened(page, name);
+    // TASK-295: an airport's airside is drawn as paving (aprons, taxiways, the runway).
+    if (id === 'london-city-airport')
+      expect(
+        Number(await page.locator('canvas[data-airside-areas]').getAttribute('data-airside-areas')),
+      ).toBeGreaterThan(2);
     await page.screenshot({ path: info.outputPath(`${id}-2d.png`) });
     await button(page, 'Play').click();
     await expect

@@ -227,6 +227,7 @@ interface GeoSource {
 
 interface City {
   rail?: RailNetwork;      // TASK-126: independent track network
+  airport?: Airport;       // TASK-295: the airside of an airport in the area (section 4)
   schemaVersion: 3;
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
@@ -517,6 +518,86 @@ any other value; absent when untagged, which draws wired. It adds optional `Rail
 { pos, osmId }[]`, the mapped `power=catenary_mast` nodes inside the bbox (omitted when there are
 none); compiled `RailGraph.masts` carries them. No schema-version bump: older projects omit both
 and draw every track wired with generated supports.
+
+TASK-295 adds optional `City.airport: Airport` (`schema/airport.ts`, validated by
+`airport.schema.ts`) without a version bump. It is present only where the import read aeroway
+features (an aerodrome outline alone is none), so every other city, its archive and its hashes are
+unchanged; older projects omit it. Ids use the shared counter after every other import step:
+`tm:` terminals, `gt:` gates, `rw:` runways, `st:` stands, `an:` airside nodes, `ae:` edges, `hp:`
+holding positions, `hl:` helipads. Units are metres and radians in the local frame; a heading is
+`atan2(dy, dx)` (x east, y south). The aircraft size scale is the ICAO aerodrome reference code
+letter `A` to `F` of the aircraft catalogue (`schema/aircraft.ts`: `AircraftCode`,
+`codeSpanLimitM` the wingspan each admits, exclusive: 15, 24, 36, 52, 65, 80 m; `codeAdmits`).
+
+```ts
+interface Airport {
+  name: string | null; iata?: string; icao?: string;
+  boundary?: Vec2[][];                       // the aerodrome outline, outer ring then holes
+  nodes: Record<string, AirsideNode>;        // an:  { pos, layer, osmId?, provenance }
+  edges: Record<string, AirsideEdge>;        // ae:  undirected (a `oneway` one runs along its line)
+  runways: Record<string, Runway>;           // rw:
+  holdingPositions: Record<string, HoldingPosition>; // hp:
+  stands: Record<string, Stand>;             // st:
+  gates: Record<string, Gate>;               // gt:  { ref?, pos, terminal: tm: | null, osmId }
+  terminals: Record<string, Terminal>;       // tm:  { name?, rings, group, osmId }
+  helipads: Record<string, Helipad>;         // hl:  { pos, ring?, ref?, name?, osmId }
+  surfaces: AirsideSurface[];                // mapped aprons and runway, taxiway, turn-pad areas
+  hangars: { rings; name?; ref?; osmId }[];
+  windsocks: { pos; lit?; osmId }[];
+  approachAids: { kind; pos; facing?; runway?; end?; osmId }[]; // aeroway=navigationaid
+  turnPads: { pos; node?; osmId }[];
+  roadCrossings: RoadCrossing[];
+}
+interface AirsideEdge {
+  id; from; to; line: Vec2[];                // first point at `from`, last at `to`
+  kind: 'runway' | 'taxiway' | 'taxilane' | 'lead_in';
+  layer: number; widthM: number;             // mapped `width`, else the code's width (inferred)
+  maxCode: AircraftCode | null;              // the largest code it admits, by rule; null: none
+  ref?; name?; surface?; oneway?: true;
+  runway?: string; stand?: string;           // a runway edge's runway, a lead-in's stand
+  provenance: Provenance;                    // `generated` for a generated lead-in
+}
+interface Runway {
+  id; ref;                                   // '09/27'
+  ends: [RunwayEnd, RunwayEnd];              // in the order of `ref`
+  edges: string[];                           // from ends[0] to ends[1], each oriented that way
+  lengthM; widthM; surface?; maxCode; stopways: Vec2[][]; osmIds; provenance;
+}
+interface RunwayEnd {
+  designator: string; node: string; pos: Vec2;     // where the pavement ends (take-off start)
+  threshold: { node: string; pos: Vec2 }; displacedM: number;
+  heading: number;                           // taking off from this end
+}
+interface HoldingPosition {
+  id; node; ref?; kind: 'runway' | 'intermediate';
+  runway: string | null;                     // the protected runway
+  side: 'left' | 'right' | null;             // of the runway, looking from ends[0] to ends[1]
+  toward: string | null;                     // the edge at the hold leading to that runway
+  osmId; provenance;
+}
+interface Stand {
+  id; ref?; kind: 'contact' | 'remote' | 'cargo' | 'general_aviation' | 'maintenance';
+  pos: Vec2; heading: number;                // the stop (nose) position and the aircraft's heading
+  leadIn: string[];                          // edges from the taxi network to `pos`, network first
+  gate: string | null; maxCode: AircraftCode | null; osmIds; provenance;
+}
+interface RoadCrossing { edge; pos; roads: string[]; roadOsmIds: number[]; osmId? }
+```
+
+Boundary validation checks that record keys match ids, edges meet existing endpoints, a runway's
+edges chain from `ends[0].node` to `ends[1].node`, holds, stands, gates and crossings name
+existing entities, and every lead-in edge names its stand. The graph is undirected: a runway edge
+is usable both ways, so a backtrack (taxiing along the runway to its end and turning there, as at
+London City, which has no full parallel taxiway) is a route over runway edges while the runway is
+held. `RoadCrossing.roads` are the directed roads at the crossing as imported; an edit can retire
+them, so a reader resolves by `pos` and `roadOsmIds` as rail crossings do by OSM way. Nothing in
+the section bounds aircraft to the map: runway ends, headings and thresholds define the extended
+centrelines that approaches and climbs (TASK-298, TASK-301) follow some 10 km past the polygon.
+Compile ignores the section; no lane, connector, route or simulation hash reads it (TASK-298
+compiles the airside graph). The 2D and 3D maps draw it as paving (`render/airside-geometry.ts`):
+mapped aprons, then taxiways and taxilanes buffered to their widths with round ends, then each
+runway along its edges and stopways with square ends, over the place tints and under the roads, at
+grade 0; terminals and hangars are the buildings the context already draws.
 
 ## 5. Compiled model: `CompiledCity`
 
@@ -3959,6 +4040,79 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
     60 degrees the arm gets as far as they allow and a `realign_limited` info names it.
     Provenance records `realigned:<degrees>`. Roundabout rings, layer changes and controlled
     nodes whose control would change meaning are left alone.
+
+TASK-295 reads the airside last (`osm/airport.ts`), after every other id is allocated. Query
+version 13 adds `nwr[aeroway]` and `nwr[building~"^(terminal|hangar)$"]` to both queries. A feature
+with a node inside the area is kept whole (the airside is not clipped, so a runway keeps both
+ends). The rules, with ICAO Annex 14 Vol. I (8th edition, 2018) figures by code letter
+(`airsideRules`):
+
+- **Graph.** Edges are the centrelines of `aeroway=runway|taxiway|taxilane` ways (an `area=yes`
+  way or a multipolygon is a surface, not an edge), split at every node two such ways share, at
+  holding positions, thresholds, turn pads and stand nodes, at nodes shared with drivable roads,
+  and at the nodes `parking_position` ways touch; a closed way also at its middle. Ways cross only at shared nodes: a crossing without
+  one is not joined. A way with nodes missing from the extract is broken there
+  (`airport_incomplete_way`).
+- **Runways.** Runway ways joined end to end within 15 degrees of a straight line, with at most
+  one `ref` between them, are one runway; a `runway=displaced_threshold` way is part of the runway
+  it continues. Its edges run from end to end; ways that do not form one line stay taxiable edges
+  with no runway (`airport_runway_unordered`). `ref` gives the designators (else they are derived
+  from the true bearing, `inferred: ['ref']`); designator n is the end where a heading of n x 10
+  degrees starts. A threshold is a mapped `aeroway=threshold` node in the half nearer the end (its
+  `ref` first), else the inner end of a displaced-threshold way at the end, else the end. Width is
+  the mapped `width`, else 45, 30, 23 or 18 m for a runway of at least 1,800, 1,200, 800 or 0 m.
+  Its code is the largest whose runway width (A 18, B 23, C 30, D to F 45 m) the width meets.
+  Stopways are `aeroway=stopway` ways starting at an end.
+- **Holding positions.** On the graph, or snapped onto the nearest taxiway or taxilane edge within
+  20 m by a generated node (`inferred: ['node']`); farther ones are left out (`airport_unjoined`).
+  A runway hold protects the runway the graph reaches first from it within 1 km of travel; `toward`
+  is the first edge of that path and `side` the side of that runway's centreline it lies on.
+  `holding_position:type=intermediate` protects none; an untyped hold is a runway hold when that
+  runway is within 300 m of travel (`inferred: ['kind']`).
+- **Stands.** A `parking_position` way is a lead-in that ends at the stop position: it runs from
+  the last graph node before a free end to that end, the aircraft's heading being its last
+  segment's (a way with both ends on the graph is a drive-through stand stopping at its middle). A
+  `parking_position` node is the stop of a lead-in way of its `ref` (or of none) ending within
+  30 m, else a stand of its own. A stand or lead-in that shares no node with the graph joins the
+  nearest taxiway or taxilane edge within 150 m by a straight generated lead-in that crosses no
+  building (`provenance.source: 'generated'`); farther ones are left out (`airport_unjoined`).
+  The gate is the `aeroway=gate` of the stand's `ref` within 250 m. Kind: cargo or general aviation
+  by the stand's or its containing apron's tags (`cargo=yes`, `apron=*`) or name (cargo, freight;
+  GA, general aviation, business aviation, executive, FBO); else contact with a gate; else
+  maintenance by tags or name (maintenance, hangar) or within 60 m of a hangar; else remote.
+- **Stand codes.** The largest code whose aircraft keeps the stand clearance (A, B 3 m; C 4.5 m; D
+  to F 7.5 m) from the same code's aircraft on every other stand and from every building but one
+  it stands in. The aircraft is a fuselage as long as the code's span (a capsule of radius 5.5% of
+  the span) from the nose back along the heading, a wing of the full span across it 45% of the
+  length back and a tailplane of 35% of the span at the tail: nose-in stands side by side then
+  need the span plus the clearance between them, and angled stands (London City's) fit as their
+  wings stagger. A lead-in edge takes its stand's code.
+- **Taxi edge codes.** The lower of the code whose taxiway width (A 7.5, B 10.5, C 15, D 18, E 23,
+  F 25 m) a mapped width meets and the largest code whose separations hold at every 5 m along the
+  edge: from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
+  B 31.5, C 44, D 63, E 76, F 91 m; two taxilanes A 19.5, B 28.5, C 40.5, D 59.5, E 72.5, F 87.5
+  m), and from buildings (taxiway to object A 15.5, B 20, C 26, D 37, E 43.5, F 51 m; taxilane to
+  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. A parallel
+  neighbour is another edge on the same layer within 20 degrees of the edge's direction that the
+  graph does not join to the sample within their distance plus 120 m of travel: near a junction
+  holding separates aircraft, not geometry. A runway counts as a parallel taxiway (wingtip
+  clearance); the runway-strip separations of Table 3-1 are operating restrictions, left to the
+  operations tasks. An unmapped width is the width of the edge's code.
+- **Terminals, gates, hangars.** Terminals are `aeroway=terminal` or `building=terminal` outlines;
+  terminals within 30 m of each other share a `group`, so a detached terminal is a group alone. A
+  gate belongs to the terminal containing it or nearest within 100 m. Hangars are
+  `aeroway=hangar` or `building=hangar` outlines. Aprons are `aeroway=apron` areas.
+- **Aids, windsocks, helipads, turn pads.** `aeroway=navigationaid` nodes keep their
+  `navigationaid` kind and `direction` (as `facing`), and take the runway end whose threshold is
+  nearest within 1.5 km; `aeroway=helipad` nodes and areas are helipads.
+- **Road crossings.** A road crosses an airside edge where its OSM way shares a node with a
+  runway, taxiway or taxilane edge (the directed roads of that way passing within 5 m of it), or
+  where its centreline crosses the edge's line on the same layer, at least 5 m from a crossing
+  already found on that edge and 1 m from one on another (the node two edges share); the directed
+  roads within 15 m of the first such point are one crossing.
+- **Disconnected.** Edges outside the component holding the most runway length are reported
+  (`airport_disconnected`) with their OSM ways and why: the closest gap, or a crossing with no
+  shared node.
 
 Overpass provider: query drivable highways and restriction relations in a bbox capped at
 50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,

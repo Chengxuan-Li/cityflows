@@ -20,6 +20,7 @@ import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
 import { addMappedLotPortals } from './lot-junctions';
 import { addNodeCrossings, importWalk } from './walk';
+import { importAirport } from './airport';
 import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
 import { addStrips } from './strips';
@@ -499,6 +500,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addNodeCrossings(city, data, positions, bounds);
   if (lots.entrances)
     addParkingEntranceConnectors(city, portalGeometry ?? parkingGraph, lots.entrances, diagnostics);
+  // TASK-295: the airside last, so that no other id moves.
+  importAirport(city, data, positions, bounds, diagnostics);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)

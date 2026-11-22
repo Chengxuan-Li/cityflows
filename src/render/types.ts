@@ -175,6 +175,7 @@ export interface Scene {
 
 export type CityGeometry = {
   rail?: City['rail'];
+  airport?: City['airport'];
   parking?: City['parking'];
   markingTheme?: City['markingTheme'];
   nodes: City['nodes'];

@@ -120,3 +120,18 @@ BBox of the polygon: -1.0975, 53.9514, -1.0713, 53.9655
 4,189,077 bytes, SHA-256 7e9ba136abe8141171154e09f99c89ccf41e8e1814ecbf821f33529c978524c7
 It replaces TASK-259's query-10 fetch of 2026-11-21 (york-walls.osm, never committed, 4,171,757
 bytes, SHA-256 762dc47387d41ed9425fc902638a93d407e0a5fc7189d8deec6aa826ab21f057).
+
+london-city-airport.osm — London City Airport between the Royal Albert and King George V Docks,
+with Hartmann Road, the Connaught Bridge, North Woolwich Road and the DLR, Newham, London
+(the airports batch's first airport, docs/decisions/2026-11-22-airports.md; TASK-295 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-22T09:53:28Z, finished
+09:55:04Z
+OSM snapshot: 2026-11-22T09:52:21Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 12) with
+every (s,w,n,e) filter replaced by (poly:"...") with the polygon below, [timeout:300], plus
+nwr[aeroway] and nwr[building~"^(terminal|hangar)$"] over the same polygon inside the union (what
+queryVersion 13 adds). Overpass returns every way that touches the polygon whole; the file has no
+bounds element.
+Polygon (lat lon): 51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356
+BBox of the polygon: 0.0356, 51.4995, 0.0724, 51.509
+3,097,022 bytes, SHA-256 ef33c9b404602eb0a2acf880788cda128808592d2890367dc26edfa5ac739ea6
