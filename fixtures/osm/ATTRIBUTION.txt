@@ -135,3 +135,23 @@ bounds element.
 Polygon (lat lon): 51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356
 BBox of the polygon: 0.0356, 51.4995, 0.0724, 51.509
 3,097,022 bytes, SHA-256 ef33c9b404602eb0a2acf880788cda128808592d2890367dc26edfa5ac739ea6
+
+TASK-309 airport extracts — © OpenStreetMap contributors, ODbL 1.0
+Source: https://overpass-api.de/api/interpreter, client cityflows-scout/1.0.
+Query: the same query-12 polygon recipe as London City above, including both aviation filters
+and [timeout:300]. Each rectangle below is the query polygon in Overpass lat lon order.
+
+zurich-airport.osm — Zurich Airport (ZRH)
+Requested 2026-11-22T09:55:34Z, finished 09:57:31Z. OSM snapshot: 2026-11-22T09:54:21Z.
+Polygon: 47.438 8.5307 47.438 8.5802 47.4858 8.5802 47.4858 8.5307
+8,822,125 bytes, SHA-256 d726b96bab387a4c650a0712229bb647499f002927eaa3eea99586a0c35c0d27
+
+boston-logan.osm — Boston Logan International Airport (BOS)
+Requested 2026-11-22T09:59:32Z, finished 10:01:39Z. OSM snapshot: 2026-11-22T09:58:17Z.
+Polygon: 42.3439 -71.0368 42.3439 -70.9817 42.3823 -70.9817 42.3823 -71.0368
+8,335,953 bytes, SHA-256 15b11627ced268c937947f15e9b187e81e8f6e1d2b2f113009049f31bb9fe2c5
+
+heathrow.osm — London Heathrow Airport (LHR)
+Requested 2026-11-22T10:03:40Z, finished 10:05:39Z. OSM snapshot: 2026-11-22T10:02:30Z.
+Polygon: 51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948
+7,187,396 bytes, SHA-256 c167961a5ff5f4d89af662e1d2bc1c7026c6c28857b914c5e1fb97bb01d524c1
