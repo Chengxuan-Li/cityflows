@@ -527,7 +527,8 @@ export function createFlightOperations(
       if (turn.flight.arrivalS >= startS || turn.flight.departureS >= startS) active.add(turn);
     }
 
-    // Request departures first so that the fleet can free stands for arrivals.
+    // Request departures first. Ready-for-pushback starts after the turn is ready;
+    // the fleet keeps the stand occupied until the preparation and departure clearance finish.
     const parked = [...active].filter(({ phase }) => phase === 'parked');
     parked.sort((a, b) => a.flight.departureS - b.flight.departureS);
     for (const turn of parked) {

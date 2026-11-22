@@ -185,6 +185,9 @@ export interface Airport {
   stands: Record<string, Stand>;
   gates: Record<string, Gate>;
   terminals: Record<string, Terminal>;
+  /** Mapped lines run from the terminal end to the apron end. `stand` names the stand found
+   * at import, which an airport edit can retire. */
+  jetBridges?: { osmId: number; line: Vec2[]; stand: string | null }[];
   helipads: Record<string, Helipad>;
   /** Paved areas: aprons, runway, taxiway, turn-pad and helipad areas. */
   surfaces: AirsideSurface[];

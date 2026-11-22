@@ -17,6 +17,7 @@ export const aircraftStateLabels: Record<AircraftState, string> = {
   rotation: 'Rotating',
   climb: 'Climbing out',
   parked: 'Parked',
+  'ready-for-pushback': 'Ready for pushback',
   pushback: 'Pushback',
   tow: 'Under tow',
   'hover-taxi': 'Hover-taxiing',

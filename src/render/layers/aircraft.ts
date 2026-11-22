@@ -56,7 +56,8 @@ function drawJetBridges(g: Graphics, states: JetBridgeStates, timeS: number) {
   };
   for (const [i, bridge] of states.bridges.entries()) {
     const pose = states.poseAt(i, timeS);
-    if (bridge.link) bar(bridge.link, bridge.rotunda, 3);
+    if (bridge.link)
+      for (let j = 1; j < bridge.link.length; j++) bar(bridge.link[j - 1]!, bridge.link[j]!, 3);
     bar(bridge.rotunda, cabBack(pose), 3);
     const c = Math.cos(pose.facing),
       s = Math.sin(pose.facing);
@@ -98,7 +99,7 @@ export function drawAircraft(
     const at = place(pose);
     const colors = style.aircraft;
     const type = typeOf(pose.typeId);
-    if (pose.state === 'pushback') {
+    if (pose.state === 'pushback' || pose.state === 'ready-for-pushback') {
       const { noseX } = fixedWingGearStations(type.lengthM);
       const nose = at({ x: noseX, y: 0 });
       const tugAt = place({
