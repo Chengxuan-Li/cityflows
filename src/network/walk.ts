@@ -923,29 +923,34 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       .map((j) => ({ j, rank: rankOf(j), gap: preferred ? 0 : gap(j) }))
       .sort((a, b) => (preferred ? a.j - b.j : a.rank - b.rank || a.gap - b.gap || a.j - b.j));
     let best: { target: Raw; j: number; a: Vec2; b: Vec2; away: number; rank: number } | undefined;
+    const tolerance = preferred ? 1e-6 : 0;
+    let limit2 = Infinity;
     for (const { j, rank, gap: targetGap } of candidates) {
-      const target = raw[j]!,
-        probes = [...points];
-      if (best && !preferred && (rank > best.rank || targetGap > best.away ** 2)) break;
-      const prepared = prepare(target);
+      if (best && !preferred && (rank > best.rank || targetGap > limit2)) break;
       if (best) {
         // Every probe lies in the shape's box, so the per-probe tests below would reject this
         // whole target; skip its polygon projections (lead, TASK-110 merge: compile time).
         if (rank > best.rank) continue;
-        if (rank === best.rank && gap(j) > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
+        if (preferred && rank === best.rank && gap(j) > limit2) continue;
       }
-      if (shape.kind === 'polygon') for (const p of target.line) probes.push(nearShape!(p).point);
+      const target = raw[j]!;
+      const {
+        box: [minX, minY, maxX, maxY],
+        near,
+      } = prepare(target);
+      const probes = nearShape
+        ? [...points, ...target.line.map((p) => nearShape(p).point)]
+        : points;
       let previousProbe: Vec2 | undefined;
       for (const a of probes) {
         if (previousProbe?.x === a.x && previousProbe.y === a.y) continue;
         previousProbe = a;
         if (best && best.rank === rank) {
-          const [x0, y0, x1, y1] = prepared.box as [number, number, number, number];
-          const dx = Math.max(x0 - a.x, 0, a.x - x1),
-            dy = Math.max(y0 - a.y, 0, a.y - y1);
-          if (dx * dx + dy * dy > (best.away + (preferred ? 1e-6 : 0)) ** 2) continue;
+          const dx = Math.max(minX! - a.x, 0, a.x - maxX!),
+            dy = Math.max(minY! - a.y, 0, a.y - maxY!);
+          if (dx * dx + dy * dy > limit2) continue;
         }
-        const n = prepared.near(a);
+        const n = near(a);
         if (
           n.away > ACCESS_M ||
           (best &&
@@ -960,6 +965,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         )
           continue;
         best = { target, j, a, b: n.point, away: n.away, rank };
+        limit2 = (n.away + tolerance) ** 2;
       }
     }
     if (!best) return;

@@ -38,8 +38,11 @@ export function airsideAreas(airport: Airport): AirsideArea[] {
     (e) => e.kind === 'taxiway' || e.kind === 'taxilane',
   );
   const byWidth = new Map<number, Vec2[][]>();
-  for (const edge of taxi)
-    byWidth.set(edge.widthM, [...(byWidth.get(edge.widthM) ?? []), edge.line]);
+  for (const edge of taxi) {
+    const lines = byWidth.get(edge.widthM);
+    if (lines) lines.push(edge.line);
+    else byWidth.set(edge.widthM, [edge.line]);
+  }
   const taxiPaths = [...byWidth].flatMap(([width, lines]) =>
     inflatePathsD(lines, width / 2, JoinType.Round, EndType.Round, 2, 2),
   );

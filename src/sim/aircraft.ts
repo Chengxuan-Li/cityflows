@@ -1,9 +1,11 @@
 import { createRandom } from '../geo/random';
 import {
+  boxOf,
   cumulativeLengths,
   headingAtDistance,
   nearestOnPolyline,
   pointAtDistance,
+  polylineNearest,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { AirsideGraph, AirsideRunwayC } from '../network/airside';
@@ -18,7 +20,9 @@ import {
   deflection,
   reverseArc,
   routeAirside,
+  createAirsideRouteFinder,
   turnAllowed,
+  type AirsideRouteQuery,
 } from '../routing/airside';
 import {
   aircraftCode,
@@ -1028,6 +1032,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   // ----- Starting legs.
+  const route = (query: AirsideRouteQuery) => routeAirside(graph, query);
+  let standRoute: ReturnType<typeof createAirsideRouteFinder> | undefined;
+
   function setLeg(craft: Craft, leg: Leg, timeS: number, speedMps = 0, claimed = false) {
     craft.leg = leg;
     craft.mode = 'ground';
@@ -1048,6 +1055,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     goal: (arc: number) => boolean,
     stand: number,
     tail: (arcs: number[]) => Segment[],
+    findRoute = route,
   ) {
     const leg = craft.leg!;
     const lastPiece = leg.pieces.at(-1);
@@ -1063,7 +1071,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (lastPiece && lastPiece.endNode >= 0) {
       const at = graph.edges[lastPiece.edge]!;
       const arc = arcOf(at.idx, lastPiece.toE >= lastPiece.fromE);
-      const route = routeAirside(graph, { ...query, from: { arc } });
+      const route = findRoute({ ...query, from: { arc } });
       if (route) {
         const behind = Math.min(craft.lengthM, at.lengthM);
         const start = arcSegment(arc, arcForward(arc) ? at.lengthM - behind : behind);
@@ -1094,7 +1102,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     for (const { arc } of backs) {
       const back = straightOn(craft, arc, half + PUSH_CLEAR_M + craft.lengthM);
       if (!back) continue;
-      const route = routeAirside(graph, { ...query, from: { arc: reverseArc(back.arcs[0]!) } });
+      const route = findRoute({ ...query, from: { arc: reverseArc(back.arcs[0]!) } });
       if (!route) continue;
       // The return over the pushed stretch is part of the leg.
       const returnArcs = back.arcs.toReversed().map(reverseArc);
@@ -1246,20 +1254,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** Road crossings within 15 m of a path, with their stations along it. */
   function crossingsOn(path: AircraftPath) {
     if (!graph.crossings.length) return [];
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const p of path.points) {
-      minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
-    }
-    return graph.crossings.flatMap((c) => {
-      const { x, y } = c.pos;
-      if (x < minX - 15 || x > maxX + 15 || y < minY - 15 || y > maxY + 15) return [];
-      const near = nearestOnPolyline(path.points, c.pos);
+    const { minX, minY, maxX, maxY } = boxOf(path.points);
+    const candidates = graph.crossings.filter(
+      ({ pos }) =>
+        pos.x >= minX - 15 && pos.x <= maxX + 15 && pos.y >= minY - 15 && pos.y <= maxY + 15,
+    );
+    const nearest =
+      candidates.length > 4
+        ? polylineNearest(path.points)
+        : (pos: Vec2) => nearestOnPolyline(path.points, pos);
+    return candidates.flatMap((c) => {
+      const near = nearest(c.pos);
       return near.away < 15 ? [{ crossing: c.idx, stationM: near.along }] : [];
     });
   }
@@ -1290,7 +1295,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** The landings on `end` to `stand`, in order of preference: forward exits from the first
    * usable (its node at least the landing roll and the handover beyond touchdown), then a
    * backtrack from a reversing loop at the far end. */
-  function landings(craft: Craft, runway: AirsideRunwayC, end: number, stand: number) {
+  function landings(
+    craft: Craft,
+    runway: AirsideRunwayC,
+    end: number,
+    stand: number,
+    findRoute = route,
+  ) {
     const p = fixedWing(craft);
     const nodes = runwayNodes(runway, end);
     const thresholdU = fromEnd(runway, end, runway.ends[end]!.thresholdM);
@@ -1319,7 +1330,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (inArc < 0) continue;
       const arriving = reverseArc(inArc);
       result.push(() => {
-        const route = routeAirside(graph, {
+        const route = findRoute({
           code: craft.code,
           turnRadiusM: p.minTurnRadiusM,
           from: { arc: arriving },
@@ -1348,7 +1359,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           ? runwayArc(runway, last.i + 1, false)
           : runwayArc(runway, last.i - 1, true);
         if (behind < 0) return null;
-        const route = routeAirside(graph, {
+        const route = findRoute({
           code: craft.code,
           turnRadiusM: p.minTurnRadiusM,
           from: { arc: behind },
@@ -1669,7 +1680,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return legsFromStand(craft, 'tow', goal, stand, (arcs) => arcs.map((a) => arcSegment(a)));
   }
 
-  function departurePlan(craft: Craft, runway: AirsideRunwayC, end: number) {
+  function departurePlan(craft: Craft, runway: AirsideRunwayC, end: number, findRoute = route) {
     for (const option of lineUps(craft, runway, end)) {
       const legs = legsFromStand(
         craft,
@@ -1677,6 +1688,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         (a) => a === option.goal,
         -1,
         (arcs) => [...arcs.slice(0, -1).map((a) => arcSegment(a)), ...option.after()],
+        findRoute,
       );
       if (legs) return { ...legs, lineUpU: option.lineUpU };
     }
@@ -1696,9 +1708,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (Math.min(inbound.maxCode, outbound.maxCode) < craft.code) return Infinity;
     craft.stand = stand;
     craft.leg = standLeg(craft, stand);
-    const outboundPlan = departurePlan(craft, outbound, departure.end);
+    const findRoute = (standRoute ??= createAirsideRouteFinder(graph));
+    const outboundPlan = departurePlan(craft, outbound, departure.end, findRoute);
     if (!outboundPlan) return Infinity;
-    for (const option of landings(craft, inbound, arrival.end, stand)) {
+    for (const option of landings(craft, inbound, arrival.end, stand, findRoute)) {
       const landing = option();
       if (!landing) continue;
       craft.stationM = craft.leg.endM;

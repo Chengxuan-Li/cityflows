@@ -423,7 +423,28 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
   if (!osmLamps.length) lampIndex.add(0, 0, 0, 0);
   lampIndex.finish();
   const incoming = city.nodes.map(() => [] as CRoad[]);
-  for (const road of city.roads) incoming[road.to]!.push(road);
+  const corridors = new Map<string, CRoad[]>();
+  const groups = new Map<string, CRoad[]>();
+  for (const road of city.roads) {
+    incoming[road.to]!.push(road);
+    if (road.corridorId) {
+      const roads = corridors.get(road.corridorId);
+      if (roads) roads.push(road);
+      else corridors.set(road.corridorId, [road]);
+    }
+    if (road.streetGroupId !== null) {
+      const roads = groups.get(road.streetGroupId);
+      if (roads) roads.push(road);
+      else groups.set(road.streetGroupId, [road]);
+    }
+  }
+  const nodeIndex = new Flatbush(Math.max(1, city.nodes.length));
+  for (const {
+    pos: { x, y },
+  } of city.nodes)
+    nodeIndex.add(x, y, x, y);
+  if (!city.nodes.length) nodeIndex.add(Infinity, Infinity, Infinity, Infinity);
+  nodeIndex.finish();
 
   // The access points on a road or its street group, in order (TASK-287: grouped once, not
   // filtered from all of them per road).
@@ -494,8 +515,8 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
       const outward = { x: -near.direction.y * sign, y: near.direction.x * sign };
       if (
         road.corridorId &&
-        city.roads.some((other) => {
-          if (other === road || other.corridorId !== road.corridorId) return false;
+        corridors.get(road.corridorId)!.some((other) => {
+          if (other === road) return false;
           const q = nearestOnPolyline(city.lanes[other.lanes[0]!]!.polyline, near.point).point;
           return (q.x - near.point.x) * outward.x + (q.y - near.point.y) * outward.y > 0.1;
         })
@@ -550,9 +571,7 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
       const paired =
         road.streetGroupId === null
           ? undefined
-          : city.roads.find(
-              (other) => other.idx !== road.idx && other.streetGroupId === road.streetGroupId,
-            );
+          : groups.get(road.streetGroupId)!.find((other) => other.idx !== road.idx);
       const physicalWidth =
         width + (paired?.lanes.reduce((sum, i) => sum + city.lanes[i]!.widthM, 0) ?? 0);
       const lampStations: number[] = [];
@@ -569,7 +588,9 @@ export function placeStreet(city: CompiledCity, source: CityGeometry, trees: rea
         const p = pointAtDistance(verge, vergeLengths, s);
         if (
           !clear(p, 0.15) ||
-          city.nodes.some((n) => distance(n.pos, p) < 12) ||
+          nodeIndex
+            .search(p.x - 12, p.y - 12, p.x + 12, p.y + 12)
+            .some((i) => distance(city.nodes[i]!.pos, p) < 12) ||
           inGap(nearestOnPolyline(edge, p).along, 3) ||
           connectors.some((q) => distance(p, q) < width + 4)
         )

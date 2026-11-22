@@ -8,8 +8,7 @@ import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 // panel and by `?city=<id>`, paused at 07:00, and every place but Freiburg reports its frame
 // figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
 // morning plays, and the 3D build).
-// A place held out of the panel (`heldOutOfPanel` in bench/bundled-cities.ts) is listed in
-// `heldOut` and opens by `?city=` only: Zurich Airport (TASK-302).
+// Places held out of the panel (`heldOutOfPanel` in bench/bundled-cities.ts) open by `?city=`.
 
 test.use({ trace: 'off' });
 if (process.platform === 'win32')
@@ -28,14 +27,17 @@ const realPlaces = [
   { id: 'york', name: 'York city centre' },
   { id: 'london-city-airport', name: 'London City Airport' },
 ];
-/** Bundled, opened by `?city=`, not in the panel (TASK-302: Zurich's showcase gate and load). */
-const heldOut: { id: string; name: string }[] = [{ id: 'zurich-airport', name: 'Zurich Airport' }];
+/** Boston and Heathrow have scene-load checks while their throughput gates are pending. */
+const heldOut = [
+  { id: 'boston-logan', name: 'Boston Logan Airport' },
+  { id: 'heathrow', name: 'London Heathrow Airport' },
+];
+const zurich = { id: 'zurich-airport', name: 'Zurich Airport' };
 
-const opened = async (page: Page, name: string) => {
+const opened = async (page: Page, name: string, timeout = 60_000) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
-  // the 20 s default once another city is drawn and the machine is loaded. Zurich Airport's
-  // engine is ready 30 to 45 s after it opens (TASK-302).
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 60_000 });
+  // the 20 s default once another city is drawn and the machine is loaded.
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout });
   await expect(button(page, 'Play')).toBeEnabled({ timeout: 120_000 });
   await expect(page.getByLabel('Simulation clock', { exact: true })).toHaveText('07:00:00.0');
 };
@@ -82,7 +84,25 @@ for (const [width, height] of [
     expect(errors).toEqual([]);
   });
 
-for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), ...heldOut])
+for (const { id, name } of heldOut)
+  test(`${name} opens by URL and builds its 2D and 3D scenes`, async ({ page }) => {
+    test.setTimeout(240_000);
+    const errors = pageErrors(page);
+    await page.goto(`/?city=${id}`);
+    await opened(page, name, 180_000);
+    const canvas = page.locator('canvas[data-airside-areas]');
+    await expect(canvas).toHaveAttribute('data-airside-areas', /^[1-9]\d*$/);
+    await button(page, '3D').click();
+    await page.waitForFunction(
+      () => performance.getEntriesByName('cityflows:first-frame-3d').length > 0,
+      null,
+      { timeout: 120_000 },
+    );
+    await expect(page.locator('canvas[data-view="3d"]')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), zurich])
   test(`${name} renders in 2D and 3D while its morning plays`, async ({ page }, info) => {
     test.setTimeout(240_000);
     const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 180, warm: 30 };

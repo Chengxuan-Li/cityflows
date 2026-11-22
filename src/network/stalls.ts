@@ -1,4 +1,5 @@
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
+import Flatbush from 'flatbush';
 import {
   cumulativeLengths,
   headingAtDistance,
@@ -35,7 +36,25 @@ function overlaps(a: PreparedRing, b: PreparedRing): boolean {
 
 /** Derived bays; lots without mapped aisles use a regular layout without inventing roads. */
 export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
-  const occupied: { ring: PreparedRing; layer: number | undefined }[] = [];
+  // Stalls go in as they are accepted, so later candidates only test the bays in their cells.
+  const occupied = new Map<string, { ring: PreparedRing; layer: number | undefined }[]>();
+  function* cells({ box }: PreparedRing) {
+    const cellM = 8;
+    const x0 = Math.floor(box.minX / cellM),
+      y0 = Math.floor(box.minY / cellM);
+    const columns = Math.floor(box.maxX / cellM) - x0,
+      rows = Math.floor(box.maxY / cellM) - y0;
+    for (let col = 0; col <= columns; col++)
+      for (let row = 0; row <= rows; row++) yield `${x0 + col},${y0 + row}`;
+  }
+  const occupy = (ring: PreparedRing, layer: number | undefined) => {
+    const bay = { ring, layer };
+    for (const key of cells(ring)) {
+      const bucket = occupied.get(key);
+      if (bucket) bucket.push(bay);
+      else occupied.set(key, [bay]);
+    }
+  };
   const obstacles = [
     ...compiled.roads.map((road) => ({
       ring: road.surface,
@@ -57,6 +76,13 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
   ]
     .filter(({ ring }) => ring.length >= 3)
     .map(({ ring, ...rest }) => ({ ring: prepareRing(closed(ring)), ...rest }));
+  const obstacleIndex = new Flatbush(Math.max(1, obstacles.length));
+  for (const {
+    ring: { box },
+  } of obstacles)
+    obstacleIndex.add(box.minX, box.minY, box.maxX, box.maxY);
+  if (!obstacles.length) obstacleIndex.add(0, 0, 0, 0);
+  obstacleIndex.finish();
   const profiles = gradeProfiles(compiled);
   /**
    * TASK-190: a road of another grade overhead of a bay (a ramp, whose height varies along the
@@ -97,16 +123,26 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
       const layer = layers.size === 1 ? [...layers][0] : undefined;
       const sameGrade = (other: number | undefined) =>
         layer === undefined || other === undefined || layer === other;
-      const near = ({ box }: PreparedRing) =>
-        box.minX <= boundary.box.maxX &&
-        box.maxX >= boundary.box.minX &&
-        box.minY <= boundary.box.maxY &&
-        box.maxY >= boundary.box.minY;
-      const above = obstacles.filter((o) => !sameGrade(o.layer) && near(o.ring));
+      const taken = (candidate: PreparedRing) => {
+        for (const cell of cells(candidate))
+          if (occupied.get(cell)?.some((o) => sameGrade(o.layer) && overlaps(candidate, o.ring)))
+            return true;
+        return false;
+      };
+      const { minX, minY, maxX, maxY } = boundary.box;
+      const nearby = obstacles.length
+        ? obstacleIndex.search(minX, minY, maxX, maxY).map((i) => obstacles[i]!)
+        : [];
+      const above = nearby.filter((o) => !sameGrade(o.layer));
       const local = [
-        ...obstacles.filter((o) => sameGrade(o.layer)).map((o) => o.ring),
-        ...(lot.exclusions ?? []).map((ring) => prepareRing(closed(ring))),
-      ].filter(near);
+        ...nearby.filter((o) => sameGrade(o.layer)).map((o) => o.ring),
+        ...(lot.exclusions ?? [])
+          .map((ring) => prepareRing(closed(ring)))
+          .filter(
+            ({ box }) =>
+              box.minX <= maxX && box.maxX >= minX && box.minY <= maxY && box.maxY >= minY,
+          ),
+      ];
       const junctions = compiled.nodes.filter(
         (node) =>
           (lot.entries ?? []).includes(node.id) ||
@@ -175,7 +211,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
             const candidate = prepareRing(closed(corners));
             if (
               local.some((obstacle) => overlaps(candidate, obstacle)) ||
-              occupied.some((other) => sameGrade(other.layer) && overlaps(candidate, other.ring)) ||
+              taken(candidate) ||
               above.some(
                 (o) =>
                   overlaps(candidate, o.ring) &&
@@ -192,7 +228,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               )
             )
               continue;
-            occupied.push({ ring: candidate, layer });
+            occupy(candidate, layer);
             stalls.push({
               layout: angle < Math.PI / 2 ? 'angled' : 'perpendicular',
               access: p,
@@ -305,7 +341,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
               if (
                 local.some((o) => overlaps(candidate, o)) ||
                 throats.some((o) => overlaps(candidate, o)) ||
-                occupied.some((o) => sameGrade(o.layer) && overlaps(candidate, o.ring)) ||
+                taken(candidate) ||
                 above.some(
                   (o) =>
                     overlaps(candidate, o.ring) &&
@@ -337,7 +373,7 @@ export function generateStalls(city: City, compiled: CompiledCity): CLot[] {
         }
         for (const stall of best) {
           stalls.push(stall);
-          occupied.push({ ring: prepareRing(closed(stall.corners)), layer });
+          occupy(prepareRing(closed(stall.corners)), layer);
         }
         result.aislePaths = bestPaths;
       }
