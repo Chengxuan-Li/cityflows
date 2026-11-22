@@ -26,6 +26,29 @@ const runwayEnd = z.object({
   heading: z.number(),
 });
 
+const daySeconds = z.number().min(0).max(86_400);
+export const runwayOperationsSchema = z.object({
+  configurations: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        arrivalEnds: z.array(z.string().min(1)).min(1),
+        departureEnds: z.array(z.string().min(1)).min(1),
+      }),
+    )
+    .optional(),
+  concepts: z
+    .array(
+      z.object({
+        startS: daySeconds,
+        endS: daySeconds,
+        configurationId: z.string().min(1).nullable(),
+      }),
+    )
+    .optional(),
+  tailwindLimitKt: z.number().nonnegative().optional(),
+});
+
 export const airportSchema = z
   .object({
     name: z.string().nullable(),
@@ -177,6 +200,7 @@ export const airportSchema = z
         osmId: z.int().optional(),
       }),
     ),
+    runwayOperations: runwayOperationsSchema.optional(),
   })
   .superRefine((airport, ctx) => {
     const issue = (path: (string | number)[], message: string) =>
@@ -241,4 +265,12 @@ export const airportSchema = z
     for (const gate of Object.values(airport.gates))
       if (gate.terminal && !airport.terminals[gate.terminal])
         issue(['gates', gate.id, 'terminal'], 'Gate terminal does not exist');
+    const designators = new Set(
+      Object.values(airport.runways).flatMap(({ ends }) => ends.map((end) => end.designator)),
+    );
+    const operations = airport.runwayOperations;
+    for (const [i, configuration] of (operations?.configurations ?? []).entries())
+      for (const end of [...configuration.arrivalEnds, ...configuration.departureEnds])
+        if (!designators.has(end))
+          issue(['runwayOperations', 'configurations', i], `Runway end ${end} does not exist`);
   }) satisfies z.ZodType<Airport>;

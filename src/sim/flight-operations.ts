@@ -163,10 +163,20 @@ export function createFlightOperations(
   // TASK-300: the runway configuration follows the airport's concepts and the wind. It changes
   // at a concept's time boundary, or when the wind takes an end it uses past the tailwind (5 kt)
   // or the crosswind limit of the types the airport sees; the fleet runs the change.
+  // TASK-305: an airport's own table (edited in the flight board) before the one for its code.
+  const own = graph.runwayOperations;
+  const table = airportRunwayConcepts[graph.icao ?? ''];
   const chooser = ends.length
     ? createRunwayChooser({
         ends,
-        ...(options.runways ?? airportRunwayConcepts[graph.icao ?? '']),
+        ...(options.runways ??
+          (own
+            ? {
+                configurations: own.configurations ?? table?.configurations,
+                concepts: own.concepts ?? table?.concepts,
+                tailwindLimitKt: own.tailwindLimitKt,
+              }
+            : table)),
         crosswindLimitsKt: Object.fromEntries(
           typeMix.flatMap(({ typeId }) =>
             isHelicopter(typeId) ? [] : [[typeId, demonstratedCrosswindKt[typeId]!]],

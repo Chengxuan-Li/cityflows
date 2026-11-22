@@ -162,6 +162,16 @@ export interface RoadCrossing {
   osmId?: number;
 }
 
+/** TASK-305: an airport's own runway configuration table (TASK-300's chooser input), set in the
+ * flight board. Absent fields fall back to the sim's table for the airport's ICAO code, then to
+ * configurations derived from the runway ends and a 5 kt tailwind limit. Times are seconds after
+ * midnight; a concept may wrap midnight; a null configuration closes the runways. */
+export interface RunwayOperations {
+  configurations?: { id: string; arrivalEnds: string[]; departureEnds: string[] }[];
+  concepts?: { startS: number; endS: number; configurationId: string | null }[];
+  tailwindLimitKt?: number;
+}
+
 export interface Airport {
   name: string | null;
   iata?: string;
@@ -192,4 +202,5 @@ export interface Airport {
   }[];
   turnPads: { pos: Vec2; node?: string; osmId?: number }[];
   roadCrossings: RoadCrossing[];
+  runwayOperations?: RunwayOperations;
 }

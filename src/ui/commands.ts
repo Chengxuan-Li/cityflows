@@ -73,6 +73,14 @@ function deletion(s: State): Edit | null {
       project.city,
       selectedRoads.length ? selectedRoads : [compiled.roads[selection.road]!.id],
     );
+  // TASK-305: a stand, taxiway or holding position, as its inspector's button does.
+  const airside = compiled.airside;
+  if (selection.kind === 'stand')
+    return { kind: 'deleteStand', standId: airside!.stands[selection.stand]!.id };
+  if (selection.kind === 'taxiway')
+    return { kind: 'deleteTaxiway', edgeId: airside!.edges[selection.edge]!.id };
+  if (selection.kind === 'hold')
+    return { kind: 'deleteHold', holdId: airside!.holds[selection.hold]!.id };
   let place: number | undefined;
   if (selection.kind === 'place') place = selection.place;
   if (selection.kind === 'connector') {
@@ -86,13 +94,13 @@ function deletion(s: State): Edit | null {
 }
 
 const tool = (
-  id: 'select' | 'road' | 'place' | 'ramp' | 'roundabout',
+  id: 'select' | 'road' | 'place' | 'ramp' | 'roundabout' | 'airside',
   name: string,
 ): AppCommand => ({
   id,
   group: 'Tools',
   name: `${name} tool`,
-  enabled: editing,
+  enabled: id === 'airside' ? (s) => editing(s) && !!s.session?.project.city.airport : editing,
   run: () => store().setTool(id),
 });
 
@@ -228,6 +236,7 @@ export const commands: AppCommand[] = [
   tool('place', 'Place'),
   tool('ramp', 'Ramp'),
   tool('roundabout', 'Roundabout'),
+  tool('airside', 'Airside'),
   toggle('sidebar', 'sidebar'),
   toggle('inspector', 'inspector'),
   {

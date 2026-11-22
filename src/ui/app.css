@@ -1608,6 +1608,25 @@ input[type='file']::file-selector-button {
   margin-top: 6px;
 }
 
+/* TASK-305: a runway configuration in the flight board's runway table. */
+.runway-configuration {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--separator);
+}
+
+.runway-ends {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.runway-ends > span {
+  min-width: 72px;
+}
+
 .parking-fields {
   min-width: 0;
   margin: 0;

@@ -25,6 +25,7 @@ export const bindings = {
   place: ['3'],
   ramp: ['4'],
   roundabout: ['5'],
+  airside: ['6'],
   sidebar: ['s'],
   inspector: ['i'],
   view3d: ['v'],

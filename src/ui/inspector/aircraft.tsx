@@ -32,7 +32,8 @@ export function AircraftInspector({ id }: { id: number }) {
       active = false;
     };
   }, [session, timeS, id]);
-  const graph = session?.compiled.airside;
+  // The loaded run's graph: an airside edit waits for a restart (TASK-305).
+  const graph = session?.loadedCompiled.airside;
   if (!graph || pose === undefined) return null;
   if (pose === null)
     return (

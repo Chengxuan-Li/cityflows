@@ -1,7 +1,7 @@
 import { cumulativeLengths, nearestOnPolyline } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import { aircraftCodes, codeSpanLimitM, type AircraftCode } from '../schema/aircraft';
-import type { AirsideEdgeKind, Airport, StandKind } from '../schema/airport';
+import type { AirsideEdgeKind, Airport, RunwayOperations, StandKind } from '../schema/airport';
 import type { City } from '../schema';
 import type { CompiledCity } from './types';
 
@@ -110,6 +110,8 @@ export interface AirsideGraph {
   crossings: AirsideCrossingC[];
   /** The aircraft size the largest stand admits: its span limit. */
   maxSpanM: number;
+  /** TASK-305: the airport's own runway configuration table, where it has one. */
+  runwayOperations?: RunwayOperations;
   index: { node: Map<string, number>; edge: Map<string, number>; stand: Map<string, number> };
 }
 
@@ -315,6 +317,7 @@ export function compileAirside(
     hangars,
     crossings,
     maxSpanM,
+    ...(airport.runwayOperations ? { runwayOperations: airport.runwayOperations } : {}),
     index: { node: nodeIndex, edge: edgeIndex, stand: standIndex },
   };
 }

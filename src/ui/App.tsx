@@ -9,11 +9,8 @@ import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
 import { AircraftInspector } from './inspector/aircraft';
-import {
-  FlightBoardInspector,
-  FlightBoardProvider,
-  StandInspector,
-} from './inspector/flight-board';
+import { FlightBoardInspector, FlightBoardProvider } from './inspector/flight-board';
+import { HoldInspector, StandInspector, TaxiwayInspector } from './inspector/airside';
 import { ParkingInspector, ParkedSpaceInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
@@ -66,6 +63,10 @@ function Inspector() {
       return <AircraftInspector id={selection.id} />;
     case 'stand':
       return <StandInspector index={selection.stand} />;
+    case 'taxiway':
+      return <TaxiwayInspector index={selection.edge} />;
+    case 'hold':
+      return <HoldInspector index={selection.hold} />;
     case 'flight-board':
       return <FlightBoardInspector />;
     case 'track':
