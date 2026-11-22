@@ -54,7 +54,19 @@ test('T48 garage data is requested independently of decorative surroundings', ()
   expect(query).toContain('[service!~"^(parking_aisle|driveway)$"]');
 });
 
-test('TASK-273 query version 11 fetches city walls and their gates with the surroundings', () => {
+test('TASK-290 requests parking entrance nodes with and without surroundings', () => {
+  const bbox: [number, number, number, number] = [-74.008, 40.711, -74.004, 40.715];
+  for (const context of [true, false]) {
+    const query = buildQuery(bbox, context);
+    expect(query).toContain(
+      'node[amenity=parking_entrance](40.711,-74.008,40.715,-74.004)->.parkingEntrances;',
+    );
+    expect(query).toContain('way(bn.parkingEntrances)[highway=service][service=driveway];');
+  }
+  expect(queryVersion).toBe(12);
+});
+
+test('TASK-273 fetches city walls and their gates with the surroundings', () => {
   const bbox: [number, number, number, number] = [-1.0975, 53.9514, -1.0713, 53.9655];
   const full = buildQuery(bbox);
   for (const clause of [
@@ -64,5 +76,4 @@ test('TASK-273 query version 11 fetches city walls and their gates with the surr
   ])
     expect(full).toContain(clause + '(53.9514,-1.0975,53.9655,-1.0713);');
   expect(buildQuery(bbox, false)).not.toContain('city_wall');
-  expect(queryVersion).toBe(11);
 });

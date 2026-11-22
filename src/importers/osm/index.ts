@@ -33,7 +33,7 @@ import {
 } from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
-import { addOsmGarages, compileDroppingParking } from './parking';
+import { addOsmGarages, addParkingEntranceConnectors, compileDroppingParking } from './parking';
 import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
 import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
@@ -459,10 +459,15 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addBuildings(city, data, positions, bounds, base.compiled);
   const garageFootprints = addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
-  const parkingGraph = addLots(city, data, positions, bounds, diagnostics) ?? base.compiled;
+  const lots = addLots(city, data, positions, bounds, diagnostics, { garageFootprints });
+  const parkingGraph = lots.compiled ?? base.compiled;
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
-  connectCarExits(city, parkingGraph, garageFootprints);
+  connectCarExits(
+    city,
+    parkingGraph,
+    new Map([...garageFootprints].map(([id, { rings }]) => [id, rings])),
+  );
   importRail(city, data, positions, bounds, diagnostics);
   assignTramForms(city, data, parkingGraph, positions);
   if (options.context !== false)
@@ -490,8 +495,10 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     parkingGraph,
   );
   addMappedLotPortals(city, data, diagnostics, portalGeometry ?? parkingGraph);
-  // TASK-239: last, so that no other id moves.
+  // TASK-239: crossing IDs follow the existing network imports.
   addNodeCrossings(city, data, positions, bounds);
+  if (lots.entrances)
+    addParkingEntranceConnectors(city, portalGeometry ?? parkingGraph, lots.entrances, diagnostics);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)

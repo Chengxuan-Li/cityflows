@@ -273,7 +273,6 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
   expect(keepClearMarkings(net, road('r:225'), markingThemes.de, city)).toEqual([]);
   // Without the canonical city (no `sharedLane` known) the box is drawn, as on any street.
   expect(keepClearBoxes(net, promenade, markingThemes.de)).toHaveLength(1);
-  // Every other street keeps its boxes: 137 in Freiburg.
   const boxes = net.lanes.reduce(
     (sum, l) =>
       sum +
@@ -282,7 +281,8 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
         : 0),
     0,
   );
-  expect(boxes).toBe(137);
+  // TASK-290: nine mapped garage entrances bring Freiburg's keep-clear box count from 137 to 139.
+  expect(boxes).toBe(139);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {

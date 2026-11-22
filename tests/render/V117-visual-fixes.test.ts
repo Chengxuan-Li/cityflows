@@ -201,26 +201,30 @@ const pins = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-    compile: '9546701887629ab0ffcdef5605e24b6d76f552aa49d51585836fabf62f8ddcf3',
+    // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+    compile: 'e89706fd95a07aef6ed066d8533dfc8350e80e12f5a4143c927b694d3543a38b',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-    curbs: 'abfd1ae1fe3e4c6787c3f9fe8b2b37efd2fd7c745173025fd8d8625a3fdd15aa',
+    // TASK-290: Munich's garage mouth moves from r:1071 to r:1070 and changes the curb openings.
+    curbs: '69ab80548bd7baaf0efb38b864f0793d1c1084ae5e926c8bce2f9f36ffe2cef6',
     // TASK-229 (N1): the four dividers of the inner road r:267; without them both equal 5c47b75's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
     // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
-    de: '6bf159e95f018ec1b2f1a6debd3572f83b654c515af7d51557a577e4561c52d8',
+    // TASK-290: Munich's moved garage mouth changes German keep-clear paint on r:1070 and r:1071.
+    de: '9e96bffe20e1ad1101184e4e30da5da1c3cf36758f0e334f543945edca438256',
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
     // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
     // TASK-256: no keep-clear box on shared one-lane streets (r:379, r:380: 3 boxes).
-    us: 'd828085dd199ef4065e16a41e104fdb3edd33c65eef8980036e9dba6bd45ae8c',
+    // TASK-290: Munich's moved garage mouth changes US keep-clear paint on r:1070 and r:1071.
+    us: 'e74521b49dff0ce938fa653cf0f73d18770429d55193ba1e70efe363a7fe9248',
   },
   sindelfingen: {
     // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
@@ -232,24 +236,28 @@ const pins = {
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    compile: 'f0857a99470c223fdeb9349d63a77a2f0dd2fdd652c4e52bf6de51a954320df2',
+    // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+    compile: '827867701b73f17be4388e88481279f27ee60a1162bbcac0b9c2f05d35cc93a4',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    curbs: 'e2ec9fd8f902e8ef063d5d490af65e79157be6d6156567b5570753cd0b4ab342',
+    // TASK-290: Sindelfingen's garage mouth moves from r:97 to r:954 and changes the curb openings.
+    curbs: '3d9a7d2bd2aede8d00353ddea65a0ad8bef80ddb344c3d4abecc22a99d4b1f10',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    de: '27166f0115cc2f96e4817143b35877a66af174f6c878cbcdffd9bbd357849072',
+    // TASK-290: Sindelfingen's moved garage mouth changes German keep-clear paint on r:97 and r:954.
+    de: '9fac14a27bf845a1ab34d602a275b25909a1634db852efe0cc0d85acd9804e45',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    us: 'c7783c0792c0ca146715ba43b82c5947c6d1d204580f9147b16ec8a565076bec',
+    // TASK-290: Sindelfingen's moved garage mouth changes US keep-clear paint on r:97 and r:954.
+    us: '97c271a602ebd4bc11a342340961a4fa9766a54ce9f5d205de468341e403d7f6',
   },
 } as const;
 const hash = (value: unknown) =>

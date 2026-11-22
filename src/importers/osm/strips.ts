@@ -188,7 +188,11 @@ function addMappedAreas(
       });
   }
   if (fallback.length) {
-    addLots(city, data, positions, bounds, diagnostics, fallback, false, compiled);
+    addLots(city, data, positions, bounds, diagnostics, {
+      sources: fallback,
+      includeAisles: false,
+      compiled,
+    });
     for (const p of Object.values(city.parking ?? {}))
       if (p.kind === 'lot' && fallback.some((s) => p.provenance.osmIds?.includes(s.id)))
         p.provenance.inferred!.push('streetSideLot');

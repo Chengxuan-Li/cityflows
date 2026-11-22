@@ -16,9 +16,12 @@ const pins = {
   // Lead merge: re-pinned on TASK-275's canopies and handrails (the same hashes with and without
   // TASK-278's lookups on the merged tree).
   // Lead merge: re-pinned on TASK-271 (passages and covered ways at grade change the walk).
-  freiburg: '09b27fc15dd96f5df2fcaaec4d925d8c7751743849f82322bcbd335d927cd9ec',
-  munich: '15bab3954dfa57a1bd897bf6ad9291e4973a36068cdb3510cca36c2c0275efaa',
-  sindelfingen: 'b5ae4105b3a362ced824c74d4b6878ceaeb94385fb22a2ca098530f47fc9fc24',
+  // TASK-290: Freiburg's nine mapped garage entrances change the 3D sidewalk mesh.
+  freiburg: '483ac21ae773737a5e475326c6eeb42535268e3c45efc0fa2245a0fb3e915451',
+  // TASK-290: Munich's garage connector moves to r:1070 and changes the 3D footway mesh.
+  munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
+  // TASK-290: Sindelfingen's garage connector moves to r:954 and changes the 3D sidewalk mesh.
+  sindelfingen: '99e8635b168b60c518c7f2b55262df295e88c4504e15b39cda851fea1d67c8ec',
 };
 
 for (const [name, pin] of Object.entries(pins))

@@ -64,13 +64,15 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
           // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
           // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
-          '425ed4dc4f99a5ddab8d9d4ca5076222ff1c04c9d714b8a78ca0b3e6e1e3401f'
+          // TASK-290: Munich's garage entrance changes keep-clear paint on r:1070 and r:1071.
+          'eb654316b6d41273f108c7127b7f9d725b468866a78045e064103f5b82c40d64'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
           // TASK-241: no hatch at lane gains (5 roads).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-          '15fca425d91639a581850b657fe340b633339e757bff0c30768f56cadcd9ac69',
+          // TASK-290: Sindelfingen's garage entrance changes keep-clear paint on r:97 and r:954.
+          'a103451dfb8631354af06ae883031fd029c49097f6ae53380d5efe0a315a570e',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
