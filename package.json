@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Browser-based city traffic sandbox: individual vehicles on lane-level road networks imported from OpenStreetMap or drawn by hand.",
-  "license": "GPL-3.0-or-later",
+  "license": "GPL-2.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=22"

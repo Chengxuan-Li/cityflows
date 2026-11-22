@@ -337,10 +337,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-311](tasks/TASK-311.md) | airports | 3D render cost at airport scale | render3d, airfield lights | - | Heathrow 3D p95 under 6 ms, no visible change | merged 2026-11-22 (`8f4cde8`, wave E) |
 | [TASK-313](tasks/TASK-313.md) | airports | London City: a taxiway section that reads and behaves as one-way | importer, airside, markings | - | both ways as paved, LCY gates kept | merged 2026-11-22 (`947f9d7`, wave E) |
 | [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | planned (wave F, Claude) |
-| [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | in progress 2026-11-22 (wave F, Codex) |
+| [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | in progress 2026-11-22 (wave F, Claude) |
 | [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | planned (wave G, Claude) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | in progress 2026-11-22 (wave E, Codex) |
+| [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | planned (wave F, Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5889,6 +5890,11 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-314 (Codex; merged `45f6507`): rotation on the main gear, lift-off, gear retraction, banked curved flight,
+  flare and de-rotation; on the ground the nose wheel follows the centreline (error under 0.10 m through 90 degrees)
+  while the main gear tracks inside; pushback tug at the nose; both views interpolate one snapshot behind. London
+  City's gates unchanged; existing hashes identical; Heathrow 3D p95 2.0 to 2.5 ms (budget kept); London City live 2D
+  mean CPU 0.48 to 0.92 ms.
 - TASK-311 (Codex; merged `1496fe3` with the lead-line merge `8f4cde8`): aircraft meshes batched, light instances
   packed, sub-pixel cabin windows skipped, airport asphalt drawn once. 3D render p95 by day, lead line against merge:
   Heathrow 7.0 to 2.2 ms, Zurich 4.1 to 1.3, Boston 1.7 to 1.3, London City 2.1 to 1.2; night likewise; Freiburg and
@@ -6356,6 +6362,12 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): real aircraft models "really matter", with level of detail, realism for the common types.
+  The free set that covers them (Flightradar24's glTF, from FlightGear) is GPL-2.0; the owner chose to relicense
+  CityFlows to GPL-2.0-or-later (runtime dependencies MIT, ISC, BSD-3, BSL-1.0, OFL; the SUMO adaptation is
+  GPL-2.0-or-later). The set is downloaded to `D:\cityflows-wtirport-datar24` (commit dd53267, 41 models, 125
+  MB); TASK-318 brings it in with LOD.
 
 - 2026-11-22 (owner): "resume zurich and at the same time start with the taxi speed increase and measure delays etc.
   if that may be the cause - if not, dispatch performance upgrade agents and 3d rendering upgrade agents". TASK-302 resumed on a
