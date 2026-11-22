@@ -54,12 +54,13 @@ export const airsideRules = {
     [800, 23],
     [0, 18],
   ] as const,
-  /** A parallel neighbour lies within 20 degrees of the edge's direction, and the graph does not
-   * join the two points within their distance plus 120 m of travel: near a junction, holding
-   * separates aircraft, not geometry. */
+  /** Parallel neighbours are aligned within 20 degrees. A short graph detour marks a junction
+   * unless the lanes run side by side for at least 20 m. */
   parallelDeg: 20,
   parallelJoinM: 120,
+  parallelOverlapM: 20,
   sampleM: 5,
+  taxiGapM: 5,
   /** A stand or hold off the graph joins the nearest taxi edge within these. */
   standJoinM: 150,
   holdJoinM: 20,
@@ -278,10 +279,16 @@ export function importAirport(
   // drivable roads).
   const nodes = new Map<string, DraftNode>();
   const edges: DraftEdge[] = [];
+  const aliases = new Map<string, string>();
+  const graphKey = (ref: number) => {
+    let key = String(ref);
+    while (aliases.has(key)) key = aliases.get(key)!;
+    return key;
+  };
   const addNode = (r: number) => {
-    if (!nodes.has(String(r)))
-      nodes.set(String(r), { key: String(r), pos: positions.get(r)!, osmId: r });
-    return String(r);
+    const key = graphKey(r);
+    if (!nodes.has(key)) nodes.set(key, { key, pos: positions.get(r)!, osmId: r });
+    return key;
   };
   const incidence = new Map<number, number>();
   for (const w of graphWays)
@@ -351,30 +358,47 @@ export function importAirport(
     pieces.set(w.id, list);
   }
   const ends = (edge: DraftEdge) => [edge.from, edge.to];
-  const onGraph = (r: number) => edges.some((e) => e.from === String(r) || e.to === String(r));
-  /** Splits `edge` at `along` metres; the node there (an end within 1 m). */
-  const splitAt = (edge: DraftEdge, along: number, key: string): string => {
+  const onGraph = (r: number) => {
+    const key = graphKey(r);
+    return edges.some((e) => e.from === key || e.to === key);
+  };
+  /** Splits `edge` at `along` metres; the node there (an end within 1 m by default). */
+  const splitAt = (
+    edge: DraftEdge,
+    along: number,
+    key: string,
+    tolerance = 1,
+    wayPieces?: DraftEdge[],
+  ): string => {
     const lengths = cumulativeLengths(edge.line);
-    if (along < 1) return edge.from;
-    if (along > lengths.at(-1)! - 1) return edge.to;
-    const point = pointAtDistance(edge.line, lengths, along);
+    if (along < tolerance) return edge.from;
+    if (along > lengths.at(-1)! - tolerance) return edge.to;
+    const point = nodes.get(key)?.pos ?? pointAtDistance(edge.line, lengths, along);
     let i = 1;
     while (lengths[i]! < along) i++;
-    nodes.set(key, { key, pos: point, generated: true });
-    const second: DraftEdge = { ...edge, from: key, line: [point, ...edge.line.slice(i)] };
-    edge.line = [...edge.line.slice(0, i), point];
+    if (!nodes.has(key)) nodes.set(key, { key, pos: point, generated: true });
+    const next = distance(point, edge.line[i]!) < 1e-7 ? i + 1 : i;
+    const second: DraftEdge = { ...edge, from: key, line: [point, ...edge.line.slice(next)] };
+    const prev = distance(point, edge.line[i - 1]!) < 1e-7 ? i - 1 : i;
+    edge.line = [...edge.line.slice(0, prev), point];
     edge.to = key;
     edges.splice(edges.indexOf(edge) + 1, 0, second);
+    wayPieces?.splice(wayPieces.indexOf(edge) + 1, 0, second);
     return key;
   };
   /** The nearest point on a taxi edge (not a runway or lead-in) of `layer` within `limit`. */
-  const nearestTaxi = (p: Vec2, limit: number, layer: number, clear?: (q: Vec2) => boolean) => {
+  const nearestTaxi = (
+    p: Vec2,
+    limit: number,
+    layer: number,
+    accepts?: (q: Vec2, edge: DraftEdge) => boolean,
+  ) => {
     let found: { edge: DraftEdge; along: number; away: number; point: Vec2 } | undefined;
     for (const edge of edges) {
       if ((edge.kind !== 'taxiway' && edge.kind !== 'taxilane') || edge.layer !== layer) continue;
       const near = nearestOnPolyline(edge.line, p);
       if (near.away > limit || (found && near.away >= found.away)) continue;
-      if (clear && !clear(near.point)) continue;
+      if (accepts && !accepts(near.point, edge)) continue;
       found = { edge, along: near.along, away: near.away, point: near.point };
     }
     return found;
@@ -383,6 +407,60 @@ export function importAirport(
   // Runways: runway ways joined end to end in line, with one `ref` between them; a mapped
   // `runway=displaced_threshold` way is part of the runway it continues.
   const runwayWays = graphWays.filter((w) => w.tag.aeroway === 'runway');
+  // Distinct runway centrelines at grade share a graph node even if the ways did not share an
+  // OSM node. Split before ordering the runway chains so both own their complete edge lists.
+  const exactM = 1e-5;
+  const atEnd = (edge: DraftEdge, p: Vec2) =>
+    ends(edge).find((key) => distance(nodes.get(key)!.pos, p) < exactM);
+  const unify = (keep: string, discard: string) => {
+    if (keep === discard) return;
+    aliases.set(discard, keep);
+    const p = nodes.get(keep)!.pos;
+    for (const edge of edges) {
+      if (edge.from === discard) {
+        edge.from = keep;
+        edge.line[0] = p;
+      }
+      if (edge.to === discard) {
+        edge.to = keep;
+        edge.line[edge.line.length - 1] = p;
+      }
+    }
+  };
+  for (const [i, a] of runwayWays.entries())
+    for (const b of runwayWays.slice(i + 1)) {
+      if (norm(a.tag.ref) && norm(a.tag.ref) === norm(b.tag.ref)) continue;
+      const as = pieces.get(a.id)!;
+      const bs = pieces.get(b.id)!;
+      const crossings: Vec2[] = [];
+      for (const e of as)
+        for (const f of bs) {
+          if (e.layer !== f.layer) continue;
+          for (let j = 1; j < e.line.length; j++)
+            for (let k = 1; k < f.line.length; k++) {
+              const u = e.line[j - 1]!,
+                v = e.line[j]!;
+              const x = f.line[k - 1]!,
+                y = f.line[k]!;
+              const p = segmentIntersection(u, v, x, y);
+              if (p && !crossings.some((q) => distance(p, q) < exactM)) crossings.push(p);
+            }
+        }
+      for (const [j, p] of crossings.entries()) {
+        const crossingOf = (list: DraftEdge[]) =>
+          list
+            .map((edge) => ({ edge, ...nearestOnPolyline(edge.line, p) }))
+            .find(({ away }) => away < exactM)!;
+        const left = crossingOf(as),
+          right = crossingOf(bs);
+        const leftKey = atEnd(left.edge, p),
+          rightKey = atEnd(right.edge, p);
+        const key = leftKey ?? rightKey ?? `runway-crossing/${a.id}/${b.id}/${j}`;
+        if (!leftKey) splitAt(left.edge, left.along, key, exactM, as);
+        if (!rightKey) splitAt(right.edge, right.along, key, exactM, bs);
+        if (leftKey && rightKey) unify(leftKey, rightKey);
+      }
+    }
   const parent = new Map(runwayWays.map((w) => [w.id, w.id]));
   const find = (id: number): number => (parent.get(id) === id ? id : find(parent.get(id)!));
   const outward = (w: OsmWay, at: number) => {
@@ -437,11 +515,13 @@ export function importAirport(
       ways.find((w) => w.tag.ref);
     const along = heading(nodes.get(chain[0]!.from)!.pos, nodes.get(chain.at(-1)!.to)!.pos);
     const given = named?.tag.ref?.split('/').map((d) => d.trim());
-    const valid = given?.length === 2 && given.every((d) => /^\d{1,2}[LRC]?$/.test(d));
+    const helicopterOnly = given?.length === 2 && given.every((d) => /^H\d{1,2}$/.test(d));
+    const valid =
+      helicopterOnly || (given?.length === 2 && given.every((d) => /^\d{1,2}[LRC]?$/.test(d)));
     const derive = (angle: number) =>
       String(Math.round(bearing(angle) / 10) || 36).padStart(2, '0');
     const designators = valid ? given! : [derive(along), derive(along + Math.PI)];
-    const first = (Number(/^\d+/.exec(designators[0]!)![0]) * 10 * Math.PI) / 180;
+    const first = (Number(/\d+/.exec(designators[0]!)![0]) * 10 * Math.PI) / 180;
     if (angleBetween(first, (bearing(along) * Math.PI) / 180) > Math.PI / 2) {
       chain.reverse();
       chain.forEach(reversed);
@@ -466,10 +546,12 @@ export function importAirport(
               Number(norm(a.tag!.ref) === norm(designator)) || a.along - b.along,
         )[0];
       if (mappedThreshold) return { key: mappedThreshold.key, along: mappedThreshold.along };
-      const k = i === 0 ? 1 : keys.length - 2;
-      const endEdge = i === 0 ? chain[0]! : chain.at(-1)!;
-      if (endEdge.tag.runway === 'displaced_threshold' && chain.length > 1)
+      const fromThisEnd = i === 0 ? chain : [...chain].reverse();
+      const firstMain = fromThisEnd.findIndex((e) => e.tag.runway !== 'displaced_threshold');
+      if (firstMain > 0) {
+        const k = i === 0 ? firstMain : chain.length - firstMain;
         return { key: keys[k]!, along: fromEnd(k) };
+      }
       return { key: i === 0 ? keys[0]! : keys.at(-1)!, along: 0 };
     });
     const runway: DraftRunway = {
@@ -489,10 +571,10 @@ export function importAirport(
             w.tag.aeroway === 'stopway' &&
             isLine(w) &&
             w.nd.every((r) => positions.has(r)) &&
-            [keys[0], keys.at(-1)].some((k) => [w.nd[0], w.nd.at(-1)].map(String).includes(k!)),
+            [keys[0], keys.at(-1)].some((k) => [w.nd[0]!, w.nd.at(-1)!].map(graphKey).includes(k!)),
         )
         .map((w) => w.nd.map((r) => positions.get(r)!)),
-      code: largest((code) => rules.runwayWidthM[code] <= widthM),
+      code: helicopterOnly ? null : largest((code) => rules.runwayWidthM[code] <= widthM),
     };
     for (const edge of chain) edge.runway = runway;
     runways.push(runway);
@@ -540,17 +622,80 @@ export function importAirport(
         points.some((p) => pointInPolygon(p, close(ring))) ? [i] : [],
       ),
     );
-  const crossesBuilding = (a: Vec2, b: Vec2, skip: Set<number>) =>
+  const crossesBuilding = (a: Vec2, b: Vec2, skip?: ReadonlySet<number>) =>
     segmentIndex.search(...box([a, b])).some((i) => {
       const s = segments[i];
-      return s !== undefined && !skip.has(s.owner) && segmentsIntersect(a, b, s.a, s.b);
+      return s !== undefined && !skip?.has(s.owner) && segmentsIntersect(a, b, s.a, s.b);
     });
+
+  const incidentEdges = () => {
+    const byNode = new Map<string, DraftEdge[]>();
+    for (const edge of edges)
+      for (const key of ends(edge)) byNode.set(key, [...(byNode.get(key) ?? []), edge]);
+    return byNode;
+  };
+  // Repair a short gap at the end of an isolated taxilane or taxiway before attaching stands.
+  // Larger gaps remain diagnostic: a nearby apron does not establish a route across it.
+  const byNode = incidentEdges();
+  const flood = (starts: string[]) => {
+    const seen = new Set(starts);
+    const queue = [...seen];
+    while (queue.length)
+      for (const edge of byNode.get(queue.pop()!)!)
+        for (const key of ends(edge))
+          if (!seen.has(key)) {
+            seen.add(key);
+            queue.push(key);
+          }
+    return seen;
+  };
+  const connected = flood(runways.filter((r) => r.code !== null).flatMap((r) => r.endKeys));
+  const visited = new Set(connected);
+  for (const key of byNode.keys()) {
+    if (visited.has(key)) continue;
+    const group = flood([key]);
+    let best:
+      | { key: string; dangling: DraftEdge; near: NonNullable<ReturnType<typeof nearestTaxi>> }
+      | undefined;
+    for (const candidate of group) {
+      visited.add(candidate);
+      const incident = byNode.get(candidate)!;
+      const dangling = incident[0]!;
+      if (incident.length !== 1 || dangling.kind === 'runway') continue;
+      const p = nodes.get(candidate)!.pos;
+      const near = nearestTaxi(
+        p,
+        rules.taxiGapM,
+        dangling.layer,
+        (q, e) => connected.has(e.from) && !crossesBuilding(p, q),
+      );
+      if (near && (!best || near.away < best.near.away)) best = { key: candidate, dangling, near };
+    }
+    if (!best) continue;
+    const { key: from, dangling, near } = best;
+    const to = splitAt(near.edge, near.along, `${from}/join`, exactM);
+    const p = nodes.get(from)!.pos;
+    const q = nodes.get(to)!.pos;
+    if (distance(p, q) < exactM) unify(to, from);
+    else
+      edges.push({
+        from,
+        to,
+        line: [p, q],
+        kind: dangling.kind,
+        layer: dangling.layer,
+        tag: {},
+        osmIds: [...new Set([...dangling.osmIds, ...near.edge.osmIds])],
+        generated: true,
+      });
+    connected.add(to);
+  }
 
   // Holding positions: on the graph, or snapped onto the nearest taxi edge within 20 m.
   const unjoined: string[] = [];
   const holdKeys = new Map<number, string>();
   for (const n of aeroNodes('holding_position')) {
-    if (onGraph(n.id)) holdKeys.set(n.id, String(n.id));
+    if (onGraph(n.id)) holdKeys.set(n.id, graphKey(n.id));
     else {
       const near = nearestTaxi(positions.get(n.id)!, rules.holdJoinM, osmLayer(n.tag) ?? 0);
       if (near) holdKeys.set(n.id, splitAt(near.edge, near.along, `hold/${n.id}`));
@@ -660,7 +805,7 @@ export function importAirport(
       tag: n.tag,
       osmIds: [n.id],
     };
-    const key = String(n.id);
+    const key = graphKey(n.id);
     if (onGraph(n.id)) {
       const edge = edges.find((e) => e.to === key) ?? edges.find((e) => e.from === key)!;
       stand.heading = edge.to === key ? heading(edge.line.at(-2)!, p) : heading(edge.line[1]!, p);
@@ -687,6 +832,7 @@ export function importAirport(
   const surfaceAreas = areas(
     (tag) =>
       tag.aeroway === 'apron' ||
+      (tag.aeroway === 'helipad' && tag.area !== 'no') ||
       ((tag.area === 'yes' || tag.type === 'multipolygon') &&
         ['runway', 'taxiway', 'taxilane', 'turn_pad', 'helipad'].includes(tag.aeroway ?? '')),
   );
@@ -797,18 +943,44 @@ export function importAirport(
   // separations hold at every 5 m along it: from parallel taxi edges and runways (the taxiway
   // column; two taxilanes the taxilane column) and from buildings (the object columns), but a
   // building the edge enters.
-  const nodeEdges = new Map<string, DraftEdge[]>();
-  for (const edge of edges)
-    for (const key of ends(edge)) nodeEdges.set(key, [...(nodeEdges.get(key) ?? []), edge]);
+  const nodeEdges = incidentEdges();
   const network = edges.filter((e) => e.kind !== 'lead_in');
   const lineSegments = network.flatMap((edge) =>
-    edge.line.slice(1).map((b, i) => ({ edge, a: edge.line[i]!, b })),
+    edge.line.slice(1).map((b, i) => {
+      const a = edge.line[i]!;
+      return { edge, a, b, heading: heading(a, b), length: distance(a, b) };
+    }),
   );
   const lineIndex = new Flatbush(Math.max(1, lineSegments.length));
   for (const { a, b } of lineSegments) lineIndex.add(...box([a, b]));
   if (!lineSegments.length) lineIndex.add(0, 0, 0, 0);
   lineIndex.finish();
   const reach = rules.taxiwaySeparationM.F;
+  const parallelAngle = (rules.parallelDeg * Math.PI) / 180;
+  const overlap = rules.parallelOverlapM;
+  const sustainedParallel = (
+    edge: DraftEdge,
+    lengths: Float64Array,
+    s: number,
+    segment: (typeof lineSegments)[number],
+  ) => {
+    const length = lengths.at(-1)!;
+    if (length < overlap || segment.length < overlap) return false;
+    const start = Math.max(0, Math.min(s - overlap / 2, length - overlap));
+    const a = pointAtDistance(edge.line, lengths, start);
+    const b = pointAtDistance(edge.line, lengths, start + overlap);
+    const station = (p: Vec2) =>
+      ((p.x - segment.a.x) * (segment.b.x - segment.a.x) +
+        (p.y - segment.a.y) * (segment.b.y - segment.a.y)) /
+      segment.length;
+    const first = station(a),
+      last = station(b);
+    return (
+      Math.min(first, last) >= 0 &&
+      Math.max(first, last) <= segment.length &&
+      Math.abs(last - first) >= overlap * Math.cos(parallelAngle)
+    );
+  };
   const travel = new Map<string, Map<string, number>>();
   /** Graph distances from `key` over the taxi network, up to what `joined` can ask. */
   const distances = (key: string) => {
@@ -847,10 +1019,12 @@ export function importAirport(
       }
     return false;
   };
+  const inferredCode = largest((c) => runways.some((r) => r.code === c)) ?? 'F';
   for (const edge of network) {
     if (edge.kind === 'runway') continue;
     const mapped = metres(edge.tag.width);
-    let code = mapped === undefined ? 'F' : largest((c) => rules.taxiwayWidthM[c] <= mapped);
+    let code =
+      mapped === undefined ? inferredCode : largest((c) => rules.taxiwayWidthM[c] <= mapped);
     const skip = containing(edge.line);
     const lengths = cumulativeLengths(edge.line);
     const length = lengths.at(-1)!;
@@ -872,10 +1046,20 @@ export function importAirport(
         const segment = lineSegments[i];
         if (!segment || segment.edge === edge || segment.edge.layer !== edge.layer) continue;
         const away = segmentDistance(p, segment.a, segment.b);
-        const turn = angleBetween(heading(segment.a, segment.b), direction);
+        const turn = angleBetween(segment.heading, direction);
+        if (away > reach || Math.min(turn, Math.PI - turn) > parallelAngle) continue;
+        const separation =
+          edge.kind === 'taxilane' && segment.edge.kind === 'taxilane'
+            ? rules.taxilaneSeparationM
+            : rules.taxiwaySeparationM;
+        if (code === null || away >= separation[code]) continue;
+        // A short cross-link does not give a pair of parallel taxi lanes more clearance.
+        const separateLanes =
+          segment.edge.kind !== 'runway' &&
+          away >= separation.A &&
+          sustainedParallel(edge, lengths, s, segment);
         if (
-          away > reach ||
-          Math.min(turn, Math.PI - turn) > (rules.parallelDeg * Math.PI) / 180 ||
+          !separateLanes &&
           joined(
             edge,
             s,
@@ -885,10 +1069,6 @@ export function importAirport(
           )
         )
           continue;
-        const separation =
-          edge.kind === 'taxilane' && segment.edge.kind === 'taxilane'
-            ? rules.taxilaneSeparationM
-            : rules.taxiwaySeparationM;
         code = lower(
           code,
           largest((c) => separation[c] <= away),
@@ -1233,7 +1413,7 @@ export function importAirport(
   airport.roadCrossings = roadCrossings(city, data, airport);
   airport.turnPads = aeroNodes('turn_pad').map((n) => ({
     pos: positions.get(n.id)!,
-    ...(nodeIds.has(String(n.id)) ? { node: nodeIds.get(String(n.id))! } : {}),
+    ...(nodeIds.has(graphKey(n.id)) ? { node: nodeIds.get(graphKey(n.id))! } : {}),
     osmId: n.id,
   }));
   city.airport = airport;

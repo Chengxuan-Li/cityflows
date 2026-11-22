@@ -45,6 +45,17 @@ test('London City: one runway, its holds, stands, gates and terminal, all on one
   expect(runways[0]!.ends.every((e) => e.displacedM > 0)).toBe(true);
   const edges = Object.values(airport.edges);
   expect(count(edges, (e) => e.kind)).toEqual({ taxiway: 97, runway: 18, lead_in: 19 });
+  expect(
+    count(
+      edges.filter((e) => e.kind === 'taxiway'),
+      (e) => String(e.maxCode),
+    ),
+  ).toEqual({
+    A: 1,
+    B: 6,
+    C: 70,
+    D: 20,
+  });
   expect(edges.filter((e) => e.provenance.source === 'generated')).toHaveLength(0);
   const holds = Object.values(airport.holdingPositions);
   expect(count(holds, (h) => `${h.kind} ${h.side} ${h.provenance.source}`)).toEqual({

@@ -56,17 +56,19 @@ const tags = (t: Record<string, string> = {}) =>
   Object.entries(t)
     .map(([k, v]) => `<tag k="${k}" v="${v}"/>`)
     .join('');
-const xml = `<osm version="0.6">${nodes
-  .map(([id, lon, lat, t]) => `<node id="${id}" lat="${lat}" lon="${lon}">${tags(t)}</node>`)
-  .join('')}${ways
-  .map(
-    ([id, nd, t]) =>
-      `<way id="${id}">${nd.map((r) => `<nd ref="${r}"/>`).join('')}${tags(t)}</way>`,
-  )
-  .join('')}</osm>`;
+const osm = (points: typeof nodes, lines: typeof ways) =>
+  `<osm version="0.6">${points
+    .map(([id, lon, lat, t]) => `<node id="${id}" lat="${lat}" lon="${lon}">${tags(t)}</node>`)
+    .join('')}${lines
+    .map(
+      ([id, nd, t]) =>
+        `<way id="${id}">${nd.map((r) => `<nd ref="${r}"/>`).join('')}${tags(t)}</way>`,
+    )
+    .join('')}</osm>`;
+const xml = osm(nodes, ways);
 
-const imported = () => {
-  const result = importOsm(xml, {
+const imported = (input = xml) => {
+  const result = importOsm(input, {
     importerVersion: '1',
     bbox: [-0.0005, 51.4975, 0.0105, 51.5015],
     terrain: false,
@@ -233,6 +235,129 @@ describe('TASK-295 airside import', () => {
     expect(plain.ok && 'airport' in plain.city).toBe(false);
     expect(plain.ok).toBe(true);
   });
+});
+
+test('splits a same-layer runway crossing at one shared node and preserves both chains', () => {
+  const { city } = imported(
+    osm(
+      [...nodes, [50, 0.005, 51.499], [51, 0.005, 51.501]],
+      [...ways, [110, [50, 51], { aeroway: 'runway', ref: '18/36' }]],
+    ),
+  );
+  const airport = city.airport!;
+  const [eastWest, northSouth] = Object.values(airport.runways);
+  const middle = airport.edges[northSouth!.edges[0]!]!.to;
+  expect(northSouth!.edges).toHaveLength(2);
+  expect(eastWest!.edges.some((id) => airport.edges[id]!.from === middle)).toBe(true);
+
+  const raised = imported(
+    osm(
+      [...nodes, [50, 0.005, 51.499], [51, 0.005, 51.501]],
+      [...ways, [110, [50, 51], { aeroway: 'runway', ref: '18/36', layer: '1' }]],
+    ),
+  ).city.airport!;
+  expect(Object.values(raised.runways)[1]!.edges).toHaveLength(1);
+});
+
+test('uses the inner end of the whole displaced-threshold way even when split', () => {
+  const { city } = imported(
+    osm(
+      [...nodes, [50, 0.0004, 51.5, { aeroway: 'turn_pad' }]],
+      ways.map(([id, nd, tag]) => [id, id === 101 ? [1, 50, 2] : nd, tag]),
+    ),
+  );
+  const airport = city.airport!;
+  const end = Object.values(airport.runways)[0]!.ends[0];
+  expect(airport.nodes[end.threshold.node]!.osmId).toBe(2);
+  expect(end.displacedM).toBeCloseTo(69.4, 0);
+});
+
+test('repairs a short dangling taxilane join without bridging an unmapped apron', () => {
+  const { city } = imported(
+    osm(
+      [
+        ...nodes,
+        [50, 0.007, 51.49952],
+        [51, 0.007, 51.4997],
+        [52, 0.0074, 51.4997],
+        [53, 0.003, 51.49975],
+        [54, 0.003, 51.4999],
+      ],
+      [
+        ...ways,
+        [110, [50, 51], { aeroway: 'taxilane' }],
+        [111, [51, 52], { aeroway: 'parking_position', ref: '3' }],
+        [112, [53, 54], { aeroway: 'taxilane' }],
+      ],
+    ),
+  );
+  const airport = city.airport!;
+  const runway = Object.values(airport.runways)[0]!;
+  const connected = reachable(airport, runway.ends[0].node);
+  expect(connected.has(Object.values(airport.nodes).find((n) => n.osmId === 51)!.id)).toBe(true);
+  expect(connected.has(Object.values(airport.nodes).find((n) => n.osmId === 53)!.id)).toBe(false);
+  expect(
+    Object.values(airport.edges).filter(
+      (e) => e.kind === 'taxilane' && e.provenance.source === 'generated',
+    ),
+  ).toHaveLength(1);
+});
+
+test('bounds an unmapped taxi width by the largest runway code at the airport', () => {
+  const { city } = imported(xml.replaceAll('k="width" v="45"', 'k="width" v="30"'));
+  const edges = Object.values(city.airport!.edges).filter((e) => e.ref === 'C');
+  expect(edges.map((e) => [e.maxCode, e.widthM])).toEqual([
+    ['C', 15],
+    ['C', 15],
+  ]);
+});
+
+test('clearance limits two parallel taxilanes even where a short link joins them', () => {
+  const { city } = imported(
+    osm(
+      [
+        [1, 0.001, 51.5],
+        [2, 0.009, 51.5],
+        [3, 0.004, 51.5],
+        [4, 0.004, 51.499],
+        [5, 0.00475, 51.499],
+        [6, 0.004, 51.4986],
+        [7, 0.00475, 51.4986],
+        [20, 0.0065, 51.498],
+        [21, 0.0065, 51.501],
+      ],
+      [
+        [101, [1, 3, 2], { aeroway: 'runway', ref: '09/27', width: '45' }],
+        [102, [3, 4], { aeroway: 'taxiway' }],
+        [103, [4, 5], { aeroway: 'taxilane' }],
+        [104, [6, 7], { aeroway: 'taxilane' }],
+        [105, [4, 6], { aeroway: 'taxiway' }],
+        [109, [20, 21], { highway: 'service' }],
+      ],
+    ),
+  );
+  const lanes = Object.values(city.airport!.edges).filter((e) => e.kind === 'taxilane');
+  expect(lanes.map((lane) => [lane.maxCode, lane.widthM])).toEqual([
+    ['C', 15],
+    ['C', 15],
+  ]);
+});
+
+test('keeps closed helipads and a helicopter runway with its mapped designators', () => {
+  const { city } = imported(
+    osm(
+      [...nodes, [50, 0.002, 51.499], [51, 0.002, 51.4995]],
+      [
+        ...ways,
+        [110, [40, 41, 42, 43, 40], { aeroway: 'helipad', ref: 'H1' }],
+        [111, [50, 51], { aeroway: 'runway', ref: 'H01/H19' }],
+      ],
+    ),
+  );
+  expect(Object.values(city.airport!.helipads)[0]?.ref).toBe('H1');
+  const lane = Object.values(city.airport!.runways)[1]!;
+  expect(lane.ends.map((e) => e.designator)).toEqual(['H01', 'H19']);
+  expect(lane.maxCode).toBeNull();
 });
 
 function polyLength(line: { x: number; y: number }[]) {

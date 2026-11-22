@@ -4073,19 +4073,23 @@ ends). The rules, with ICAO Annex 14 Vol. I (8th edition, 2018) figures by code 
 - **Graph.** Edges are the centrelines of `aeroway=runway|taxiway|taxilane` ways (an `area=yes`
   way or a multipolygon is a surface, not an edge), split at every node two such ways share, at
   holding positions, thresholds, turn pads and stand nodes, at nodes shared with drivable roads,
-  and at the nodes `parking_position` ways touch; a closed way also at its middle. Ways cross only at shared nodes: a crossing without
-  one is not joined. A way with nodes missing from the extract is broken there
-  (`airport_incomplete_way`).
+  and at the nodes `parking_position` ways touch; a closed way also at its middle. A crossing of
+  distinct runway centrelines on the same layer gets a shared node even when OSM maps none.
+  Otherwise centrelines intersect at shared nodes. Before stands are attached, an isolated taxi
+  component can join the runway network at its shortest gap from a dangling end to a taxi edge.
+  The gap must be at most 5 m, on the same layer, and clear of buildings. A way with nodes missing
+  from the extract is broken there (`airport_incomplete_way`).
 - **Runways.** Runway ways joined end to end within 15 degrees of a straight line, with at most
   one `ref` between them, are one runway; a `runway=displaced_threshold` way is part of the runway
   it continues. Its edges run from end to end; ways that do not form one line stay taxiable edges
   with no runway (`airport_runway_unordered`). `ref` gives the designators (else they are derived
   from the true bearing, `inferred: ['ref']`); designator n is the end where a heading of n x 10
   degrees starts. A threshold is a mapped `aeroway=threshold` node in the half nearer the end (its
-  `ref` first), else the inner end of a displaced-threshold way at the end, else the end. Width is
-  the mapped `width`, else 45, 30, 23 or 18 m for a runway of at least 1,800, 1,200, 800 or 0 m.
-  Its code is the largest whose runway width (A 18, B 23, C 30, D to F 45 m) the width meets.
-  Stopways are `aeroway=stopway` ways starting at an end.
+  `ref` first), else the inner end of the entire displaced-threshold stretch, else the pavement
+  end. Width is the mapped `width`, else 45, 30, 23 or 18 m for a runway of at least 1,800, 1,200,
+  800 or 0 m. Its code is the largest whose runway width (A 18, B 23, C 30, D to F 45 m) the width
+  meets. Paired helicopter designators such as `H01/H19` are retained and take `maxCode: null`
+  because the fixed-wing codes do not apply. Stopways are `aeroway=stopway` ways starting at an end.
 - **Holding positions.** On the graph, or snapped onto the nearest taxiway or taxilane edge within
   20 m by a generated node (`inferred: ['node']`); farther ones are left out (`airport_unjoined`).
   A runway hold protects the runway the graph reaches first from it within 1 km of travel; `toward`
@@ -4110,24 +4114,27 @@ ends). The rules, with ICAO Annex 14 Vol. I (8th edition, 2018) figures by code 
   length back and a tailplane of 35% of the span at the tail: nose-in stands side by side then
   need the span plus the clearance between them, and angled stands (London City's) fit as their
   wings stagger. A lead-in edge takes its stand's code.
-- **Taxi edge codes.** The lower of the code whose taxiway width (A 7.5, B 10.5, C 15, D 18, E 23,
-  F 25 m) a mapped width meets and the largest code whose separations hold at every 5 m along the
-  edge: from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
+- **Taxi edge codes.** Start at the code whose taxiway width (A 7.5, B 10.5, C 15, D 18, E 23,
+  F 25 m) a mapped width meets. Without a mapped width, start at the largest fixed-wing runway
+  code in the airport (F when no fixed-wing runway code is known). Limit that code by the
+  separations at 5 m intervals from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
   B 31.5, C 44, D 63, E 76, F 91 m; two taxilanes A 19.5, B 28.5, C 40.5, D 59.5, E 72.5, F 87.5
   m), and from buildings (taxiway to object A 15.5, B 20, C 26, D 37, E 43.5, F 51 m; taxilane to
   object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. A parallel
   neighbour is another edge on the same layer within 20 degrees of the edge's direction that the
-  graph does not join to the sample within their distance plus 120 m of travel: near a junction
-  holding separates aircraft, not geometry. A runway counts as a parallel taxiway (wingtip
-  clearance); the runway-strip separations of Table 3-1 are operating restrictions, left to the
-  operations tasks. An unmapped width is the width of the edge's code.
+  graph does not join to the sample within their distance plus 120 m of travel. At junctions
+  aircraft use the same pavement in turn. Two taxi edges running side by side for 20 m, separated
+  by at least the code A minimum, still impose clearance limits when connected by a short link.
+  A runway counts as a parallel taxiway (wingtip clearance). The runway-strip separations of
+  Table 3-1 are operating restrictions, left to the operations tasks. An unmapped width is the
+  width of the edge's code.
 - **Terminals, gates, hangars.** Terminals are `aeroway=terminal` or `building=terminal` outlines;
   terminals within 30 m of each other share a `group`, so a detached terminal is a group alone. A
   gate belongs to the terminal containing it or nearest within 100 m. Hangars are
   `aeroway=hangar` or `building=hangar` outlines. Aprons are `aeroway=apron` areas.
 - **Aids, windsocks, helipads, turn pads.** `aeroway=navigationaid` nodes keep their
   `navigationaid` kind and `direction` (as `facing`), and take the runway end whose threshold is
-  nearest within 1.5 km; `aeroway=helipad` nodes and areas are helipads.
+  nearest within 1.5 km. `aeroway=helipad` nodes, closed outlines and multipolygons are helipads.
 - **Road crossings.** A road crosses an airside edge where its OSM way shares a node with a
   runway, taxiway or taxilane edge (the directed roads of that way passing within 5 m of it), or
   where its centreline crosses the edge's line on the same layer, at least 5 m from a crossing
