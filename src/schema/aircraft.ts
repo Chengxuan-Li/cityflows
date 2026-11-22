@@ -1,6 +1,6 @@
 // Airports batch (docs/decisions/2026-11-22-airports.md): the aircraft catalogue every airport task
 // reads. Dimensions are the types' published length and wingspan (rotor diameter for helicopters),
-// in metres. TASK-306 adds performance figures to these entries.
+// in metres.
 
 /** ICAO aerodrome reference code letters, by wingspan. */
 export const aircraftCodes = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -31,6 +31,37 @@ export const aircraftClasses = [
 ] as const;
 export type AircraftClass = (typeof aircraftClasses)[number];
 
+interface GroundPerformance {
+  taxiStraightMps: number;
+  taxiTurnMps: number;
+  maxLateralAccelerationMps2: number;
+  pushbackSpeedMps: number;
+  towSpeedMps: number;
+  brakingDecelerationMps2: number;
+}
+
+export interface FixedWingPerformance extends GroundPerformance {
+  kind: 'fixedWing';
+  /** Minimum radius of the aircraft's path centreline for routing. */
+  minTurnRadiusM: number;
+  rotationSpeedMps: number;
+  /** Distance from brake release to rotation. */
+  takeoffRollM: number;
+  climbSpeedMps: number;
+  /** Metres of rise per metre along the centreline. */
+  climbGradient: number;
+  approachSpeedMps: number;
+  /** Distance from touchdown to straight taxi speed. */
+  landingRollM: number;
+}
+
+export interface HelicopterPerformance {
+  kind: 'helicopter';
+  hoverTaxiMps: number;
+  verticalClimbMps: number;
+  transitionSpeedMps: number;
+}
+
 export interface AircraftType {
   id: string;
   name: string;
@@ -40,7 +71,65 @@ export interface AircraftType {
   spanM: number;
   /** Engines and where they sit: under the wing, at the rear fuselage, or none for a helicopter. */
   engines: { count: number; mount: 'wing' | 'rear' | 'none' };
+  performance: FixedWingPerformance | HelicopterPerformance;
 }
+
+// Representative dry, calm-condition figures for the simulation. Fixed-wing flight figures are
+// informed by EUROCONTROL's Aircraft Performance Database (V2, initial climb, Vat and runway
+// distances); model rotation speeds and ground rolls are estimates, since the published speeds and
+// field lengths include airborne portions. Turn radii are rounded aircraft airport-planning
+// geometry estimates. Taxi, pushback, tow and braking limits are shared operating assumptions by
+// class. Helicopter pad manoeuvre speeds are model assumptions within manufacturer performance.
+const groundPerformance = {
+  double_decker: {
+    taxiStraightMps: 12,
+    taxiTurnMps: 4,
+    maxLateralAccelerationMps2: 0.7,
+    pushbackSpeedMps: 1.5,
+    towSpeedMps: 3,
+    brakingDecelerationMps2: 3.4,
+  },
+  widebody: {
+    taxiStraightMps: 13,
+    taxiTurnMps: 4.5,
+    maxLateralAccelerationMps2: 0.8,
+    pushbackSpeedMps: 1.5,
+    towSpeedMps: 3,
+    brakingDecelerationMps2: 3.4,
+  },
+  narrowbody: {
+    taxiStraightMps: 14,
+    taxiTurnMps: 5,
+    maxLateralAccelerationMps2: 0.9,
+    pushbackSpeedMps: 1.8,
+    towSpeedMps: 3.5,
+    brakingDecelerationMps2: 3.4,
+  },
+  regional_jet: {
+    taxiStraightMps: 12,
+    taxiTurnMps: 5,
+    maxLateralAccelerationMps2: 0.9,
+    pushbackSpeedMps: 1.8,
+    towSpeedMps: 3.5,
+    brakingDecelerationMps2: 3.4,
+  },
+  propeller: {
+    taxiStraightMps: 11,
+    taxiTurnMps: 4.5,
+    maxLateralAccelerationMps2: 0.9,
+    pushbackSpeedMps: 1.5,
+    towSpeedMps: 3,
+    brakingDecelerationMps2: 3.4,
+  },
+  private: {
+    taxiStraightMps: 11,
+    taxiTurnMps: 4.5,
+    maxLateralAccelerationMps2: 1,
+    pushbackSpeedMps: 1.5,
+    towSpeedMps: 3,
+    brakingDecelerationMps2: 3.5,
+  },
+} satisfies Record<Exclude<AircraftClass, 'helicopter'>, GroundPerformance>;
 
 export const aircraftTypes: readonly AircraftType[] = [
   {
@@ -50,6 +139,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 72.7,
     spanM: 79.8,
     engines: { count: 4, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.double_decker,
+      minTurnRadiusM: 32,
+      rotationSpeedMps: 74,
+      takeoffRollM: 2240,
+      climbSpeedMps: 98,
+      climbGradient: 0.07,
+      approachSpeedMps: 71,
+      landingRollM: 1100,
+    },
   },
   {
     id: 'B748',
@@ -58,6 +158,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 76.3,
     spanM: 68.4,
     engines: { count: 4, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.double_decker,
+      minTurnRadiusM: 28,
+      rotationSpeedMps: 82,
+      takeoffRollM: 2470,
+      climbSpeedMps: 98,
+      climbGradient: 0.08,
+      approachSpeedMps: 79,
+      landingRollM: 1260,
+    },
   },
   {
     id: 'B77W',
@@ -66,6 +177,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 73.9,
     spanM: 64.8,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.widebody,
+      minTurnRadiusM: 28,
+      rotationSpeedMps: 80,
+      takeoffRollM: 2390,
+      climbSpeedMps: 95,
+      climbGradient: 0.09,
+      approachSpeedMps: 77,
+      landingRollM: 1150,
+    },
   },
   {
     id: 'A359',
@@ -74,6 +196,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 66.8,
     spanM: 64.75,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.widebody,
+      minTurnRadiusM: 27,
+      rotationSpeedMps: 77,
+      takeoffRollM: 2090,
+      climbSpeedMps: 93,
+      climbGradient: 0.1,
+      approachSpeedMps: 73,
+      landingRollM: 1040,
+    },
   },
   {
     id: 'A333',
@@ -82,6 +215,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 63.7,
     spanM: 60.3,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.widebody,
+      minTurnRadiusM: 25,
+      rotationSpeedMps: 75,
+      takeoffRollM: 1970,
+      climbSpeedMps: 92,
+      climbGradient: 0.11,
+      approachSpeedMps: 72,
+      landingRollM: 1000,
+    },
   },
   {
     id: 'B789',
@@ -90,6 +234,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 62.8,
     spanM: 60.1,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.widebody,
+      minTurnRadiusM: 26,
+      rotationSpeedMps: 77,
+      takeoffRollM: 2150,
+      climbSpeedMps: 93,
+      climbGradient: 0.1,
+      approachSpeedMps: 74,
+      landingRollM: 1060,
+    },
   },
   {
     id: 'A20N',
@@ -98,6 +253,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 37.6,
     spanM: 35.8,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.narrowbody,
+      minTurnRadiusM: 16,
+      rotationSpeedMps: 71,
+      takeoffRollM: 1500,
+      climbSpeedMps: 90,
+      climbGradient: 0.12,
+      approachSpeedMps: 69,
+      landingRollM: 930,
+    },
   },
   {
     id: 'B738',
@@ -106,6 +272,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 39.5,
     spanM: 35.8,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.narrowbody,
+      minTurnRadiusM: 16,
+      rotationSpeedMps: 72,
+      takeoffRollM: 1670,
+      climbSpeedMps: 90,
+      climbGradient: 0.12,
+      approachSpeedMps: 71,
+      landingRollM: 960,
+    },
   },
   {
     id: 'A21N',
@@ -114,6 +291,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 44.5,
     spanM: 35.8,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.narrowbody,
+      minTurnRadiusM: 18,
+      rotationSpeedMps: 72,
+      takeoffRollM: 1700,
+      climbSpeedMps: 90,
+      climbGradient: 0.11,
+      approachSpeedMps: 72,
+      landingRollM: 990,
+    },
   },
   {
     id: 'BCS3',
@@ -122,6 +310,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 38.7,
     spanM: 35.1,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.narrowbody,
+      minTurnRadiusM: 15,
+      rotationSpeedMps: 67,
+      takeoffRollM: 1230,
+      climbSpeedMps: 85,
+      climbGradient: 0.12,
+      approachSpeedMps: 67,
+      landingRollM: 810,
+    },
   },
   {
     id: 'E190',
@@ -130,6 +329,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 36.2,
     spanM: 28.7,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.regional_jet,
+      minTurnRadiusM: 15,
+      rotationSpeedMps: 66,
+      takeoffRollM: 1210,
+      climbSpeedMps: 82,
+      climbGradient: 0.12,
+      approachSpeedMps: 65,
+      landingRollM: 710,
+    },
   },
   {
     id: 'E175',
@@ -138,6 +348,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 31.7,
     spanM: 26.0,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.regional_jet,
+      minTurnRadiusM: 14,
+      rotationSpeedMps: 63,
+      takeoffRollM: 1170,
+      climbSpeedMps: 80,
+      climbGradient: 0.13,
+      approachSpeedMps: 62,
+      landingRollM: 680,
+    },
   },
   {
     id: 'CRJ9',
@@ -146,6 +367,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 36.2,
     spanM: 24.9,
     engines: { count: 2, mount: 'rear' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.regional_jet,
+      minTurnRadiusM: 15,
+      rotationSpeedMps: 71,
+      takeoffRollM: 1510,
+      climbSpeedMps: 87,
+      climbGradient: 0.13,
+      approachSpeedMps: 68,
+      landingRollM: 780,
+    },
   },
   {
     id: 'AT76',
@@ -154,6 +386,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 27.2,
     spanM: 27.1,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.propeller,
+      minTurnRadiusM: 12,
+      rotationSpeedMps: 55,
+      takeoffRollM: 950,
+      climbSpeedMps: 67,
+      climbGradient: 0.11,
+      approachSpeedMps: 59,
+      landingRollM: 620,
+    },
   },
   {
     id: 'DH8D',
@@ -162,6 +405,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 32.8,
     spanM: 28.4,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.propeller,
+      minTurnRadiusM: 15,
+      rotationSpeedMps: 60,
+      takeoffRollM: 1070,
+      climbSpeedMps: 72,
+      climbGradient: 0.15,
+      approachSpeedMps: 64,
+      landingRollM: 680,
+    },
   },
   {
     id: 'SF34',
@@ -170,6 +424,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 19.7,
     spanM: 21.4,
     engines: { count: 2, mount: 'wing' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.propeller,
+      minTurnRadiusM: 11,
+      rotationSpeedMps: 51,
+      takeoffRollM: 850,
+      climbSpeedMps: 64,
+      climbGradient: 0.12,
+      approachSpeedMps: 55,
+      landingRollM: 560,
+    },
   },
   {
     id: 'C25C',
@@ -178,6 +443,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 16.3,
     spanM: 15.5,
     engines: { count: 2, mount: 'rear' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.private,
+      minTurnRadiusM: 8,
+      rotationSpeedMps: 54,
+      takeoffRollM: 760,
+      climbSpeedMps: 73,
+      climbGradient: 0.15,
+      approachSpeedMps: 56,
+      landingRollM: 540,
+    },
   },
   {
     id: 'PC24',
@@ -186,6 +462,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 16.9,
     spanM: 17.0,
     engines: { count: 2, mount: 'rear' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.private,
+      minTurnRadiusM: 8,
+      rotationSpeedMps: 51,
+      takeoffRollM: 620,
+      climbSpeedMps: 69,
+      climbGradient: 0.15,
+      approachSpeedMps: 53,
+      landingRollM: 500,
+    },
   },
   {
     id: 'GLF6',
@@ -194,6 +481,17 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 30.4,
     spanM: 30.4,
     engines: { count: 2, mount: 'rear' },
+    performance: {
+      kind: 'fixedWing',
+      ...groundPerformance.private,
+      minTurnRadiusM: 13,
+      rotationSpeedMps: 69,
+      takeoffRollM: 1280,
+      climbSpeedMps: 90,
+      climbGradient: 0.15,
+      approachSpeedMps: 68,
+      landingRollM: 800,
+    },
   },
   {
     id: 'EC45',
@@ -202,6 +500,12 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 13.6,
     spanM: 11.0,
     engines: { count: 2, mount: 'none' },
+    performance: {
+      kind: 'helicopter',
+      hoverTaxiMps: 4,
+      verticalClimbMps: 5,
+      transitionSpeedMps: 18,
+    },
   },
   {
     id: 'A139',
@@ -210,6 +514,12 @@ export const aircraftTypes: readonly AircraftType[] = [
     lengthM: 16.7,
     spanM: 13.8,
     engines: { count: 2, mount: 'none' },
+    performance: {
+      kind: 'helicopter',
+      hoverTaxiMps: 4.5,
+      verticalClimbMps: 6,
+      transitionSpeedMps: 20,
+    },
   },
 ];
 

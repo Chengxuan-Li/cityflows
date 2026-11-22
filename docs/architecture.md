@@ -1644,6 +1644,15 @@ times), transfer walks, access and egress stops, and walking, waiting and riding
 
 ## 8. Simulation
 
+TASK-306 prepares aircraft motion profiles over a metric polyline with cumulative stations.
+`src/sim/aircraft-motion.ts` samples position, heading, height above runway or pad, horizontal
+speed, and phase at elapsed simulation time, clamped to the profile's duration. Taxi, pushback,
+and tow brake for curvature and stop at a requested station. The caller supplies legal turns
+using the catalogue's minimum radius and supplies extended runway centrelines for roll, climb,
+approach, and flare. Approach samples reach zero height at the aiming station and end at the
+requested exit speed. Helicopter profiles use vertical pad motion, forward transition, and
+hover taxi. The profiles use nominal catalogue figures and have no engine dependency.
+
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
 adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
 each facility; movement segments use `-movementIndex-1`. The controller advances on fixed
