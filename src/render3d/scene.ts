@@ -324,7 +324,7 @@ export class Scene3D {
     this.trainTimeS = NaN;
     this.railSelection = undefined;
     this.content.add(this.rail.group);
-    this.catenary = buildCatenary(city, geometry.heights);
+    this.catenary = buildCatenary(city, geometry.heights, this.rail.heights);
     this.catenary.setBelowGround(this.belowGround);
     this.content.add(this.catenary.group);
     this.setRail(this.railVisible);
