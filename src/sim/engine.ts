@@ -35,6 +35,7 @@ import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
 import { createAircraftFleet, type AircraftFleet } from './aircraft';
+import type { AirportWind } from './runway-configuration';
 import { createAirsideGiveWay } from './airside-give-way';
 import {
   createFlightOperations,
@@ -91,6 +92,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
     step(timeS: number): void;
     metrics?(): FlightOperationsMetrics;
     board?(timeS: number): FlightBoard;
+    setWind?(wind: AirportWind): void;
   };
 };
 const detailStates: (VehicleState | null)[] = [
@@ -1933,6 +1935,11 @@ function createRun({
     patch,
     time,
     flightBoard: () => operations?.board?.(time()) ?? null,
+    /** TASK-300: the airport's wind, from the UI's wind control. */
+    setAirportWind(wind: AirportWind) {
+      if (!operations?.setWind) throw new Error('This city has no airport');
+      operations.setWind(wind);
+    },
     snapshot,
     inspect,
     metrics: () => {
@@ -2111,10 +2118,14 @@ export function createEngine() {
     snapshot: () => loaded().snapshot(),
     metrics: () => loaded().metrics(),
     flightBoard: () => loaded().flightBoard(),
+    setAirportWind: (wind: AirportWind) => loaded().setAirportWind(wind),
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
     inspectPerson: (id) => loaded().inspectPerson(id),
     signalTiming: () => loaded().signalTiming(),
     stateHash: () => loaded().stateHash(),
-  } satisfies TrafficEngine & { flightBoard(): FlightBoard | null };
+  } satisfies TrafficEngine & {
+    flightBoard(): FlightBoard | null;
+    setAirportWind(wind: AirportWind): void;
+  };
 }

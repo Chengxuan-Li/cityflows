@@ -68,51 +68,90 @@ export function deriveRunwayConfigurations(ends: readonly RunwayEnd[]): RunwayCo
   return configurations;
 }
 
-function prepareChooser(input: RunwayConfigurationInput) {
+/** Maximum demonstrated crosswind by aircraft type, knots: stated approximations of the
+ * manufacturers' published figures (TASK-300). */
+export const demonstratedCrosswindKt: Readonly<Record<string, number>> = {
+  A388: 38,
+  B748: 36,
+  B77W: 38,
+  A359: 40,
+  A333: 32,
+  B789: 40,
+  A20N: 38,
+  B738: 33,
+  A21N: 35,
+  BCS3: 32,
+  E190: 30,
+  E175: 30,
+  CRJ9: 27,
+  AT76: 35,
+  DH8D: 32,
+  SF34: 25,
+  C25C: 25,
+  PC24: 29,
+  GLF6: 32,
+};
+
+/** Per-airport configuration tables by ICAO code. An airport without one (London City) uses the
+ * derived configurations and switches by wind alone. */
+export const airportRunwayConcepts: Readonly<
+  Record<string, Pick<RunwayConfigurationInput, 'configurations' | 'concepts'>>
+> = {};
+
+/** The headwind (negative: tailwind) and crosswind on a runway heading, knots. */
+export function windComponents(headingRad: number, wind: AirportWind) {
+  const angle = (wind.fromDeg - 90) * degToRad - headingRad;
+  return {
+    headwindKt: wind.speedKt * Math.cos(angle),
+    crosswindKt: Math.abs(wind.speedKt * Math.sin(angle)),
+  };
+}
+
+export function createRunwayChooser(input: RunwayConfigurationInput) {
   const ends = new Map(input.ends.map(({ designator, headingRad }) => [designator, headingRad]));
   const configurations = input.configurations?.length
     ? input.configurations
     : deriveRunwayConfigurations(input.ends);
-  const candidates = configurations.map((configuration) => {
+  const headingsOf = (configuration: RunwayConfiguration) => {
     const used = new Set([...configuration.arrivalEnds, ...configuration.departureEnds]);
     if (!used.size) throw new Error(`Runway configuration ${configuration.id} has no ends`);
-    const headings = [...used].map((end) => {
+    return [...used].map((end) => {
       const heading = ends.get(end);
       if (heading === undefined)
         throw new Error(`Unknown runway end ${end} in ${configuration.id}`);
       return heading;
     });
-    return { configuration, headings };
-  });
+  };
+  const candidates = configurations.map((configuration) => ({
+    configuration,
+    headings: headingsOf(configuration),
+  }));
   const tailwindLimit = input.tailwindLimitKt ?? 5;
   const crosswindLimit = Math.min(...Object.values(input.crosswindLimitsKt ?? {}));
-
-  return (timeS: number, wind: AirportWind): RunwayConfiguration | null => {
-    const concept = input.concepts?.find(({ startS, endS }) =>
+  const safe = (headings: number[], wind: AirportWind) =>
+    headings.every((heading) => {
+      const { headwindKt, crosswindKt } = windComponents(heading, wind);
+      return (
+        -headwindKt <= tailwindLimit + windEpsilonKt &&
+        crosswindKt <= crosswindLimit + windEpsilonKt
+      );
+    });
+  const conceptAt = (timeS: number) =>
+    input.concepts?.find(({ startS, endS }) =>
       startS <= endS ? startS <= timeS && timeS < endS : startS <= timeS || timeS < endS,
     );
+
+  function choose(timeS: number, wind: AirportWind): RunwayConfiguration | null {
+    const concept = conceptAt(timeS);
     if (concept?.configurationId === null) return null;
-    const windHeading = (wind.fromDeg - 90) * degToRad;
     let best = null;
     for (const { configuration, headings } of candidates) {
-      const components = headings.map((heading) => {
-        const angle = windHeading - heading;
-        return {
-          headwind: wind.speedKt * Math.cos(angle),
-          crosswind: Math.abs(wind.speedKt * Math.sin(angle)),
-        };
-      });
-      if (
-        components.some(
-          ({ headwind, crosswind }) =>
-            -headwind > tailwindLimit + windEpsilonKt || crosswind > crosswindLimit + windEpsilonKt,
-        )
-      )
-        continue;
+      if (!safe(headings, wind)) continue;
       if (configuration.id === concept?.configurationId) return configuration;
       const endCount = headings.length;
       const headwind =
-        components.reduce((sum, component) => sum + component.headwind, 0) / endCount;
+        headings.reduce((sum, heading) => sum + windComponents(heading, wind).headwindKt, 0) /
+        endCount;
       if (
         !best ||
         endCount > best.endCount ||
@@ -122,6 +161,15 @@ function prepareChooser(input: RunwayConfigurationInput) {
       }
     }
     return best?.configuration ?? null;
+  }
+
+  return {
+    configurations,
+    choose,
+    conceptAt,
+    /** Whether every end a configuration uses keeps the tailwind and crosswind limits. */
+    admits: (configuration: RunwayConfiguration, wind: AirportWind) =>
+      safe(headingsOf(configuration), wind),
   };
 }
 
@@ -131,7 +179,7 @@ export function chooseRunwayConfiguration(
   timeS: number,
   wind: AirportWind,
 ) {
-  return prepareChooser(input)(timeS, wind);
+  return createRunwayChooser(input).choose(timeS, wind);
 }
 
 /** Lists the initial state at midnight and changes at wind samples or concept boundaries. */
@@ -147,7 +195,7 @@ export function runwayConfigurationChanges(
     times.add(startS);
     times.add(endS);
   }
-  const choose = prepareChooser(input);
+  const { choose } = createRunwayChooser(input);
   const changes: RunwayConfigurationChange[] = [];
   for (const timeS of [...times].sort((a, b) => a - b)) {
     if (timeS < 0 || timeS >= dayS) continue;

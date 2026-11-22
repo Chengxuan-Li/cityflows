@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   chooseRunwayConfiguration,
+  createRunwayChooser,
+  windComponents,
   deriveRunwayConfigurations,
   runwayConfigurationChanges,
   type RunwayConfigurationInput,
@@ -96,5 +98,17 @@ describe('runway configurations', () => {
       chooseRunwayConfiguration({ ...input, crosswindLimitsKt: { E190: 11, C25C: 8 } }, 0, east),
     ).toBeNull();
     expect(chooseRunwayConfiguration(input, 0, { fromDeg: 0, speedKt: 8 })).toBeNull();
+  });
+
+  it('reports wind components and whether a configuration keeps its limits', () => {
+    // From 070 at 12 kt on 27 (heading west): about 11.3 kt of tailwind, 4.1 kt of crosswind.
+    const on27 = windComponents(Math.PI, { fromDeg: 70, speedKt: 12 });
+    expect(on27.headwindKt).toBeCloseTo(-11.28, 2);
+    expect(on27.crosswindKt).toBeCloseTo(4.1, 1);
+    const chooser = createRunwayChooser({ ...london, crosswindLimitsKt: { C25C: 25 } });
+    const [c09, c27] = chooser.configurations;
+    expect(chooser.admits(c27!, { fromDeg: 90, speedKt: 5 })).toBe(true);
+    expect(chooser.admits(c27!, { fromDeg: 90, speedKt: 6 })).toBe(false);
+    expect(chooser.admits(c09!, { fromDeg: 0, speedKt: 26 })).toBe(false);
   });
 });

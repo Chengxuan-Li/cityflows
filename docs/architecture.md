@@ -1817,7 +1817,7 @@ carry no persons and generate no road trips.
   parked, off-block, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
   `engine.load({ airsideOperations })` can supply a scripted driver. The default driver
   (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
-  starting day. It uses the ends chosen for a 240-degree, 8 kt wind. Ground movements can run
+  starting day on the runway configuration in use (below). Ground movements can run
   concurrently on separate paths and on shared directed taxiways with following-distance
   claims. Crossing and converging body sweeps take turns. A pending clearance gains priority
   after two minutes so recurring traffic cannot starve a conflicting route. Helicopters use
@@ -1826,7 +1826,14 @@ carry no persons and generate no road trips.
   ground trajectory, including intermediate runway taxi and backtracks. A runway clearance
   checks that the path through the runway and its exit can be claimed. Approaches book a runway
   window at appearance and check the runway and swept ground route at the decision point 30 s
-  before the threshold. An aircraft unable to secure both goes around. Pushback reserves its
+  before the threshold. An aircraft unable to secure both goes around. Runway use is sequenced
+  so that this is rare (TASK-300; London City seeds 1 to 3: no go-around): an arrival appears
+  only when no aircraft is locked against its exit route and no other ground route crosses it at
+  the decision point, taking an aircraft standing still to stay and one short of an ungranted
+  runway hold to stop there; a departure or tow starts ahead of an arrival's exit only where it
+  passes the crossing before that arrival's decision with no runway hold before it; at the
+  decision, others' moving routes count from where they will be when the arrival turns off.
+  Pushback reserves its
   swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
   push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
 - **Stands and service.** Stand selection checks that the type can land, reach the stand,
@@ -1858,9 +1865,38 @@ carry no persons and generate no road trips.
   `VehicleSnapshot.airfield` (TASK-301, `fleet.airfield()`): per runway the end arrivals and the
   end departures use (-1: none), the holding positions whose stop bar is off (an aircraft granted
   past it whose tail has not passed the hold node) and the glide slope. The ends in use are the
-  latest requested, or those `fleet.setActiveEnds({ arrivalEnds, departureEnds })` names (flight
-  operations set their chooser's ends at the start; TASK-300 calls it on a reconfiguration). Not
-  in the state hash.
+  latest requested, or those `fleet.setActiveEnds({ arrivalEnds, departureEnds })` names; once a
+  runway configuration is set they are its ends from the moment it opens. Its `runways` field
+  (TASK-300, additive, present once a configuration is set) gives the open configuration, the
+  ends open for arrivals and departures and, during a change, the configuration it changes to,
+  since when, the closed ends still in use and the departures re-routed so far. Not in the state
+  hash.
+- **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
+  airport's runway ends, with the configurations and time-of-day concepts of
+  `airportRunwayConcepts` by ICAO code (London City has none: derived configurations, wind
+  only), the 5 kt tailwind limit and the strictest maximum demonstrated crosswind of the types in
+  the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
+  figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
+  (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
+  start and again only at a concept's time boundary or when a wind change takes an end it uses
+  past a limit (or while closed); it can be null, a closure. `fleet.setRunwayConfiguration`
+  runs the change: the ends the new configuration drops close at once (no approach appears and no
+  departure is granted its line-up there; ends kept in the same role stay open); approaches
+  already on final land, aircraft lined up, rolling, climbing out or going around from a closed
+  end and runway grants for it complete. Queued arrivals and departures not yet started take the
+  first new end that reaches their stand; a taxiing departure bound for a closed end is re-routed
+  (tried each second): its leg is kept up to the first node far enough ahead to brake and turn
+  (and at least half its last edge ahead), continued by a route to the new end's line-up (a
+  runway backtrack where the taxiways leave no other way), with passed runway gates kept as
+  passed, its new edges locked and its swept path clear; a departure holding a runway grant keeps
+  its route. The new ends open when no aircraft uses a closed end any more. Each change records its
+  start, opening and the departures re-routed (`fleet.runwayTransitions()`, `metrics().aircraft
+  .reconfigurations` and `.rerouted`). Stands are chosen for the configuration in use; with
+  several ends, each turn takes the arrival and departure end pair that serves its stand at least
+  cost. Taxiways within 15 degrees and 400 m of a runway in use prefer the flow toward the
+  departure threshold: the other direction costs three times its length in routing (the factor of
+  an edge locked the other way), so taxiing against the flow is avoided where an alternative
+  exists. Mapped one-way taxiways keep their direction.
 - **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
