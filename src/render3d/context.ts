@@ -331,6 +331,7 @@ export function buildContext(
   groundMeshes = true,
   palette: MapPalette = mapPalettes.light,
   walk?: WalkGraph,
+  aerodrome = false,
 ) {
   const start = performance.now();
   const buildings: BufferGeometry[] = [],
@@ -492,15 +493,18 @@ export function buildContext(
       ];
       color = feature.class === 'waterway' ? palette.context.water : style.context[feature.class];
     }
+    // Keep water above the aerodrome's place tint (-20 mm) and below airside paving.
+    const lift =
+      aerodrome && (feature.class === 'water' || feature.class === 'waterway') ? -0.018 : -0.025;
     let geometry: BufferGeometry = new ShapeGeometry(shape(rings), 1)
       .toNonIndexed()
       .rotateX(-Math.PI / 2)
-      .translate(0, -0.025, 0);
+      .translate(0, lift, 0);
     if (terrain?.grid) {
       if (feature.class === 'water') {
         geometry.translate(0, lowestGround(rings, terrain), 0);
         geometry.deleteAttribute('uv');
-      } else geometry = drape(geometry, terrain);
+      } else geometry = drape(geometry, terrain, lift);
     }
     const surface = feature.kind === 'area' ? groundSurface(feature) : undefined;
     const surfaceIndex = surface

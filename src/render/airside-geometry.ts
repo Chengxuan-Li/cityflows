@@ -1,12 +1,16 @@
 import { areaD, EndType, FillRule, inflatePathsD, JoinType, unionD } from 'clipper2-ts';
 import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { Airport } from '../schema/airport';
+import type { Airport, Runway } from '../schema/airport';
 
 /** TASK-295: a paved airside area, outer ring then holes, open. */
 export interface AirsideArea {
   kind: 'apron' | 'taxiway' | 'runway';
   rings: Vec2[][];
+}
+
+export function runwayCentreline(airport: Airport, runway: Runway): Vec2[] {
+  return runway.edges.flatMap((id, i) => airport.edges[id]!.line.slice(i ? 1 : 0));
 }
 
 /** Outer rings with the holes inside each (Clipper's outers wind positive). */
@@ -45,7 +49,7 @@ export function airsideAreas(airport: Airport): AirsideArea[] {
   const onRunway = new Set<string>();
   const runwayPaths = Object.values(airport.runways).flatMap((runway) => {
     runway.edges.forEach((id) => onRunway.add(id));
-    const line = runway.edges.flatMap((id, i) => airport.edges[id]!.line.slice(i ? 1 : 0));
+    const line = runwayCentreline(airport, runway);
     return [line, ...runway.stopways].flatMap((path) =>
       inflatePathsD([path], runway.widthM / 2, JoinType.Miter, EndType.Butt, 2, 2),
     );

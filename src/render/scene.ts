@@ -12,8 +12,9 @@ import type { placeTrees } from './vegetation';
 import { placeDetails, type placeStreet } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
-import { airsideAreas, type AirsideArea } from './airside-geometry';
-import { drawAirside } from './layers/airside';
+import { airsideAreas } from './airside-geometry';
+import { airsideMarkings } from './airside-markings';
+import { drawAirside, drawAirsidePaint } from './layers/airside';
 import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
@@ -246,7 +247,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance.
   let palette = mapPalettes.light;
   let contextFeatures: ContextFeature[] = [];
-  let airside: AirsideArea[] = [];
+  let airsidePaint: Graphics | undefined;
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
@@ -368,7 +369,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     // A 2048 px edge cap bounds texture storage; detailed views use vector geometry.
     const overview = camera.zoom < 0.7;
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
-    if (surroundings) surroundings.ties.visible = !overview;
+    if (surroundings) surroundings.ties.visible = !overview && layerVisibility.context;
     for (const grade of visibleGrades) {
       // Twin rails are 0.18 m wide: below 3 px/m they are sub-pixel slivers that cost frame time.
       const detail = layerVisibility.rail && camera.zoom >= 3;
@@ -386,6 +387,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.guides.visible = !overview && layerVisibility.markings;
       grade.arrows.visible = !overview && layerVisibility.markings;
       grade.crossings.visible = !overview && layerVisibility.markings;
+      if (grade.layer === 0 && airsidePaint && airsidePaint.visible !== layerVisibility.markings) {
+        airsidePaint.visible = layerVisibility.markings;
+        grade.terrain.updateCacheTexture();
+      }
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
       if (next === grade.cacheResolution) continue;
       grade.terrain.cacheAsTexture(false);
@@ -507,9 +512,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     updateTerrainCache();
     canvas.dataset.terrain = String(Boolean(hillshade && layerVisibility.terrain));
-    if (surroundings && surroundings.container.visible !== layerVisibility.context) {
-      surroundings.container.visible = layerVisibility.context;
-      surroundings.walls.visible = layerVisibility.context;
+    if (surroundings && surroundings.walls.visible !== layerVisibility.context) {
+      surroundings.setVisible(layerVisibility.context);
       const grade = visibleGrades[0]!;
       const bounds = grade.terrain.getLocalBounds();
       grade.terrainSize = Math.max(bounds.width, bounds.height);
@@ -556,6 +560,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.places.visible = layerVisibility.places;
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
+    }
+    const tint = surroundings?.aerodromeTint;
+    if (tint && tint.visible !== layerVisibility.places) {
+      tint.visible = layerVisibility.places;
+      visibleGrades[0]!.terrain.updateCacheTexture();
     }
     for (const ghost of ghosts) ghost.signals.visible = layerVisibility.signals;
     if (import.meta.env.MODE === 'test')
@@ -728,9 +737,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vegetation = drawVegetation([]);
       furniture = [];
       contextFeatures = features;
-      airside = source?.airport ? airsideAreas(source.airport) : [];
+      const airport = source?.airport;
+      const airside = airport ? airsideAreas(airport) : [];
+      airsidePaint = undefined;
       canvas.dataset.airsideAreas = String(airside.length);
-      surroundings = drawContext(features, palette);
+      surroundings = drawContext(features, palette, !!airport);
       contextCount = features.length;
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
@@ -752,9 +763,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
-      if (airside.length) {
+      if (airport) {
         const { terrain, placeFills } = grades.get(0)!;
+        const shapes = airsideMarkings(airport);
+        airsidePaint = drawAirsidePaint(shapes);
         terrain.addChildAt(drawAirside(airside), terrain.getChildIndex(placeFills) + 1);
+        terrain.addChildAt(airsidePaint, terrain.getChildIndex(placeFills) + 2);
+        if (import.meta.env.MODE === 'test') canvas.dataset.airsideMarkings = String(shapes.length);
+      } else {
+        delete canvas.dataset.airsideMarkings;
       }
       stations = undefined;
       tramStops = compiled.rail ? drawTramStops(tramPlacements) : undefined;
@@ -929,7 +946,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         places.clear();
         placeFills.clear();
         connectors.clear();
-        updatePlaces = drawPlaces(places, city!, shapes, connectors, placeFills, palette.placeBase);
+        const tint = surroundings?.aerodromeTint;
+        tint?.clear();
+        if (tint) tint.visible = layerVisibility.places;
+        updatePlaces = drawPlaces(
+          places,
+          city!,
+          shapes,
+          connectors,
+          placeFills,
+          palette.placeBase,
+          tint,
+        );
         updatePlaces(camera.zoom);
       };
       redrawPlaces();
@@ -1242,8 +1270,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       syncBackground();
       if (!surroundings || !lots) return;
       const terrain = visibleGrades[0]!.terrain;
-      const context = drawContext(contextFeatures, palette);
-      context.container.visible = context.walls.visible = surroundings.container.visible;
+      const context = drawContext(contextFeatures, palette, !!sourceGeometry?.airport);
+      context.setVisible(layerVisibility.context);
       terrain.addChildAt(context.container, terrain.getChildIndex(surroundings.container));
       const walls = surroundings.walls.parent!;
       walls.addChildAt(context.walls, walls.getChildIndex(surroundings.walls));
