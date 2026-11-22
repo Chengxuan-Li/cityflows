@@ -60,6 +60,11 @@ export const airsideRules = {
 };
 const rules = airsideRules;
 
+// ICAO Doc 9157 Part 2, Table 1-4. Nearly straight taxiways can use the wingspan and
+// fixed-object buffer alone because aircraft track the centreline. Keep the lateral
+// allowance on bends, where a wingtip can sweep beyond that envelope.
+const taxiwayTrackingAllowanceM: Codes = { A: 1.5, B: 2.25, C: 3, D: 4, E: 4, F: 4 };
+
 const descending = [...aircraftCodes].reverse();
 /** The largest code that `fits`, or null. */
 export const largestCode = (fits: (code: AircraftCode) => boolean): AircraftCode | null =>
@@ -308,6 +313,12 @@ export function taxiEdgeCodes<E extends CodeEdge>(
     const lengths = cumulativeLengths(edge.line);
     const length = lengths.at(-1)!;
     const objects = edge.kind === 'taxilane' ? rules.taxilaneObjectM : rules.taxiwayObjectM;
+    const chordHeading = heading(edge.line[0]!, edge.line.at(-1)!);
+    const straightTaxiway =
+      edge.kind === 'taxiway' &&
+      edge.line
+        .slice(1)
+        .every((p, i) => angleBetween(chordHeading, heading(edge.line[i]!, p)) <= parallelAngle);
     for (let s = 0; s <= length && code !== null; s += rules.sampleM) {
       const p = pointAtDistance(edge.line, lengths, s);
       const direction = heading(
@@ -318,7 +329,7 @@ export function taxiEdgeCodes<E extends CodeEdge>(
         const wall = obstacles.toBuilding(p, objects.F, skip);
         code = lower(
           code,
-          largest((c) => objects[c] <= wall),
+          largest((c) => objects[c] - (straightTaxiway ? taxiwayTrackingAllowanceM[c] : 0) <= wall),
         );
       }
       for (const i of lineIndex.search(p.x - reach, p.y - reach, p.x + reach, p.y + reach)) {
