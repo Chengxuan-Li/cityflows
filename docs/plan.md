@@ -326,7 +326,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | merged 2026-11-22 (`dd04482`, wave C) |
 | [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | merged 2026-11-22 (`e098862`, wave C) |
 | [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | in progress 2026-11-22 (wave D, Claude) |
-| [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | in progress 2026-11-22 (wave D, Codex) |
+| [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | parked 2026-11-22 (`dacf5ae`: 227/1,000 movements; scale findings in review) |
 | [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | parked 2026-11-22 (`c0b4b2f`: 56/1,306 movements, load 37 s; scale findings in review) |
 | [TASK-305](tasks/TASK-305.md) | airports | Airport editing: stands, taxiways, holding points, limits, configurations | editor, UI | 302 | edits recompile, undo, saved and reopened | merged 2026-11-22 (`8289736`, wave D) |
 | [TASK-306](tasks/TASK-306.md) | airports | Aircraft performance figures and motion profiles | schema catalogue, sim motion | catalogue | profiles within figures, determinism | merged 2026-11-22 (`761b6bd`, wave A) |
@@ -5891,6 +5891,14 @@ Airports wave D:
   e2e: a London City remote stand added at code B takes the 07:29 business jet (larger codes stay unused while
   London City has spare stands, filled smallest first). Lead tiers green; London City 3D render p95 2.0 ms on a quiet
   machine (the earlier 6.5 ms was load).
+- TASK-303 (Codex; parked `dacf5ae`, first version and variant in one branch): Boston bundled; a general apron rule
+  (mapped apron, aligned with the centreline, clear of buildings and runway centrelines) joins the nine disconnected
+  stands (North Cargo 41.7 m, Earhart Pad 71.4 m); 14C to 14K stay omitted (150 to 310 m, no mapped lane); the five
+  code F stands are reachable only by code D or C routes, so no widebody turns are scheduled. Crossing interlocks hold
+  (four blocks, 30 samples of independent runways in simultaneous use); wind reversals 22 to 4 and back open at once.
+  The day fails: 227/1,000 movements, 372 diversions, mean delay 15,248 s, eight go-arounds, zero overlaps or
+  conflicts. First frame 5.4 s and ready 15.3 s (Freiburg 2.2 / 4.7 s). Same throughput collapse as Heathrow: the
+  airside operations of TASK-298 to 300 do not scale past London City's volume.
 - TASK-304 (Codex; parked `c0b4b2f`, initial and variant in one branch): Heathrow bundled (2 runways, 1,501 taxiway
   edges, 307 stands of which 45 code F, 288 holds), 1,306 movements scheduled with A380 and 747-8 turns, segregated
   mode with the 15:00 swap (opened on time). The scale test fails: the day completes 56/1,306 (4.3%) with 494
