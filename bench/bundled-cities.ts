@@ -104,12 +104,21 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
       '51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356',
       'London City Airport',
     ),
+  heathrow: () =>
+    polygonImport(
+      'heathrow',
+      'heathrow.osm',
+      '51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948',
+      'London Heathrow Airport',
+    ),
 };
 
-/** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New
- * city panel because they fail the showcase gate or the load budget; each with why. TASK-286:
- * York passes its gate (no `no_route` at the Layerthorpe gateway); its load remains (TASK-287). */
-export const heldOutOfPanel: Record<string, string> = {};
+/** TASK-284: bundles available by `?city=<id>` while their showcase gates are pending.
+ * Boston is byte-pinned to TASK-303's apron-rule archive until that importer rule lands. */
+export const heldOutOfPanel: Record<string, string> = {
+  'boston-logan': 'Airport throughput gate',
+  heathrow: 'Airport throughput gate',
+};
 
 /** The committed bundled project, opened as the app opens it. */
 export async function openBundled(id: string): Promise<Project> {

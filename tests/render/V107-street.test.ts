@@ -454,6 +454,24 @@ unitTest('V107 curbs remain continuous beneath a grade-separated crossing', () =
   }
 });
 
+unitTest('V107 a tight return builds both curb sides when the inside offset loses corners', () => {
+  const b = buildCity('return curb', 1);
+  b.road(b.node(0, 0), b.node(100, 0));
+  const network = compiled(b.city);
+  const points = [
+    { x: 50, y: 0 },
+    { x: 52, y: 0 },
+    { x: 52, y: 0.17 },
+    { x: 50, y: 0.17 },
+  ];
+  expect(parallelOffset(points, -0.1).length).not.toBe(parallelOffset(points, 0.1).length);
+  const mesh = buildCurbs([{ road: 0, points }], network, cityHeights(network, b.city));
+  const positions = mesh.getAttribute('position').array;
+  expect(positions.length).toBeGreaterThan(0);
+  expect(positions.every(Number.isFinite)).toBe(true);
+  mesh.dispose();
+});
+
 unitTest('V107 curved curb meshes bound plan error to 1cm without dense subpixel vertices', () => {
   const b = buildCity('curved curb mesh', 1),
     a = b.node(0, 0),

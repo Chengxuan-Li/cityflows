@@ -87,10 +87,40 @@ export interface AirsideRouteQuery {
 
 /** Least-cost route by length times each arc's factor; null when the goal cannot be reached. */
 export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
+  return search(graph, query);
+}
+
+/** Reuse static turns across the many stand checks during flight setup. Access and costs
+ * still belong to each search (aircraft code, stand lead-in, runway exit and direction). */
+export function createAirsideRouteFinder(graph: AirsideGraph) {
+  const outgoing = graph.nodes.map(({ idx }) => arcsFrom(graph, idx));
+  const byRadius = new Map<number, (number[] | undefined)[]>();
+  return (query: AirsideRouteQuery) => {
+    let turns = byRadius.get(query.turnRadiusM);
+    if (!turns) byRadius.set(query.turnRadiusM, (turns = []));
+    const cached = turns;
+    return search(graph, query, {
+      outgoing: (node) => outgoing[node]!,
+      turns: (arc) =>
+        (cached[arc] ??= outgoing[arcEnd(graph, arc)]!.filter((b) =>
+          turnAllowed(graph, arc, b, query.turnRadiusM),
+        )),
+    });
+  };
+}
+
+function search(
+  graph: AirsideGraph,
+  query: AirsideRouteQuery,
+  prepared?: { outgoing: (node: number) => number[]; turns: (arc: number) => number[] },
+) {
   const count = graph.edges.length * 2;
   const cost = new Float64Array(count).fill(Infinity);
   const previous = new Int32Array(count).fill(-1);
   const heap = new MinHeap();
+  const outgoing = (node: number) => prepared?.outgoing(node) ?? arcsFrom(graph, node);
+  const successors = (arc: number) => prepared?.turns(arc) ?? outgoing(arcEnd(graph, arc));
+  const canTurn = (a: number, b: number) => prepared || turnAllowed(graph, a, b, query.turnRadiusM);
   const admits = (arc: number) => {
     const edge = graph.edges[arcEdge(arc)]!;
     if (edge.maxCode < query.code) return false;
@@ -112,14 +142,14 @@ export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
   const start = 'arc' in query.from ? query.from.arc : -1;
   if ('arc' in query.from) {
     const runway = graph.edges[arcEdge(start)]!.kind === 'runway';
-    for (const b of arcsFrom(graph, arcEnd(graph, start)))
+    for (const b of successors(start))
       if (
         admits(b) &&
-        turnAllowed(graph, start, b, query.turnRadiusM) &&
+        canTurn(start, b) &&
         !(query.exitRunway && runway && graph.edges[arcEdge(b)]!.kind === 'runway')
       )
         relax(b, -1, 0);
-  } else for (const b of arcsFrom(graph, query.from.node)) if (admits(b)) relax(b, -1, 0);
+  } else for (const b of outgoing(query.from.node)) if (admits(b)) relax(b, -1, 0);
   for (let arc = heap.pop(); arc !== undefined; arc = heap.pop()) {
     const reached = heap.cost;
     if (reached > cost[arc]!) continue;
@@ -128,8 +158,7 @@ export function routeAirside(graph: AirsideGraph, query: AirsideRouteQuery) {
       while (previous[route[0]!]! !== -1) route.unshift(previous[route[0]!]!);
       return { arcs: route, cost: reached };
     }
-    for (const b of arcsFrom(graph, arcEnd(graph, arc)))
-      if (admits(b) && turnAllowed(graph, arc, b, query.turnRadiusM)) relax(b, arc, reached);
+    for (const b of successors(arc)) if (admits(b) && canTurn(arc, b)) relax(b, arc, reached);
   }
   return null;
 }

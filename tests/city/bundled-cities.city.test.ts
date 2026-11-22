@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import {
@@ -22,6 +23,15 @@ test('the panel lists every bundled real place not held out of it, and each has 
       .filter((id) => !(id in heldOutOfPanel))
       .sort(),
   );
+});
+
+test.for([
+  ['london-city-airport', 'b193d1de13cb46413569e85e0d40aa212cf261d556b7893b896e5fa1ecc41dd8'],
+  ['boston-logan', 'c80805bdc46c6f3b593a8a0072599db2016357be560992690d44c070f6392866'],
+  ['heathrow', 'bad6f00cfe54a59ab749b1dc323d778cd577d2127b306290537cd3912cff68e6'],
+] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
+  const archive = readFileSync(projectFile(id));
+  expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
 });
 
 // TASK-284: the driving side is the importer's inference from the location (TASK-268), not an

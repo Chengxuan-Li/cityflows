@@ -1,14 +1,17 @@
+import Flatbush from 'flatbush';
+import { MinHeap } from '../geo/heap';
 import {
   boxOf,
   distance,
   nearestOnPolyline,
   pointAtDistance,
   pointInPolygon,
+  preparePolygon,
+  polylineNearest,
   segmentIntersection,
   cumulativeLengths,
   polylineCrossings,
 } from '../geo/polyline';
-import type { Box } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City } from '../schema';
 import type { CompiledCity, Diagnostic, LotCirculation } from './types';
@@ -22,63 +25,65 @@ const mix = (a: Vec2, b: Vec2, t: number) => ({
   y: a.y + (b.y - a.y) * t,
 });
 
-/** TASK-287: ring boxes, so a segment or point tests only the rings it can meet (York: 834 bays in
- * 62 lots, every bay a ring each aisle piece and probe of its lot was tested against, five times
- * Freiburg's). The margin is far above the tolerances of `segmentIntersection` and
- * `pointInPolygon`, so the answers are the same. */
-const ringBoxes = new WeakMap<Vec2[], Box>();
 const RING_MARGIN_M = 1e-5;
-function ringNear(ring: Vec2[], x0: number, y0: number, x1: number, y1: number) {
-  let box = ringBoxes.get(ring);
-  if (!box) ringBoxes.set(ring, (box = boxOf(ring)));
-  return (
-    box.minX - RING_MARGIN_M <= x1 &&
-    x0 <= box.maxX + RING_MARGIN_M &&
-    box.minY - RING_MARGIN_M <= y1 &&
-    y0 <= box.maxY + RING_MARGIN_M
-  );
-}
-const inRing = (p: Vec2, ring: Vec2[]) =>
-  ringNear(ring, p.x, p.y, p.x, p.y) && pointInPolygon(p, ring);
 
 /** Split at polygon edges, not at a sampling interval (narrow exclusions must still cut). */
-function cuts(a: Vec2, b: Vec2, rings: Vec2[][]) {
+function cuts(a: Vec2, b: Vec2, rings: Vec2[][], index: Flatbush) {
   const ts = [0, 1],
     length = distance(a, b);
   const [x0, x1] = a.x < b.x ? [a.x, b.x] : [b.x, a.x],
     [y0, y1] = a.y < b.y ? [a.y, b.y] : [b.y, a.y];
-  for (const ring of rings) {
-    if (!ringNear(ring, x0, y0, x1, y1)) continue;
+  for (const j of index.search(x0, y0, x1, y1)) {
+    const ring = rings[j]!;
     for (let i = 1; i < ring.length; i++) {
       const hit = segmentIntersection(a, b, ring[i - 1]!, ring[i]!);
       if (hit && length > 0) ts.push(distance(a, hit) / length);
     }
   }
-  return [...new Set(ts)].sort((a, b) => a - b);
+  return ts.length === 2 ? ts : [...new Set(ts)].sort((a, b) => a - b);
 }
 
 export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics: Diagnostic[]) {
+  const queue = new MinHeap();
   for (const lot of compiled.lots ?? []) {
     const facility = compiled.parking[compiled.index.parking.get(lot.id)!];
     const source = city.parking![lot.id]!;
     if (source.shape?.kind !== 'polygon') continue;
     const boundary = closed(source.shape.ring),
       exclusions = (source.exclusions ?? []).map(closed);
-    const bays = lot.stalls.map((s) => closed(s.corners));
-    const obstacles = [...exclusions, ...bays];
-    const rings = [boundary, ...obstacles];
-    const inside = (p: Vec2) => inRing(p, boundary) && !obstacles.some((r) => inRing(p, r));
+    const inBoundary = preparePolygon(boundary);
+    const rings = [boundary, ...exclusions, ...lot.stalls.map((s) => closed(s.corners))];
+    const index = new Flatbush(rings.length);
+    for (const ring of rings) {
+      const box = boxOf(ring);
+      // Keep TASK-287's margin around each ring before testing the exact geometry.
+      index.add(
+        box.minX - RING_MARGIN_M,
+        box.minY - RING_MARGIN_M,
+        box.maxX + RING_MARGIN_M,
+        box.maxY + RING_MARGIN_M,
+      );
+    }
+    index.finish();
+    const blocked = (p: Vec2, passage = false) =>
+      index.collides(
+        p.x,
+        p.y,
+        p.x,
+        p.y,
+        (j) => j > (passage ? exclusions.length : 0) && pointInPolygon(p, rings[j]!),
+      );
+    const inside = (p: Vec2) => inBoundary(p) && !blocked(p);
     // `passage`: an entry link may run under a building exclusion (a courtyard lot reached
     // through a building passage, Munich pk:2037, Sindelfingen pk:1475), never over a bay.
     const clear = (a: Vec2, b: Vec2, entry = false, passage = false) => {
-      const ts = cuts(a, b, rings);
-      const blocking = passage ? bays : obstacles;
+      const ts = cuts(a, b, rings, index);
       let entered = false;
       for (let i = 1; i < ts.length; i++) {
         if (ts[i]! - ts[i - 1]! < 1e-8) continue;
         const p = mix(a, b, (ts[i]! + ts[i - 1]!) / 2);
-        if (blocking.some((r) => inRing(p, r))) return false;
-        if (inRing(p, boundary)) entered = true;
+        if (blocked(p, passage)) return false;
+        if (inBoundary(p)) entered = true;
         else if (!entry || entered) return false;
       }
       return (
@@ -97,8 +102,11 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
     const directed = !!source.mappedPortals?.length;
     const paths = [
       ...mappedLanes.map((l) => ({ line: l.polyline, directed })),
-      ...compiled.movements
-        .filter((m) => !m.neverGreen && laneIds.has(m.fromLane) && laneIds.has(m.toLane))
+      ...[...laneIds]
+        .flatMap((i) => compiled.lanes[i]!.out)
+        .sort((a, b) => a - b)
+        .map((i) => compiled.movements[i]!)
+        .filter((m) => !m.neverGreen && laneIds.has(m.toLane))
         .map((m) => ({ line: m.polyline, directed })),
       ...(lot.aislePaths ?? []).map((line) => ({ line, directed: false })),
     ];
@@ -110,7 +118,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
         const a = path[i - 1]!,
           b = path[i]!;
         if (distance(a, b) < 1e-8) continue;
-        const ts = cuts(a, b, rings);
+        const ts = cuts(a, b, rings, index);
         for (let j = 1; j < ts.length; j++) {
           if (ts[j]! - ts[j - 1]! < 1e-8 || !inside(mix(a, b, (ts[j]! + ts[j - 1]!) / 2))) continue;
           const p = mix(a, b, ts[j - 1]!),
@@ -126,10 +134,19 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
             ends.push(pieces[i - 1]!.b, pieces[i]!.a);
       }
     }
-    for (let i = 0; i < segments.length; i++)
-      for (let j = i + 1; j < segments.length; j++) {
-        const a = segments[i]!,
-          b = segments[j]!;
+    const segmentIndex = new Flatbush(Math.max(1, segments.length));
+    const boxes = segments.map(({ a, b }) => boxOf([a, b]));
+    for (const { minX, minY, maxX, maxY } of boxes) segmentIndex.add(minX, minY, maxX, maxY);
+    if (!segments.length) segmentIndex.add(0, 0, 0, 0);
+    segmentIndex.finish();
+    for (const [i, a] of segments.entries()) {
+      const { minX, minY, maxX, maxY } = boxes[i]!;
+      const candidates = segmentIndex
+        .search(minX - 2e-5, minY - 2e-5, maxX + 2e-5, maxY + 2e-5)
+        .sort((a, b) => a - b);
+      for (const j of candidates) {
+        if (j <= i) continue;
+        const b = segments[j]!;
         if (
           Math.max(a.a.x, a.b.x) + 1e-5 < Math.min(b.a.x, b.b.x) ||
           Math.max(b.a.x, b.b.x) + 1e-5 < Math.min(a.a.x, a.b.x) ||
@@ -148,6 +165,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
         for (const p of [b.a, b.b])
           if (nearestOnPolyline([a.a, a.b], p).away < 1e-5) a.points.push(p);
       }
+    }
     const graph: LotCirculation = {
       nodes: [],
       edges: [],
@@ -191,19 +209,15 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       if (!directed) graph.adjacency[to]!.push(idx);
     };
     const attach = (p: Vec2, entry: boolean) => {
+      if (!segments.length) return -1;
       const reach = STALL_LINK_M + RING_MARGIN_M;
       const nearby = entry
-        ? segments
-        : segments.filter(
-            ({ a, b }) =>
-              p.x + reach >= Math.min(a.x, b.x) &&
-              p.x - reach <= Math.max(a.x, b.x) &&
-              p.y + reach >= Math.min(a.y, b.y) &&
-              p.y - reach <= Math.max(a.y, b.y),
-          );
-      const choices = nearby
-        .map((s) => ({ s, hit: nearestOnPolyline([s.a, s.b], p) }))
-        .sort((a, b) => a.hit.away - b.hit.away);
+        ? segments.keys()
+        : segmentIndex.search(p.x - reach, p.y - reach, p.x + reach, p.y + reach);
+      const choices = Array.from(nearby, (i) => {
+        const s = segments[i]!;
+        return { i, s, hit: nearestOnPolyline([s.a, s.b], p) };
+      }).sort((a, b) => a.hit.away - b.hit.away || a.i - b.i);
       // Entries prefer a clear link; only when none exists may the link take a passage.
       for (const passage of entry ? [false, true] : [false])
         for (const { s, hit } of choices) {
@@ -221,16 +235,31 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
         }
       return -1;
     };
+    const accessLanes = lot.aislePaths?.length
+      ? []
+      : mappedLanes
+          .toSorted((a, b) => a.idx - b.idx)
+          .map((lane) => ({
+            lane,
+            nearest: polylineNearest(lane.polyline),
+            box: boxOf(lane.polyline),
+          }));
     for (const stall of lot.stalls) {
-      if (mappedLanes.length && !lot.aislePaths?.length) {
-        const candidate = mappedLanes
-          .map((lane) => ({ lane, hit: nearestOnPolyline(lane.polyline, stall.position) }))
-          .sort((a, b) => a.hit.away - b.hit.away || a.lane.idx - b.lane.idx)[0]!;
-        stall.access = pointAtDistance(
-          candidate.lane.polyline,
-          candidate.lane.cumulative,
-          candidate.hit.along,
-        );
+      if (accessLanes.length) {
+        let candidate: (typeof accessLanes)[number] | undefined;
+        let away = Infinity;
+        let along = 0;
+        const { x, y } = stall.position;
+        for (const access of accessLanes) {
+          const { minX, minY, maxX, maxY } = access.box;
+          if (Math.max(minX - x, x - maxX, minY - y, y - maxY) > away + 1e-9) continue;
+          const hit = access.nearest(stall.position);
+          if (candidate && hit.away >= away) continue;
+          candidate = access;
+          away = hit.away;
+          along = hit.along;
+        }
+        stall.access = pointAtDistance(candidate!.lane.polyline, candidate!.lane.cumulative, along);
       }
       const access = stall.access ?? stall.position;
       const at = attach(access, false);
@@ -239,9 +268,9 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       if (directed && at !== -1 && group && !lot.aislePaths?.length) {
         // A bay on a two-way aisle can be entered or left from either travel
         // direction. This short manoeuvre is not a reverse edge on a one-way lane.
-        for (const lane of mappedLanes.filter(
-          (l) => city.roads[compiled.roads[l.road]!.id]!.streetGroupId === group,
-        )) {
+        // Lane order here controls node creation, so keep the mapped aisle order.
+        for (const lane of mappedLanes) {
+          if (city.roads[compiled.roads[lane.road]!.id]!.streetGroupId !== group) continue;
           const hit = nearestOnPolyline(lane.polyline, access);
           if (hit.away > STALL_LINK_M || !clear(access, hit.point)) continue;
           const other = attach(hit.point, false);
@@ -391,17 +420,10 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
           (sum, at, i) => sum + distance(graph.nodes[entry.approach![i]!]!, graph.nodes[at]!),
           0,
         );
-      const visited = new Uint8Array(graph.nodes.length);
-      for (;;) {
-        let current = -1,
-          best = Infinity;
-        for (let i = 0; i < visited.length; i++)
-          if (!visited[i] && entry.distances[i]! < best) {
-            current = i;
-            best = entry.distances[i]!;
-          }
-        if (current === -1) break;
-        visited[current] = 1;
+      queue.push(entry.node, entry.distances[entry.node]!);
+      for (let current = queue.pop(); current !== undefined; current = queue.pop()) {
+        const best = queue.cost;
+        if (best !== entry.distances[current]) continue;
         for (const idx of (entry.direction === 'out' ? reverse : graph.adjacency)[current]!) {
           const e = graph.edges[idx]!,
             next = e.from === current ? e.to : e.from,
@@ -409,6 +431,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
           if (cost < entry.distances[next]!) {
             entry.distances[next] = cost;
             entry.previous[next] = current;
+            queue.push(next, cost);
           }
         }
       }
