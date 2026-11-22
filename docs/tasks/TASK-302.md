@@ -1,6 +1,6 @@
 # TASK-302 — Zurich Airport bundled: crossing runways, Dock E, helicopters, ZRH concepts
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-300 and TASK-301). Proposed owner:
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-300, TASK-301 and TASK-309, alongside TASK-303 and 304). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/302-zurich`, worktree `D:\cityflows-wt\302`, ports 5502 / 5602.
 
 ## Goal
@@ -8,8 +8,7 @@ Claude Code subagent (Opus 5.5, high). Branch `task/302-zurich`, worktree `D:\ci
 The batch's large target (`docs/decisions/2026-11-22-airports.md`): Zurich Airport as a bundled real place, built
 by the same rules as London City, no per-id curation.
 
-- Import the lead's extract (`D:\cityflows-wt\airport-data\zrh.osm`, record in `record.txt`; untrusted, read by
-  path) into `fixtures/osm/zurich-airport.osm` with attribution, build it through `bench/bundled-cities.ts`,
+- Build TASK-309's committed extract `fixtures/osm/zurich-airport.osm` through `bench/bundled-cities.ts`,
   list it as "Zurich Airport" in the New city panel.
 - Runways 10/28, 14/32 and 16/34 with the 10/28 x 16/34 crossing: an aircraft on one blocks the other where they
   cross (TASK-298's interlock); the helicopter lane and helipads.

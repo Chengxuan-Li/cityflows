@@ -1,6 +1,6 @@
 # TASK-303 — Boston Logan: the crossing-runway complexity test
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-302). Proposed owner: Codex CLI
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-300, TASK-301 and TASK-309, alongside TASK-302 and 304). Proposed owner: Codex CLI
 (gpt-6.2-sol, high). Branch `task/303-boston`, worktree `D:\cityflows-wt\303`, ports 5503 / 5603.
 
 ## Goal
@@ -8,8 +8,7 @@ Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-302). 
 Boston Logan as a bundled real place, the test that the batch's rules (not Zurich-specific fixes) carry over to
 six runways with six crossing pairs and detached Terminals A, B, C and E (`docs/decisions/2026-11-22-airports.md`).
 
-- Import the lead's extract (`D:\cityflows-wt\airport-data\bos.osm`, record in `record.txt`; untrusted, read by
-  path) into `fixtures/osm/boston-logan.osm` with attribution; build and list it as "Boston Logan Airport".
+- Build TASK-309's committed extract `fixtures/osm/boston-logan.osm` and list it as "Boston Logan Airport".
 - Configurations derived by TASK-300's rule over all six runways, with crossings interlocked; wind-only switching
   (no concept table); a full-day schedule sized to Boston's volume and mix.
 - Where the rules fail on Boston, fix them as rules and keep London City, the synthetic airport and Zurich

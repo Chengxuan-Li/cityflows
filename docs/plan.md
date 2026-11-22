@@ -329,6 +329,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | planned (Codex) |
 | [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | planned (Codex) |
 | [TASK-305](tasks/TASK-305.md) | airports | Airport editing: stands, taxiways, holding points, limits, configurations | editor, UI | 302 | edits recompile, undo, saved and reopened | planned (Claude) |
+| [TASK-306](tasks/TASK-306.md) | airports | Aircraft performance figures and motion profiles | schema catalogue, sim motion | catalogue | profiles within figures, determinism | in progress 2026-11-22 (wave A, Codex) |
+| [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | in progress 2026-11-22 (wave A, Codex) |
+| [TASK-308](tasks/TASK-308.md) | airports | Flight schedule generator and runway configuration chooser | demand, sim | catalogue | seeded volumes, tailwind limit | in progress 2026-11-22 (wave A, Codex) |
+| [TASK-309](tasks/TASK-309.md) | airports | Airside import rules on the Zurich, Boston and Heathrow extracts | importer, fixtures | 295 | counts, every stand reaches a runway | planned (wave B, Codex) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6218,6 +6222,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): "yes apply": the airports batch runs in waves A to D with TASK-306 to 309 split off
+  (`docs/decisions/2026-11-22-airports.md`); one Full run per wave on the lead merge branch before main moves; the
+  cheaper unchanged-cities evidence, a test-time budget, no pixel assertions; the nightly Full skips verified heads.
 
 - 2026-11-22 (owner): airport editing later (TASK-305, after Zurich); service roads give way to aircraft at taxiway
   crossings, no flight-driven landside trips; aircraft shown on about 10 km finals and climb-outs beyond the map.

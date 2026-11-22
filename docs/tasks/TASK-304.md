@@ -1,6 +1,6 @@
 # TASK-304 — Heathrow: the operational-scale test
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-302). Proposed owner: Codex CLI
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-300, TASK-301 and TASK-309, alongside TASK-302 and 303). Proposed owner: Codex CLI
 (gpt-6.2-sol, high). Branch `task/304-heathrow`, worktree `D:\cityflows-wt\304`, ports 5504 / 5604.
 
 ## Goal
@@ -8,8 +8,7 @@ Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-302). 
 Heathrow as a bundled real place, the test of operational scale: two parallel runways near capacity, Terminals 2
 to 5 with their satellites, about 370 stands (`docs/decisions/2026-11-22-airports.md`).
 
-- Import the lead's extract (`D:\cityflows-wt\airport-data\lhr.osm`, record in `record.txt`; untrusted, read by
-  path) into `fixtures/osm/heathrow.osm` with attribution; build and list it as "London Heathrow Airport".
+- Build TASK-309's committed extract `fixtures/osm/heathrow.osm` and list it as "London Heathrow Airport".
 - Segregated mode: one runway for arrivals, the other for departures, alternating at a stated time each day
   (westerly and easterly operations by wind); a full-day schedule sized to Heathrow's volume (about 1,300
   movements a day) and mix, double-deckers included.

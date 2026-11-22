@@ -7,7 +7,7 @@ Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-298). 
 
 An airport runs a day of operations on its own (`docs/decisions/2026-11-22-airports.md`), through TASK-298's API.
 
-- **Schedule.** A seeded daily schedule sized to the airport: movements per hour from the stand count and a
+- **Schedule.** TASK-308's generator (wave A) fed from the airport's stands and runways: a seeded daily schedule sized to the airport: movements per hour from the stand count and a
   daily profile (morning and evening peaks, a night curfew window per airport where stated), a type mix per
   airport from what its stands and runway admit (London City: regional, propeller, A220, private; larger
   airports all classes), each arrival paired with its departure after the type's turnaround time.

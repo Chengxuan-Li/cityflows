@@ -1,6 +1,6 @@
 # TASK-298 — Aircraft as a vehicle: types, airside routing with limits, taxi, runway, approach and climb
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-296). Proposed owner: Claude Code
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-295 and TASK-306). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/298-aircraft`, worktree `D:\cityflows-wt\298`, ports 5498 / 5598.
 
 ## Goal
@@ -9,7 +9,8 @@ Aircraft move on the airside graph as their own vehicle, with no passengers or p
 trams carry none), deterministic and in the state hash only where an airport exists
 (`docs/decisions/2026-11-22-airports.md`).
 
-**Catalogue** (one table in `src/schema`; ICAO aerodrome reference code by wingspan: A < 15 m, B < 24, C < 36,
+**Catalogue** (on main in `src/schema/aircraft.ts`; TASK-306 adds the performance figures and the motion
+profiles this task drives aircraft with, and TASK-307 the shapes; ICAO aerodrome reference code by wingspan: A < 15 m, B < 24, C < 36,
 D < 52, E < 65, F < 80):
 
 | Class | Types (length x span m) | Code |
@@ -22,8 +23,6 @@ D < 52, E < 65, F < 80):
 | Private | Citation CJ4 (16.3 x 15.5), PC-24 (16.9 x 17.0), G650 (30.4 x 30.4) | B, C |
 | Helicopter | H145 (13.6, rotor 11.0), AW139 (16.7, rotor 13.8) | helipad |
 
-Each type also carries taxi, approach, landing-roll and rotation speeds, take-off and landing roll lengths and
-turn radius, from published type figures (state sources as type-level figures; no download).
 
 **Movement.**
 - Airside routing on the compiled graph with the code limits of TASK-295 (an edge or stand admits a type only up
@@ -48,14 +47,14 @@ turn radius, from published type figures (state sources as type-level figures; n
 - An API the operations task (TASK-299) drives: spawn an arrival, request a departure from a stand, tow from one
   stand to another or to a hangar.
 
-**Inspection.** Aircraft are pickable (type, registration-like id, state, route), drawn with TASK-297's
-outlines where it has landed, else a plain outline at real dimensions.
+**Inspection.** Aircraft are pickable (type, registration-like id, state, route), drawn with TASK-307's
+outlines and meshes.
 
 ## Scope
 
 `src/schema` (catalogue), `src/network` (compiled airside graph if TASK-295 left it raw), `src/routing` (airside
 routes) or a new airside module, `src/sim` (a new aircraft module and its engine hook), `src/render`,
-`src/render3d/vehicles.ts` or a new aircraft layer (simple 3D boxes at real dimensions until TASK-301),
+`src/render3d` (placing TASK-307's meshes),
 `src/ui` (inspector), `docs/architecture.md`, tests.
 
 Out of scope: schedules and stand allocation (TASK-299), runway configuration changes (TASK-300), lights and
@@ -63,7 +62,8 @@ detailed 3D (TASK-301), road vehicles' behaviour, gate floors, `bench/traffic-ba
 
 ## Gates
 
-- Tests on the synthetic airport and its variant: an arrival lands and reaches a stand; a departure pushes back,
+- Tests on inline fixtures and London City, and on the synthetic airport and its variant once TASK-296 lands
+  (rebase onto it before finishing if it has): an arrival lands and reaches a stand; a departure pushes back,
   taxis, holds, lines up and climbs out; a backtrack; two aircraft on crossing taxi paths never overlap; a code E
   aircraft is never routed onto a code C edge or stand; one aircraft on the runway at a time; determinism (two
   runs, one hash).

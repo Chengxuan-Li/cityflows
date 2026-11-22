@@ -1,6 +1,6 @@
 # TASK-300 — Runway configurations: time-of-day concepts, a wind control, reconfiguration
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-299). Proposed owner: Claude Code
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-299; TASK-308 provides the chooser). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/300-runway-config`, worktree `D:\cityflows-wt\300`, ports 5500 / 5600.
 
 ## Goal
@@ -8,7 +8,7 @@ subagent (Opus 5.5, high). Branch `task/300-runway-config`, worktree `D:\cityflo
 Aircraft navigate the runways and taxiways correctly when the runway direction changes
 (`docs/decisions/2026-11-22-airports.md`).
 
-- **Configurations.** Per airport, a set of configurations, each naming the runway ends used for arrivals and for
+- **Configurations.** TASK-308's chooser (wave A) wired to the airport: per airport, a set of configurations, each naming the runway ends used for arrivals and for
   departures (and, at airports with crossing runways, which crossings are active). Derived by rule from the
   runways (each end alone, and pairs a stated rule allows), plus an optional per-airport concept table:
   configurations by time of day (London City: 27 or 09 by wind only; Zurich and the later airports set theirs in

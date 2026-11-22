@@ -1,6 +1,6 @@
 # TASK-301 — 3D aircraft, flight paths, and airfield and aircraft lighting
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-297 and TASK-299). Proposed owner:
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-298; TASK-307 provides the aircraft meshes and light mounts). Proposed owner:
 Claude Code subagent (Opus 5.5, high). Branch `task/301-aircraft-3d-lights`, worktree `D:\cityflows-wt\301`,
 ports 5501 / 5601.
 
@@ -9,10 +9,8 @@ ports 5501 / 5601.
 Visuals and lighting coordinated with landing, departure and aircraft movement
 (`docs/decisions/2026-11-22-airports.md`). Procedural geometry only, no downloaded models.
 
-- **Aircraft in 3D** per class at real dimensions: fuselage, wings with sweep, engines (two or four, under the
-  wing or at the tail for the private and regional jets where typical), tail; the double-decker's two decks of
-  windows; propellers spinning on the propeller class; rotor turning on the helicopter; a neutral livery with a
-  per-flight accent colour; gear down near the ground, up after climb-out.
+- **Aircraft in 3D:** TASK-307's meshes driven by the sim state: propellers and rotors spinning when engines run,
+  gear down near the ground and up after climb-out, a per-flight accent colour.
 - **Flight paths.** Approaches descend from about 10 km out (owner, 2026-11-22: longer finals, drawn over the map's empty surround in 3D) on their glide path, flare and touch down at the aiming
   point; departures rotate and climb; the camera can follow an aircraft.
 - **Airfield lights** (night and dusk, through the existing lighting mode): runway edge (white, amber on the last

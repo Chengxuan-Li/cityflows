@@ -1,6 +1,6 @@
 # TASK-305 — Airport editing: stands, taxiways, holding points, limits, configurations
 
-Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-302). Proposed owner: Claude Code
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-300, alongside TASK-302 to 304). Proposed owner: Claude Code
 subagent (Opus 5.5, high). Branch `task/305-airport-editing`, worktree `D:\cityflows-wt\305`, ports 5505 / 5605.
 
 ## Goal
