@@ -316,7 +316,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | in progress 2026-11-21 (wave C, Codex) |
 | [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | queued 2026-11-21 (wave C, Codex; after TASK-289's measurements) |
-| [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | in progress 2026-11-21 (wave C, Codex) |
+| [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
 | [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | queued 2026-11-21 (wave C, Claude; after TASK-289 merges) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5802,6 +5802,15 @@ walk 11 mm lower; the fix (on-demand candidate polygons, the 2D view's rail shap
 +67 ms median (three interleaved rounds), Munich even. Simulation hashes identical. Extra files `catenary.ts`,
 `scene.ts`, `src/render/rail-geometry.ts`. Follow-ups: `maxheight` read by the importer (Breisacher Straße 3.4 m),
 the shared road-and-tram deck at Kaiser-Joseph-Straße (`wl:9187/1`), 12 grade-limited pairs.
+
+TASK-293 (Codex CLI, gpt-6.2-sol high, 2026-11-21; merged `c79f58f`): Philadelphia's warnings and load. Polygon cut
+endpoints stay outside junction groups, so signals serve traffic using those exits: Philadelphia's 10
+`signal_unserved_movement` warnings and 4 dead ends cleared, two arrival connectors restored (T68 regression);
+warnings 155 to 141, the rest judged real (short setbacks, terminal aisles, restrictions, three arrival-only
+gateways); other cities unchanged. Road markings reuse the incident-road index, junction clipping skips far
+segments, stall attachment checks near aisles: Philadelphia marking CPU 859 to 688 ms, first frame 2.34 to 1.99 s on
+a quiet machine (five interleaved runs). Only Philadelphia's archive changes (gate 4,530 to 4,662 completed, delay
+174.4 to 163.7 s); Munich (58 pairs) and Freiburg state hashes identical.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
