@@ -387,6 +387,16 @@ export const style = {
   /** TASK-295: airside paving, as roads in both appearances: concrete aprons, taxiways in the
    * road asphalt, runways a darker asphalt. */
   airside: { apron: 0xc9cbcc, taxiway: 0xacb0b3, runway: 0x8e9295 },
+  /** TASK-298: aircraft from above (TASK-307's preview palette), and their ground shadow. */
+  aircraft: {
+    fuselage: 0xf7f9fb,
+    wing: 0xb7c2cc,
+    tailplane: 0xb7c2cc,
+    fin: 0x31657f,
+    engine: 0xf7f9fb,
+    edge: 0x566474,
+    disc: 0x365267,
+  },
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,

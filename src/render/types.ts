@@ -28,6 +28,28 @@ export interface VehicleSnapshot {
   walkers?: WalkerSnapshot;
   rail?: { crossings: Uint8Array; railReady: Uint8Array; trains: TrainPose[] };
   signals?: SignalStates;
+  aircraft?: AircraftPose[];
+}
+
+/** TASK-298: an aircraft as the sim's snapshot gives it (`sim/aircraft.ts`). */
+export interface AircraftPose {
+  id: number;
+  registration: string;
+  typeId: string;
+  x: number;
+  y: number;
+  heightM: number;
+  heading: number;
+  speedMps: number;
+  state: string;
+  enginesRunning: boolean;
+  onRunway: boolean;
+  airborne: boolean;
+  gearDown: boolean;
+  stand: string | null;
+  runwayEnd: string | null;
+  /** Airside edges ahead on its legs. */
+  route: number[];
 }
 
 /** TASK-170: the signals as the run drives them: each node's phase (-1 without a signal) and
@@ -60,6 +82,7 @@ export interface ParkedCarsSnapshot {
 
 export type Pick =
   | { kind: 'train'; id: string; route: number }
+  | { kind: 'aircraft'; id: number }
   | { kind: 'track'; track: number }
   | { kind: 'platform'; platform: number }
   | { kind: 'vehicle'; id: number }

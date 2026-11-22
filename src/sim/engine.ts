@@ -34,6 +34,9 @@ import {
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
+import { createAircraftFleet, type AircraftFleet } from './aircraft';
+import { createAirsideGiveWay } from './airside-give-way';
+import { createAirsideRotation } from './airside-rotation';
 import { mouthAt, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
@@ -79,6 +82,9 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
    * kept lane plan, the lot stop looked up only on the way to the destination's lane) and check
    * each against the full computation, so a run with it gives the same results. */
   debugSkips?: boolean;
+  /** TASK-298: what drives the aircraft each step, where the city has an airport section; the
+   * scripted rotation by default (flight operations, TASK-299, supply their own). */
+  airsideOperations?: (fleet: AircraftFleet) => { step(timeS: number): void };
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -105,6 +111,7 @@ function createRun({
   debugParkingClaims = false,
   debugLaneOrder = false,
   debugSkips = false,
+  airsideOperations = (fleet) => createAirsideRotation(fleet, scenario.seed, scenario.startS),
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -250,6 +257,15 @@ function createRun({
     undefined,
     debugSkips,
   );
+  // TASK-298: aircraft, where the city has an airport section; a scripted rotation drives them
+  // until flight operations (TASK-299) do.
+  const fleet = compiled.airside ? createAircraftFleet(compiled.airside, scenario.seed) : null;
+  const operations = fleet ? airsideOperations(fleet) : null;
+  const airsideGiveWay = (city: CompiledCity) =>
+    fleet && city.airside?.crossings.length
+      ? createAirsideGiveWay(city, vehicles, params, fleet.crossingClosed)
+      : null;
+  let giveWay = airsideGiveWay(compiled);
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   const originCourtesy = createOriginCourtesy(
     compiled,
@@ -931,6 +947,15 @@ function createRun({
           }
           limit[id] = Math.min(limit[id]!, Math.max(position, railStop));
         }
+        // TASK-298: a crossing an aircraft occupies or approaches is a stop, as a rail one.
+        const airsideStop = giveWay ? giveWay.hold(id, lane, path) : Infinity;
+        if (airsideStop < Infinity) {
+          if (airsideStop + idm.minGapM < obstacle) {
+            obstacle = airsideStop + idm.minGapM;
+            leaderSpeed = 0;
+          }
+          limit[id] = Math.min(limit[id]!, Math.max(position, airsideStop));
+        }
         const driving = profile(id);
         // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
         // leader's braking distance but no farther than behind the leader's own stand, or at a
@@ -1575,6 +1600,7 @@ function createRun({
       }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
       ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
+      ...(fleet && { aircraft: fleet.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -1893,6 +1919,7 @@ function createRun({
       railCrossings?.roadState(changes),
       debugSkips,
     );
+    giveWay = airsideGiveWay(next);
     return result;
   }
 
@@ -1907,6 +1934,7 @@ function createRun({
       if (walkers) metrics.walkers = walkers.metrics();
       if (persons.enabled) metrics.persons = persons.metrics();
       if (transit) metrics.transit = transit.metrics();
+      if (fleet) metrics.aircraft = fleet.metrics();
       return metrics;
     },
     inspectWalker: (id: number): WalkerDetail | null => {
@@ -1943,12 +1971,16 @@ function createRun({
         parking.stateHash(),
         walkers ?? undefined,
         persons,
+        fleet ?? undefined,
       ),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
         railCrossings?.step(timeS);
+        operations?.step(timeS);
+        fleet?.step(timeS);
+        giveWay?.update();
         persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, spawnGap, releaseTrip);

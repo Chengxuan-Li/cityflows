@@ -14,6 +14,8 @@ import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 import type { PersonDetail, PersonMetrics } from './persons';
 import type { RailSnapshot } from './rail-crossings';
 import type { TransitMetrics, TransitSnapshot } from './transit';
+import type { AircraftMetrics, AircraftPoseSnapshot } from './aircraft';
+export type { AircraftMetrics, AircraftPoseSnapshot, AircraftState } from './aircraft';
 export type { TransitMetrics, TransitSnapshot } from './transit';
 export type { RailSnapshot } from './rail-crossings';
 export { CROSSING_OPEN, CROSSING_WARNING, CROSSING_CLOSED } from './rail-crossings';
@@ -83,6 +85,8 @@ export interface VehicleSnapshot {
   rail?: RailSnapshot;
   /** TASK-174: vehicles in service with the person ids aboard, by train pose id. */
   transit?: { vehicles: TransitSnapshot['vehicles'] };
+  /** TASK-298: aircraft on the airside and on approach or climb-out, where the city has one. */
+  aircraft?: AircraftPoseSnapshot[];
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;
@@ -184,6 +188,8 @@ export interface Metrics {
   persons?: PersonMetrics;
   /** TASK-174: boardings and loads per line, waits, denied boardings; where stops are served. */
   transit?: TransitMetrics;
+  /** TASK-298: where the city has an airport section. */
+  aircraft?: AircraftMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

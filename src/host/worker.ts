@@ -134,6 +134,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         rail,
         transit,
         signals,
+        aircraft,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
@@ -185,6 +186,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           rail,
           transit,
           signals,
+          aircraft,
         },
       };
       self.postMessage(reply, { transfer });
