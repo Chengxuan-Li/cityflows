@@ -312,12 +312,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-286](tasks/TASK-286.md) | city | Polygon gateways by the router's lane-change rule (York's Layerthorpe) | `places.ts` | 270, 284 | York gate, traffic, merge rule | done 2026-11-21 (merged variant; York gate passes; York in the panel) |
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
 | [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | done 2026-11-21 (merged on the owner's go; Munich and Freiburg identical; Sindelfingen 280 to 890 trips a day) |
-| [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | in progress 2026-11-21 (owner's go) |
+| [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | done 2026-11-21 (merged; York v1 seeds 1, 2 pass; every hash identical) |
 | [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | done 2026-11-21 (merged; 54 entrances linked; Freiburg gate 62.7 s; Codex) |
 | [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | in progress 2026-11-21 (wave C, Codex; final timings on a quiet machine) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
-| [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | queued 2026-11-21 (wave C, Claude; after TASK-289 merges) |
+| [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | in progress 2026-11-21 (wave C, Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5820,6 +5820,18 @@ fetches the nodes and their driveways. Linked of read: Freiburg 9/31, Munich 1/2
 left-out facilities restored 0. Munich 0.15 +0.51 / +0.03 / -0.03 / 0.00%, drain on all 48; full demand +1.51% / +0.19%;
 Freiburg gate 59.8 to 62.7 s (+2.8, hash 3314728190; seeds 2, 3 within 0.7 s); Philadelphia 174.4 to 159.0 s. Passes.
 Lead merge on TASK-293: Philadelphia's archive rebuilt from both; tiers green, gate re-measured.
+
+TASK-289 (Claude Code subagent, Opus 5.5 high, 2026-11-21; merged `a23dd8a`): the York lot deadlock was a three-party
+cycle at `pk:4462`: an arrival refused by the lot stood over George Street's zebra (keep-clear lets a car stand on a
+crosswalk at its destination connector), walkers held every span of that crossing, so the exiting car's landing
+lane stayed blocked and the lot kept refusing the arrival. Now a lot arrival whose body would cover a crosswalk stops
+0.5 m short of it while the lot would not admit it (a full lot still turns it away), and no departure from that lot
+starts while such a car can no longer stop short. Affects lot entries over a crosswalk only (Munich 0 of 48, Freiburg
+1, Sindelfingen 3, York 2, Lübeck 4, Philadelphia 6). Two synthetic tests fail on main. TASK-288 v1's York: seeds 1, 2
+gridlocked 7 / 6 to 0, worst visit 5,869 / 5,243 to 149 / 180 s. Every Munich (0.15, full demand), Freiburg,
+Sindelfingen and showcase hash identical to main `3843cda`. The agent restarted its queue after its background
+worker died at 17:12; it found that the lead's `fbgate.ts` imported from `lead-main-ref` (fixed to measure the
+current tree; lead merge measurements were taken there and stand).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
