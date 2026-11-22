@@ -66,11 +66,12 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       exclusions = (source.exclusions ?? []).map(closed);
     const bays = lot.stalls.map((s) => closed(s.corners));
     const obstacles = [...exclusions, ...bays];
+    const rings = [boundary, ...obstacles];
     const inside = (p: Vec2) => inRing(p, boundary) && !obstacles.some((r) => inRing(p, r));
     // `passage`: an entry link may run under a building exclusion (a courtyard lot reached
     // through a building passage, Munich pk:2037, Sindelfingen pk:1475), never over a bay.
     const clear = (a: Vec2, b: Vec2, entry = false, passage = false) => {
-      const ts = cuts(a, b, [boundary, ...obstacles]);
+      const ts = cuts(a, b, rings);
       const blocking = passage ? bays : obstacles;
       let entered = false;
       for (let i = 1; i < ts.length; i++) {
@@ -109,7 +110,7 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
         const a = path[i - 1]!,
           b = path[i]!;
         if (distance(a, b) < 1e-8) continue;
-        const ts = cuts(a, b, [boundary, ...obstacles]);
+        const ts = cuts(a, b, rings);
         for (let j = 1; j < ts.length; j++) {
           if (ts[j]! - ts[j - 1]! < 1e-8 || !inside(mix(a, b, (ts[j]! + ts[j - 1]!) / 2))) continue;
           const p = mix(a, b, ts[j - 1]!),
@@ -190,7 +191,17 @@ export function compileLotPaths(city: City, compiled: CompiledCity, diagnostics:
       if (!directed) graph.adjacency[to]!.push(idx);
     };
     const attach = (p: Vec2, entry: boolean) => {
-      const choices = segments
+      const reach = STALL_LINK_M + RING_MARGIN_M;
+      const nearby = entry
+        ? segments
+        : segments.filter(
+            ({ a, b }) =>
+              p.x + reach >= Math.min(a.x, b.x) &&
+              p.x - reach <= Math.max(a.x, b.x) &&
+              p.y + reach >= Math.min(a.y, b.y) &&
+              p.y - reach <= Math.max(a.y, b.y),
+          );
+      const choices = nearby
         .map((s) => ({ s, hit: nearestOnPolyline([s.a, s.b], p) }))
         .sort((a, b) => a.hit.away - b.hit.away);
       // Entries prefer a clear link; only when none exists may the link take a passage.
