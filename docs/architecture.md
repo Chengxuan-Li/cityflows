@@ -1774,7 +1774,12 @@ standing obstacle for the lane's traffic (and for traffic about to enter it), cl
 line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
 the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
-checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-289: a car
+bound for a lot entry where its body would stand over a crosswalk (keep clear, section 8) stops
+0.5 m short of it while the lot would not admit it at once, unless the lot is full and turns it
+away there; no departure of the lot starts while such a car can no longer stop short of it. Held
+on the crosswalk it held the walkers, whose wait held the crossing's span of the exit lane, where
+the departure in its way waited for its landing (York pk:4462). TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit

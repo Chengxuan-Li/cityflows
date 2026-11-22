@@ -8,6 +8,7 @@ import { createRandom } from '../geo/random';
 import type { Vec2 } from '../geo/vec2';
 import type { CParkingSpace, CompiledCity } from '../network';
 import { laneHeightAt } from '../network/heights';
+import { keepClearZones } from '../network/keep-clear';
 import { lotPath } from '../network/lot-paths';
 import { departureMisses, parkingConnectorPermitted } from '../network/parking';
 import { lanesNear } from '../network/walk';
@@ -16,6 +17,7 @@ import { parkingEgress } from './parking-egress';
 import type { Metrics, ParkedCarsSnapshot, ParkingClaimsSnapshot } from './types';
 import { COMPLETED, FAILED, type Vehicles } from './vehicle';
 import { parkingHash } from './hash';
+import { KEEP_CLEAR_STOP_M, keepClearStand } from './keep-clear';
 import {
   bodyClearLane,
   bodyClearOf,
@@ -792,6 +794,17 @@ export function createParking(
         (!checkExit || departure(nextTrip[id]!).spaces[i]),
     );
   }
+  function full(connector: number, id = -1) {
+    const facility = compiled.connectors[connector]!.parking;
+    if (facility === undefined) return false;
+    const f = compiled.parking[facility]!;
+    return (
+      (!soft(f) &&
+        occupied[facility]! + enRoute[facility]! - (heading[id] === facility ? 1 : 0) >=
+          f.capacity) ||
+      (f.kind !== 'garage' && !hasFreeSpace(connector, id))
+    );
+  }
   function beginSearch(id: number, timeS: number) {
     searching[id] = 1;
     if (Number.isNaN(searchStart[id])) searchStart[id] = timeS;
@@ -1069,6 +1082,57 @@ export function createParking(
           params.idm.minGapM;
         if (vehicles.position[id]! - offset + braking >= stop) return true;
       }
+    return false;
+  }
+  /** TASK-289: where a car stops short of the crosswalks its body would cover standing at lot
+   * entry `connector`: its front `KEEP_CLEAR_STOP_M` short of them (`keepClearStand`), or
+   * Infinity. Keep-clear lets a car stand over a zone at its destination, which it leaves the lane
+   * at (TASK-169), but an arrival the lot does not admit yet waits there. On a crosswalk it holds
+   * the walkers, and a waiting walker holds the spans of the run's other lanes: the landing a
+   * departure's grant needs while the departure's way holds the arrival (York pk:4462, whose entry
+   * stands over George Street's zebra and whose exit joins the other carriageway at it). */
+  const crosswalkStops = new Map<number, number>();
+  function crosswalkStop(id: number, connector: number) {
+    const key = connector * vehicleClasses.length + vehicles.vclass[id]!;
+    let stop = crosswalkStops.get(key);
+    if (stop === undefined) {
+      const c = compiled.connectors[connector]!;
+      const zones = keepClearZones(compiled)[c.lane]!.filter((z) => z.kind === 'crosswalk');
+      stop = (zones.length ? keepClearStand(zones, length(id), c.positionM) : null) ?? Infinity;
+      crosswalkStops.set(key, stop);
+    }
+    return stop;
+  }
+  /** TASK-289: whether a car bound for an entry of lot `facility` can no longer stop short of the
+   * crosswalk its stand there covers: one that moved up because the lot would admit it, or stands
+   * there. A departure starting now could hold it there (`crosswalkStop`), so it goes first. */
+  function arrivalOverCrosswalk(facility: number) {
+    for (const entry of compiled.parking[facility]!.connectorsIn) {
+      const lane = compiled.lanes[compiled.connectors[entry]!.lane]!;
+      if (!keepClearZones(compiled)[lane.idx]!.some((z) => z.kind === 'crosswalk')) continue;
+      const approaches = [
+        { segment: lane.idx, offset: 0 },
+        ...lane.in.flatMap((i) => {
+          const movement = compiled.movements[i]!,
+            from = compiled.lanes[movement.fromLane]!;
+          return [
+            { segment: -i - 1, offset: movement.lengthM },
+            { segment: from.idx, offset: from.lengthM + movement.lengthM },
+          ];
+        }),
+      ];
+      for (const { segment, offset } of approaches)
+        for (let id = vehicles.first(segment); id !== -1; id = vehicles.next[id]!) {
+          if (vehicles.destination[id] !== entry) continue;
+          const stop = crosswalkStop(id, entry);
+          if (!Number.isFinite(stop)) continue;
+          const speed = vehicles.speed[id]!,
+            profile = params.vehicleClasses[vehicleClasses[vehicles.vclass[id]!]!];
+          const braking =
+            (speed * speed) / (2 * params.idm.bMps2 * profile.decelFactor) + speed * params.dtS;
+          if (vehicles.position[id]! - offset + braking > stop + 1e-6) return true;
+        }
+    }
     return false;
   }
   /** TASK-176: the points an arriving body passes on its way from `connector` to lot space `s`
@@ -1717,6 +1781,16 @@ export function createParking(
       for (const [other, m] of atFacility(motionsAt, destination!.parking!))
         if (leavingLot(m))
           positionM = Math.min(positionM, sharedMouthStop(id, other, m.connector, m));
+      // TASK-289: nor on a crosswalk, while it can still stop short of it; a full lot turns it
+      // away at the entry.
+      const crosswalk = crosswalkStop(id, destination!.idx);
+      if (
+        crosswalk < Infinity &&
+        (vehicles.lane[id] !== destination!.lane ||
+          vehicles.position[id]! <= crosswalk + KEEP_CLEAR_STOP_M) &&
+        !full(destination!.idx, id)
+      )
+        positionM = Math.min(positionM, crosswalk);
       // TASK-153: a car that would enter at once does not wait for the departure.
       return Number.isFinite(positionM) && !admission(id, destination!.idx)
         ? { lane: destination!.lane, positionM }
@@ -1741,7 +1815,8 @@ export function createParking(
       const slot = spaces[originSpace(id)]!;
       if (lotBusy(slot.parking, true, connector)) return false;
       const way = driveOut(id, slot.idx, connector);
-      if (arrivalBlocksDeparture(id, connector, way)) return false;
+      if (arrivalBlocksDeparture(id, connector, way) || arrivalOverCrosswalk(slot.parking))
+        return false;
       const out = pathPose(way.path, 0);
       return ![...atFacility(motionsIn, slot.parking)].some(
         ([otherId, m]) =>
@@ -1963,17 +2038,7 @@ export function createParking(
       const f = compiled.parking[facility]!;
       return soft(f) || occupied[facility]! + enRoute[facility]! < f.capacity;
     },
-    full(connector: number, id = -1) {
-      const facility = compiled.connectors[connector]!.parking;
-      if (facility === undefined) return false;
-      const f = compiled.parking[facility]!;
-      return (
-        (!soft(f) &&
-          occupied[facility]! + enRoute[facility]! - (heading[id] === facility ? 1 : 0) >=
-            f.capacity) ||
-        (f.kind !== 'garage' && !hasFreeSpace(connector, id))
-      );
-    },
+    full,
     needsChoice(id: number) {
       if (!requiresExit(id) || Number.isNaN(searchStart[id])) return false;
       const connector = compiled.connectors[vehicles.destination[id]!]!;
@@ -2340,6 +2405,7 @@ export function createParking(
       missed.clear();
       drives.clear();
       arrivalSweeps.clear();
+      crosswalkStops.clear();
       markCrossings();
     },
   };
