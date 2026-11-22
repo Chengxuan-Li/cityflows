@@ -315,7 +315,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | done 2026-11-21 (merged; York v1 seeds 1, 2 pass; every hash identical) |
 | [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | done 2026-11-21 (merged; 54 entrances linked; Freiburg gate 62.7 s; Codex) |
 | [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
-| [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | in progress 2026-11-21 (wave C, Codex; final timings on a quiet machine) |
+| [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | done 2026-11-21 (merged; York first frame 2.19 to 2.09 s, 1.22x Freiburg; identical output; Codex) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
 | [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | in progress 2026-11-21 (wave C, Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
@@ -5832,6 +5832,13 @@ gridlocked 7 / 6 to 0, worst visit 5,869 / 5,243 to 149 / 180 s. Every Munich (0
 Sindelfingen and showcase hash identical to main `3843cda`. The agent restarted its queue after its background
 worker died at 17:12; it found that the lead's `fbgate.ts` imported from `lead-main-ref` (fixed to measure the
 current tree; lead merge measurements were taken there and stand).
+
+TASK-292 (Codex CLI, gpt-6.2-sol high, 2026-11-21; merged `28c3566`): load hot paths with identical output. Junction
+outlines reuse edge bounds in crossing checks and skip curb sampling at one-approach nodes; seam searches reject far
+segments before projecting; walkway clipping reuses prepared obstacles; Pixi groups rail and walkway polygons by fill
+in draw order. Junctions, seams, walk shapes, two 2D captures and state hashes identical in six cities. Quiet-machine
+medians, five interleaved rounds: York first frame 2.19 to 2.09 s (ready 4.85 to 4.67), Freiburg 1.77 to 1.72,
+Philadelphia 1.97 to 1.91, Munich 1.77 to 1.70. York stays at 1.22x Freiburg (aim 1.15x not reached).
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
