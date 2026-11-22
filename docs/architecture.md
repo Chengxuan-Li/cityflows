@@ -2428,6 +2428,20 @@ original trips and seed.
 Lives in `src/demand`. Population is persistent and saved with the project; trips are
 regenerated deterministically from it.
 
+TASK-308 provides airport operations with two pure decision modules over summaries. The seeded
+`generateFlightSchedule` in `src/demand/flight-schedule.ts` accepts fixed-wing movements directly
+or assumes four turns per usable stand per day, bounded by 40 movements per runway per operating
+hour. It weights both legs by the hourly profile, applies the curfew to both movement times,
+and uses the synthetic turnaround minutes in the aircraft catalogue. Times are seconds from
+midnight: an overnight carry-in arrives before 0 and a carry-out departs at or after 86400. An
+odd count adds a carry-in. Helicopter movements are additional and require helipads.
+`src/sim/runway-configuration.ts` derives single ends and co-directional pairs within three
+degrees when no configurations are supplied. Explicit configurations can name ends on crossing
+runways. The chooser honours concept closures, prefers a concept within the wind limits, then
+prefers more usable ends and stronger mean headwind. It checks all active ends against the
+tailwind limit (default 5 kt) and the tightest supplied type crosswind limit. The timeline uses
+wind samples held until the next sample, starting at midnight, and also checks concept boundaries.
+
 ```ts
 interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
   placeId: PlaceId; startS: number; durationS: number }
