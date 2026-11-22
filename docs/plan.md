@@ -6366,7 +6366,7 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 - 2026-11-22 (owner): real aircraft models "really matter", with level of detail, realism for the common types.
   The free set that covers them (Flightradar24's glTF, from FlightGear) is GPL-2.0; the owner chose to relicense
   CityFlows to GPL-2.0-or-later (runtime dependencies MIT, ISC, BSD-3, BSL-1.0, OFL; the SUMO adaptation is
-  GPL-2.0-or-later). The set is downloaded to `D:\cityflows-wtirport-datar24` (commit dd53267, 41 models, 125
+  GPL-2.0-or-later). The set is downloaded to `D:\cityflows-wt\airport-data\fr24` (commit dd53267, 41 models, 125
   MB); TASK-318 brings it in with LOD.
 
 - 2026-11-22 (owner): "resume zurich and at the same time start with the taxi speed increase and measure delays etc.
