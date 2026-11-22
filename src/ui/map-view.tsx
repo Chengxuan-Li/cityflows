@@ -449,6 +449,7 @@ export function MapView() {
         window.cityflows.worldToScreen = (point) =>
           active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
         window.cityflows.vehicleToScreen = (id) => three?.vehicleToScreen(id) ?? null;
+        window.cityflows.aircraftToScreen = (id) => three?.aircraftToScreen(id) ?? null;
         window.cityflows.capture3D = () => three!.captureFrames();
         window.cityflows.view3D = () => three?.getView() ?? null;
         window.cityflows.setView3D = (centre, zoom, pitch, bearing) =>
@@ -848,6 +849,24 @@ export function MapView() {
         }
         const run = getState().run;
         snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
+        // TASK-301: the camera follows the selected aircraft (in 2D, within the map).
+        const { followAircraft } = getState();
+        const followed =
+          followAircraft !== null &&
+          selection?.kind === 'aircraft' &&
+          selection.id === followAircraft
+            ? followAircraft
+            : null;
+        if (active3D) three!.follow(followed);
+        else if (followed !== null) {
+          const pose = latestSnapshot?.aircraft?.find((a) => a.id === followed);
+          if (pose) {
+            const at = view.camera.worldToScreen(pose);
+            const dx = canvas.clientWidth / 2 - at.x,
+              dy = canvas.clientHeight / 2 - at.y;
+            if (Math.hypot(dx, dy) > 0.5) view.camera.pan(dx, dy);
+          }
+        }
         if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0);
         else view.animateVehicles(snapshotAgeS, run?.status === 'playing');
         if (pulling || failed === session) return;

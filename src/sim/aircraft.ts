@@ -126,6 +126,16 @@ export interface AircraftPoseSnapshot {
   route: number[];
 }
 
+/** TASK-301: the airfield's light state, by compiled index. */
+export interface AirfieldSnapshot {
+  /** Per runway, the end (0 or 1) arrivals and departures use, or -1. */
+  arrivalEnds: number[];
+  departureEnds: number[];
+  /** Holding positions an aircraft is cleared past: their stop bars are off. */
+  clearedHolds: number[];
+  glideSlopeDeg: number;
+}
+
 export interface AircraftEvent {
   timeS: number;
   id: number;
@@ -167,6 +177,10 @@ interface Gate {
   released: boolean;
   /** Seconds from the grant until it clears, as estimated at the grant. */
   occupancyS: number;
+  /** TASK-301: the mapped holding position it stops at (-1: none) and that node's station; its
+   * stop bar is off from the grant until the tail passes the node. */
+  hold: number;
+  holdNodeM: number;
 }
 
 interface Leg {
@@ -378,6 +392,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const margin = (graph.maxSpanM || 36) / 2 + 12;
   const holdAt = new Map(graph.holds.map((h) => [h.node, h]));
   const glideRad = ((steepApproachDeg[graph.icao ?? ''] ?? GLIDE_DEG) * Math.PI) / 180;
+  /** TASK-301: the glide slope the airfield's PAPI units are set to. */
+  const glideDeg = steepApproachDeg[graph.icao ?? ''] ?? GLIDE_DEG;
+  /** TASK-301: per runway, the end arrivals and the end departures use (-1: none), as the
+   * operations set them or as the latest requests name them; the airfield lights follow them. */
+  const arrivalEnd = new Int8Array(graph.runways.length).fill(-1);
+  const departureEnd = new Int8Array(graph.runways.length).fill(-1);
   const prefix = graph.icao?.startsWith('EG')
     ? 'G-'
     : graph.icao?.startsWith('LS')
@@ -585,12 +605,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const runway = runways[0]!;
       const entryM = piece.endM;
       let holdM = entryM - HOLD_FALLBACK_M;
+      let mapped = -1;
       for (let j = i; j >= 0; j--) {
         const p = pieces[j]!;
         if (entryM - p.endM > 300) break;
         const hold = holdAt.get(p.endNode);
         if (hold && hold.runway === runway && p.endM < entryM) {
           holdM = p.endM;
+          mapped = hold.idx;
           break;
         }
       }
@@ -624,6 +646,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         granted: false,
         released: false,
         occupancyS: 0,
+        hold: mapped,
+        holdNodeM: holdM,
       });
       i = k;
     }
@@ -1012,6 +1036,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         granted: true,
         released: false,
         occupancyS: 0,
+        hold: -1,
+        holdNodeM: -Infinity,
       });
       addGates(craft, leg, -1);
       const exitSpeedMps = Math.min(
@@ -1273,6 +1299,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (!landings(craft, graph.runways[found.runway]!, found.end, stand).some((o) => o()))
       return { ok: false, reason: `no landing on ${input.runwayEnd} reaches stand ${input.stand}` };
     craft.request = { kind: 'arrival', end: found.end, stand };
+    arrivalEnd[found.runway] = found.end;
     crafts.push(craft);
     standBound[stand] = craft.id;
     craft.stand = stand;
@@ -1373,6 +1400,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const found = findEnd(runwayEnd);
     if (!found) return { ok: false, reason: `no runway end ${runwayEnd}` };
     craft.request = { kind: 'departure', end: found.end };
+    departureEnd[found.runway] = found.end;
     craft.runway = found.runway;
     craft.end = found.end;
     craft.retryS = -Infinity;
@@ -1958,6 +1986,39 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return result;
   }
 
+  /** TASK-301: the runway ends in use from now on, by designator; runways not named go unused. */
+  function setActiveEnds(ends: { arrivalEnds: string[]; departureEnds: string[] }) {
+    arrivalEnd.fill(-1);
+    departureEnd.fill(-1);
+    for (const [designators, into] of [
+      [ends.arrivalEnds, arrivalEnd],
+      [ends.departureEnds, departureEnd],
+    ] as const)
+      for (const designator of designators) {
+        const found = findEnd(designator);
+        if (found) into[found.runway] = found.end;
+      }
+  }
+
+  /** TASK-301: what the airfield lights show: the ends in use, and the holding positions whose
+   * stop bar is off (an aircraft cleared past it whose tail has not passed it yet). */
+  function airfield(): AirfieldSnapshot {
+    const clearedHolds: number[] = [];
+    for (const craft of crafts) {
+      if (craft.mode !== 'ground' || !craft.leg) continue;
+      const tail = craft.stationM - craft.lengthM / 2;
+      for (const g of craft.leg.gates)
+        if (g.granted && g.hold >= 0 && tail < g.holdNodeM && !clearedHolds.includes(g.hold))
+          clearedHolds.push(g.hold);
+    }
+    return {
+      arrivalEnds: Array.from(arrivalEnd),
+      departureEnds: Array.from(departureEnd),
+      clearedHolds: clearedHolds.sort((a, b) => a - b),
+      glideSlopeDeg: glideDeg,
+    };
+  }
+
   function metrics(): AircraftMetrics {
     let active = 0,
       stuck = 0;
@@ -1980,6 +2041,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     requestHoverTaxi,
     step,
     snapshot,
+    airfield,
+    setActiveEnds,
     metrics,
     crossingClosed,
     /** Events since the last call. */

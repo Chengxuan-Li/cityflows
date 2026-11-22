@@ -29,6 +29,17 @@ export interface VehicleSnapshot {
   rail?: { crossings: Uint8Array; railReady: Uint8Array; trains: TrainPose[] };
   signals?: SignalStates;
   aircraft?: AircraftPose[];
+  airfield?: AirfieldState;
+}
+
+/** TASK-301: the airfield's light state as the sim gives it (`sim/aircraft.ts`), by compiled
+ * index: per runway the end (0 or 1) arrivals and departures use (-1: none), the holding
+ * positions whose stop bars are off, and the glide slope. */
+export interface AirfieldState {
+  arrivalEnds: number[];
+  departureEnds: number[];
+  clearedHolds: number[];
+  glideSlopeDeg: number;
 }
 
 /** TASK-298: an aircraft as the sim's snapshot gives it (`sim/aircraft.ts`). */

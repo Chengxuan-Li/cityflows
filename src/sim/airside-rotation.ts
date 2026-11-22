@@ -24,6 +24,11 @@ export function createAirsideRotation(fleet: AircraftFleet, seed: number, startS
     : null;
   const arrivalEnd = configuration?.arrivalEnds[0] ?? ends[0]?.designator;
   const departureEnd = configuration?.departureEnds[0] ?? ends[0]?.designator;
+  // TASK-301: the airfield lights show these ends from the start.
+  fleet.setActiveEnds({
+    arrivalEnds: arrivalEnd ? [arrivalEnd] : [],
+    departureEnds: departureEnd ? [departureEnd] : [],
+  });
   const longestM = Math.max(0, ...graph.runways.map((r) => r.lengthM));
   // London City's mix where it is London City, else every fixed-wing type the runway takes.
   const mix =

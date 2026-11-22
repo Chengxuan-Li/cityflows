@@ -77,6 +77,7 @@ import { buildRail, pickRail3D } from './rail';
 import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
 import { Aircraft3D } from './aircraft';
+import { AirfieldLights3D, pixelScale } from './airfield-lights';
 import { Stations3D } from './stations';
 import { TramStops3D } from './tram-stops';
 import { LevelCrossings3D } from './level-crossings';
@@ -137,6 +138,12 @@ export class Scene3D {
   private overheadVisible = true;
   private trains: Trains3D | undefined;
   private aircraft: Aircraft3D | undefined;
+  /** TASK-301: airfield lights, the aircraft the camera follows, and the aircraft animation's
+   * wall clock (it stands still while the run is paused). */
+  private airfieldLights: AirfieldLights3D | undefined;
+  private followed: number | null = null;
+  private followFrom: Vector3 | null = null;
+  private aircraftFrameMs = performance.now();
   private stations: Stations3D | undefined;
   private tramStops: TramStops3D | undefined;
   private levelCrossings: LevelCrossings3D | undefined;
@@ -332,6 +339,12 @@ export class Scene3D {
       ? new Aircraft3D(middle ? terrain.groundAt(middle.x, middle.y) : 0)
       : undefined;
     if (this.aircraft) this.content.add(this.aircraft.group);
+    this.airfieldLights = city.airside
+      ? new AirfieldLights3D(city.airside, source.airport?.approachAids, (x, y) =>
+          terrain.groundAt(x, y),
+        )
+      : undefined;
+    if (this.airfieldLights) this.content.add(this.airfieldLights.group);
     this.content.add(this.rail.group);
     this.catenary = buildCatenary(city, geometry.heights, this.rail.heights);
     this.catenary.setBelowGround(this.belowGround);
@@ -733,6 +746,10 @@ export class Scene3D {
     this.vehicles.setLights(on);
     this.trains?.setLights(on);
     this.levelCrossings?.setNight(on);
+    this.aircraft?.setLight(on);
+    this.airfieldLights?.setLight(on);
+    if (this.airfieldLights)
+      this.canvas.dataset.airfieldLights = JSON.stringify(this.airfieldLights.counts());
     if (this.street) (this.street.heads.material as MeshLambertMaterial).emissiveIntensity = on;
     if (this.buildings) setBuildingLights(this.buildings.material, light.windows, on);
     if (this.night) {
@@ -783,8 +800,12 @@ export class Scene3D {
       this.railVisible ? Array.from(this.crossingStates ?? []) : [],
     );
     this.vehicles.setSnapshot(snapshot);
-    this.aircraft?.update(snapshot.aircraft ?? []);
+    this.aircraft?.update(snapshot.aircraft ?? [], snapshot.timeS);
     this.canvas.dataset.aircraft = String(this.aircraft?.count ?? 0);
+    if (this.airfieldLights) {
+      this.airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
+      this.canvas.dataset.airfieldLights = JSON.stringify(this.airfieldLights.counts());
+    }
     this.trainTimeS = NaN;
     if (this.geometry) this.walkers.setSnapshot(snapshot.walkers, this.geometry.heights);
     this.canvas.dataset.walkers = String(this.walkers.mesh.count);
@@ -1093,6 +1114,15 @@ export class Scene3D {
       y: ((1 - p.y) * this.canvas.clientHeight) / 2,
     };
   }
+  aircraftToScreen(id: number) {
+    const at = this.aircraft?.positionOf(id);
+    if (!at) return null;
+    const p = at.clone().project(this.camera);
+    return {
+      x: ((p.x + 1) * this.canvas.clientWidth) / 2,
+      y: ((1 - p.y) * this.canvas.clientHeight) / 2,
+    };
+  }
   vehicleToScreen(id: number) {
     const index =
       this.vehicles.poses.snapshot?.id.subarray(0, this.vehicles.mesh.count).indexOf(id) ?? -1;
@@ -1188,6 +1218,42 @@ export class Scene3D {
     );
   }
 
+  /** TASK-301: keeps the camera on an aircraft (null: stops). Orbiting and zooming still work;
+   * a pan offsets the view from it. */
+  follow(id: number | null) {
+    if (id === this.followed) return;
+    this.followed = id;
+    this.followFrom = null;
+    this.canvas.dataset.follow = id === null ? '' : String(id);
+    this.invalidate();
+  }
+
+  private animateAircraft(elapsedS: number, advancing: boolean) {
+    const aircraft = this.aircraft!;
+    const now = performance.now();
+    const dtS = advancing ? Math.min(0.1, (now - this.aircraftFrameMs) / 1000) : 0;
+    this.aircraftFrameMs = now;
+    if (advancing && aircraft.animating) this.invalidate();
+    const scale = pixelScale(this.camera, this.canvas.clientHeight);
+    aircraft.setPixelScale(scale);
+    this.airfieldLights?.setPixelScale(scale);
+    aircraft.animate(elapsedS, dtS);
+    if (this.followed === null) return;
+    const at = aircraft.positionOf(this.followed);
+    if (!at) {
+      this.follow(null);
+      return;
+    }
+    const from = this.followFrom ?? this.controls.target;
+    if (at.distanceToSquared(from) > 1e-8) {
+      const delta = at.clone().sub(from);
+      this.camera.position.add(delta);
+      this.controls.target.add(delta);
+      this.invalidate();
+    }
+    this.followFrom = at.clone();
+  }
+
   render(elapsedS: number, timeS: number) {
     const renderStart = performance.now();
     this.controls.update();
@@ -1204,8 +1270,10 @@ export class Scene3D {
       this.invalidate();
     }
     if (import.meta.env.MODE === 'test') this.stations?.report(this.canvas, this.railVisible);
-    if (this.vehicleAgeS !== elapsedS && this.vehicles.mesh.count) this.invalidate();
+    const advancing = this.vehicleAgeS !== elapsedS;
+    if (advancing && this.vehicles.mesh.count) this.invalidate();
     this.vehicleAgeS = elapsedS;
+    if (this.aircraft) this.animateAircraft(elapsedS, advancing);
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
     const distance = this.camera.position.distanceTo(this.controls.target);
     this.camera.near = Math.max(0.2, distance / 10);

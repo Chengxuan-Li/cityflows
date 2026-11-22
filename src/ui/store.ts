@@ -152,6 +152,9 @@ interface AppState {
   previewShown: () => void;
   run: Run | null;
   selection: MapPick | null;
+  /** TASK-301: the aircraft the camera follows while it stays selected. */
+  followAircraft: number | null;
+  setFollowAircraft: (id: number | null) => void;
   selectedRoads: RoadId[];
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
@@ -646,6 +649,8 @@ export const useAppStore = create<AppState>((set, get) => {
     session: null,
     run: null,
     selection: null,
+    followAircraft: null,
+    setFollowAircraft: (followAircraft) => set({ followAircraft }),
     selectedRoads: [],
     selectRoads: (roads) => {
       const compiled = get().session?.compiled;
@@ -933,6 +938,8 @@ declare global {
       drawnSnapshot?: () => VehicleSnapshot | null;
       parkedCars?: () => ParkedCarsSnapshot | null;
       vehicleToScreen?: (id: number) => Vec2 | null;
+      /** TASK-301: where an aircraft is drawn in 3D, in CSS pixels. */
+      aircraftToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
       view3D?: () => { centre: Vec2; zoom: number; pitch: number; bearing: number } | null;
       setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;

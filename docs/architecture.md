@@ -1826,6 +1826,12 @@ carry no persons and generate no road trips.
   holding, line-up, takeoff-roll, rotation, climb, parked, pushback, tow and the helicopter
   phases), engines running, on runway, airborne, gear down (on the ground, below 600 m on
   approach, below 150 m climbing), stand, runway end and the airside edges ahead.
+  `VehicleSnapshot.airfield` (TASK-301, `fleet.airfield()`): per runway the end arrivals and the
+  end departures use (-1: none), the holding positions whose stop bar is off (an aircraft granted
+  past it whose tail has not passed the hold node) and the glide slope. The ends in use are the
+  latest requested, or those `fleet.setActiveEnds({ arrivalEnds, departureEnds })` names (the
+  rotation sets its chooser's ends at the start; TASK-300 calls it on a reconfiguration). Not in
+  the state hash.
 - **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
@@ -3078,6 +3084,35 @@ within the map's node extent) and its meshes in 3D (heights above the first runw
 gear by the snapshot, a plain pitch by state; the far plane reaches 15 km where an airport
 exists). Both pick an aircraft; the inspector shows its registration, type, status, stand,
 runway, speed, height and route by taxiway names.
+
+TASK-301: airfield and aircraft lighting by rule (`render/airfield-lights.ts`, shared by both
+views; ICAO Annex 14 in simplified form). `placeAirfieldLights` places every light once: runway
+edge lights at most 60 m apart 1.5 m outside the edge, centreline lights every 30 m, threshold
+(every 3 m) and end lights (every 6 m, at least six) across each end, approach lights 900 m out
+(420 m on a runway under 1,800 m) with a crossbar at 300 m, four PAPI units (a mapped PAPI's
+distance and side, else 300 m past the threshold on the left), taxiway centreline lights every
+30 m (taxiways and taxilanes, off runway pavement), taxiway edge lights every 60 m (taxiways, off
+any airside pavement), a stop bar across the taxiway every 3 m at each runway holding position,
+three yellow lights at an intermediate one, and a floodlight per stand. `airfieldLightColors`
+colours them from `VehicleSnapshot.airfield`: a runway with no end in use is dark; edge lights
+amber over the last 600 m (or third) and centreline lights red and white from 900 m and red over
+the last 300 m in the landing direction (else the take-off one); green threshold, approach and
+PAPI at a landing end; red end lights at the far end of each run in use; stop bars off while
+cleared. Each PAPI unit is white when the nearest aircraft on approach to its end, short of the
+units, is above its setting (the glide slope plus 30', 10', -10', -30', next to the runway first),
+else red; with none, the on-slope two and two. `aircraftLights` reads an aircraft's state:
+navigation lights always, beacon while engines run or it moves, strobes on the runway or airborne,
+landing lights on approach to the landing roll, on the take-off roll and climbing until the gear
+comes up, taxi lights while taxiing (not holding). In 3D (`render3d/airfield-lights.ts`,
+`render3d/aircraft.ts`) the lights are additive camera-facing glows never under a pixel radius,
+shown with the scene's artificial light (aircraft lights also by day, dimmer), with beacon and
+strobe flashes, ground beams for taxi and near-ground landing lights and floodlight pools.
+Aircraft carry a per-registration accent colour, a one-pixel dark outline, propellers and rotors
+that spin up with the engines, and, off the ground, a shadow straight below with a drop line;
+positions run on between snapshots at the last two snapshots' velocity, and animation stands still
+while the run is paused. The camera follows the selected aircraft (`Scene3D.follow`; inspector
+switch "Follow with camera"), and a distant aircraft picks within 12 px. In 2D the night layer
+shows the same lights steadily (`render/layers/airfield-lights.ts`).
 
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
