@@ -549,6 +549,12 @@ interface Airport {
   approachAids: { kind; pos; facing?; runway?; end?; osmId }[]; // aeroway=navigationaid
   turnPads: { pos; node?; osmId? }[];
   roadCrossings: RoadCrossing[];
+  runwayOperations?: RunwayOperations;       // TASK-305: the airport's own runway table
+}
+interface RunwayOperations {                 // TASK-305; absent fields fall back (section 8)
+  configurations?: { id; arrivalEnds: string[]; departureEnds: string[] }[]; // ends by designator
+  concepts?: { startS; endS; configurationId: string | null }[];             // after midnight; may wrap
+  tailwindLimitKt?: number;
 }
 interface AirsideEdge {
   id; from; to; line: Vec2[];                // first point at `from`, last at `to`
@@ -588,7 +594,12 @@ interface RoadCrossing { edge; pos; roads: string[]; roadOsmIds: number[]; osmId
 
 Boundary validation checks that record keys match ids, edges meet existing endpoints, a runway's
 edges chain from `ends[0].node` to `ends[1].node`, holds, stands, gates and crossings name
-existing entities, and every lead-in edge names its stand. The graph is undirected: a runway edge
+existing entities, every lead-in edge names its stand, and a runway table's configurations name
+existing runway ends (at least one for arrivals and one for departures). TASK-305: a code given
+by rule carries `maxCode` in `provenance.inferred` (stands, taxi edges, lead-ins), a width given
+by rule `widthM`; an edit re-derives the first where geometry changes and never touches a code or
+width the user set, which drops the name from the list. Authored airside items have
+`provenance.source: 'authored'`. The graph is undirected: a runway edge
 is usable both ways, so a backtrack (taxiing along the runway to its end and turning there, as at
 London City, which has no full parallel taxiway) is a route over runway edges while the runway is
 held. `RoadCrossing.roads` are the directed roads at the crossing as imported; an edit can retire
@@ -1459,6 +1470,9 @@ stations; holds their node, protected runway and `toward` edge; stands their lea
 recorded roads whose drawn line passes within a lane width of it, with a stop `clearance` short of
 it: the larger of half the edge's width and half its code's span, plus 7.5 m; a stop before a
 lane's start falls on the lanes leading in. Cities without the section compile unchanged.
+TASK-305: the graph also carries the airport's `runwayOperations`. Nothing else in the compiled
+city reads the section, so a commit whose patch edits the airport alone recompiles only
+`airside` (and the version) on the previous compiled city; the result equals a full compile's.
 
 ## 6. Editing
 
@@ -1474,6 +1488,60 @@ and inverse patches. Inferred facilities become canonical when editing begins or
 added; undo removes newly inferred facilities with their place. Garage connectors follow
 road topology and lane edits. The live engine rejects reducing capacity below occupied slots;
 the inspector uses current occupancy as the minimum. Restart can apply a lower capacity.
+
+TASK-305 adds airport edits (`editor/commands/airport.ts`). Patches carry `airport: { set,
+remove }` of the section's `nodes`, `edges`, `runways`, `holdingPositions` and `stands`, and the
+whole `roadCrossings` or `runwayOperations` (null removes it) when they change; inverse patches
+and `diffCity` (restore, batches) cover them, and the editor validates the edited section with
+`airportSchema` before it commits (`airport_invalid` otherwise). Commands:
+
+```ts
+  | { kind: 'addStand'; pos: Vec2; standKind: StandKind; ref?: string; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'moveStand'; standId: string; pos: Vec2 }
+  | { kind: 'setStand'; standId: string; standKind?: StandKind; ref?: string | null; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'deleteStand'; standId: string }
+  | { kind: 'addTaxiway'; edgeKind: 'taxiway' | 'taxilane'; vertices: AirsideVertex[]; ref?: string; widthM?: number; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'splitTaxiway'; edgeId: string; atM: number }
+  | { kind: 'setTaxiway'; edgeId: string; edgeKind?: 'taxiway' | 'taxilane'; ref?: string | null; widthM?: number | null; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'deleteTaxiway'; edgeId: string }
+  | { kind: 'addHold'; edgeId: string; atM: number; runway?: string | null; ref?: string }
+  | { kind: 'moveHold'; holdId: string; edgeId: string; atM: number }
+  | { kind: 'setHold'; holdId: string; runway?: string | null; ref?: string | null }
+  | { kind: 'deleteHold'; holdId: string }
+  | { kind: 'setRunwayOperations'; operations: RunwayOperations | null }
+type AirsideVertex = { node: string } | { edge: string; atM: number } | { pos: Vec2 };
+```
+
+- A new or moved stand joins the network as the import joins a stand node: a straight lead-in
+  (`generated` rule, `authored` source) from the nearest point of a taxiway or taxilane within
+  150 m whose line to the stop crosses no building but one the stand stands in, splitting that
+  edge there; the heading is the lead-in's. A moved stand's old lead-in goes with the nodes it
+  leaves without edges. `maxCode` 'rule' (or none on an add) derives the code; a code or null
+  sets it, and a lead-in takes its stand's code.
+- `addTaxiway` resolves each vertex: a node joins there, a point on a taxiway, taxilane or runway
+  edge splits it (the farthest along first, so the others keep their place), a free point is a
+  shape point, or a new node at either end. Each section between joins is one edge, at least 1 m.
+  A width given is mapped; without one the width is the code's.
+- Splitting an edge keeps its id on the piece at `from` and copies the attributes; a runway's
+  edge list takes the new piece in order, a hold looking along it from the far end looks along
+  the far piece, and road crossings go to the nearer piece. Splits re-derive nothing. Deleting a
+  taxiway removes the end nodes it leaves without edges (not runway ends), the holds on them and
+  its road crossings; holds looking along it look again by rule.
+- A hold added on a taxiway protects the runway the graph reaches first within 1 km (the import's
+  rule for a runway hold), else none (intermediate); `runway` sets it, null makes it
+  intermediate. `side` and `toward` follow the runway (`toward` is null on the runway or out of
+  reach). A moved hold keeps its runway on its new node; the old node stays.
+- Codes by rule again (`network/airside-codes.ts`, TASK-295's rules, shared with the importer):
+  after an edit that changes geometry, every stand within 175 m of a placed or removed stand (the
+  reach of two code F stands with their clearance) and every taxi edge within 211 m of a drawn,
+  deleted or re-kinded line (the code F separation plus the 120 m junction detour), whose code is
+  inferred, gets the code the rules give it in the edited airport. Obstacles are the city's
+  context buildings, terminals and hangars; London City re-derives every one of its imported codes
+  unchanged from the bundled city. A width given by rule follows its code.
+- Restart policy: the run's flight day (stands, routes, schedule, runway table) is built from the
+  airside at load, so an airport edit marks the run stale and offers a restart, as a scheduling
+  change does. Until then the map draws the edited airside and maps the loaded run's aircraft
+  routes and cleared stop bars onto it by id; the aircraft inspector reads the loaded graph.
 
 Lives in `src/editor`. The editor owns one `City` and exposes:
 
@@ -1872,9 +1940,10 @@ carry no persons and generate no road trips.
   since when, the closed ends still in use and the departures re-routed so far. Not in the state
   hash.
 - **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
-  airport's runway ends, with the configurations and time-of-day concepts of
-  `airportRunwayConcepts` by ICAO code (London City has none: derived configurations, wind
-  only), the 5 kt tailwind limit and the strictest maximum demonstrated crosswind of the types in
+  airport's runway ends, with the configurations and time-of-day concepts of the airport's own
+  `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
+  code (London City has none: derived configurations, wind only), field by field, the airport's
+  tailwind limit or 5 kt and the strictest maximum demonstrated crosswind of the types in
   the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
   figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
   (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
@@ -3830,6 +3899,21 @@ transit (system purple) to the caption, the counts and the hourly bars, the mean
 by a full vehicle, and a table of riders per line (residents boarded, TASK-128's riders off and on,
 the most aboard of the places).
 
+TASK-305: where the city has an airport, the toolbox adds the Airside tool (key 6), whose
+sidebar options choose what a click adds: a stand of the chosen kind (ref one above the largest
+numeric ref), a taxiway or taxilane drawn point by point (snapping to airside nodes within 12 px
+and to taxiway, taxilane and runway centrelines within their half width or 10 px; Enter or a
+double click ends), or a holding position on a taxiway. In 2D the Select tool picks a holding
+position (8 px) and a taxiway or taxilane under the pointer, before a place's tint; a selected
+stand or hold shows a handle that drags it (a hold snaps along the taxiways), a selected taxiway
+its line. The stand inspector sets the stand's ref, kind and code limit ("By rule (C)", a code,
+or none) and deletes it; the taxiway inspector its name, kind, width (blank: the code's) and code
+limit, splits it at the clicked point and deletes it; the holding position inspector its name and
+the runway it protects. Delete removes the selected stand, taxiway or hold. The flight board's
+Runways section adds a "Runway table": the tailwind limit, each configuration's arrival and
+departure ends, the time-of-day periods preferring a configuration or closing the runways, and a
+reset to the default table.
+
 ## 12. Project format and migrations
 
 Lives in `src/project`. A project is a ZIP with extension `.cityflows` (fflate), or a single
@@ -4272,7 +4356,8 @@ TASK-295 reads the airside last (`osm/airport.ts`), after every other id is allo
 version 13 adds `nwr[aeroway]` and `nwr[building~"^(terminal|hangar)$"]` to both queries. A feature
 with a node inside the area is kept whole (the airside is not clipped, so a runway keeps both
 ends). The rules, with ICAO Annex 14 Vol. I (8th edition, 2018) figures by code letter
-(`airsideRules`):
+(`airsideRules`; the stand and taxi edge code rules live in `network/airside-codes.ts`, which the
+editor re-runs, TASK-305):
 
 - **Graph.** Edges are the centrelines of `aeroway=runway|taxiway|taxilane` ways (an `area=yes`
   way or a multipolygon is a surface, not an edge), split at every node two such ways share, at

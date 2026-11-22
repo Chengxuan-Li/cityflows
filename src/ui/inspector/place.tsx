@@ -79,15 +79,17 @@ function DemographicSlider({
   );
 }
 
-function TextField({
+export function TextField({
   label,
   value,
   type = 'text',
+  required = true,
   onCommit,
 }: {
   label: string;
   value: string;
   type?: 'text' | 'time';
+  required?: boolean;
   onCommit: (value: string) => void;
 }) {
   return (
@@ -96,7 +98,7 @@ function TextField({
       <input
         key={value}
         type={type}
-        required
+        required={required}
         defaultValue={value}
         onBlur={({ currentTarget: input }) => {
           const next = input.value;

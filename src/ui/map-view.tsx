@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Scene3D } from '../render3d/scene';
 import { lonLatToLocal } from '../geo/projection';
+import { distance, nearestOnPolyline } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import { boundsOf, type Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
@@ -11,6 +12,7 @@ import type { LaneId } from '../schema';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool } from './tools/draw-road';
+import { createAirsideTool } from './tools/airside';
 import { createRampTool } from './tools/ramp';
 import { createRoundaboutTool } from './tools/roundabout';
 import { createSelectTool } from './tools/select';
@@ -55,7 +57,25 @@ function snapshotForMap(
       ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
       : -current - 1;
   });
-  return { ...presentation, lane, poseLane, signals };
+  // TASK-305: aircraft run on the loaded airside until a restart; their routes and the cleared
+  // stop bars are drawn on the edited one by id (runways are not edited).
+  const [before, after] = [loadedCompiled.airside, compiled.airside];
+  let { aircraft, airfield } = snapshot;
+  if (before && after && before !== after) {
+    const ids =
+      <T extends { id: string }>(items: T[], index: (id: string) => number | undefined) =>
+      (list: readonly number[]) =>
+        list.flatMap((i) => {
+          const mapped = index(items[i]!.id);
+          return mapped === undefined ? [] : [mapped];
+        });
+    const edges = ids(before.edges, (id) => after.index.edge.get(id));
+    const holdIndex = new Map(after.holds.map((h) => [h.id, h.idx]));
+    const holds = ids(before.holds, (id) => holdIndex.get(id));
+    aircraft = aircraft?.map((pose) => ({ ...pose, route: edges(pose.route) }));
+    if (airfield) airfield = { ...airfield, clearedHolds: holds(airfield.clearedHolds) };
+  }
+  return { ...presentation, lane, poseLane, signals, aircraft, airfield };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
@@ -176,6 +196,28 @@ function pickStand(screen: Vec2, project: (world: Vec2) => Vec2): Pick | null {
   return best;
 }
 
+/** TASK-305: the holding position within 8 px, else the taxiway or taxilane under the pointer
+ * (within its half width or 6 px). */
+function pickAirside(world: Vec2, zoom: number): Pick | null {
+  const graph = useAppStore.getState().session?.compiled.airside;
+  if (!graph) return null;
+  let nearest = 8 / zoom;
+  let hold = -1;
+  for (const h of graph.holds) {
+    const away = distance(graph.nodes[h.node]!.pos, world);
+    if (away < nearest) [nearest, hold] = [away, h.idx];
+  }
+  if (hold >= 0) return { kind: 'hold', hold };
+  let edge = -1;
+  nearest = Infinity;
+  for (const e of graph.edges) {
+    if (e.kind !== 'taxiway' && e.kind !== 'taxilane') continue;
+    const away = nearestOnPolyline(e.line, world).away;
+    if (away <= Math.max(e.widthM / 2, 6 / zoom) && away < nearest) [nearest, edge] = [away, e.idx];
+  }
+  return edge >= 0 ? { kind: 'taxiway', edge } : null;
+}
+
 function bindPointer(
   canvas: HTMLCanvasElement,
   scene: Scene,
@@ -279,10 +321,15 @@ function bindPointer(
         const { world, screen } = point(event);
         useAppStore.setState({ selectionPoint: world });
         const hit = scene.pick(screen.x, screen.y);
+        // An airside item under a place's tint or the bare map is picked before them.
+        const airside = (pick: Pick | null) =>
+          !pick || pick.kind === 'place' || pick.kind === 'flight-board'
+            ? (pickAirside(world, camera.zoom) ?? pick)
+            : pick;
         getState().select(
           hit?.kind === 'aircraft'
             ? hit
-            : (pickStand(screen, (p) => camera.worldToScreen(p)) ?? hit),
+            : (pickStand(screen, (p) => camera.worldToScreen(p)) ?? airside(hit)),
         );
       }
       drag = null;
@@ -910,6 +957,7 @@ export function MapView() {
         ),
         ramp: createRampTool(view),
         roundabout: createRoundaboutTool(view),
+        airside: createAirsideTool(view, () => getState().airsideOptions),
       };
       const pointer = bindPointer(
         canvas,

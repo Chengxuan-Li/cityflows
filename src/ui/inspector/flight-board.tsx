@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { aircraftCodes } from '../../schema/aircraft';
-import type { StandKind } from '../../schema/airport';
+import type { RunwayOperations } from '../../schema/airport';
 import type { FlightBoard } from '../../sim/flight-operations';
+import { airportRunwayConcepts, deriveRunwayConfigurations } from '../../sim/runway-configuration';
 import { Stepper } from '../controls';
+import { TextField } from './place';
 import { useAppStore } from '../store';
 import { aircraftStateLabels, flightBoardContext, useFlightBoard } from '../flight-board-data';
 
@@ -35,14 +36,6 @@ export function FlightBoardProvider({ children }: { children: ReactNode }) {
 }
 
 type Movement = FlightBoard['arrivals'][number];
-
-const kinds: Record<StandKind, string> = {
-  contact: 'Contact',
-  remote: 'Remote',
-  cargo: 'Cargo',
-  general_aviation: 'General aviation',
-  maintenance: 'Maintenance',
-};
 
 const stateLabels: Record<Movement['state'], string> = {
   ...aircraftStateLabels,
@@ -192,6 +185,167 @@ function Runways({ runways }: { runways: NonNullable<FlightBoard['runways']> }) 
   );
 }
 
+const roleLabels = { arrivalEnds: 'Arrivals', departureEnds: 'Departures' };
+const fromClock = (clock: string) => {
+  const [h, m] = clock.split(':').map(Number);
+  return h! * 3600 + m! * 60;
+};
+
+/** TASK-305: the airport's runway table, as the run uses it (its own, else the table for its
+ * ICAO code, else configurations derived from the runway ends): configurations, the time-of-day
+ * periods preferring one, and the tailwind limit. Edits are the airport's and need a restart. */
+function RunwayTable() {
+  const airport = useAppStore((s) => s.session?.project.city.airport);
+  const disabled = useAppStore((s) => s.busy || s.viewMode === '3d');
+  if (!airport || !Object.keys(airport.runways).length) return null;
+  const { commit } = useAppStore.getState();
+  const ends = Object.values(airport.runways).flatMap((runway) =>
+    runway.ends.map((end) => ({ designator: end.designator, headingRad: end.heading })),
+  );
+  const designators = ends.map((end) => end.designator).sort();
+  const own = airport.runwayOperations;
+  const table = airportRunwayConcepts[airport.icao ?? ''];
+  const configurations = (own?.configurations ??
+    table?.configurations ??
+    deriveRunwayConfigurations(ends)) as NonNullable<RunwayOperations['configurations']>;
+  const concepts = (own?.concepts ?? table?.concepts ?? []) as NonNullable<
+    RunwayOperations['concepts']
+  >;
+  const save = (change: RunwayOperations) =>
+    void commit({ kind: 'setRunwayOperations', operations: { ...own, ...change } });
+  const setConfiguration = (index: number, role: 'arrivalEnds' | 'departureEnds', end: string) => {
+    const configuration = configurations[index]!;
+    const list = configuration[role].includes(end)
+      ? configuration[role].filter((e) => e !== end)
+      : designators.filter((e) => e === end || configuration[role].includes(e));
+    save({
+      configurations: configurations.map((c, i) =>
+        i === index ? { ...c, [role]: list } : { ...c },
+      ),
+    });
+  };
+  const setConcept = (index: number, change: Partial<(typeof concepts)[number]>) =>
+    save({ concepts: concepts.map((c, i) => (i === index ? { ...c, ...change } : c)) });
+  return (
+    <details className="disclosure">
+      <summary>Runway table</summary>
+      <fieldset className="edit-fields" disabled={disabled}>
+        <Stepper
+          label="Tailwind limit (kt)"
+          value={own?.tailwindLimitKt ?? 5}
+          min={0}
+          max={15}
+          onChange={(tailwindLimitKt) => save({ tailwindLimitKt })}
+        />
+        {configurations.map((configuration, index) => (
+          <div
+            key={configuration.id}
+            role="group"
+            aria-label={`Configuration ${configuration.id}`}
+            className="runway-configuration"
+          >
+            <strong>{configuration.id}</strong>
+            {(['arrivalEnds', 'departureEnds'] as const).map((role) => (
+              <div key={role} className="runway-ends" role="group" aria-label={roleLabels[role]}>
+                <span>{roleLabels[role]}</span>
+                {designators.map((end) => (
+                  <label key={end} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={configuration[role].includes(end)}
+                      disabled={configuration[role].length === 1 && configuration[role][0] === end}
+                      onChange={() => setConfiguration(index, role, end)}
+                    />
+                    {end}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <button
+              disabled={configurations.length === 1}
+              onClick={() =>
+                save({
+                  configurations: configurations.filter((_, i) => i !== index),
+                  concepts: concepts.filter((c) => c.configurationId !== configuration.id),
+                })
+              }
+            >
+              Remove {configuration.id}
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => {
+            let n = configurations.length + 1;
+            while (configurations.some((c) => c.id === `Configuration ${n}`)) n++;
+            const end = designators[0]!;
+            save({
+              configurations: [
+                ...configurations,
+                { id: `Configuration ${n}`, arrivalEnds: [end], departureEnds: [end] },
+              ],
+            });
+          }}
+        >
+          Add configuration
+        </button>
+        {concepts.map((concept, index) => (
+          <div key={index} className="edit-fields" role="group" aria-label={`Period ${index + 1}`}>
+            <TextField
+              label="From"
+              type="time"
+              value={localTime(concept.startS)}
+              onCommit={(clock) => setConcept(index, { startS: fromClock(clock) })}
+            />
+            <TextField
+              label="To"
+              type="time"
+              value={localTime(concept.endS)}
+              onCommit={(clock) => setConcept(index, { endS: fromClock(clock) })}
+            />
+            <label className="edit-field">
+              Use
+              <select
+                value={concept.configurationId ?? ''}
+                onChange={(event) =>
+                  setConcept(index, { configurationId: event.currentTarget.value || null })
+                }
+              >
+                {configurations.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id}
+                  </option>
+                ))}
+                <option value="">Closed</option>
+              </select>
+            </label>
+            <button onClick={() => save({ concepts: concepts.filter((_, i) => i !== index) })}>
+              Remove period
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() =>
+            save({
+              concepts: [
+                ...concepts,
+                { startS: 6 * 3600, endS: 22 * 3600, configurationId: configurations[0]!.id },
+              ],
+            })
+          }
+        >
+          Add period
+        </button>
+        {own && (
+          <button onClick={() => void commit({ kind: 'setRunwayOperations', operations: null })}>
+            Reset runway table
+          </button>
+        )}
+      </fieldset>
+    </details>
+  );
+}
+
 export function FlightBoardInspector() {
   const board = useFlightBoard();
   if (!board) return null;
@@ -199,34 +353,9 @@ export function FlightBoardInspector() {
     <section aria-label="Flight board" className="flight-board">
       <h2>Flight board</h2>
       {board.runways && <Runways runways={board.runways} />}
+      {board.runways && <RunwayTable />}
       <Movements title="Departures" rows={board.departures} />
       <Movements title="Arrivals" rows={board.arrivals} />
-    </section>
-  );
-}
-
-export function StandInspector({ index }: { index: number }) {
-  const stand = useAppStore((s) => s.session?.compiled.airside?.stands[index]);
-  const occupancy = useFlightBoard()?.stands[index];
-  if (!stand) return null;
-  return (
-    <section aria-label="Stand inspector">
-      <h2>Stand {stand.ref ?? stand.id}</h2>
-      <dl className="details">
-        <dt>Code</dt>
-        <dd>{aircraftCodes[stand.maxCode] ?? '—'}</dd>
-        <dt>Kind</dt>
-        <dd>{kinds[stand.kind]}</dd>
-        <dt>Occupancy</dt>
-        <dd>
-          {occupancy?.occupiedBy ??
-            (occupancy?.reservedFor
-              ? `Reserved for ${occupancy.reservedFor}`
-              : occupancy
-                ? 'Free'
-                : '—')}
-        </dd>
-      </dl>
     </section>
   );
 }

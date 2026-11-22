@@ -95,6 +95,9 @@ export type Pick =
   | { kind: 'train'; id: string; route: number }
   | { kind: 'aircraft'; id: number }
   | { kind: 'stand'; stand: number }
+  // TASK-305: a taxiway or taxilane edge and a holding position, by compiled airside index.
+  | { kind: 'taxiway'; edge: number }
+  | { kind: 'hold'; hold: number }
   | { kind: 'flight-board' }
   | { kind: 'track'; track: number }
   | { kind: 'platform'; platform: number }
