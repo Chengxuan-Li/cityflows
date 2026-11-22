@@ -333,7 +333,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | merged 2026-11-22 (`931cb56`, wave A) |
 | [TASK-308](tasks/TASK-308.md) | airports | Flight schedule generator and runway configuration chooser | demand, sim | catalogue | seeded volumes, tailwind limit | merged 2026-11-22 (`6540ebb`, wave A) |
 | [TASK-309](tasks/TASK-309.md) | airports | Airside import rules on the Zurich, Boston and Heathrow extracts | importer, fixtures | 295 | counts, every stand reaches a runway | merged 2026-11-22 (`7b82aae`, wave B) |
-| [TASK-310](tasks/TASK-310.md) | airports | Load time at airport scale | project, compile, demand, scene build | - | Heathrow first frame under 10 s, identical output | in progress 2026-11-22 (wave E, Codex) |
+| [TASK-310](tasks/TASK-310.md) | airports | Load time at airport scale | project, compile, demand, scene build | - | Heathrow first frame under 10 s, identical output | merged 2026-11-22 (`25ee0d5`, aims not met: Heathrow first frame 14 s) |
 | [TASK-311](tasks/TASK-311.md) | airports | 3D render cost at airport scale | render3d, airfield lights | - | Heathrow 3D p95 under 6 ms, no visible change | in progress 2026-11-22 (wave E, Codex) |
 | [TASK-313](tasks/TASK-313.md) | airports | London City: a taxiway section that reads and behaves as one-way | importer, airside, markings | - | both ways as paved, LCY gates kept | merged 2026-11-22 (`947f9d7`, wave E) |
 | [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | planned (wave F, Claude) |
@@ -5889,6 +5889,15 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-310 (Codex; merged `4dbcab9` with the lead-line merge `25ee0d5`): load path with identical output (archives,
+  compiles, populations, trips, flight boards, geometry digests, sampled states, existing hashes): parking geometry
+  indexed, static airside turns reused in flight setup, pedestrian compile skipped for population, less project-open
+  and scene-build work, a curb-mesh fix that lets Heathrow's 3D scene build. Boston and Heathrow open by URL, held out
+  of the panel. Quiet machine, lead line against merge: Heathrow first frame 22.2 to 13.6 s, ready 80 to 49 s; Boston
+  5.3 to 4.7 s and 15.0 to 12.8 s; Zurich 7.8 to 6.8 s and 35 to 31 s. Aims (Heathrow under 10 s, Boston under 4 s)
+  not met: remaining cost in road and parking compile, 2D scene build, pedestrian access, street details and flight
+  setup. The wave D Full run 45059413619 failed on CI opening held-out Zurich within 60 s; fixed forward (`f34b648`,
+  180 s like the other held-out airports).
 - TASK-302 (Claude Code subagents, Opus 5.5 high; the first stopped by an app interruption, a second finished from
   its WIP; merged `7de5a81`): Zurich bundled and held out of the New city panel (`?city=zurich-airport`). Concept
   table (south 06:00, north 07:00, east 21:00, closed 23:30; switches opened on time), crossing interlock (an aircraft
