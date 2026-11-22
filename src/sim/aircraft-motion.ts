@@ -143,9 +143,13 @@ function groundEnvelope(
     }
     // Radius of the circle through the preceding, current and following path points.
     const radiusM = Math.hypot(c.x - a.x, c.y - a.y) / (2 * sine);
+    // The tight-turn speed caps manoeuvring near the minimum radius. On broader curves,
+    // scale it with radius at constant lateral acceleration, up to the taxiway limit.
+    const turnSpeedMps =
+      performance.taxiTurnMps * Math.sqrt(Math.max(1, radiusM / performance.minTurnRadiusM));
     return Math.min(
       speedLimitMps,
-      performance.taxiTurnMps,
+      turnSpeedMps,
       Math.sqrt(performance.maxLateralAccelerationMps2 * radiusM),
     );
   });

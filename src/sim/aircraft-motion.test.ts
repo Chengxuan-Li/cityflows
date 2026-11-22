@@ -115,6 +115,22 @@ describe('aircraft motion', () => {
     expect(peakCurveSpeedMps ** 2 / radiusM).toBeCloseTo(0.5, 8);
   });
 
+  test('carries taxiway speed through a broad curve while respecting its lateral limit', () => {
+    const radiusM = 140;
+    const curve = sampleArc({ x: 0, y: radiusM }, radiusM, -Math.PI / 2, Math.PI / 3);
+    const path = aircraftPath([{ x: -200, y: 0 }, ...curve]);
+    const motion = taxiProfile(path, regional);
+    const speeds = Array.from({ length: Math.ceil(motion.durationS * 10) }, (_, i) =>
+      motion.sample(i / 10),
+    )
+      .filter(({ stationM }) => stationM > 220 && stationM < 280)
+      .map(({ speedMps }) => speedMps);
+    expect(Math.min(...speeds)).toBeGreaterThan(8);
+    expect(Math.max(...speeds)).toBeLessThanOrEqual(
+      Math.sqrt(radiusM * regional.maxLateralAccelerationMps2) + 1e-6,
+    );
+  });
+
   test('stops exactly at a station inside a segment from a moving start', () => {
     const profile = taxiProfile(line(300), regional, {
       startStationM: 30,

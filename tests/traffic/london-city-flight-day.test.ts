@@ -63,8 +63,7 @@ test.for([1, 2, 3])(
     expect(day.runwayConflicts).toBe(0);
     expect(day.peakStuck).toBe(0);
     expect(day.peakMovingOnApron).toBeGreaterThan(1);
-    // TASK-300: runway use is sequenced so arrivals rarely go around (real rates are under 1%).
-    expect(aircraft.goArounds).toBeLessThanOrEqual(0.01 * aircraft.landed);
+    expect(aircraft.goArounds).toBe(0);
     expect(metrics.meanDelayS).toBeLessThanOrEqual(300);
     expect(metrics.worstDelayS).toBeLessThanOrEqual(1800);
   },
