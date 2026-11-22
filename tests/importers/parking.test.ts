@@ -3,6 +3,7 @@ import { defaultScenario } from '../../src/fixtures/scenarios';
 import { pointAtDistance } from '../../src/geo/polyline';
 import { lonLatToLocal } from '../../src/geo/projection';
 import { importOsm } from '../../src/importers/osm';
+import { addParkingEntranceConnectors } from '../../src/importers/osm/parking';
 import { compile } from '../../src/network';
 import { openProject } from '../../src/project/open';
 import { saveProject, saveProjectJson } from '../../src/project/save';
@@ -25,8 +26,8 @@ function rectangle(id: number, x: number, y: number, width: number, height: numb
   );
 }
 
-function load(features: string) {
-  const result = importOsm(`<osm>${road}${features}</osm>`, {
+function load(features: string, roads = road) {
+  const result = importOsm(`<osm>${roads}${features}</osm>`, {
     importerVersion: 'test',
     bbox: [-0.001, -0.001, 0.002, 0.002],
     context: false,
@@ -165,6 +166,116 @@ test('T48 assigns a touching garage to its building and snaps the mapped entranc
   const position = pointAtDistance(lane.polyline, lane.cumulative, entry.positionM);
   const entrancePoint = lonLatToLocal(city.geo!, { lon: 0.00059, lat: 0.0001 });
   expect(position.x).toBeCloseTo(entrancePoint.x, 3);
+});
+
+test('TASK-290 uses separate mapped entry and exit nodes on the correct garage', () => {
+  const tags = '<tag k="amenity" v="parking"/><tag k="parking" v="underground"/>';
+  const city = load(
+    rectangle(20, 0.0001, 0.00004, 0.0004, 0.0002, tags) +
+      rectangle(30, 0.0002, 0.00004, 0.0001, 0.0002, tags) +
+      '<node id="40" lat="0.00002" lon="0.00022"><tag k="amenity" v="parking_entrance"/><tag k="exit" v="no"/></node>' +
+      '<node id="41" lat="0.00004" lon="0.00028"><tag k="amenity" v="parking_entrance"/><tag k="entrance" v="exit"/></node>' +
+      '<node id="42" lat="0.00004" lon="0.00025"><tag k="amenity" v="parking_entrance"/><tag k="motorcar" v="no"/></node>',
+  );
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const [larger, smaller] = explicit(city);
+  expect(larger!.connectors.map((c) => c.direction)).toEqual(['both']);
+  expect(smaller!.connectors.map((c) => c.direction)).toEqual(['in', 'out']);
+  for (const [i, entry] of smaller!.connectors.entries()) {
+    const lane =
+      result.compiled.lanes[result.compiled.index.lane.get(`${entry.roadId}#${entry.lane}`)!]!;
+    const point = pointAtDistance(lane.polyline, lane.cumulative, entry.positionM);
+    const entrance = lonLatToLocal(city.geo!, { lon: [0.00022, 0.00028][i]!, lat: 0 });
+    expect(point.x).toBeCloseTo(entrance.x, 3);
+  }
+});
+
+test('TASK-290 treats an inward one-way driveway as an entry and retains the existing departure', () => {
+  const garage = rectangle(20, 0.0001, 0.00004, 0.0004, 0.0002, '<tag k="building" v="garage"/>');
+  const entrance =
+    '<node id="40" lat="0.00004" lon="0.00015"><tag k="amenity" v="parking_entrance"/></node>';
+  const driveway =
+    '<node id="41" lat="0.00014" lon="0.00015"/><way id="50"><nd ref="40"/><nd ref="41"/><tag k="highway" v="service"/><tag k="service" v="driveway"/><tag k="oneway" v="yes"/></way>';
+  const [legacy] = explicit(load(garage))[0]!.connectors;
+  const connectors = explicit(load(garage + entrance + driveway))[0]!.connectors;
+  expect(connectors.map((c) => c.direction)).toEqual(['in', 'out']);
+  expect(connectors[1]).toEqual({ ...legacy, direction: 'out' });
+});
+
+test('TASK-290 keeps a car prohibition on the mapped approach', () => {
+  const garage = rectangle(20, 0.0001, 0.00004, 0.0004, 0.0002, '<tag k="building" v="garage"/>');
+  const entrance =
+    '<node id="40" lat="0.00004" lon="0.00015"><tag k="amenity" v="parking_entrance"/></node>';
+  const driveway =
+    '<node id="41" lat="0.00014" lon="0.00015"/><way id="50"><nd ref="40"/><nd ref="41"/><tag k="highway" v="service"/><tag k="service" v="driveway"/><tag k="motorcar" v="no"/></way>';
+  expect(explicit(load(garage + entrance + driveway))[0]!.connectors).toEqual(
+    explicit(load(garage))[0]!.connectors,
+  );
+});
+
+test('TASK-290 uses the requested garage type when mapped footprints overlap', () => {
+  const tags = (kind: string) => `<tag k="amenity" v="parking"/><tag k="parking" v="${kind}"/>`;
+  const underground = rectangle(20, 0.0001, 0.00004, 0.0004, 0.0002, tags('underground'));
+  const surface = rectangle(30, 0.0002, 0.00004, 0.0001, 0.0002, tags('multi-storey'));
+  const entrance =
+    '<node id="40" lat="0.00004" lon="0.00022"><tag k="amenity" v="parking_entrance"/><tag k="parking" v="underground"/></node>';
+  const [garage, other] = explicit(load(underground + surface + entrance));
+  expect(garage!.provenance.inferred).not.toContain('connectedLane');
+  expect(other!.provenance.inferred).toContain('connectedLane');
+});
+
+test('TASK-290 restores a surface lot through its mapped entrance', () => {
+  const polygon = rectangle(20, 0.0001, 0.0003, 0.0004, 0.0003, '<tag k="amenity" v="parking"/>');
+  const entrance =
+    '<node id="40" lat="0.00024" lon="0.00025"><tag k="amenity" v="parking_entrance"/></node>';
+  const lot = (city: ReturnType<typeof load>) =>
+    Object.values(city.parking ?? {}).find((p) => p.provenance.osmIds?.includes(20));
+  expect(lot(load(polygon))).toBeUndefined();
+  const city = load(polygon + entrance);
+  const restored = lot(city)!;
+  expect(restored).toMatchObject({
+    kind: 'lot',
+    connectors: [{ direction: 'both' }],
+  });
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const { compiled } = result;
+  const facility = compiled.parking[compiled.index.parking.get(restored.id)!]!;
+  expect(facility.capacity).toBeGreaterThan(0);
+  expect(facility.connectorsIn).toHaveLength(1);
+  expect(facility.connectorsOut).toHaveLength(1);
+  expect(compiled.lots!.find((l) => l.id === restored.id)!.circulation!.entries).toHaveLength(1);
+});
+
+test('TASK-290 keeps the original two-way aisle when a lot gains an entry-only connector', () => {
+  const streets = road.replace(
+    '<nd ref="1"/><nd ref="2"/>',
+    '<nd ref="1"/><nd ref="50"/><nd ref="52"/><nd ref="2"/>',
+  );
+  const polygon = rectangle(20, 0.00015, 0.00003, 0.0005, 0.0005, '<tag k="amenity" v="parking"/>');
+  const aisle =
+    '<node id="50" lat="0" lon="0.0003"/><node id="51" lat="0.0004" lon="0.00045"/><node id="52" lat="0" lon="0.0006"/><way id="60"><nd ref="50"/><nd ref="51"/><nd ref="52"/><tag k="highway" v="service"/><tag k="service" v="parking_aisle"/></way>';
+  const city = load(polygon + aisle, streets);
+  const lot = Object.values(city.parking ?? {}).find((p) => p.kind === 'lot')!;
+  // Exercise the saved form with implicit aisle connectors at its source-proven street mouths.
+  const approach = city.roads[lot.aisles![0]!]!;
+  lot.entries = [approach.from, approach.to];
+  lot.connectors = [];
+  delete lot.mappedPortals;
+  const before = compile(city);
+  if (!before.ok) throw new Error(JSON.stringify(before.diagnostics));
+  const compiledLot = before.compiled.parking[before.compiled.index.parking.get(lot.id)!]!;
+  expect(compiledLot.connectorsOut.length).toBeGreaterThan(0);
+  const point = lonLatToLocal(city.geo!, { lat: 0.00002, lon: 0.0005 });
+  addParkingEntranceConnectors(
+    city,
+    before.compiled,
+    new Map([[lot, [{ id: 40, point, direction: 'in', roads: new Set() }]]]),
+    [],
+  );
+  expect(lot.connectors.some((c) => c.direction === 'in')).toBe(true);
+  expect(lot.connectors.some((c) => c.direction !== 'in')).toBe(true);
 });
 
 test('T48 garage entries bypass bus lanes and roads closed to ordinary cars', () => {

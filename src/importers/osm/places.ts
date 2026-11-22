@@ -451,6 +451,70 @@ export function layoutConnector(city: City, compiled: CompiledCity, parking = fa
 // Mapped facilities get a short inferred driveway, never an invented street connection.
 export const PARKING_SNAP_LIMIT_M = 30;
 
+/** Snap a mapped node to its street's nearest reachable edge lane. */
+export function parkingEntranceConnector(city: City, compiled: CompiledCity) {
+  const access = parkingEgress(compiled, 30);
+  const candidates = compiled.lanes.map((lane) => {
+    const compiledRoad = compiled.roads[lane.road]!;
+    const road = city.roads[compiledRoad.id]!;
+    return {
+      lane,
+      road,
+      usable:
+        lane.allowed.includes('car') &&
+        !['motorway', 'trunk', 'ramp'].includes(road.roadClass) &&
+        (lane.lane === 0 || lane.lane === compiledRoad.lanes.length - 1),
+    };
+  });
+  return (
+    entrance: {
+      point: Vec2;
+      layer?: number;
+      roads: ReadonlySet<number>;
+      direction: Place['connectors'][number]['direction'];
+    },
+    excluded?: ReadonlySet<string>,
+  ): Omit<Place['connectors'][number], 'id'> | undefined => {
+    let best:
+      | { roadId: string; lane: number; positionM: number; distance: number; mapped: boolean }
+      | undefined;
+    let mappedNearby = false;
+    for (const { lane, road, usable } of candidates) {
+      const mapped = road.provenance.osmIds?.some((id) => entrance.roads.has(id)) ?? false;
+      if (excluded?.has(road.id) || (!usable && !mapped)) continue;
+      const layer = entrance.layer ?? (mapped ? (road.layer ?? 0) : 0);
+      if ((road.layer ?? 0) !== layer) continue;
+      const hit = nearestOnPolyline(lane.polyline, entrance.point);
+      if (hit.away > PARKING_SNAP_LIMIT_M) continue;
+      mappedNearby ||= mapped;
+      if (!usable || (!mapped && road.provenance.inferred?.includes('lotAccess'))) continue;
+      if (entrance.direction !== 'out' && hit.along + 1e-9 < access.earliestArrival(lane.idx))
+        continue;
+      if (entrance.direction !== 'in' && hit.along > access.latestDeparture(lane.idx) + 1e-9)
+        continue;
+      if (!best || (mapped && !best.mapped) || (mapped === best.mapped && hit.away < best.distance))
+        best = {
+          roadId: road.id,
+          lane: lane.lane,
+          positionM: hit.along,
+          distance: hit.away,
+          mapped,
+        };
+    }
+    // A nearby street cannot supply access when the mapped approach cannot carry it.
+    if (mappedNearby && !best?.mapped) return;
+    return (
+      best && {
+        roadId: best.roadId,
+        lane: best.lane,
+        positionM: best.positionM,
+        direction: entrance.direction,
+        throughputPerMin: 30,
+      }
+    );
+  };
+}
+
 export function placeConnector(
   city: City,
   compiled: CompiledCity,
@@ -586,7 +650,7 @@ export function placeConnector(
 export function connectCarExits(
   city: City,
   compiled: CompiledCity,
-  garageFootprints?: Map<string, Vec2[][]>,
+  garageFootprints?: ReadonlyMap<string, Vec2[][]>,
   refreshLots?: ReadonlySet<string>,
 ): boolean {
   const exits = parkingEgress(compiled, 30);

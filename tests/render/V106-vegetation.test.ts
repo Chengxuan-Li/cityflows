@@ -64,7 +64,7 @@ const baselines = {
   // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
   // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-  'munich-donnersberger': 'bd9fcd5854e099b370be3d8f31d22794aa96bac4cd4135fba725cc600fb0183c',
+  'munich-donnersberger': 'c5eef03505f646be3109cef34406e93ebdfc6551fd8562de1d721fbf4829bae2',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -73,7 +73,7 @@ const baselines = {
   // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-  'sindelfingen-a81': '71e3e27216b68310934e93582656d6feda5884d5c3a795d418f456070189f102',
+  'sindelfingen-a81': '44f058f02a545bb130b582a8db6fa5925bb286d5a8a8b25ce37633d8f9c23e62',
 };
 
 unitTest(
