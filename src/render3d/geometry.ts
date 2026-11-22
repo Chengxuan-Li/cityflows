@@ -286,6 +286,7 @@ export function buildMapContext(
     !omitContextGround,
     palette,
     city.walk,
+    !!source.airport,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
   return context;

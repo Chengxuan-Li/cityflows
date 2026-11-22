@@ -3,6 +3,7 @@ import { booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { nearestOnPolyline } from '../geo/polyline';
 import {
   BufferGeometry,
+  Color,
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
@@ -26,6 +27,7 @@ import {
   type GoreSurface,
   type PaintedGore,
 } from '../render/marking-geometry';
+import { airsideMarkings } from '../render/airside-markings';
 import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -122,8 +124,10 @@ export function buildMarkings(
   const raised = { positions: [] as number[], colors: [] as number[] };
   const land = { positions: [] as number[], colors: [] as number[] };
   let target = raised;
+  let airside = false;
   const emit = (polygon: Vec2[], color: number, height: (p: Vec2) => number) => {
     const { positions, colors } = target;
+    const rgb = airside ? new Color(color) : undefined;
     for (const triangle of ShapeUtils.triangulateShape(
       polygon.map((p) => new Vector2(p.x, p.y)),
       [],
@@ -131,7 +135,9 @@ export function buildMarkings(
       for (const index of [triangle[2]!, triangle[1]!, triangle[0]!]) {
         const p = polygon[index]!;
         positions.push(p.x, height(p) + 0.025, p.y);
-        colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
+        if (rgb) colors.push(rgb.r, rgb.g, rgb.b);
+        else
+          colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
       }
   };
   const counts = { line: 0, polygon: 0 };
@@ -214,6 +220,12 @@ export function buildMarkings(
         if (!movement.neverGreen)
           add(movementMarkings(movement, markingTheme), (p) => nodeZ(p) - 0.05, true);
       }
+  }
+  if (source.airport) {
+    // Between TASK-295's runway surface (-10 mm) and ground-level service roads.
+    airside = true;
+    target = terrain ? land : raised;
+    add(airsideMarkings(source.airport), () => -0.027, true);
   }
   const buffer = ({ positions, colors }: typeof raised) => {
     const geometry = new BufferGeometry();
