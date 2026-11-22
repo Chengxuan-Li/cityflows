@@ -1742,8 +1742,8 @@ times), transfer walks, access and egress stops, and walking, waiting and riding
 TASK-298 routes aircraft on the airside graph (`routing/airside.ts`). An arc is an edge in one
 direction (`2e` along its line, `2e + 1` against; a oneway edge only along). Dijkstra over arcs
 from an arc (continuing from its end) or a node, to the first arc a goal accepts; cost is length,
-four times on runway edges, times a caller's factor (the sim makes edges another aircraft has
-locked the other way cost 20 times). An arc is admitted when its edge's code admits the aircraft's
+four times on runway edges, times a caller's factor. The sim further penalizes runway transit
+and increases the cost of edges locked in the opposite direction. An arc is admitted when its edge's code admits the aircraft's
 and, for a lead-in, when it is the goal stand's. A turn from arc a into b (never b's reverse) is
 taken when its deflection, measured over a turning radius on each side, is under 165 degrees and
 needs a tangent `R tan(θ/2)` no longer than the shorter of the two edges or 1.5 R, whichever is
@@ -1779,9 +1779,8 @@ carry no persons and generate no road trips.
   its body (and 10 m ahead), so it closes no junction another aircraft's leg crosses.
 - **Direction locks.** A departure or tow starts only when every edge of its legs can be locked
   in its direction of travel (an edge locked one way by another aircraft is closed the other
-  way); an arrival locks its exit stretch (to its vacating point plus its length and the margin)
-  when it appears and the rest when free, waiting past the vacating point until then. Locks are
-  released as the tail passes; so two aircraft never meet head-on.
+  way). An arrival locks its route at the final approach decision and claims the space it needs
+  to vacate. Locks are released as the tail passes so two aircraft never meet head-on.
 - **Runways.** One aircraft holds a runway (and every runway sharing a node with it) at a time.
   A ground leg stops at the mapped runway hold within 300 m before the runway node it enters
   (else 75 m short of it) until granted; it asks when first in line there, and is granted if no
@@ -1798,8 +1797,8 @@ carry no persons and generate no road trips.
   (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
   roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
   first runway node past touchdown plus the type's landing roll whose turn-off has a route to the
-  stand, preferring at touchdown one whose whole leg locks, then one whose wait blocks no locked
-  leg, else the booked one; with none, a reversing loop at the far end and a backtrack.
+  stand and whose predicted exit is free when the arrival books it. The exit is checked again
+  before landing clearance. A reversing loop at the far end permits a backtrack when needed.
 - **Line-up and take-off.** A departure lines up at the first runway node from its end up to the
   threshold that a route turns onto in the take-off direction (centre half its length or its
   turning radius past it, plus 5 m); otherwise it backtracks: onto the runway toward the end at
@@ -1815,12 +1814,42 @@ carry no persons and generate no road trips.
   then forward, and hover-taxi between helipads.
 - **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
   `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
-  parked, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
-  `engine.load({ airsideOperations })` supplies the driver; by default a scripted rotation
-  (`sim/airside-rotation.ts`): every other stand holds a parked aircraft at the start, and every
-  5 minutes it alternates the departure of the aircraft parked longest past its turnaround with
-  an arrival to a free stand, on the runway end TASK-308's chooser picks for a 240-degree 8 kt
-  wind (London City's schedule mix there, else every fixed-wing type the runway takes).
+  parked, off-block, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
+  `engine.load({ airsideOperations })` can supply a scripted driver. The default driver
+  (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
+  starting day. It uses the ends chosen for a 240-degree, 8 kt wind. Ground movements can run
+  concurrently on separate paths and on shared directed taxiways with following-distance
+  claims. Crossing and converging body sweeps take turns. A pending clearance gains priority
+  after two minutes so recurring traffic cannot starve a conflicting route. Helicopters use
+  separate pad slots and a shorter schedule.
+- **Airside clearance.** Gates come from runway intervals and crossing nodes on the actual
+  ground trajectory, including intermediate runway taxi and backtracks. A runway clearance
+  checks that the path through the runway and its exit can be claimed. Approaches book a runway
+  window at appearance and check the runway and swept ground route at the decision point 30 s
+  before the threshold. An aircraft unable to secure both goes around. Pushback reserves its
+  swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
+  push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
+- **Stands and service.** Stand selection checks that the type can land, reach the stand,
+  push back and depart on the chosen ends. Passenger flights prefer contact stands. Private
+  and cargo flights prefer their designated stands where available. Within each kind the
+  allocator prefers the smallest suitable code, then the shorter combined surface route. It
+  checks both stands' parked bodies and pushback sweeps before pairing neighbours. Arrivals with no
+  stand wait off-map at the entry to the final approach for up to 30 minutes. A diversion
+  cancels the paired departure. Turnaround starts when the aircraft parks. Long turns can
+  move to a remote stand, maintenance uses a maintenance or nearest hangar-apron stand, and
+  overnight aircraft use remote parking where available, with a return tow due 20 minutes
+  before departure when they need to return to a contact or general-aviation stand. A scenario
+  opened partway through the schedule places aircraft whose
+  turns are already in progress on compatible stands. The bundled airports' browser showcases
+  run to midnight from the stored start time. The archives remain unchanged.
+- **Flight board.** The worker exposes the day's schedule, movement states, delays and stand
+  occupancy separately from the per-frame pose snapshot. Counts cover movements scheduled
+  at or after the scenario start. London City's timetable spreads the seeded movements across
+  operating hours, retaining morning and evening demand, and allows three minutes of taxi-in
+  before turnaround. Arrival delay is actual touchdown minus scheduled touchdown, and departure
+  delay is actual off-block minus scheduled off-block, each floored at zero. Departure completion
+  still requires the aircraft to reach the end of climb. The status bar shows the movement count,
+  and the inspector shows the board and the code, kind and occupancy of a picked stand.
 - **Snapshot.** `VehicleSnapshot.aircraft`: id, registration-like id (by ICAO prefix), type,
   position, height, heading, speed, state (approach, flare, landing-roll, go-around, taxi,
   holding, line-up, takeoff-roll, rotation, climb, parked, pushback, tow and the helicopter

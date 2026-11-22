@@ -5,11 +5,11 @@ import { createEngine } from '../../src/sim/engine';
 import { overlaps, onRunway } from '../sim/aircraft-checks';
 import { limit } from '../timeouts';
 
-// TASK-298: London City's scripted hour (the rotation that drives the airside until TASK-299):
-// a dozen arrivals and departures on 27 with no overlap, no runway conflict and no stuck aircraft.
+// Exercise the default airport driver through engine.load, including carry-in parked aircraft.
+// The complete schedule and its completion floor run in the full traffic tier.
 
 test(
-  'London City: an hour of the scripted rotation completes without conflict',
+  'London City: the default flight schedule runs through the engine without conflict',
   async () => {
     const project = await openBundled('london-city-airport');
     const result = compile(project.city);
@@ -21,6 +21,10 @@ test(
       trips: [],
       scenario: { ...scenario, endS: scenario.startS + 4200 },
     });
+    const initial = engine.flightBoard()!;
+    expect(initial.arrivals).toHaveLength(75);
+    expect(initial.departures).toHaveLength(75);
+    expect(initial.stands.some(({ occupiedBy }) => occupiedBy)).toBe(true);
     let conflicts = 0;
     const touched = new Set<string>();
     const appeared = new Map<number, number>();
@@ -38,13 +42,15 @@ test(
     const metrics = engine.metrics().aircraft!;
     expect(conflicts).toBe(0);
     expect(metrics.stuck).toBe(0);
-    expect(metrics.landed + metrics.departed).toBeGreaterThanOrEqual(10);
+    expect(metrics.landed).toBeGreaterThan(0);
+    expect(metrics.departed).toBeGreaterThan(0);
+    expect(engine.metrics().flights!.completed).toBe(metrics.landed + metrics.departed);
     // The prevailing wind puts both flows on 27, approached at London City's 5.5 degrees.
     expect(
       [...touched].filter((s) => s.startsWith('approach')).every((s) => s.endsWith(':27')),
     ).toBe(true);
     // Each appears about 10 km out on a 5.5-degree path (3 degrees would be 524 m high).
-    expect(appeared.size).toBeGreaterThanOrEqual(5);
+    expect(appeared.size).toBeGreaterThan(0);
     for (const heightM of appeared.values()) expect(heightM / 10_000).toBeCloseTo(0.098, 2);
   },
   limit(60_000),
