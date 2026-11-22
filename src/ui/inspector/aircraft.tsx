@@ -3,27 +3,7 @@ import { aircraftTypes } from '../../schema/aircraft';
 import type { AircraftPoseSnapshot } from '../../sim/types';
 import { Switch } from '../controls';
 import { useAppStore } from '../store';
-
-const states: Record<AircraftPoseSnapshot['state'], string> = {
-  approach: 'On approach',
-  flare: 'Landing',
-  'landing-roll': 'Landing roll',
-  'go-around': 'Going around',
-  taxi: 'Taxiing',
-  holding: 'Holding',
-  'line-up': 'Lining up',
-  'takeoff-roll': 'Take-off roll',
-  rotation: 'Rotating',
-  climb: 'Climbing out',
-  parked: 'Parked',
-  pushback: 'Pushback',
-  tow: 'Under tow',
-  'hover-taxi': 'Hover-taxiing',
-  'vertical-climb': 'Lifting off',
-  'helicopter-climb': 'Climbing out',
-  'helicopter-approach': 'On approach',
-  'vertical-descent': 'Landing',
-};
+import { aircraftStateLabels } from '../flight-board-data';
 
 const classes = {
   double_decker: 'Large double-decker',
@@ -83,11 +63,17 @@ export function AircraftInspector({ id }: { id: number }) {
           {type.name}, {classes[type.class]}
         </dd>
         <dt>Status</dt>
-        <dd>{states[pose.state]}</dd>
+        <dd>{aircraftStateLabels[pose.state]}</dd>
         {stand && (
           <>
             <dt>Stand</dt>
-            <dd>{stand.ref ?? stand.id}</dd>
+            <dd>
+              <button
+                onClick={() => useAppStore.getState().select({ kind: 'stand', stand: stand.idx })}
+              >
+                {stand.ref ?? stand.id}
+              </button>
+            </dd>
           </>
         )}
         {pose.runwayEnd && (

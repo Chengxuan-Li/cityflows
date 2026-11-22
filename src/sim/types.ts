@@ -15,6 +15,7 @@ import type { PersonDetail, PersonMetrics } from './persons';
 import type { RailSnapshot } from './rail-crossings';
 import type { TransitMetrics, TransitSnapshot } from './transit';
 import type { AircraftMetrics, AircraftPoseSnapshot, AirfieldSnapshot } from './aircraft';
+import type { FlightOperationsMetrics } from './flight-operations';
 export type {
   AircraftMetrics,
   AircraftPoseSnapshot,
@@ -197,6 +198,7 @@ export interface Metrics {
   transit?: TransitMetrics;
   /** TASK-298: where the city has an airport section. */
   aircraft?: AircraftMetrics;
+  flights?: FlightOperationsMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

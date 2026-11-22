@@ -58,6 +58,7 @@ export type HostRequest =
   | { id: number; type: 'restart' }
   | { id: number; type: 'snapshot' }
   | { id: number; type: 'metrics' }
+  | { id: number; type: 'flightBoard' }
   | { id: number; type: 'metricsSeries' }
   | { id: number; type: 'runHeadless' }
   | { id: number; type: 'tripRecords' }

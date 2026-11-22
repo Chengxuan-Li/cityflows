@@ -94,6 +94,8 @@ export interface ParkedCarsSnapshot {
 export type Pick =
   | { kind: 'train'; id: string; route: number }
   | { kind: 'aircraft'; id: number }
+  | { kind: 'stand'; stand: number }
+  | { kind: 'flight-board' }
   | { kind: 'track'; track: number }
   | { kind: 'platform'; platform: number }
   | { kind: 'vehicle'; id: number }

@@ -1,4 +1,5 @@
 import type { Metrics, PersonDetail, VehicleDetail, WalkerDetail } from '../sim/types';
+import type { FlightBoard } from '../sim/flight-operations';
 import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
@@ -26,6 +27,7 @@ export interface EngineClient {
   restart(): Promise<void>;
   snapshot(): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
+  flightBoard(): Promise<FlightBoard | null>;
   metricsSeries(): Promise<MetricsSample[]>;
   runHeadless(): Promise<HeadlessResult>;
   tripRecords(): Promise<TripRecord[]>;
@@ -135,6 +137,7 @@ export function createEngineClient(worker: Worker): EngineClient {
       }));
     },
     metrics: () => send({ type: 'metrics' }),
+    flightBoard: () => send({ type: 'flightBoard' }),
     metricsSeries: () => send({ type: 'metricsSeries' }),
     runHeadless: () => send({ type: 'runHeadless' }),
     tripRecords: () => send({ type: 'tripRecords' }),

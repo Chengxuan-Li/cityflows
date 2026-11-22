@@ -51,7 +51,10 @@ export function selectionAnchor(
       return index < 0 ? null : { x: walkers!.x[index]!, y: walkers!.y[index]! };
     }
     case 'train':
+    case 'flight-board':
       return null;
+    case 'stand':
+      return city.airside?.stands[pick.stand]?.pos ?? null;
     case 'aircraft': {
       const pose = snapshot?.aircraft?.find((a) => a.id === pick.id);
       return pose ? { x: pose.x, y: pose.y } : null;

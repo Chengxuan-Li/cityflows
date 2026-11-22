@@ -68,11 +68,23 @@ export const realPlaces = [
   },
 ];
 
-export async function bundledProject(id: string): Promise<OpenResult> {
+async function readBundle(id: string): Promise<OpenResult> {
   const archive = archives[`../../fixtures/projects/${id}.cityflows.json`];
   if (archive) return openProject(await archive());
   const scenario = scenarios.find((entry) => entry.id === id);
   const generate = generators[id];
   if (!scenario || !generate) throw new Error(`Missing bundled project ${id}`);
   return { ok: true, project: { city: generate(scenario.seed), scenarios: [scenario] } };
+}
+
+export async function bundledProject(id: string): Promise<OpenResult> {
+  const result = await readBundle(id);
+  if (!result.ok || !result.project.city.airport) return result;
+  const [scenario, ...others] = result.project.scenarios;
+  if (!scenario) return result;
+  const midnight = (Math.floor(scenario.startS / 86_400) + 1) * 86_400;
+  return {
+    ok: true,
+    project: { ...result.project, scenarios: [{ ...scenario, endS: midnight }, ...others] },
+  };
 }

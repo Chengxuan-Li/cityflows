@@ -163,6 +163,19 @@ function fitCity(scene: Scene, area: Bounds, preview: Preview) {
   if (outline.length) scene.camera.fitToBounds(boundsOf(outline), area);
 }
 
+function pickStand(screen: Vec2, project: (world: Vec2) => Vec2): Pick | null {
+  let best: Pick | null = null;
+  let nearest = 8;
+  for (const stand of useAppStore.getState().session?.compiled.airside?.stands ?? []) {
+    const point = project(stand.pos);
+    const distance = Math.hypot(point.x - screen.x, point.y - screen.y);
+    if (distance >= nearest) continue;
+    nearest = distance;
+    best = { kind: 'stand', stand: stand.idx };
+  }
+  return best;
+}
+
 function bindPointer(
   canvas: HTMLCanvasElement,
   scene: Scene,
@@ -265,7 +278,12 @@ function bindPointer(
       if (!drag.moved && drag.pick && canPick()) {
         const { world, screen } = point(event);
         useAppStore.setState({ selectionPoint: world });
-        getState().select(scene.pick(screen.x, screen.y));
+        const hit = scene.pick(screen.x, screen.y);
+        getState().select(
+          hit?.kind === 'aircraft'
+            ? hit
+            : (pickStand(screen, (p) => camera.worldToScreen(p)) ?? hit),
+        );
       }
       drag = null;
       canvas.classList.remove('panning');
@@ -955,7 +973,13 @@ export function MapView() {
           }
           down = null;
           const rect = canvas3D.getBoundingClientRect();
-          getState().select(three!.pick(event.clientX - rect.left, event.clientY - rect.top));
+          const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+          const hit = three!.pick(screen.x, screen.y);
+          getState().select(
+            hit?.kind === 'aircraft'
+              ? hit
+              : (pickStand(screen, (p) => three!.worldToScreen(p)) ?? hit),
+          );
         },
         { signal },
       );
