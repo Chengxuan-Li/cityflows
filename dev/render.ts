@@ -195,7 +195,10 @@ async function start() {
   return { scene, compiled, snapshot };
 }
 
-export const demo = start();
+export const demo =
+  fixture === 'aircraft'
+    ? import('./aircraft-preview').then(({ showAircraftPreview }) => showAircraftPreview(query))
+    : start();
 void demo.catch((error: unknown) => {
   status.textContent = String(error);
 });
