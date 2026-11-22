@@ -13,7 +13,7 @@ Visuals and lighting coordinated with landing, departure and aircraft movement
   wing or at the tail for the private and regional jets where typical), tail; the double-decker's two decks of
   windows; propellers spinning on the propeller class; rotor turning on the helicopter; a neutral livery with a
   per-flight accent colour; gear down near the ground, up after climb-out.
-- **Flight paths.** Approaches descend from the map edge on their glide path, flare and touch down at the aiming
+- **Flight paths.** Approaches descend from about 10 km out (owner, 2026-11-22: longer finals, drawn over the map's empty surround in 3D) on their glide path, flare and touch down at the aiming
   point; departures rotate and climb; the camera can follow an aircraft.
 - **Airfield lights** (night and dusk, through the existing lighting mode): runway edge (white, amber on the last
   600 m), centreline, threshold (green) and end (red) lights, approach lights before each threshold in use, PAPI
