@@ -12,7 +12,7 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { aircraftLivery } from '../../src/render/aircraft-livery';
+import { aircraftLivery, type AircraftLivery } from '../../src/render/aircraft-livery';
 import { boardingDoor } from '../../src/render/aircraft-outline';
 import type { AircraftPose } from '../../src/render/types';
 import { Aircraft3D } from '../../src/render3d/aircraft';
@@ -177,16 +177,24 @@ it('docks the jet bridge at the real fuselage side', async () => {
 
 it('paints the livery onto the fuselage, fin and engines', async () => {
   const model = await load('B738');
-  for (const registration of ['G-AAAA', 'G-AAAB', 'G-AAAC', 'G-AAAD', 'G-AAAE']) {
-    const livery = aircraftLivery(registration);
+  const key = (c: Color) => [c.r, c.g, c.b].map((v) => v.toFixed(3)).join();
+  const schemes = new Map<string, AircraftLivery>();
+  for (let i = 0; schemes.size < 5 && i < 200; i++) {
+    const livery = aircraftLivery(`G-T${i}`);
+    schemes.set(`${livery.style}:${livery.trim}`, livery);
+  }
+  for (const livery of schemes.values()) {
     const body = modelBody(model, 0, livery);
     expect(modelBody(model, 0, livery)).toBe(body);
     const colors = body.getAttribute('color');
     const seen = new Set<string>();
     for (let i = 0; i < colors.count; i++)
-      seen.add([colors.getX(i), colors.getY(i), colors.getZ(i)].map((c) => c.toFixed(3)).join());
-    const tail = new Color(livery.tail);
-    expect(seen.has([tail.r, tail.g, tail.b].map((c) => c.toFixed(3)).join())).toBe(true);
+      seen.add(key(new Color(colors.getX(i), colors.getY(i), colors.getZ(i))));
+    expect(seen.has(key(new Color(livery.tail)))).toBe(true);
+    // Pinstripes are cast strips, drawn only where the scheme has them.
+    if (livery.trim !== null && livery.style !== 'crown' && livery.style !== 'tail')
+      expect(seen.has(key(new Color(livery.trim)))).toBe(true);
+    expect(model.lods[0]!.parts.some((p) => p.name === 'band-cheatline')).toBe(true);
   }
 });
 
