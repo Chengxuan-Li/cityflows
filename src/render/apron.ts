@@ -245,20 +245,28 @@ export class JetBridgeStates {
   }[];
   private started = false;
   readonly bridges: readonly JetBridge[];
-  private readonly stands: readonly StandPlace[];
-  constructor(bridges: readonly JetBridge[], stands: readonly StandPlace[]) {
+  constructor(bridges: readonly JetBridge[]) {
     this.bridges = bridges;
-    this.stands = stands;
     this.states = bridges.map(() => ({ from: 0, target: 0, changedS: 0, dock: null }));
   }
 
   /** The docked pose for an aircraft, or null when this bridge does not serve it. */
-  dockFor(i: number, pose: Pick<AircraftPose, 'typeId' | 'state' | 'stand'> | undefined) {
+  /** The docked pose at the parked aircraft's own boarding door, from its displayed pose
+   * (TASK-314's visual pose, else the snapshot's), or null when this bridge does not serve it. */
+  dockFor(
+    i: number,
+    pose:
+      | Pick<AircraftPose, 'typeId' | 'state' | 'stand' | 'x' | 'y' | 'heading' | 'visual'>
+      | undefined,
+  ) {
     const bridge = this.bridges[i]!;
     if (!pose || pose.state !== 'parked' || pose.stand !== bridge.stand) return null;
     const type = typeById.get(pose.typeId);
     if (!type || !bridgeable(type)) return null;
-    const dock = dockedPose(this.stands[bridge.index]!, type);
+    const { x, y, heading } = pose.visual ?? pose;
+    const half = type.lengthM / 2;
+    const nose = { x: x + Math.cos(heading) * half, y: y + Math.sin(heading) * half };
+    const dock = dockedPose({ pos: nose, heading }, type);
     return reaches(bridge, dock) ? dock : null;
   }
 

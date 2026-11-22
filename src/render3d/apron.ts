@@ -165,7 +165,7 @@ export class Apron3D {
     const { bridges, masts, boards } = apronLayout(airport, graph, context);
     this.bridges = bridges;
     this.drawn = bridges.map(() => null);
-    this.states = new JetBridgeStates(bridges, graph.stands);
+    this.states = new JetBridgeStates(bridges);
     const posts = bridges.flatMap((b) => (b.link ? linkPosts(b.link, b.rotunda) : []));
     const box = new BoxGeometry(1, 1, 1);
     const round = new CylinderGeometry(1, 1, 1, 14);

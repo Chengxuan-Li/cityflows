@@ -20,6 +20,7 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawAircraft, pickAircraft } from './layers/aircraft';
+import { AircraftPoseTrack } from './aircraft-pose';
 import { apronLayout, JetBridgeStates } from './apron';
 import { AirfieldLights2D } from './layers/airfield-lights';
 import { boxOf, type Box } from '../geo/polyline';
@@ -240,6 +241,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-298: aircraft over the map, under the evening tint.
   const aircraft = new Graphics();
   let aircraftPoses: AircraftPose[] = [];
+  let aircraftTracks = new Map<number, AircraftPoseTrack>();
+  let aircraftPlaying = false;
   let mapBounds: Box | null = null;
   // TASK-315: jet bridges, docked by the aircraft snapshot.
   let jetBridges: JetBridgeStates | null = null;
@@ -458,6 +461,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     drawnLight = key;
     invalidate();
     const on = night.setLight(light, layerVisibility);
+    if (on && !airfieldLights.container.visible)
+      airfieldLights.updateAircraft(aircraftPoses, mapBounds);
     airfieldLights.container.visible = on;
     map.tint = night.mapTint;
     syncBackground();
@@ -733,9 +738,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         compiled.airside && source?.airport
           ? new JetBridgeStates(
               apronLayout(source.airport, compiled.airside, source.context).bridges,
-              compiled.airside.stands,
             )
           : null;
+      aircraftTracks.clear();
       airfieldLights.setCity(compiled.airside, source?.airport?.approachAids);
       parkingCounts = null;
       drawParking(parking, city, parkingCounts, camera.zoom);
@@ -1189,7 +1194,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
       invalidate();
     },
-    setSnapshot(snapshot) {
+    setSnapshot(snapshot, playbackSpeed = 0) {
       invalidate();
       if (!city) return;
       trainTimeS = snapshot.timeS;
@@ -1201,11 +1206,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
       redrawWalkers();
-      aircraftPoses = snapshot.aircraft ?? [];
+      if (snapshot.aircraft) {
+        const tracks = new Map<number, AircraftPoseTrack>();
+        for (const pose of snapshot.aircraft) {
+          const track = aircraftTracks.get(pose.id);
+          if (track) track.update(pose, snapshot.timeS, playbackSpeed);
+          tracks.set(pose.id, track ?? new AircraftPoseTrack(pose, snapshot.timeS));
+        }
+        aircraftTracks = tracks;
+        aircraftPoses = [...tracks.values()].map(({ pose }) => pose);
+      } else {
+        aircraftTracks.clear();
+        aircraftPoses = [];
+      }
+      jetBridges?.update(snapshot.aircraft ?? [], snapshot.timeS);
       aircraftTimeS = snapshot.timeS;
-      jetBridges?.update(aircraftPoses, snapshot.timeS);
       redrawAircraft();
-      airfieldLights.update(snapshot.airfield, aircraftPoses, mapBounds);
+      airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
+      airfieldLights.updateAircraft(aircraftPoses, mapBounds);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
       for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);
@@ -1224,12 +1242,25 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vehicles.setGeometry(compiled, laneChangeDurationS);
     },
     animateVehicles(elapsedS, playing = false) {
-      if (elapsedS === vehicleAgeS && !playing) return;
+      if (elapsedS === vehicleAgeS && !playing && !aircraftPlaying) return;
+      aircraftPlaying = playing;
       vehicleAgeS = elapsedS;
       if (vehicles.snapshot?.count) invalidate();
       vehicles.animate(elapsedS);
+      let moved = false;
+      for (const track of aircraftTracks.values())
+        if (track.sample(elapsedS, playing)) moved = true;
+      if (moved) {
+        redrawAircraft();
+        if (airfieldLights.container.visible)
+          airfieldLights.updateAircraft(aircraftPoses, mapBounds);
+        invalidate();
+      }
       for (const ghost of ghosts) ghost.sync();
       updateVehicleRing();
+    },
+    aircraftPosition(id) {
+      return aircraftTracks.get(id)?.pose;
     },
     setSelection(next) {
       invalidate();

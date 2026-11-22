@@ -4,6 +4,7 @@ import type { Camera } from './camera';
 import type { EditOverlay } from './layers/edit-overlay';
 import type { Vec2 } from '../geo/vec2';
 import type { TrainPose } from '../network/trains';
+import type { AircraftVisualPose } from '../sim/aircraft-motion';
 
 export interface RoadDifference {
   id: string;
@@ -57,6 +58,7 @@ export interface AircraftPose {
   onRunway: boolean;
   airborne: boolean;
   gearDown: boolean;
+  visual?: AircraftVisualPose;
   stand: string | null;
   runwayEnd: string | null;
   /** Airside edges ahead on its legs. */
@@ -182,6 +184,7 @@ export const defaultLayers: LayerVisibility = {
 };
 
 export interface Scene {
+  aircraftPosition(id: number): Vec2 | undefined;
   readonly ready: Promise<void>;
   readonly camera: Camera;
   setActive(active: boolean): void;
@@ -192,7 +195,7 @@ export interface Scene {
   setCity(compiled: CompiledCity, source?: CityGeometry, deferDetails?: boolean): void;
   drawDetails(): void;
   setTiles(enabled: boolean): void;
-  setSnapshot(snapshot: VehicleSnapshot): void;
+  setSnapshot(snapshot: VehicleSnapshot, playbackSpeed?: number): void;
   setParkedCars(snapshot: ParkedCarsSnapshot | null): void;
   /** `states`: the snapshot's signal states, in the loaded city's node order (TASK-170). */
   setSignalPreview(loaded: CompiledCity | null, timeS: number, states?: SignalStates): void;

@@ -16,8 +16,11 @@ import {
   buildAircraftOutline,
   wingtipKind,
 } from '../../src/render/aircraft-outline';
+import { AircraftPoseTrack } from '../../src/render/aircraft-pose';
+import { placeAircraft } from '../../src/render3d/aircraft-attitude';
 import { batchAircraftMesh, buildAircraftMesh } from '../../src/render3d/aircraft-mesh';
 import { aircraftTypes, type AircraftClass } from '../../src/schema/aircraft';
+import { fixedWingGearStations } from '../../src/sim/aircraft-motion';
 
 it.each(aircraftTypes)('$name has catalogue extents and the parts of its class', (type) => {
   const helicopter = type.class === 'helicopter';
@@ -110,7 +113,7 @@ it.each(['A20N', 'AT76', 'EC45'])(
   'preserves %s silhouette and moving parts when batching',
   (id) => {
     const aircraft = buildAircraftMesh(aircraftTypes.find((type) => type.id === id)!);
-    const { root, gear, propellers, rotors } = aircraft;
+    const { root, gear, noseGear, propellers, rotors } = aircraft;
     const countMeshes = () => {
       let count = 0;
       root.traverse((object) => {
@@ -120,7 +123,7 @@ it.each(['A20N', 'AT76', 'EC45'])(
     };
     const count = countMeshes();
     const bounds = new Box3().setFromObject(root, true);
-    const pivots = [gear, ...propellers, ...rotors];
+    const pivots = [gear, ...(noseGear ? [noseGear] : []), ...propellers, ...rotors];
     const axes = pivots.map((pivot) => pivot.getWorldQuaternion(new Quaternion()));
     let wingHeights: number[] = [];
     const sampleWings = () => {
@@ -140,7 +143,7 @@ it.each(['A20N', 'AT76', 'EC45'])(
     expect(after.max.distanceTo(bounds.max)).toBeLessThan(1e-5);
     expect(countMeshes()).toBeLessThan(count / 2);
     for (const [i, pivot] of pivots.entries()) {
-      expect(pivot.children).toHaveLength(1);
+      expect(pivot.children.filter((part) => part instanceof Mesh)).toHaveLength(1);
       expect(pivot.getWorldQuaternion(new Quaternion()).angleTo(axes[i]!)).toBeCloseTo(0, 5);
     }
     if (id === 'A20N')
@@ -241,4 +244,59 @@ it('gives every registration one of the schemes, the same each time', () => {
     seen.add(JSON.stringify(livery));
   }
   expect(seen.size).toBe(10);
+});
+
+it('holds the main axle on the runway as the batched nose gear lifts and steers', () => {
+  const type = aircraftTypes.find(({ id }) => id === 'E190')!;
+  const aircraft = buildAircraftMesh(type);
+  batchAircraftMesh(aircraft, new ShaderMaterial());
+  const { mainX } = fixedWingGearStations(type.lengthM);
+  const track = new AircraftPoseTrack(
+    {
+      id: 1,
+      registration: 'G-TEST',
+      typeId: type.id,
+      x: 20,
+      y: 60,
+      heightM: 0,
+      heading: Math.PI / 2,
+      speedMps: 70,
+      state: 'rotation',
+      enginesRunning: true,
+      onRunway: true,
+      airborne: false,
+      gearDown: true,
+      stand: null,
+      runwayEnd: null,
+      route: [],
+      visual: {
+        x: 20,
+        y: 60,
+        heightM: 0,
+        heading: Math.PI / 2,
+        pitch: 0.1,
+        roll: 0,
+        steering: 0.25,
+        gear: 1,
+      },
+    },
+    5,
+  );
+  placeAircraft(aircraft, track.pose, 3, mainX, 2);
+  aircraft.root.updateMatrixWorld(true);
+  const main = aircraft.root.localToWorld(new Vector3(mainX, 0, 0));
+  expect(main.distanceTo(new Vector3(20, 3, 60 + mainX))).toBeLessThan(1e-8);
+  const nose = aircraft.noseGear!;
+  expect(nose.getWorldPosition(new Vector3()).y).toBeGreaterThan(4);
+  const steered = nose.localToWorld(new Vector3(1, 0, 0)).sub(nose.getWorldPosition(new Vector3()));
+  expect(steered.x).toBeLessThan(-0.2);
+  expect(nose.children.filter((part) => part instanceof Mesh)).toHaveLength(1);
+  track.pose.visual.gear = 0.5;
+  placeAircraft(aircraft, track.pose, 3, mainX, 2);
+  expect(aircraft.gear.scale.y).toBe(0.5);
+  expect(aircraft.gear.position.y).toBe(1);
+  expect(aircraft.gear.visible).toBe(true);
+  track.pose.visual.gear = 0;
+  placeAircraft(aircraft, track.pose, 3, mainX, 2);
+  expect(aircraft.gear.visible).toBe(false);
 });

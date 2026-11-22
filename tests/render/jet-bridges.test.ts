@@ -105,7 +105,7 @@ test('bridges dock while a jet stands parked after arrival and retract as its pu
   const jet = fleet.spawnParked({ typeId: 'A333', stand: standId('1') });
   const prop = fleet.spawnParked({ typeId: 'AT76', stand: standId('2') });
   if (!jet.ok || !prop.ok) throw new Error('spawn');
-  const states = new JetBridgeStates(bridges, graph.stands);
+  const states = new JetBridgeStates(bridges);
   states.update(fleet.snapshot(), 0);
   const one = bridgeAt('1'),
     two = bridgeAt('2'),

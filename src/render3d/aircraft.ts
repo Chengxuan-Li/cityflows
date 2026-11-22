@@ -1,6 +1,7 @@
 import {
   AdditiveBlending,
   BufferGeometry,
+  BoxGeometry,
   CircleGeometry,
   Color,
   DoubleSide,
@@ -27,30 +28,24 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftTypes, type AircraftType } from '../schema/aircraft';
-import { buildAircraftOutline } from '../render/aircraft-outline';
+import { fixedWingGearStations } from '../sim/aircraft-motion';
+import { aircraftLayout, buildAircraftOutline } from '../render/aircraft-outline';
 import { aircraftLivery } from '../render/aircraft-livery';
+import { AircraftPoseTrack, pushbackDrawbarM } from '../render/aircraft-pose';
 import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
 import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
+import { placeAircraft } from './aircraft-attitude';
 import { beamTexture } from './lights';
 import { pointHalos } from './airfield-lights';
 
 // TASK-298: TASK-307's aircraft models placed from the sim's poses: on the airside, and on the
 // approaches and climbs over the empty surround beyond the map. Heights are above the airfield's
-// elevation; the attitude is a plain pitch by state.
+// elevation, with rotation and flare pivoting at the main wheels.
 // TASK-301: driven by the same poses: a per-flight accent colour, propellers and rotors spinning
 // up while the engines run, gear by the sim, navigation, beacon, strobe, landing and taxi lights,
 // and, to read against the near-white surround, a thin dark outline and, off the ground, a
-// shadow straight below with a drop line. Positions run on between snapshots at the velocity
-// of the last two, so a followed aircraft moves smoothly.
-
-const pitchDeg: Partial<Record<string, number>> = {
-  approach: 2,
-  flare: 4,
-  rotation: 6,
-  climb: 8,
-  'go-around': 8,
-};
+// shadow straight below with a drop line.
 
 /** Spin rates at full power, rad/s: slow enough to read as turning at 60 frames a second. */
 const SPIN = { propeller: 19, rotor: 11, tailRotor: 31 };
@@ -68,12 +63,42 @@ interface Model {
   shadow: Mesh<ShapeGeometry, MeshBasicMaterial>;
   drop: Line<BufferGeometry, LineBasicMaterial>;
   discs: Mesh<CircleGeometry, MeshBasicMaterial>[];
-  pose: AircraftPose;
-  timeS: number;
-  velocity: { x: number; y: number; h: number };
+  track: AircraftPoseTrack;
+  mainX: number;
+  gearStowY: number;
+  tug: Group | null;
   lights: AircraftLightState;
   /** 0 to 1: how far the propellers and rotors have spun up. */
   spin: number;
+}
+
+/** Towbar and tug are attached at the nose axle and turn with its steering. */
+function pushbackTug(noseX: number, drawbar: number) {
+  const tug = new Group();
+  tug.name = 'pushback-tug';
+  tug.position.x = noseX;
+  const body = new MeshLambertMaterial({ color: 0xe8e4db });
+  const dark = new MeshLambertMaterial({ color: 0x46505a });
+  const box = (
+    x: number,
+    y: number,
+    l: number,
+    h: number,
+    w: number,
+    material: MeshLambertMaterial,
+  ) => {
+    const part = new Mesh(new BoxGeometry(l, h, w).translate(x, y, 0), material);
+    part.matrixAutoUpdate = false;
+    return part;
+  };
+  tug.add(
+    box(drawbar / 2, 0.32, drawbar, 0.12, 0.12, dark),
+    box(drawbar + 1.6, 0.35, 3.2, 0.7, 2.2, dark),
+    box(drawbar + 1.6, 0.71, 3.2, 0.45, 2.2, body),
+    box(drawbar + 2.45, 1.15, 1.25, 0.62, 1.7, dark),
+  );
+  tug.visible = false;
+  return tug;
 }
 
 /** A thin dark rim in screen pixels: the back faces pushed out along their normals. */
@@ -115,6 +140,7 @@ export class Aircraft3D {
   private readonly point = new Vector3();
   private readonly color = new Color();
   private renderedAgeS = NaN;
+  private playing = false;
   private clockS = 0;
   private on = 0;
   constructor(private readonly elevationM: number) {
@@ -158,7 +184,7 @@ export class Aircraft3D {
     return geometry;
   }
 
-  private build(pose: AircraftPose): Model {
+  private build(pose: AircraftPose, timeS: number): Model {
     const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
     const mesh = buildAircraftMesh(type, aircraftLivery(pose.registration));
     mesh.root.userData.aircraft = pose.id;
@@ -187,6 +213,10 @@ export class Aircraft3D {
       return disc;
     });
     batchAircraftMesh(mesh, this.outline);
+    const { bodyY, radius } = aircraftLayout(type);
+    const { noseX, mainX } = fixedWingGearStations(type.lengthM);
+    const tug = mesh.noseGear ? pushbackTug(noseX, pushbackDrawbarM(type.lengthM)) : null;
+    if (tug) mesh.root.add(tug);
     const shadow = new Mesh(
       this.shadowShape(type),
       new MeshBasicMaterial({
@@ -219,37 +249,25 @@ export class Aircraft3D {
       shadow,
       drop,
       discs,
-      pose,
-      timeS: NaN,
-      velocity: { x: 0, y: 0, h: 0 },
+      track: new AircraftPoseTrack(pose, timeS),
+      mainX: mesh.noseGear ? mainX : 0,
+      gearStowY: bodyY - radius * 0.65,
+      tug,
       lights: aircraftLights(pose),
       spin: pose.enginesRunning ? 1 : 0,
     };
   }
 
-  update(poses: readonly AircraftPose[], timeS: number) {
+  update(poses: readonly AircraftPose[], timeS: number, playbackSpeed = 0) {
     this.renderedAgeS = NaN;
     const seen = new Set<number>();
     for (const pose of poses) {
       seen.add(pose.id);
-      let model = this.models.get(pose.id);
-      if (!model) this.models.set(pose.id, (model = this.build(pose)));
-      const dt = timeS - model.timeS;
-      const previous = model.pose;
-      if (dt !== 0) {
-        model.velocity =
-          dt > 0 && dt < 5
-            ? {
-                x: (pose.x - previous.x) / dt,
-                y: (pose.y - previous.y) / dt,
-                h: (pose.heightM - previous.heightM) / dt,
-              }
-            : { x: 0, y: 0, h: 0 };
-        model.timeS = timeS;
-      }
-      model.pose = pose;
-      model.lights = aircraftLights(pose);
-      model.mesh.gear.visible = pose.gearDown;
+      const model = this.models.get(pose.id);
+      if (model) {
+        model.track.update(pose, timeS, playbackSpeed);
+        model.lights = aircraftLights(pose);
+      } else this.models.set(pose.id, this.build(pose, timeS));
     }
     for (const [id, model] of this.models)
       if (!seen.has(id)) {
@@ -269,13 +287,13 @@ export class Aircraft3D {
       }
   }
 
-  /** Places every aircraft `ageS` simulated seconds after its snapshot and advances spinning
+  /** Interpolates aircraft between snapshots and advances spinning
    * parts and flashing lights by `dtS` wall seconds (0 while paused). */
-  animate(ageS: number, dtS: number) {
-    if (ageS === this.renderedAgeS && dtS === 0) return;
+  animate(ageS: number, dtS: number, playing = ageS > 0) {
+    if (ageS === this.renderedAgeS && dtS === 0 && playing === this.playing) return;
     this.renderedAgeS = ageS;
+    this.playing = playing;
     this.clockS += dtS;
-    const ahead = Math.min(ageS, 2);
     const { transform, point, color } = this;
     const { centres, tints, geometry } = this.halos;
     let halo = 0,
@@ -288,26 +306,29 @@ export class Aircraft3D {
       tints.setXYZ(halo++, color.r, color.g, color.b);
     };
     for (const model of this.models.values()) {
-      const { pose, velocity, mesh, lights } = model;
-      const x = pose.x + velocity.x * ahead,
-        y = pose.y + velocity.y * ahead,
-        heightM = Math.max(0, pose.heightM + velocity.h * ahead);
+      const { track, mesh, lights, tug } = model;
+      track.sample(ageS, playing);
+      const { pose } = track;
+      const { heightM, heading, visual } = pose;
       const root = mesh.root;
-      root.position.set(x, this.elevationM + heightM, y);
-      root.rotation.set(0, -pose.heading, ((pitchDeg[pose.state] ?? 0) * Math.PI) / 180, 'YXZ');
-      root.updateMatrix();
+      placeAircraft(mesh, pose, this.elevationM, model.mainX, model.gearStowY);
+      const { x, z: y } = root.position;
+      if (tug) {
+        tug.visible = pose.state === 'pushback';
+        if (tug.visible) tug.rotation.y = -visual.steering;
+      }
       const matrix = root.matrix;
       // Shadow and drop line, off the ground: darker the lower it flies.
       const airborne = heightM > 1.5;
       model.shadow.visible = model.drop.visible = airborne;
       if (airborne) {
         model.shadow.position.set(x, this.elevationM + 0.15, y);
-        model.shadow.rotation.set(0, -pose.heading, 0);
+        model.shadow.rotation.set(0, -heading, 0);
         model.shadow.material.opacity =
           0.34 * Math.max(0.35, 1 - heightM / 1200) * (1 - 0.6 * this.on);
         const line = model.drop.geometry.getAttribute('position') as Float32BufferAttribute;
         line.setXYZ(0, x, this.elevationM + 0.15, y);
-        line.setXYZ(1, x, this.elevationM + heightM, y);
+        line.setXYZ(1, x, root.position.y, y);
         line.needsUpdate = true;
       }
       // Spinning parts follow the engines, spooling up and down over a couple of seconds.
@@ -339,15 +360,15 @@ export class Aircraft3D {
       if (this.on > 0 && lit && beam < this.beams.instanceMatrix.count) {
         const length = lights.landing ? 150 : 45,
           width = lights.landing ? 46 : 22;
-        const c = Math.cos(pose.heading),
-          s = Math.sin(pose.heading);
+        const c = Math.cos(heading),
+          s = Math.sin(heading);
         const from = model.type.lengthM / 2;
         transform.position.set(
           x + c * (from + length / 2),
           this.elevationM + 0.2,
           y + s * (from + length / 2),
         );
-        transform.rotation.set(0, -pose.heading, 0);
+        transform.rotation.set(0, -heading, 0);
         transform.scale.set(length, 1, width);
         transform.updateMatrix();
         this.beams.setMatrixAt(beam++, transform.matrix);
@@ -426,7 +447,12 @@ export class Aircraft3D {
     const raycaster = new Raycaster();
     raycaster.setFromCamera(new Vector2((2 * x) / width - 1, 1 - (2 * y) / height), camera);
     const roots = [...this.models.values()].map((m) => m.mesh.root);
-    const hit = raycaster.intersectObjects(roots, true).find((h) => !h.object.userData.outline);
+    const hit = raycaster.intersectObjects(roots, true).find(({ object }) => {
+      if (object.userData.outline) return false;
+      for (let part: Object3D | null = object; part; part = part.parent)
+        if (!part.visible) return false;
+      return true;
+    });
     for (let object: Object3D | null = hit?.object ?? null; object; object = object.parent)
       if (object.userData.aircraft !== undefined)
         return { kind: 'aircraft', id: object.userData.aircraft as number };

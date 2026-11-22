@@ -210,8 +210,9 @@ per-test limit and scales every limit written in a test file (`limit()`, `tests/
 
 ## Licensing
 
-- The project is GPL-3.0-or-later. Code may be adapted from permissive (MIT/BSD/Apache/ISC)
-  and GPL-compatible sources only, with an entry in `NOTICE` naming source, commit, license,
+- The project is GPL-2.0-or-later (relicensed from GPL-3.0-or-later by the owner, 2026-11-22, for GPL-2.0
+  aircraft models). Code and assets may be adapted from permissive (MIT/BSD/ISC) and GPL-2.0-compatible
+  sources only (Apache-2.0 and GPL-3.0-only are not compatible with GPL-2.0), with an entry in `NOTICE` naming source, commit, license,
   and destination file, in the same PR.
 - PolyForm Noncommercial and other non-free sources (for example Nitai Aharoni's traffic
   simulator) are study-only. Never copy their code, assets or screenshots.

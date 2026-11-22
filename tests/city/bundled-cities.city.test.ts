@@ -53,7 +53,8 @@ test.for([
 //   node --experimental-strip-types --import ./bench/register.ts bench/bundled-cities.ts
 test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
   '%s: the bundled archive is a fresh build of its extract',
-  { timeout: limit(120_000) },
+  // Heathrow's fresh build takes 10 to 26 s here and over 120 s on a CI runner (Full 45064837109).
+  { timeout: limit(600_000) },
   async (id) => {
     const archive = readFileSync(projectFile(id), 'utf8');
     expect(
