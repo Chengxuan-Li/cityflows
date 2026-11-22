@@ -6,7 +6,7 @@ import { importOsm } from '../../src/importers/osm';
 import { parseOsm } from '../../src/importers/osm/parse';
 import { compile, signalStateAt, type CompiledCity } from '../../src/network';
 import type { City } from '../../src/schema';
-import { dualSingle, dualTurnLanes } from './junction-group-osm';
+import { dualSingle, dualTurnLanes, lonLat, osm } from './junction-group-osm';
 
 // TASK-131 Phase 1, Gate 1 on synthetic OSM: a dual carriageway crossed by a two-way street.
 
@@ -70,6 +70,59 @@ describe('T68 junction groups at import', () => {
     // The threshold is the import option: 20 m does not group a 24 m crossing, 30 m does.
     expect(load(dualSingle(24), 20).city.junctionGroups).toBeUndefined();
     expect(Object.values(load(dualSingle(24)).city.junctionGroups ?? {})).toHaveLength(1);
+  });
+
+  it('keeps a short polygon exit outside its signal group so traffic can reach it', () => {
+    const tags = { highway: 'secondary', oneway: 'yes', lanes: '2' };
+    const xml = osm(
+      [
+        {
+          id: 1,
+          tags: { ...tags, name: 'Main' },
+          points: [
+            [-120, 0],
+            [0, 0],
+            [120, 0],
+          ],
+        },
+        {
+          id: 2,
+          tags: { ...tags, name: 'Side' },
+          points: [
+            [0, 120],
+            [0, 0],
+            [0, -120],
+          ],
+        },
+      ],
+      { '0,0': { highway: 'traffic_signals' } },
+    );
+    const polygon = [
+      [-80, -80],
+      [6, -80],
+      [6, 80],
+      [-80, 80],
+    ].map(([x, y]): [number, number] => {
+      const { lon, lat } = lonLat(x!, y!);
+      return [lon, lat];
+    });
+    const imported = importOsm(xml, { importerVersion: 'test', polygon });
+    if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
+    const result = compile(imported.city);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    const net = result.compiled;
+    const east = net.roads
+      .filter((road) => imported.city.roads[road.id]!.name === 'Main')
+      .reduce((a, b) => (net.nodes[a.to]!.pos.x > net.nodes[b.to]!.pos.x ? a : b));
+    expect(east.group).toBeUndefined();
+    const entering = net.movements.filter((move) => east.lanes.includes(move.toLane));
+    expect(entering.length).toBeGreaterThan(0);
+    expect(entering.every((move) => !move.neverGreen)).toBe(true);
+    expect(
+      net.connectors.some(
+        (connector) => east.lanes.includes(connector.lane) && connector.direction === 'in',
+      ),
+    ).toBe(true);
   });
 
   it('T68.3: turn permissions through the group equal those of the merged node', () => {

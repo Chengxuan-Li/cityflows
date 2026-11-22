@@ -141,6 +141,13 @@ export function formJunctionGroups(
         if (node.control !== 'uncontrolled' || node.provenance.inferred?.includes(MINI_ROUNDABOUT))
           return true;
         const here = incident.get(node.id) ?? [];
+        // A polygon cut is a potential gateway. An arm ending there must stay an entry or
+        // exit so the group can build a complete chain and give it a green.
+        if (
+          city.geo?.boundary &&
+          here.some(({ road, cutStart, cutEnd }) => (road.from === node.id ? cutStart : cutEnd))
+        )
+          return true;
         if (here.some(({ road }) => road.roadClass === 'motorway')) return true;
         const neighbors = new Set(
           here.map(({ road }) => (road.from === node.id ? road.to : road.from)),

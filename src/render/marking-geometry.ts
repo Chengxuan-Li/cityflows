@@ -9,6 +9,8 @@ import {
   triangulateD,
 } from 'clipper2-ts';
 import {
+  boxOf,
+  boxesMeet,
   clipOutside,
   cumulativeLengths,
   distance,
@@ -18,6 +20,7 @@ import {
   pointAtDistance,
   pointInPolygon,
   polylineCrossings,
+  polylineNearest,
   segmentDistance,
   segmentIntersection,
   trimPolyline,
@@ -34,6 +37,7 @@ import {
   endEdges,
   MAPPED_M,
   nearSignal,
+  nodeRoads,
   type CrossingSource,
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
@@ -451,7 +455,7 @@ function buildRoadMarkings(
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
           .filter((r) => r !== road && r.corridorId === road.corridorId && r.streetGroupId === null)
-          .map((r) => [...r.surface, r.surface[0]!])
+          .map((r) => polylineNearest([...r.surface, r.surface[0]!]))
       : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
@@ -506,9 +510,7 @@ function buildRoadMarkings(
       for (const run of runs) {
         const facing = run.map(
           (p) =>
-            partners
-              .map((ring) => nearestOnPolyline(ring, p))
-              .reduce((a, b) => (b.away < a.away ? b : a)).point,
+            partners.map((nearest) => nearest(p)).reduce((a, b) => (b.away < a.away ? b : a)).point,
         );
         pavement.push([...run, ...facing.reverse()]);
       }
@@ -555,9 +557,10 @@ function buildRoadMarkings(
           let sections = [edge];
           if (median && partners.length) {
             // Nearby opposing carriageways already carry the shared centre paint.
+            const nearestBoundary = polylineNearest(boundary);
             const kerb = (p: Vec2) => {
-              const boundaryPoint = nearestOnPolyline(boundary, p).point;
-              return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
+              const boundaryPoint = nearestBoundary(p).point;
+              return partners.every((nearest) => nearest(boundaryPoint).away > 1.5);
             };
             // Separation can change between the vertices of a straight boundary.
             sections = keepInside(edge, kerb, true);
@@ -1021,11 +1024,11 @@ export function markingPolygons(shape: MarkingShape): Vec2[][] {
   return left.slice(1).map((p, i) => [left[i]!, p, right[i + 1]!, right[i]!]);
 }
 /** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */
-function besidePartners(line: Vec2[], rings: Vec2[][]): Vec2[][] {
+function besidePartners(line: Vec2[], partners: ReturnType<typeof polylineNearest>[]): Vec2[][] {
   const runs: Vec2[][] = [];
   let run: Vec2[] = [];
   for (const p of line) {
-    if (rings.some((ring) => nearestOnPolyline(ring, p).away <= 1.5)) run.push(p);
+    if (partners.some((nearest) => nearest(p).away <= 1.5)) run.push(p);
     else if (run.length) {
       if (run.length > 1) runs.push(run);
       run = [];
@@ -1049,8 +1052,8 @@ function nodeClips(city: CompiledCity, road: CRoad, node: number, withOutline: b
   if (!outline.length) return [];
   const rings = withOutline ? [outline] : [];
   const own = endDirection(road, road.to === node);
-  for (const other of city.roads) {
-    if (other === road || (other.from !== node && other.to !== node)) continue;
+  for (const other of nodeRoads(city, city.nodes[node]!)) {
+    if (other === road) continue;
     if (other.streetGroupId !== null && other.streetGroupId === road.streetGroupId) continue;
     const atEnd = other.to === node;
     const d = endDirection(other, atEnd);
@@ -1065,21 +1068,34 @@ function splitAtRing(line: Vec2[], ring: Vec2[]) {
   const inside: Vec2[][] = [],
     outside: Vec2[][] = [];
   if (!ring.length) return { inside, outside: [line] };
+  const box = boxOf(ring);
   let current: Vec2[] = [],
     within = false;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
     const ts = [0, 1];
-    for (let j = 1; j < ring.length; j++) {
-      const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
-      if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+    // Keep the endpoint tolerance of segmentIntersection when rejecting the ring.
+    const pad =
+      2e-9 *
+      Math.max(box.maxX - box.minX, box.maxY - box.minY, Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+    const meets = boxesMeet(box, {
+      minX: Math.min(a.x, b.x) - pad,
+      minY: Math.min(a.y, b.y) - pad,
+      maxX: Math.max(a.x, b.x) + pad,
+      maxY: Math.max(a.y, b.y) + pad,
+    });
+    if (meets) {
+      for (let j = 1; j < ring.length; j++) {
+        const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
+        if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+      }
     }
     ts.sort((x, y) => x - y);
     for (let k = 1; k < ts.length; k++) {
       if (ts[k]! - ts[k - 1]! < 1e-9) continue;
       const at = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      const side = pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
+      const side = meets && pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
       if (current.length && side !== within) {
         (within ? inside : outside).push(current);
         current = [];
