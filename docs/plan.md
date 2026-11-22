@@ -317,7 +317,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | done 2026-11-21 (merged; York first frame 2.19 to 2.09 s, 1.22x Freiburg; identical output; Codex) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
-| [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | in progress 2026-11-21 (wave C, Claude) |
+| [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | merged 2026-11-22 (`12ba734`; owner accepted Lübeck delay +21 to 34 s) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5840,6 +5840,19 @@ in draw order. Junctions, seams, walk shapes, two 2D captures and state hashes i
 medians, five interleaved rounds: York first frame 2.19 to 2.09 s (ready 4.85 to 4.67), Freiburg 1.77 to 1.72,
 Philadelphia 1.97 to 1.91, Munich 1.77 to 1.70. York stays at 1.22x Freiburg (aim 1.15x not reached).
 
+TASK-294 (Claude Code subagent, Opus 5.5 high, 2026-11-22; merged `12ba734`): "Anlieger frei" pockets. Under the old
+rule a car used a destination or private road only in its trip's origin or destination zone, so a public pocket only
+such streets reach (Lübeck's 245-road Wallstraße pocket, Wakenitzmauer) carried no zone, and lots opening only onto
+it could not be reached. New compile step `src/network/zones.ts`: a component of open roads other than the largest
+that a car reaches only through zones becomes a zone (gateway roads join none); zones are ranked by the fewest zones
+on the way in from outside and each grants the zones on those ways in; a zone the outside touches grants only itself,
+so through traffic stays out. Router, both parking-exit checks, gateway servability and live-patch invalidation read
+it. Lübeck facilities without a car exit 24 (140 spaces) to 8 (14), York 4 to 3, Freiburg unchanged. All 48 Munich
+0.15 and 10 full-demand hashes identical to main; Freiburg gate 1,531 / 0, 62.7 to 62.8 s (hash 1710089250). Lübeck
+showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more trips, Kanalstraße r:1288 waits 2,630 to
+8,455 s; no gridlock, worst visit 111 s): outside the merge rule, accepted by the owner. Lead tiers green on
+`716df32`; archives rebuild unchanged.
+
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
 it, or about to take that movement (elsewhere it returned `min(stopAt, Infinity)`); (2) the rail
@@ -6194,6 +6207,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): "yes we may merge": TASK-294 merged with Lübeck's showcase delay rising 21 to 34 s (the
+  pockets' own trips now drive through the Anlieger streets). Wave C complete. Next batch: airports (owner brief
+  in chat; contracts TASK-295 onward).
 
 - 2026-11-21 (owner): Codex CLI is a default executor again: "we may use gpt sol 6.2 at high effort by default unless
   you think otherwise for any specific task" (reverses the 13 Nov rule; "no need to pilot"). Wave C, "looks good.
