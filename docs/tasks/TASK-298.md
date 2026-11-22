@@ -1,0 +1,70 @@
+# TASK-298 — Aircraft as a vehicle: types, airside routing with limits, taxi, runway, approach and climb
+
+Status: planned 2026-11-22 (airports batch, owner's go; starts after TASK-296). Proposed owner: Claude Code
+subagent (Opus 5.5, high). Branch `task/298-aircraft`, worktree `D:\cityflows-wt\298`, ports 5498 / 5598.
+
+## Goal
+
+Aircraft move on the airside graph as their own vehicle, with no passengers or person journeys (as trains and
+trams carry none), deterministic and in the state hash only where an airport exists
+(`docs/decisions/2026-11-22-airports.md`).
+
+**Catalogue** (one table in `src/schema`; ICAO aerodrome reference code by wingspan: A < 15 m, B < 24, C < 36,
+D < 52, E < 65, F < 80):
+
+| Class | Types (length x span m) | Code |
+|---|---|---|
+| Large double-decker | A380-800 (72.7 x 79.8), 747-8 (76.3 x 68.4) | F |
+| Widebody | 777-300ER (73.9 x 64.8), A350-900 (66.8 x 64.8), A330-300 (63.7 x 60.3), 787-9 (62.8 x 60.1) | E |
+| Narrowbody | A320neo (37.6 x 35.8), 737-800 (39.5 x 35.8), A321neo (44.5 x 35.8), A220-300 (38.7 x 35.1) | C |
+| Regional jet | E190 (36.2 x 28.7), E175 (31.7 x 26.0), CRJ900 (36.2 x 24.9) | C |
+| Propeller | ATR 72 (27.2 x 27.1), Dash 8-400 (32.8 x 28.4), Saab 340 (19.7 x 21.4) | C, B |
+| Private | Citation CJ4 (16.3 x 15.5), PC-24 (16.9 x 17.0), G650 (30.4 x 30.4) | B, C |
+| Helicopter | H145 (13.6, rotor 11.0), AW139 (16.7, rotor 13.8) | helipad |
+
+Each type also carries taxi, approach, landing-roll and rotation speeds, take-off and landing roll lengths and
+turn radius, from published type figures (state sources as type-level figures; no download).
+
+**Movement.**
+- Airside routing on the compiled graph with the code limits of TASK-295 (an edge or stand admits a type only up
+  to its code), turn radius respected at junctions, a backtrack on a runway where no taxiway leads to the
+  threshold.
+- Taxi: speed limits on straights and turns, car-following and a minimum separation behind another aircraft,
+  junction blocks reserved so two aircraft never meet head-on or cross bodies; pushback from contact stands (tug,
+  reverse, stop, then taxi), towing as a separate mode.
+- Runway: one aircraft occupies a runway (and every runway crossing it) from line-up or threshold crossing until
+  it vacates; holding positions stop aircraft until the runway is free; departures line up, roll and climb out
+  along the extended centreline to the map edge; arrivals appear at the map edge on the extended centreline on a
+  3 degree path (London City 5.5 degrees, where the runway carries it or by a stated rule), touch down, roll out
+  and vacate at the first usable exit.
+- Helicopters hover-taxi between helipad and stand-free spots and climb vertically then forward.
+- An API the operations task (TASK-299) drives: spawn an arrival, request a departure from a stand, tow from one
+  stand to another or to a hangar.
+
+**Inspection.** Aircraft are pickable (type, registration-like id, state, route), drawn with TASK-297's
+outlines where it has landed, else a plain outline at real dimensions.
+
+## Scope
+
+`src/schema` (catalogue), `src/network` (compiled airside graph if TASK-295 left it raw), `src/routing` (airside
+routes) or a new airside module, `src/sim` (a new aircraft module and its engine hook), `src/render`,
+`src/render3d/vehicles.ts` or a new aircraft layer (simple 3D boxes at real dimensions until TASK-301),
+`src/ui` (inspector), `docs/architecture.md`, tests.
+
+Out of scope: schedules and stand allocation (TASK-299), runway configuration changes (TASK-300), lights and
+detailed 3D (TASK-301), road vehicles' behaviour, gate floors, `bench/traffic-baseline.json`, any download.
+
+## Gates
+
+- Tests on the synthetic airport and its variant: an arrival lands and reaches a stand; a departure pushes back,
+  taxis, holds, lines up and climbs out; a backtrack; two aircraft on crossing taxi paths never overlap; a code E
+  aircraft is never routed onto a code C edge or stand; one aircraft on the runway at a time; determinism (two
+  runs, one hash).
+- A scripted London City scenario (a dozen arrivals and departures over an hour) completes with no overlap, no
+  runway conflict and no stuck aircraft; screenshots and a short recording of a landing and a departure.
+- Existing archives and state hashes byte-identical.
+- `npm run check`, `test:city`, `test:traffic:light`, `test:e2e:light`.
+
+## Report
+
+Write it as the commit body.

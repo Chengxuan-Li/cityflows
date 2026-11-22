@@ -318,6 +318,16 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | done 2026-11-21 (merged; York first frame 2.19 to 2.09 s, 1.22x Freiburg; identical output; Codex) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
 | [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | merged 2026-11-22 (`12ba734`; owner accepted Lübeck delay +21 to 34 s) |
+| [TASK-295](tasks/TASK-295.md) | airports | Airport schema, OSM import, airside topology; London City bundled | schema, importer, topology, surfaces | - | LCY counts, every stand reaches the runway, cities identical | ready 2026-11-22 (airports batch, Claude) |
+| [TASK-296](tasks/TASK-296.md) | airports | Synthetic one-runway airport and topology regression tests | fixtures, tests | 295 | graph, code limits, backtrack variant | planned (Codex) |
+| [TASK-297](tasks/TASK-297.md) | airports | Airside markings and aircraft shapes in 2D | render, markings | 295 | marking rules, screenshots | planned (Codex) |
+| [TASK-298](tasks/TASK-298.md) | airports | Aircraft as a vehicle: types, airside routing, taxi, runway, approach, climb | schema catalogue, sim, routing, render | 296 | no overlap, one per runway, code limits, determinism | planned (Claude) |
+| [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | planned (Codex) |
+| [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | planned (Claude) |
+| [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | planned (Claude) |
+| [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | planned (Claude) |
+| [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | planned (Codex) |
+| [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | planned (Codex) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6207,6 +6217,13 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): airports batch. London City first (best OSM quality of 19 surveyed), then a synthetic
+  one-runway airport to its schema, then Zurich as the large target, later Boston (crossing-runway complexity) and
+  Heathrow (operational scale). Downloads approved for these, with perimeter roads. Contract changes: "any change
+  needed". Operations: seeded schedule plus time-of-day concepts and a wind control. Unsupervised; screenshots as
+  steps land, no stops for confirmation. Survey, plan and batch merge rule: `docs/decisions/2026-11-22-airports.md`;
+  contracts TASK-295 to 304.
 
 - 2026-11-22 (owner): "yes we may merge": TASK-294 merged with Lübeck's showcase delay rising 21 to 34 s (the
   pockets' own trips now drive through the Anlieger streets). Wave C complete. Next batch: airports (owner brief
