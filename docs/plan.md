@@ -313,7 +313,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-287](tasks/TASK-287.md) | render | York's load time (crossing styles, zig-zags, place details, walk compile) | hot paths | 277, 284 | identical output, budgets | done 2026-11-21 (merged; identical output; York first frame 2.80 s) |
 | [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | done 2026-11-21 (merged on the owner's go; Munich and Freiburg identical; Sindelfingen 280 to 890 trips a day) |
 | [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | in progress 2026-11-21 (owner's go) |
-| [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | in progress 2026-11-21 (wave C, Codex) |
+| [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | done 2026-11-21 (merged; 54 entrances linked; Freiburg gate 62.7 s; Codex) |
 | [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | queued 2026-11-21 (wave C, Codex; after TASK-289's measurements) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | done 2026-11-21 (merged; Philadelphia warnings 155 to 141, first frame 2.34 to 1.99 s; Codex) |
@@ -5811,6 +5811,15 @@ gateways); other cities unchanged. Road markings reuse the incident-road index, 
 segments, stall attachment checks near aisles: Philadelphia marking CPU 859 to 688 ms, first frame 2.34 to 1.99 s on
 a quiet machine (five interleaved runs). Only Philadelphia's archive changes (gate 4,530 to 4,662 completed, delay
 174.4 to 163.7 s); Munich (58 pairs) and Freiburg state hashes identical.
+
+TASK-290 (Codex CLI, gpt-6.2-sol high, 2026-11-21; merged `9e886a4`, one send-back for pin comments): `amenity=parking_entrance`
+nodes link to a compatible enclosing facility or one within 8 m and become its connector on a reachable car lane,
+with mapped direction and access (opposite direction kept where usable); source-proven lot aisles kept; Overpass
+fetches the nodes and their driveways. Linked of read: Freiburg 9/31, Munich 1/23, Sindelfingen 1/11, Philadelphia
+36/62, Lübeck 7/37, York 0/11 (most unlinked: no compatible facility, outside bounds, no reachable lane); TASK-281's
+left-out facilities restored 0. Munich 0.15 +0.51 / +0.03 / -0.03 / 0.00%, drain on all 48; full demand +1.51% / +0.19%;
+Freiburg gate 59.8 to 62.7 s (+2.8, hash 3314728190; seeds 2, 3 within 0.7 s); Philadelphia 174.4 to 159.0 s. Passes.
+Lead merge on TASK-293: Philadelphia's archive rebuilt from both; tiers green, gate re-measured.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
