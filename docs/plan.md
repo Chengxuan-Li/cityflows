@@ -323,12 +323,12 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-297](tasks/TASK-297.md) | airports | Airside markings and aircraft shapes in 2D | render, markings | 295 | marking rules, screenshots | merged 2026-11-22 (`342f20b`, wave B) |
 | [TASK-298](tasks/TASK-298.md) | airports | Aircraft as a vehicle: types, airside routing, taxi, runway, approach, climb | schema catalogue, sim, routing, render | 296 | no overlap, one per runway, code limits, determinism | merged 2026-11-22 (`4c41a79`, wave B) |
 | [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | merged 2026-11-22 (variant `bdea18d`, wave C) |
-| [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | in progress 2026-11-22 (wave C, Claude) |
+| [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | merged 2026-11-22 (`dd04482`, wave C) |
 | [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | merged 2026-11-22 (`e098862`, wave C) |
-| [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | planned (Claude) |
-| [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | planned (Codex) |
-| [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | planned (Codex) |
-| [TASK-305](tasks/TASK-305.md) | airports | Airport editing: stands, taxiways, holding points, limits, configurations | editor, UI | 302 | edits recompile, undo, saved and reopened | planned (Claude) |
+| [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | in progress 2026-11-22 (wave D, Claude) |
+| [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | in progress 2026-11-22 (wave D, Codex) |
+| [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | in progress 2026-11-22 (wave D, Codex) |
+| [TASK-305](tasks/TASK-305.md) | airports | Airport editing: stands, taxiways, holding points, limits, configurations | editor, UI | 302 | edits recompile, undo, saved and reopened | in progress 2026-11-22 (wave D, Claude) |
 | [TASK-306](tasks/TASK-306.md) | airports | Aircraft performance figures and motion profiles | schema catalogue, sim motion | catalogue | profiles within figures, determinism | merged 2026-11-22 (`761b6bd`, wave A) |
 | [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | merged 2026-11-22 (`931cb56`, wave A) |
 | [TASK-308](tasks/TASK-308.md) | airports | Flight schedule generator and runway configuration chooser | demand, sim | catalogue | seeded volumes, tailwind limit | merged 2026-11-22 (`6540ebb`, wave A) |
@@ -5867,6 +5867,18 @@ it. Lübeck facilities without a car exit 24 (140 spaces) to 8 (14), York 4 to 3
 showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more trips, Kanalstraße r:1288 waits 2,630 to
 8,455 s; no gridlock, worst visit 111 s): outside the merge rule, accepted by the owner. Lead tiers green on
 `716df32`; archives rebuild unchanged.
+
+- TASK-300 (Claude Code subagent, Opus 5.5 high; merged `dd04482`, wave C complete): TASK-308's chooser wired to the
+  airport through flight operations (per-airport concept table, 5 kt tailwind, per-type crosswind), reconfiguration
+  (`fleet.setRunwayConfiguration`: old ends close, finals land, queued requests switch, taxiing departures re-route,
+  new ends open when clear; start, open and re-routes recorded), 3x cost for taxiing against the flow on parallel
+  taxiways, wind control and Runways section in the flight board, lights follow the opened ends. The go-arounds were a
+  deadlock between a departure reversing through London City's C / runway / D link and an arrival's exit route, fixed
+  in arrival admission and ground starts. London City seeds 1 to 3: 150 / 150 / 149, mean delay 93 / 105 / 100 s, worst
+  1,111 / 866 / 1,221 s, go-arounds 0; two wind changes: 27 to 09 in 26 s, back in 91 s. Lead tiers: all green except
+  the local-only London City 3D render p95 (6.5 ms against 6 under four agents' load; main a3c557b reads 6.2 to 6.5 ms
+  under the same load, 5.9 ms on a re-run): the lights from TASK-301 put London City near the budget. Follow-up:
+  London City 3D render cost.
 
 Airports wave C, first two (2026-11-22; lead tiers green, existing hashes identical):
 - TASK-299 (Codex; v1 `e908658` sent back, variant `bdea18d` merged): seeded operations through TASK-298's API
