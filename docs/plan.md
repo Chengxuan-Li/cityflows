@@ -322,9 +322,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-296](tasks/TASK-296.md) | airports | Synthetic one-runway airport and topology regression tests | fixtures, tests | 295 | graph, code limits, backtrack variant | merged 2026-11-22 (`c040a60`, wave B) |
 | [TASK-297](tasks/TASK-297.md) | airports | Airside markings and aircraft shapes in 2D | render, markings | 295 | marking rules, screenshots | merged 2026-11-22 (`342f20b`, wave B) |
 | [TASK-298](tasks/TASK-298.md) | airports | Aircraft as a vehicle: types, airside routing, taxi, runway, approach, climb | schema catalogue, sim, routing, render | 296 | no overlap, one per runway, code limits, determinism | merged 2026-11-22 (`4c41a79`, wave B) |
-| [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | in progress 2026-11-22 (wave C, Codex) |
-| [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | planned (Claude) |
-| [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | in progress 2026-11-22 (wave C, Claude) |
+| [TASK-299](tasks/TASK-299.md) | airports | Flight operations: schedule, stands, turnarounds, tows, hangars, helicopters | ops, sim, UI | 298 | 98% completion, stand codes, tows | merged 2026-11-22 (variant `bdea18d`, wave C) |
+| [TASK-300](tasks/TASK-300.md) | airports | Runway configurations: time-of-day concepts, wind control, reconfiguration | sim, routing, UI | 299 | switch with no conflict, re-routes | in progress 2026-11-22 (wave C, Claude) |
+| [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | merged 2026-11-22 (`e098862`, wave C) |
 | [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | planned (Claude) |
 | [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | planned (Codex) |
 | [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | planned (Codex) |
@@ -5867,6 +5867,21 @@ it. Lübeck facilities without a car exit 24 (140 spaces) to 8 (14), York 4 to 3
 showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more trips, Kanalstraße r:1288 waits 2,630 to
 8,455 s; no gridlock, worst visit 111 s): outside the merge rule, accepted by the owner. Lead tiers green on
 `716df32`; archives rebuild unchanged.
+
+Airports wave C, first two (2026-11-22; lead tiers green, existing hashes identical):
+- TASK-299 (Codex; v1 `e908658` sent back, variant `bdea18d` merged): seeded operations through TASK-298's API
+  (`src/sim/flight-operations.ts`), stand allocation checked by routing, paired turnarounds, overnight and
+  maintenance tows, helicopters, flight board and stand inspector, run-bar movements. v1 completed London City's day
+  only by serialising surface moves (mean delay 4,105 s, worst 14,853 s); its conflict log showed two TASK-298 gaps
+  (taxiing on a runway edge did not hold the runway; pushback sweeps were not reserved against neighbouring stands).
+  The variant reserves both and keeps moves concurrent: seeds 1 to 3, 150/150, 150/150, 149/150 (one diversion), mean
+  delay 252 / 192 / 158 s, worst 1,797 / 1,643 / 1,489 s, zero overlap or runway conflict samples. Delay is now
+  measured at touchdown and off-block. Gap: 15 to 21 go-arounds a day (about 75 arrivals), given to TASK-300.
+- TASK-301 (Claude Code subagent, Opus 5.5 high; merged `e098862` after merging TASK-299): airfield lights by rule
+  shared by 2D and 3D (runway edge, centreline, threshold, end, approach, PAPI by glide angle, taxiway centreline and
+  edge, stop bars switched by clearance, stand floodlights), aircraft lights from sim state, outlines, shadows and drop
+  lines for legibility over the surround, camera follow; `fleet.airfield()` and `fleet.setActiveEnds()`, set by flight
+  operations. London City 3D frame 1.61 ms against Freiburg's 1.11.
 
 Airports wave B (2026-11-22; lead tiers green on each merge, existing archives, the Freiburg gate hash 1710089250 and
 the Munich 0.15 and full-demand seed 1 hashes identical):
