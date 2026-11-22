@@ -1,5 +1,6 @@
 import Flatbush from 'flatbush';
 import { Color, type Mesh } from 'three';
+import { parseArgs } from 'node:util';
 import { boxOf, headingAtDistance, pointAtDistance } from '../src/geo/polyline';
 import type { Vec2 } from '../src/geo/vec2';
 import { compile } from '../src/network';
@@ -10,7 +11,7 @@ import { cityHeights } from '../src/render3d/heights';
 import { buildRail, railPassages } from '../src/render3d/rail';
 import { openBundled, realPlaceBuilds } from './bundled-cities';
 
-// node --experimental-transform-types --import ./bench/register.ts bench/rail-clearance.ts [city ...]
+// node --experimental-transform-types --import ./bench/register.ts bench/rail-clearance.ts [--all] [city ...]
 // Sample the rendered deck underside over each paved footprint. Separately audit the solid above
 // rail beds every metre, as in TASK-280. A crossing is one track ID and paved surface ID.
 
@@ -65,7 +66,11 @@ type BedIssues = {
   floating: number;
   worstCover?: { at: Vec2; depthM: number };
 };
-for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(realPlaceBuilds)) {
+const { values, positionals } = parseArgs({
+  options: { all: { type: 'boolean' } },
+  allowPositionals: true,
+});
+for (const name of positionals.length ? positionals : Object.keys(realPlaceBuilds)) {
   const { city: source } = await openBundled(name);
   const result = compile(source);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
@@ -168,6 +173,7 @@ for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys
         walk: low.filter((c) => c.required === 2.5).length,
       },
       worst: ordered.slice(0, 10),
+      ...(values.all && { pairs: ordered, sharedPairs: [...sharedRoadDecks.values()] }),
       sharedRoadDecks: [...sharedRoadDecks.values()].filter(
         (p) => p.clearance < p.required - 0.005,
       ),
