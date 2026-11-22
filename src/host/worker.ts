@@ -91,6 +91,8 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return { ...engine.metrics(), stepsPerSecond: loadedLoop().stepsPerSecond };
     case 'flightBoard':
       return engine.flightBoard();
+    case 'setWind':
+      return engine.setAirportWind(request.wind);
     case 'metricsSeries':
       return loadedLoop().metricsSeries();
     case 'runHeadless':

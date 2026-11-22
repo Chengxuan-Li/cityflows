@@ -185,3 +185,29 @@ test('both synthetic airports open from Test layouts and fit the runway on the m
   }
   expect(errors).toEqual([]);
 });
+
+// TASK-300: the wind control in the flight board turns the synthetic airport from 27 to 09.
+test('the wind control changes the runway configuration of the synthetic airport', async ({
+  page,
+}, info) => {
+  const errors = pageErrors(page);
+  await page.goto('/?city=syntheticAirport');
+  await expect(button(page, 'Play')).toBeEnabled();
+  const runways = page.getByRole('region', { name: 'Runways' });
+  await expect(runways).toContainText('In use27');
+  await page.getByLabel('Wind from (°)').fill('70');
+  await page.getByLabel('Wind speed (kt)').fill('12');
+  await page.screenshot({ path: info.outputPath('wind-set.png') });
+  // A minute at a time until the change has opened 09.
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => window.cityflows!.step(600));
+        return runways.innerText();
+      },
+      { timeout: 60_000, intervals: [100] },
+    )
+    .toMatch(/In use\s*09[\s\S]*Last change\s*27 to 09/);
+  await page.screenshot({ path: info.outputPath('runway-09.png') });
+  expect(errors).toEqual([]);
+});

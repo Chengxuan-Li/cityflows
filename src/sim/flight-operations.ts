@@ -7,15 +7,22 @@ import {
 } from '../demand/flight-schedule';
 import { aircraftCodes, aircraftTurnaroundMinutes, aircraftTypes } from '../schema/aircraft';
 import type { StandKind } from '../schema/airport';
-import type { AircraftFleet, AircraftState } from './aircraft';
-import { chooseRunwayConfiguration } from './runway-configuration';
+import type { AircraftFleet, AircraftState, RunwaySnapshot, RunwayTransition } from './aircraft';
+import {
+  airportRunwayConcepts,
+  createRunwayChooser,
+  demonstratedCrosswindKt,
+  type AirportWind,
+  type RunwayConfiguration,
+  type RunwayConfigurationInput,
+} from './runway-configuration';
 
 const dayS = 86_400;
 const standHoldS = 1800;
 const returnLeadS = 1200;
 const maintenanceS = 300;
 const longTurnS = 75 * 60;
-const prevailingWind = { fromDeg: 240, speedKt: 8 };
+const prevailingWind: AirportWind = { fromDeg: 240, speedKt: 8 };
 const isHelicopter = (typeId: string) =>
   aircraftTypes.find(({ id }) => id === typeId)!.class === 'helicopter';
 
@@ -77,6 +84,19 @@ export interface FlightBoard {
   arrivals: Movement[];
   departures: Movement[];
   stands: { occupiedBy?: string; reservedFor?: string }[];
+  /** The wind, the runway configuration in use and the last change, where there are runways. */
+  runways: {
+    wind: AirportWind;
+    state: RunwaySnapshot | null;
+    lastChange: RunwayTransition | null;
+  } | null;
+}
+
+export interface FlightOperationsOptions {
+  /** Configurations and time-of-day concepts in place of the airport's own table. */
+  runways?: Pick<RunwayConfigurationInput, 'configurations' | 'concepts'>;
+  /** The wind at the start; the prevailing 240 degrees at 8 kt by default. */
+  wind?: AirportWind;
 }
 
 interface Turn {
@@ -118,23 +138,13 @@ export function createFlightOperations(
   seed: number,
   startS: number,
   schedule?: readonly ScheduledFlight[],
+  options: FlightOperationsOptions = {},
 ) {
   const { graph } = fleet;
   const midnight = Math.floor(startS / dayS) * dayS;
   const ends = graph.runways.flatMap((runway) =>
     runway.ends.map((end) => ({ designator: end.designator, headingRad: end.heading })),
   );
-  const configuration = ends.length
-    ? chooseRunwayConfiguration({ ends }, startS - midnight, prevailingWind)
-    : null;
-  const arrivalEnd = configuration?.arrivalEnds[0] ?? ends[0]?.designator;
-  const departureEnd = configuration?.departureEnds[0] ?? ends[0]?.designator;
-  // TASK-301: the airfield lights show these ends from the start.
-  fleet.setActiveEnds({
-    arrivalEnds: arrivalEnd ? [arrivalEnd] : [],
-    departureEnds: departureEnd ? [departureEnd] : [],
-  });
-  const heading = ends.find(({ designator }) => designator === arrivalEnd)?.headingRad ?? 0;
   const profile = graph.icao === 'EGLC' ? londonCitySchedule : largeAirportSchedule;
   const typeMix: FlightScheduleInput['typeMix'] = [
     ...profile.typeMix.filter(({ typeId }) => !isHelicopter(typeId)),
@@ -150,23 +160,74 @@ export function createFlightOperations(
       : []),
   ];
 
+  // TASK-300: the runway configuration follows the airport's concepts and the wind. It changes
+  // at a concept's time boundary, or when the wind takes an end it uses past the tailwind (5 kt)
+  // or the crosswind limit of the types the airport sees; the fleet runs the change.
+  const chooser = ends.length
+    ? createRunwayChooser({
+        ends,
+        ...(options.runways ?? airportRunwayConcepts[graph.icao ?? '']),
+        crosswindLimitsKt: Object.fromEntries(
+          typeMix.flatMap(({ typeId }) =>
+            isHelicopter(typeId) ? [] : [[typeId, demonstratedCrosswindKt[typeId]!]],
+          ),
+        ),
+      })
+    : null;
+  let wind = options.wind ?? prevailingWind;
+  let windChanged = false;
+  const timeOfDay = (timeS: number) => (((timeS - midnight) % dayS) + dayS) % dayS;
+  let concept = chooser?.conceptAt(timeOfDay(startS));
+  let configuration = chooser?.choose(timeOfDay(startS), wind) ?? null;
+  // Stands are chosen for the configuration in use, or the last one during a closure.
+  let lastOpen: RunwayConfiguration | null = configuration ?? chooser?.configurations[0] ?? null;
+  if (chooser) fleet.setRunwayConfiguration(configuration);
+
+  function updateRunways(timeS: number) {
+    if (!chooser) return;
+    const now = chooser.conceptAt(timeOfDay(timeS));
+    const windOut = windChanged && (!configuration || !chooser.admits(configuration, wind));
+    windChanged = false;
+    if (now === concept && !windOut) return;
+    concept = now;
+    const next = chooser.choose(timeOfDay(timeS), wind);
+    if ((next?.id ?? null) === (configuration?.id ?? null)) return;
+    configuration = next;
+    lastOpen = next ?? lastOpen;
+    fleet.setRunwayConfiguration(next, timeS);
+  }
+
+  /** The arrival and departure ends of a configuration that serve a stand at least cost. */
+  const endPairs = new Map<string, { cost: number; arrival: string; departure: string } | null>();
+  function endsFor(stand: number, typeId: string, use = lastOpen) {
+    if (!use) return null;
+    const key = `${use.id}/${typeId}/${stand}`;
+    if (!endPairs.has(key)) {
+      let best: { cost: number; arrival: string; departure: string } | null = null;
+      for (const arrival of use.arrivalEnds)
+        for (const departure of use.departureEnds) {
+          const cost = fleet.standTurnCost(stand, typeId, arrival, departure);
+          if (Number.isFinite(cost) && (!best || cost < best.cost))
+            best = { cost, arrival, departure };
+        }
+      endPairs.set(key, best);
+    }
+    return endPairs.get(key)!;
+  }
+  const headingOf = (designator: string | undefined) =>
+    ends.find((end) => end.designator === designator)?.headingRad ?? 0;
+
   const eligible = new Map<string, number[]>();
   function standsFor(typeId: string) {
-    let stands = eligible.get(typeId);
+    const key = `${lastOpen?.id}/${typeId}`;
+    let stands = eligible.get(key);
     if (!stands) {
-      stands =
-        arrivalEnd && departureEnd
-          ? graph.stands
-              .map(({ idx, maxCode }) => ({
-                idx,
-                maxCode,
-                cost: fleet.standTurnCost(idx, typeId, arrivalEnd, departureEnd),
-              }))
-              .filter(({ cost }) => Number.isFinite(cost))
-              .sort((a, b) => a.maxCode - b.maxCode || a.cost - b.cost || a.idx - b.idx)
-              .map(({ idx }) => idx)
-          : [];
-      eligible.set(typeId, stands);
+      stands = graph.stands
+        .map(({ idx, maxCode }) => ({ idx, maxCode, cost: endsFor(idx, typeId)?.cost }))
+        .filter((stand): stand is typeof stand & { cost: number } => stand.cost !== undefined)
+        .sort((a, b) => a.maxCode - b.maxCode || a.cost - b.cost || a.idx - b.idx)
+        .map(({ idx }) => idx);
+      eligible.set(key, stands);
     }
     return stands;
   }
@@ -299,7 +360,11 @@ export function createFlightOperations(
       const helipad = graph.helipads[pad]!.id;
       const result = carryIn
         ? fleet.spawnHelicopterParked(flight.typeId, helipad, flight.arrivalS)
-        : fleet.requestHelicopterArrival({ typeId: flight.typeId, helipad, headingRad: heading });
+        : fleet.requestHelicopterArrival({
+            typeId: flight.typeId,
+            helipad,
+            headingRad: headingOf(lastOpen?.arrivalEnds[0]),
+          });
       if (!result.ok) return false;
       pads.add(pad);
       turn.pad = pad;
@@ -317,9 +382,12 @@ export function createFlightOperations(
       for (const idx of candidates) {
         if (!standAvailable(turn, idx)) continue;
         const stand = graph.stands[idx]!.id;
+        // No approaches while the runways are closed.
+        const runwayEnd = configuration && endsFor(idx, flight.typeId, configuration)?.arrival;
+        if (!carryIn && !runwayEnd) continue;
         const result = carryIn
           ? fleet.spawnParked({ typeId: flight.typeId, stand }, flight.arrivalS)
-          : fleet.requestArrival({ typeId: flight.typeId, runwayEnd: arrivalEnd!, stand });
+          : fleet.requestArrival({ typeId: flight.typeId, runwayEnd: runwayEnd!, stand });
         if (!result.ok) continue;
         turn.id = result.id;
         turn.stand = idx;
@@ -425,6 +493,7 @@ export function createFlightOperations(
     }
     if (timeS < nextUpdateS) return;
     nextUpdateS = Math.floor(timeS) + 1;
+    updateRunways(timeS);
     while (next < turns.length && turns[next]!.dispatchS <= timeS) {
       const turn = turns[next++]!;
       if (turn.flight.arrivalS >= startS || turn.flight.departureS >= startS) active.add(turn);
@@ -439,10 +508,15 @@ export function createFlightOperations(
         continue;
       }
       if (timeS < turn.readyS) continue;
+      const runwayEnd =
+        turn.pad >= 0
+          ? null
+          : configuration && endsFor(turn.stand, turn.flight.typeId, configuration);
+      if (turn.pad < 0 && !runwayEnd) continue;
       const result =
         turn.pad >= 0
-          ? fleet.requestHelicopterDeparture(turn.id!, heading)
-          : fleet.requestDeparture(turn.id!, departureEnd!);
+          ? fleet.requestHelicopterDeparture(turn.id!, headingOf(lastOpen?.departureEnds[0]))
+          : fleet.requestDeparture(turn.id!, runwayEnd!.departure);
       if (result.ok) {
         turn.phase = 'departing';
         if (turn.pad >= 0) pads.delete(turn.pad);
@@ -518,6 +592,14 @@ export function createFlightOperations(
 
   return {
     step,
+    /** Sets the wind; a change that takes the configuration past its limits reconfigures. */
+    setWind(next: AirportWind) {
+      if (!Number.isFinite(next.fromDeg) || !Number.isFinite(next.speedKt) || next.speedKt < 0)
+        throw new Error('Wind needs a direction and a speed of zero or more');
+      wind = { fromDeg: ((next.fromDeg % 360) + 360) % 360, speedKt: next.speedKt };
+      windChanged = true;
+    },
+    wind: () => wind,
     metrics: () => ({
       scheduled,
       completed,
@@ -538,6 +620,13 @@ export function createFlightOperations(
         occupiedBy: fleet.registrationOf(fleet.standOccupant(idx)),
         reservedFor: fleet.registrationOf(fleet.standReservation(idx)),
       })),
+      runways: chooser
+        ? {
+            wind,
+            state: fleet.runwaySnapshot(),
+            lastChange: fleet.runwayTransitions().at(-1) ?? null,
+          }
+        : null,
     }),
   };
 }

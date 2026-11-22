@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { aircraftCodes } from '../../schema/aircraft';
 import type { StandKind } from '../../schema/airport';
 import type { FlightBoard } from '../../sim/flight-operations';
+import { Stepper } from '../controls';
 import { useAppStore } from '../store';
 import { aircraftStateLabels, flightBoardContext, useFlightBoard } from '../flight-board-data';
 
@@ -120,12 +121,84 @@ function Movements({ title, rows }: { title: string; rows: Movement[] }) {
   );
 }
 
+const endsLabel = (arrivals: string[], departures: string[]) =>
+  arrivals.join(' ') === departures.join(' ')
+    ? arrivals.join(', ')
+    : `arrivals ${arrivals.join(', ')}, departures ${departures.join(', ')}`;
+
+/** TASK-300: the runway configuration in use, a change in progress, and the wind control. */
+function Runways({ runways }: { runways: NonNullable<FlightBoard['runways']> }) {
+  const engine = useAppStore((s) => s.session?.engine);
+  const [wind, setWind] = useState(runways.wind);
+  // A wind the run reports differently (a restart) replaces the one last entered.
+  const [reported, setReported] = useState(runways.wind);
+  if (reported.fromDeg !== runways.wind.fromDeg || reported.speedKt !== runways.wind.speedKt) {
+    setReported(runways.wind);
+    setWind(runways.wind);
+  }
+  const change = (next: typeof wind) => {
+    setWind(next);
+    void engine?.setWind(next).catch((error: unknown) => useAppStore.getState().reportError(error));
+  };
+  const { state, lastChange } = runways;
+  const inUse = state?.arrivalEnds.length
+    ? endsLabel(state.arrivalEnds, state.departureEnds)
+    : 'Closed';
+  return (
+    <section aria-label="Runways">
+      <h3>Runways</h3>
+      <dl className="details">
+        <dt>In use</dt>
+        <dd>{state?.switching && !state.arrivalEnds.length ? 'Changing' : inUse}</dd>
+        {state?.switching && (
+          <>
+            <dt>Changing to</dt>
+            <dd>
+              {state.switching.to ?? 'Closed'} since {localTime(state.switching.sinceS)}
+              {state.switching.closingEnds.length > 0 &&
+                `, clearing ${state.switching.closingEnds.join(', ')}`}
+            </dd>
+            <dt>Re-routed</dt>
+            <dd>{state.switching.rerouted}</dd>
+          </>
+        )}
+        {!state?.switching && lastChange && (
+          <>
+            <dt>Last change</dt>
+            <dd>
+              {lastChange.fromId ?? 'Closed'} to {lastChange.toId ?? 'Closed'} at{' '}
+              {localTime(lastChange.startS)}, open after{' '}
+              {Math.round(lastChange.openS - lastChange.startS)} s, {lastChange.rerouted} re-routed
+            </dd>
+          </>
+        )}
+      </dl>
+      <Stepper
+        label="Wind from (°)"
+        value={wind.fromDeg}
+        min={0}
+        max={350}
+        step={10}
+        onChange={(value) => change({ ...wind, fromDeg: value })}
+      />
+      <Stepper
+        label="Wind speed (kt)"
+        value={wind.speedKt}
+        min={0}
+        max={40}
+        onChange={(value) => change({ ...wind, speedKt: value })}
+      />
+    </section>
+  );
+}
+
 export function FlightBoardInspector() {
   const board = useFlightBoard();
   if (!board) return null;
   return (
     <section aria-label="Flight board" className="flight-board">
       <h2>Flight board</h2>
+      {board.runways && <Runways runways={board.runways} />}
       <Movements title="Departures" rows={board.departures} />
       <Movements title="Arrivals" rows={board.arrivals} />
     </section>
