@@ -68,6 +68,8 @@ const TAXI_CENTRELINE_SPACING_M = 30;
 const TAXI_EDGE_SPACING_M = 60;
 const PAPI_FROM_THRESHOLD_M = 300;
 const LIGHT_M = 0.3;
+/** A stand's floodlight mast stands this far ahead of the nose (TASK-315 draws the mast). */
+export const FLOOD_AHEAD_M = 12;
 
 const light = (
   kind: AirfieldLightKind,
@@ -256,7 +258,7 @@ export function placeAirfieldLights(
     lights.push(
       light(
         'apron-flood',
-        { x: stand.pos.x + dx * 12, y: stand.pos.y + dy * 12 },
+        { x: stand.pos.x + dx * FLOOD_AHEAD_M, y: stand.pos.y + dy * FLOOD_AHEAD_M },
         { heightM: 20, stationM: span },
       ),
     );
@@ -414,16 +416,4 @@ export function aircraftFlash(timeS: number, seed: number) {
   const beacon = (timeS + (seed % 7) * 0.13) % 1;
   const strobe = (timeS + (seed % 5) * 0.21) % 1.2;
   return { beacon: beacon < 0.12, strobe: strobe < 0.05 || (strobe > 0.16 && strobe < 0.21) };
-}
-
-/** A per-flight accent (fin and engines) from its registration: a fixed set of livery colours. */
-const accents = [
-  0x1f3f78, 0xb3202a, 0x10707a, 0x5a2d82, 0xd9661f, 0x2e7d32, 0x1f78c8, 0x7a1f3d, 0xc79a1b,
-  0x3b4650,
-];
-export function aircraftAccent(registration: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < registration.length; i++)
-    hash = Math.imul(hash ^ registration.charCodeAt(i), 16777619);
-  return accents[(hash >>> 0) % accents.length]!;
 }

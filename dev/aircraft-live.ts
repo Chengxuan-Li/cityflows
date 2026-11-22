@@ -19,7 +19,9 @@ import { pixelScale } from '../src/render3d/airfield-lights';
 // TASK-301: every catalogue type through the app's own aircraft renderer (accent colours,
 // outlines, spinning parts, gear, lights and shadow) in one sim state at a time.
 // /dev/render.html?fixture=aircraft-live&state=taxi&lighting=night
-// TASK-318: the real models by level of detail as the camera moves; `compare` adds a second row
+// TASK-315: `type=A388` shows one type; `angle` (degrees round the row, 0 ahead-left) and
+// `distance` (a factor on the framing distance) move the camera in for close-ups.
+// TASK-318: the real models by level of detail as the camera moves; `compare=1` adds a second row
 // of the procedural meshes behind, `lod=0` holds every real model at its near level.
 
 const states = {
@@ -34,6 +36,9 @@ export function showAircraftLive(query: URLSearchParams) {
   const state = (query.get('state') ?? 'taxi') as keyof typeof states;
   const mode = query.get('lighting') === 'night' ? 'night' : 'day';
   const only = query.get('class');
+  const typeId = query.get('type');
+  const angle = (Number(query.get('angle') ?? 0) * Math.PI) / 180;
+  const distance = Number(query.get('distance') ?? 1);
   document.querySelector('#fixture')!.textContent = `Aircraft in state ${state}, ${mode}`;
   const canvas = document.querySelector('canvas')!;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -56,9 +61,8 @@ export function showAircraftLive(query: URLSearchParams) {
     scene.add(set.group);
   }
   const near = query.get('lod') === '0';
-  const ids = query.get('types')?.split(',');
   const types = aircraftTypes.filter(
-    (t) => (!only || t.class === only) && (!ids || ids.includes(t.id)),
+    (t) => (!only || t.class === only) && (!typeId || t.id === typeId),
   );
   const s = states[state] ?? states.taxi;
   // A row along x, heading north (-y).
@@ -92,12 +96,18 @@ export function showAircraftLive(query: URLSearchParams) {
   const middle = ((types.length - 1) * spacing) / 2;
   controls.target.set(middle, s.heightM, 0);
   // Ahead and to the left of the row, far enough to frame it.
-  const reach = (types.length - 1) * spacing * 0.7 + longest * 1.6;
-  camera.position.set(middle - 0.45 * reach, s.heightM + 0.35 * reach, -0.85 * reach);
+  const reach = ((types.length - 1) * spacing * 0.7 + longest * 1.6) * distance;
+  const c = Math.cos(angle),
+    sn = Math.sin(angle);
+  camera.position.set(
+    middle - reach * (0.45 * c - 0.85 * sn),
+    s.heightM + 0.35 * reach,
+    -reach * (0.85 * c + 0.45 * sn),
+  );
   if (procedural) {
-    // Both rows, from ahead and to the left.
+    // Both rows.
     controls.target.z += spacing / 2;
-    camera.position.z -= spacing * 0.2;
+    camera.position.z += spacing / 2;
   }
   canvas.dataset.aircraft = String(aircraft.count);
   let last = performance.now();

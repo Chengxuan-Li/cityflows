@@ -171,9 +171,14 @@ export function modelBody(model: AircraftModel, lod: ModelLodIndex, livery: Mode
         const x = (position.getX(t) + position.getX(t + 1) + position.getX(t + 2)) / 3;
         const y = (position.getY(t) + position.getY(t + 1) + position.getY(t + 2)) / 3;
         const z = (position.getZ(t) + position.getZ(t + 1) + position.getZ(t + 2)) / 3;
-        const f = Math.min(profile.length - 1, Math.max(0, (x / length + 0.5) * (profile.length - 1)));
+        const f = Math.min(
+          profile.length - 1,
+          Math.max(0, (x / length + 0.5) * (profile.length - 1)),
+        );
         const [, cy, height, width] = profile[Math.round(f)]!;
-        color.setHex(liveryAt(livery, x / length, Math.atan2(Math.abs(z) / width, (y - cy) / height)));
+        color.setHex(
+          liveryAt(livery, x / length, Math.atan2(Math.abs(z) / width, (y - cy) / height)),
+        );
       } else if (part.name === 'tail') color.setHex(livery.tail);
       else if (part.name === 'engine') color.setHex(livery.engines);
       else color.copy(part.color);
@@ -274,21 +279,20 @@ export class AircraftModels {
     if (!pending) {
       const file = info.lods[lod]!.file;
       const start = performance.now();
-      pending = this.read(file)
-        .then(async (data) => {
-          const parsed = await parseModelLod(data);
-          const entry = this.models.get(typeId) ?? {
-            typeId,
-            info,
-            lengthM,
-            lods: [null, null],
-            bodies: new Map(),
-          };
-          entry.lods[lod] = parsed;
-          this.models.set(typeId, entry);
-          this.loads.push({ file, bytes: data.byteLength, ms: performance.now() - start });
-          return entry;
-        });
+      pending = this.read(file).then(async (data) => {
+        const parsed = await parseModelLod(data);
+        const entry = this.models.get(typeId) ?? {
+          typeId,
+          info,
+          lengthM,
+          lods: [null, null],
+          bodies: new Map(),
+        };
+        entry.lods[lod] = parsed;
+        this.models.set(typeId, entry);
+        this.loads.push({ file, bytes: data.byteLength, ms: performance.now() - start });
+        return entry;
+      });
       this.pending.set(key, pending);
     }
     return pending;

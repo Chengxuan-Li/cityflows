@@ -79,6 +79,7 @@ import { Trains3D } from './trains';
 import { Aircraft3D } from './aircraft';
 import { AircraftModels } from './aircraft-models';
 import { AirfieldLights3D, pixelScale } from './airfield-lights';
+import { Apron3D } from './apron';
 import { Stations3D } from './stations';
 import { TramStops3D } from './tram-stops';
 import { LevelCrossings3D } from './level-crossings';
@@ -144,6 +145,8 @@ export class Scene3D {
   /** TASK-301: airfield lights, the aircraft the camera follows, and the aircraft animation's
    * wall clock (it stands still while the run is paused). */
   private airfieldLights: AirfieldLights3D | undefined;
+  /** TASK-315: jet bridges, masts, stand boards and terminal glazing. */
+  private apron: Apron3D | undefined;
   private followed: number | null = null;
   private followFrom: Vector3 | null = null;
   private aircraftFrameMs = performance.now();
@@ -338,14 +341,18 @@ export class Scene3D {
     // TASK-298: aircraft, at the airfield's elevation (the middle of its first runway).
     const runway = city.airside?.runways[0];
     const middle = runway?.line[Math.floor(runway.line.length / 2)];
+    const airfieldM = middle ? terrain.groundAt(middle.x, middle.y) : 0;
     this.aircraft = city.airside
-      ? new Aircraft3D(
-          middle ? terrain.groundAt(middle.x, middle.y) : 0,
-          this.aircraftModels,
-          this.invalidate,
-        )
+      ? new Aircraft3D(airfieldM, this.aircraftModels, this.invalidate)
       : undefined;
     if (this.aircraft) this.content.add(this.aircraft.group);
+    this.apron =
+      city.airside && source.airport
+        ? new Apron3D(source.airport, city.airside, renderedSource.context, airfieldM, (x, y) =>
+            terrain.groundAt(x, y),
+          )
+        : undefined;
+    if (this.apron) this.content.add(this.apron.group);
     this.airfieldLights = city.airside
       ? new AirfieldLights3D(city.airside, source.airport?.approachAids, (x, y) =>
           terrain.groundAt(x, y),
@@ -756,6 +763,7 @@ export class Scene3D {
     this.trains?.setLights(on);
     this.levelCrossings?.setNight(on);
     this.aircraft?.setLight(on);
+    this.apron?.setLight(on);
     this.airfieldLights?.setLight(on);
     if (this.airfieldLights)
       this.canvas.dataset.airfieldLights = JSON.stringify(this.airfieldLights.counts());
@@ -811,6 +819,10 @@ export class Scene3D {
     this.vehicles.setSnapshot(snapshot);
     this.aircraft?.update(snapshot.aircraft ?? [], snapshot.timeS, playbackSpeed);
     this.canvas.dataset.aircraft = String(this.aircraft?.count ?? 0);
+    if (this.apron) {
+      this.apron.update(snapshot.aircraft ?? [], snapshot.timeS);
+      this.canvas.dataset.apron = JSON.stringify(this.apron.counts());
+    }
     if (this.airfieldLights) {
       this.airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
       this.canvas.dataset.airfieldLights = JSON.stringify(this.airfieldLights.counts());
@@ -1283,6 +1295,7 @@ export class Scene3D {
     if (advancing && this.vehicles.mesh.count) this.invalidate();
     this.vehicleAgeS = elapsedS;
     if (this.aircraft) this.animateAircraft(elapsedS, advancing, playing);
+    if (this.apron?.animate(elapsedS) || (advancing && this.apron?.moving)) this.invalidate();
     // Keep centimetre-separated ground/paint resolvable at city-scale camera distances.
     const distance = this.camera.position.distanceTo(this.controls.target);
     this.camera.near = Math.max(0.2, distance / 10);

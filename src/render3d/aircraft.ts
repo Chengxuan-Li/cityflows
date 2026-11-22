@@ -30,13 +30,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftTypes, type AircraftType } from '../schema/aircraft';
 import { fixedWingGearStations } from '../sim/aircraft-motion';
 import { aircraftLayout, buildAircraftOutline } from '../render/aircraft-outline';
+import { aircraftLivery } from '../render/aircraft-livery';
 import { AircraftPoseTrack, pushbackDrawbarM } from '../render/aircraft-pose';
-import {
-  aircraftAccent,
-  aircraftFlash,
-  aircraftLights,
-  type AircraftLightState,
-} from '../render/airfield-lights';
+import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
 import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
 import { placeAircraft } from './aircraft-attitude';
@@ -242,8 +238,8 @@ export class Aircraft3D {
 
   private build(pose: AircraftPose, timeS: number): Model {
     const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
-    const accent = aircraftAccent(pose.registration);
-    const mesh = buildAircraftMesh(type, accent);
+    const livery = aircraftLivery(pose.registration);
+    const mesh = buildAircraftMesh(type, livery);
     mesh.root.userData.aircraft = pose.id;
     const discs = spinnerDiscs([...mesh.propellers, ...mesh.rotors]);
     batchAircraftMesh(mesh, this.outline);
@@ -297,7 +293,7 @@ export class Aircraft3D {
       tug,
       lights: aircraftLights(pose),
       spin: pose.enginesRunning ? 1 : 0,
-      livery: { style: 'tail', tail: accent, trim: null, engines: 0xf0f1f3, belly: null },
+      livery,
       far,
       levels: [null, null],
       lod: 2,
@@ -389,7 +385,13 @@ export class Aircraft3D {
       const level = model.lod < 2 ? model.levels[model.lod] : null;
       for (const blades of level?.spinners ?? [])
         blades.rotation.y +=
-          SPIN[blades.name === 'propeller' ? 'propeller' : blades.name === 'rotor' ? 'rotor' : 'tailRotor'] *
+          SPIN[
+            blades.name === 'propeller'
+              ? 'propeller'
+              : blades.name === 'rotor'
+                ? 'rotor'
+                : 'tailRotor'
+          ] *
           model.spin *
           dtS;
       for (const disc of level ? level.discs : model.discs) {
@@ -459,7 +461,8 @@ export class Aircraft3D {
         const detailed = (depth - radiusM) * scale < 5.4;
         for (const row of mesh.windowRows) row.visible = detailed;
       }
-      if (this.loader && modelInfo(type.id)) this.chooseLevel(model, (2 * radiusM) / (Math.max(depth, radiusM) * scale));
+      if (this.loader && modelInfo(type.id))
+        this.chooseLevel(model, (2 * radiusM) / (Math.max(depth, radiusM) * scale));
     }
   }
 

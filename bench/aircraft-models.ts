@@ -321,8 +321,6 @@ function priorAt(layout: ReturnType<typeof aircraftLayout>, x: number) {
 
 // ---- parts ------------------------------------------------------------------------------------
 
-/** Parts the livery colours at run time; every other part keeps a fixed colour. */
-const liveried = ['hull', 'tail', 'engine'] as const;
 const wingGrey = [0.82, 0.84, 0.86] as const;
 const glass = [0.137, 0.216, 0.278] as const;
 
@@ -445,7 +443,11 @@ function prepare(source: Source, dir: string): Prepared {
     const a = profile[Math.floor(f)]!,
       b = profile[Math.min(40, Math.floor(f) + 1)]!;
     const t = f - Math.floor(f);
-    return { y: a[1] + (b[1] - a[1]) * t, height: a[2] + (b[2] - a[2]) * t, width: a[3] + (b[3] - a[3]) * t };
+    return {
+      y: a[1] + (b[1] - a[1]) * t,
+      height: a[2] + (b[2] - a[2]) * t,
+      width: a[3] + (b[3] - a[3]) * t,
+    };
   };
 
   // Classify triangles.
@@ -453,7 +455,8 @@ function prepare(source: Source, dir: string): Prepared {
   const tipY = (() => {
     let min = Infinity;
     for (let i = 0; i < position.length / 3; i++)
-      if (Math.abs(position[i * 3 + 2]!) > halfSpan * 0.94) min = Math.min(min, position[i * 3 + 1]!);
+      if (Math.abs(position[i * 3 + 2]!) > halfSpan * 0.94)
+        min = Math.min(min, position[i * 3 + 1]!);
     return min;
   })();
   const part: string[] = [];
@@ -469,8 +472,16 @@ function prepare(source: Source, dir: string): Prepared {
     const cy = (position[o + 1]! + position[o + 4]! + position[o + 7]!) / 3;
     const cz = (position[o + 2]! + position[o + 5]! + position[o + 8]!) / 3;
     // Wind each triangle with its stored normals outward.
-    e1.set(position[o + 3]! - position[o]!, position[o + 4]! - position[o + 1]!, position[o + 5]! - position[o + 2]!);
-    e2.set(position[o + 6]! - position[o]!, position[o + 7]! - position[o + 1]!, position[o + 8]! - position[o + 2]!);
+    e1.set(
+      position[o + 3]! - position[o]!,
+      position[o + 4]! - position[o + 1]!,
+      position[o + 5]! - position[o + 2]!,
+    );
+    e2.set(
+      position[o + 6]! - position[o]!,
+      position[o + 7]! - position[o + 1]!,
+      position[o + 8]! - position[o + 2]!,
+    );
     face.crossVectors(e1, e2);
     const stored = new Vector3(
       normal[o]! + normal[o + 3]! + normal[o + 6]!,
@@ -479,7 +490,11 @@ function prepare(source: Source, dir: string): Prepared {
     );
     const flip = stored.lengthSq() > 0 && face.dot(stored) < 0;
     const order = flip ? [0, 2, 1] : [0, 1, 2];
-    const vertices = order.flatMap((k) => [position[o + k * 3]!, position[o + k * 3 + 1]!, position[o + k * 3 + 2]!]);
+    const vertices = order.flatMap((k) => [
+      position[o + k * 3]!,
+      position[o + k * 3 + 1]!,
+      position[o + k * 3 + 2]!,
+    ]);
     face.normalize();
     if (flip) face.negate();
     const spin = spinOf[t];
@@ -504,29 +519,44 @@ function prepare(source: Source, dir: string): Prepared {
       cy > s.y + s.height * 0.85 &&
       Math.abs(cz) < Math.max(0.35 * s.width, 0.6)
     )
-      name = light ? 'tail' : `c${hex(group.color!).map((c) => c.toString(16).padStart(2, '0')).join('')}`;
-    else if (!helicopter && Math.abs(cz) > halfSpan * 0.88 && Math.abs(face.y) < 0.6 && cy > tipY + 0.2)
+      name = light
+        ? 'tail'
+        : `c${hex(group.color!)
+            .map((c) => c.toString(16).padStart(2, '0'))
+            .join('')}`;
+    else if (
+      !helicopter &&
+      Math.abs(cz) > halfSpan * 0.88 &&
+      Math.abs(face.y) < 0.6 &&
+      cy > tipY + 0.2
+    )
       name = 'tail';
     else if (engineNames.test(names) && light) name = 'engine';
     else if (light) name = inBody || helicopter ? 'hull' : 'wing';
     else {
       // Fixed colours, rounded to eighths so that similar materials share a primitive.
       const c = group.color!.map((x) => Math.round(x * 8) / 8);
-      name = `c${hex(c).map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+      name = `c${hex(c)
+        .map((x) => x.toString(16).padStart(2, '0'))
+        .join('')}`;
     }
     part.push(name);
     keepPosition.push(...vertices);
-    keepNormal.push(...order.flatMap((k) => [normal[o + k * 3]!, normal[o + k * 3 + 1]!, normal[o + k * 3 + 2]!]));
+    keepNormal.push(
+      ...order.flatMap((k) => [normal[o + k * 3]!, normal[o + k * 3 + 1]!, normal[o + k * 3 + 2]!]),
+    );
   }
   const spinners = [...spinTriangles.values()].map(({ kind, position: list }) => {
     const p = Float32Array.from(list);
     const hub =
       kind === 'rotor'
         ? rotorHub.clone().setY(extent(p, 1)[0])
-        : new Vector3(...[0, 1, 2].map((a) => {
-            const [lo, hi] = extent(p, a);
-            return (lo + hi) / 2;
-          }));
+        : new Vector3(
+            ...[0, 1, 2].map((a) => {
+              const [lo, hi] = extent(p, a);
+              return (lo + hi) / 2;
+            }),
+          );
     return { kind, hub, position: p };
   });
   return {
@@ -535,7 +565,9 @@ function prepare(source: Source, dir: string): Prepared {
     normal: Float32Array.from(keepNormal),
     part,
     spinners,
-    profile: profile.map((row) => row.map((x) => Math.round(x * 1000) / 1000) as Prepared['profile'][number]),
+    profile: profile.map(
+      (row) => row.map((x) => Math.round(x * 1000) / 1000) as Prepared['profile'][number],
+    ),
     scale: { x: sx, body, wing },
   };
 }
@@ -594,10 +626,21 @@ function windowPanes(prepared: Prepared, lod: number) {
             b = points[j]!;
           const corner = (p: { point: Vector3; normal: Vector3 }, up: number) => {
             const tangent = new Vector3(1, 0, 0).cross(p.normal).normalize().multiplyScalar(side);
-            return p.point.clone().addScaledVector(p.normal, 0.04).addScaledVector(tangent, (up * height) / 2);
+            return p.point
+              .clone()
+              .addScaledVector(p.normal, 0.04)
+              .addScaledVector(tangent, (up * height) / 2);
           };
           const quad = [corner(a, -1), corner(b, -1), corner(b, 1), corner(a, 1)];
-          for (const [i, k, m] of side > 0 ? [[0, 1, 2], [0, 2, 3]] : [[0, 2, 1], [0, 3, 2]])
+          for (const [i, k, m] of side > 0
+            ? [
+                [0, 1, 2],
+                [0, 2, 3],
+              ]
+            : [
+                [0, 2, 1],
+                [0, 3, 2],
+              ])
             out.push(...quad[i!]!.toArray(), ...quad[k!]!.toArray(), ...quad[m!]!.toArray());
         }
         continue;
@@ -626,7 +669,8 @@ function windowPanes(prepared: Prepared, lod: number) {
             .addScaledVector(up, w! * height),
         );
         for (let k = 1; k < 7; k++) {
-          const tri = side > 0 ? [ring[0]!, ring[k]!, ring[k + 1]!] : [ring[0]!, ring[k + 1]!, ring[k]!];
+          const tri =
+            side > 0 ? [ring[0]!, ring[k]!, ring[k + 1]!] : [ring[0]!, ring[k + 1]!, ring[k]!];
           for (const p of tri) out.push(p.x, p.y, p.z);
         }
       }
@@ -686,7 +730,11 @@ function partColor(name: string): [number, number, number] {
   if (name === 'glass') return [...glass];
   if (name === 'wing') return [...wingGrey];
   if (name.startsWith('c'))
-    return [1, 3, 5].map((i) => parseInt(name.slice(i, i + 2), 16) / 255) as [number, number, number];
+    return [1, 3, 5].map((i) => parseInt(name.slice(i, i + 2), 16) / 255) as [
+      number,
+      number,
+      number,
+    ];
   return [0.94, 0.945, 0.953];
 }
 
@@ -734,8 +782,13 @@ async function exportLod(prepared: Prepared, lod: number) {
     mount.updateMatrix();
     const inverse = mount.matrix.clone().invert();
     const v = new Vector3();
-    for (let k = 0; k < local.length; k += 3) v.fromArray(local, k).applyMatrix4(inverse).toArray(local, k);
-    const geometry = simplify(local, Array.from({ length: local.length / 9 }, () => 'spinner'), target).get('spinner')!;
+    for (let k = 0; k < local.length; k += 3)
+      v.fromArray(local, k).applyMatrix4(inverse).toArray(local, k);
+    const geometry = simplify(
+      local,
+      Array.from({ length: local.length / 9 }, () => 'spinner'),
+      target,
+    ).get('spinner')!;
     const material = new MeshStandardMaterial({ roughness: 1, metalness: 0 });
     material.color.setRGB(0.302, 0.349, 0.392).convertSRGBToLinear();
     material.name = 'spinner';
@@ -757,7 +810,8 @@ function mounts(prepared: Prepared) {
   const L = type.lengthM;
   const layout = aircraftLayout(type);
   const helicopter = type.class === 'helicopter';
-  const round = (p: number[]) => p.map((x) => Math.round(x * 100) / 100) as [number, number, number];
+  const round = (p: number[]) =>
+    p.map((x) => Math.round(x * 100) / 100) as [number, number, number];
   const at = (x: number) => profile[Math.round(Math.min(40, Math.max(0, (x / L + 0.5) * 40)))]!;
   // Wing tips (helicopters: the stabiliser tips): the outermost few centimetres.
   const tipFilter = (i: number) => !helicopter || position[i * 3]! < -0.25 * L;
@@ -808,12 +862,15 @@ for (const source of sources) {
     const file = `${source.type.toLowerCase()}-${lod}.glb`;
     writeFileSync(join(outDir, file), glb);
     lods.push({ file, triangles, bytes: glb.byteLength });
-    if (lod === 0) console.log(`${source.type} from ${source.file}: ${sourceTriangles} source triangles`);
+    if (lod === 0)
+      console.log(`${source.type} from ${source.file}: ${sourceTriangles} source triangles`);
   }
   manifest[source.type] = {
     source: source.file,
     lods,
-    scale: Object.fromEntries(Object.entries(prepared.scale).map(([k, x]) => [k, Math.round(x * 1e4) / 1e4])),
+    scale: Object.fromEntries(
+      Object.entries(prepared.scale).map(([k, x]) => [k, Math.round(x * 1e4) / 1e4]),
+    ),
     profile: prepared.profile,
     lights: mounts(prepared),
   };

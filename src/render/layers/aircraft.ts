@@ -6,6 +6,7 @@ import { aircraftTypes, type AircraftType } from '../../schema/aircraft';
 import { fixedWingGearStations } from '../../sim/aircraft-motion';
 import { buildAircraftOutline, type AircraftOutlinePart } from '../aircraft-outline';
 import { pushbackDrawbarM } from '../aircraft-pose';
+import { bridgeSize, cabBack, type JetBridgeStates } from '../apron';
 import { style } from '../style';
 import type { AircraftPose, Pick } from '../types';
 
@@ -34,14 +35,53 @@ function place(pose: AircraftPose, offset: Vec2 = { x: 0, y: 0 }) {
 const inside = (bounds: Box | null, p: AircraftPose) =>
   !bounds || (p.x >= bounds.minX && p.x <= bounds.maxX && p.y >= bounds.minY && p.y <= bounds.maxY);
 
+/** TASK-315: jet bridges from above at `timeS`: rotunda, any fixed link, the tunnels and the
+ * cab, under the aircraft. */
+function drawJetBridges(g: Graphics, states: JetBridgeStates, timeS: number) {
+  const { bridge: fill, edge } = style.apron;
+  const bar = (from: Vec2, to: Vec2, width: number) => {
+    const dx = to.x - from.x,
+      dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / length) * (width / 2),
+      ny = (dx / length) * (width / 2);
+    g.poly([
+      { x: from.x + nx, y: from.y + ny },
+      { x: to.x + nx, y: to.y + ny },
+      { x: to.x - nx, y: to.y - ny },
+      { x: from.x - nx, y: from.y - ny },
+    ])
+      .fill(fill)
+      .stroke({ width: 0.25, color: edge });
+  };
+  for (const [i, bridge] of states.bridges.entries()) {
+    const pose = states.poseAt(i, timeS);
+    if (bridge.link) bar(bridge.link, bridge.rotunda, 3);
+    bar(bridge.rotunda, cabBack(pose), 3);
+    const c = Math.cos(pose.facing),
+      s = Math.sin(pose.facing);
+    const half = bridgeSize.cabDepthM / 2;
+    bar(
+      { x: pose.cab.x - c * half, y: pose.cab.y - s * half },
+      { x: pose.cab.x + c * half, y: pose.cab.y + s * half },
+      bridgeSize.cabWidthM,
+    );
+    g.circle(bridge.rotunda.x, bridge.rotunda.y, bridgeSize.rotundaRadiusM)
+      .fill(fill)
+      .stroke({ width: 0.25, color: edge });
+  }
+}
+
 export function drawAircraft(
   g: Graphics,
   aircraft: readonly AircraftPose[],
   bounds: Box | null,
   selected: number | null,
   graph: AirsideGraph | undefined,
+  bridges?: { states: JetBridgeStates; timeS: number },
 ) {
   g.clear();
+  if (bridges) drawJetBridges(g, bridges.states, bridges.timeS);
   const shown = aircraft.filter((p) => inside(bounds, p));
   for (const pose of shown) {
     if (pose.heightM < 0.5) continue;

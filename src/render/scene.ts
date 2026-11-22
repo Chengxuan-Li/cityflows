@@ -21,6 +21,7 @@ import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawAircraft, pickAircraft } from './layers/aircraft';
 import { AircraftPoseTrack } from './aircraft-pose';
+import { apronLayout, JetBridgeStates } from './apron';
 import { AirfieldLights2D } from './layers/airfield-lights';
 import { boxOf, type Box } from '../geo/polyline';
 import { drawStations } from './layers/stations';
@@ -243,6 +244,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let aircraftTracks = new Map<number, AircraftPoseTrack>();
   let aircraftPlaying = false;
   let mapBounds: Box | null = null;
+  // TASK-315: jet bridges, docked by the aircraft snapshot.
+  let jetBridges: JetBridgeStates | null = null;
+  let aircraftTimeS = 0;
   const redrawAircraft = () => {
     drawAircraft(
       aircraft,
@@ -250,6 +254,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       mapBounds,
       selection?.kind === 'aircraft' ? selection.id : null,
       city?.airside,
+      jetBridges ? { states: jetBridges, timeS: aircraftTimeS } : undefined,
     );
     canvas.dataset.aircraft = String(
       aircraftPoses.filter(
@@ -729,6 +734,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // The map's edge: its nodes' extent (aircraft beyond it are not drawn in 2D).
       mapBounds = compiled.nodes.length ? boxOf(compiled.nodes.map((n) => n.pos)) : null;
       aircraftPoses = [];
+      jetBridges =
+        compiled.airside && source?.airport
+          ? new JetBridgeStates(
+              apronLayout(source.airport, compiled.airside, source.context).bridges,
+            )
+          : null;
       aircraftTracks.clear();
       airfieldLights.setCity(compiled.airside, source?.airport?.approachAids);
       parkingCounts = null;
@@ -1208,6 +1219,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         aircraftTracks.clear();
         aircraftPoses = [];
       }
+      jetBridges?.update(snapshot.aircraft ?? [], snapshot.timeS);
+      aircraftTimeS = snapshot.timeS;
       redrawAircraft();
       airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
       airfieldLights.updateAircraft(aircraftPoses, mapBounds);
