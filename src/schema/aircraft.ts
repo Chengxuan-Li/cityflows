@@ -216,3 +216,28 @@ export const aircraftTypes: readonly AircraftType[] = [
 /** A fixed-wing type's code from its wingspan; helicopters use helipads and carry none. */
 export const aircraftCode = (type: AircraftType): AircraftCode | null =>
   type.class === 'helicopter' ? null : codeForSpan(type.spanM);
+
+/** Synthetic stand times used to schedule each type, in minutes. */
+export const aircraftTurnaroundMinutes: Readonly<Partial<Record<string, number>>> = {
+  A388: 100,
+  B748: 95,
+  B77W: 85,
+  A359: 85,
+  A333: 80,
+  B789: 80,
+  A20N: 45,
+  B738: 40,
+  A21N: 50,
+  BCS3: 40,
+  E190: 35,
+  E175: 30,
+  CRJ9: 35,
+  AT76: 30,
+  DH8D: 30,
+  SF34: 25,
+  C25C: 25,
+  PC24: 25,
+  GLF6: 35,
+  EC45: 15,
+  A139: 20,
+};
