@@ -29,8 +29,12 @@ import {
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 // @ts-expect-error three ships no types for its bundled meshoptimizer build
 import { MeshoptSimplifier } from 'three/addons/libs/meshopt_simplifier.module.js';
-import { mergeVertices, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { aircraftLayout } from '../src/render/aircraft-outline';
+import {
+  mergeGeometries,
+  mergeVertices,
+  toCreasedNormals,
+} from 'three/addons/utils/BufferGeometryUtils.js';
+import { aircraftLayout, cabinFloor } from '../src/render/aircraft-outline';
 import { aircraftTypes, type AircraftType } from '../src/schema/aircraft';
 import { fixedWingGearStations } from '../src/sim/aircraft-motion';
 
@@ -323,7 +327,12 @@ function priorAt(layout: ReturnType<typeof aircraftLayout>, x: number) {
 
 const wingGrey = [0.82, 0.84, 0.86] as const;
 const glass = [0.137, 0.216, 0.278] as const;
+/** TASK-315's door seam colour. */
+const doorPart = 'cd3d8dd';
 
+/** Mid greys outside the fuselage are the sources' untextured wing and tail surfaces. */
+const isGrey = (c: readonly number[]) =>
+  luminance(c) > 0.3 && Math.max(...c) - Math.min(...c) < 0.06;
 const luminance = ([r, g, b]: readonly number[]) => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 const hex = (c: readonly number[]) =>
   c.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)) as [number, number, number];
@@ -352,6 +361,7 @@ function prepare(source: Source, dir: string): Prepared {
     v.fromArray(soup.position, i).applyMatrix4(rotate).toArray(position, i);
     v.fromArray(soup.normal, i).applyMatrix4(rotate).toArray(normal, i);
   }
+  const rotated = position.slice();
   const layout = aircraftLayout(type);
   const L = type.lengthM,
     halfSpan = type.spanM / 2;
@@ -426,7 +436,6 @@ function prepare(source: Source, dir: string): Prepared {
   const probe = section(slice(position, at, nonSpin), { ...prior, ...anyHeight })!;
   const lift = prior.y - prior.height - (probe.y - probe.height);
   for (let i = 1; i < position.length; i += 3) position[i] = position[i]! + lift;
-  rotorHub.multiply(new Vector3(sx, body, body)).add(new Vector3(xShift, 0, -zMid * body));
 
   // Fuselage profile.
   const profile: Prepared['profile'] = [];
@@ -438,6 +447,17 @@ function prepare(source: Source, dir: string): Prepared {
       s ? [x, s.y, s.height, s.width] : [x, p.y, Math.max(0.05, p.height), Math.max(0.05, p.width)],
     );
   }
+  // Behind the wing the fuselage only narrows: the fin and tailplane roots that the sections
+  // pick up there are clipped off by keeping the crown, keel and sides from growing rearward.
+  if (!helicopter)
+    for (let i = 13; i >= 0; i--) {
+      const [x, y, height, width] = profile[i]!;
+      const [, ny, nh, nw] = profile[i + 1]!;
+      const top = Math.min(y + height, ny + nh);
+      const bottom = Math.max(y - height, ny - nh);
+      const h = Math.max(0.05, (top - bottom) / 2);
+      profile[i] = [x, Math.min(top, bottom + 2 * h) - h, h, Math.min(width, nw)];
+    }
   const profileAt = (x: number) => {
     const f = Math.min(40, Math.max(0, (x / L + 0.5) * 40));
     const a = profile[Math.floor(f)]!,
@@ -465,7 +485,10 @@ function prepare(source: Source, dir: string): Prepared {
     e2 = new Vector3();
   const keepPosition: number[] = [],
     keepNormal: number[] = [];
-  const spinTriangles = new Map<string, { kind: SpinKind; position: number[] }>();
+  const spinTriangles = new Map<
+    string,
+    { kind: SpinKind; position: number[]; rotated: number[] }
+  >();
   for (let t = 0; t < triangles; t++) {
     const o = t * 9;
     const cx = (position[o]! + position[o + 3]! + position[o + 6]!) / 3;
@@ -500,8 +523,9 @@ function prepare(source: Source, dir: string): Prepared {
     const spin = spinOf[t];
     if (spin) {
       const key = spin === 'propeller' ? `${spin}${cz < 0 ? 0 : 1}` : spin;
-      const list = spinTriangles.get(key) ?? { kind: spin, position: [] };
+      const list = spinTriangles.get(key) ?? { kind: spin, position: [], rotated: [] };
       list.position.push(...vertices);
+      list.rotated.push(...order.flatMap((k) => [0, 1, 2].map((a) => rotated[o + k * 3 + a]!)));
       spinTriangles.set(key, list);
       continue;
     }
@@ -513,6 +537,8 @@ function prepare(source: Source, dir: string): Prepared {
     const light = !group.color || luminance(group.color) > 0.55;
     let name: string;
     if (glassNames.test(names)) name = 'glass';
+    // A helicopter's skids and steps, below the cabin floor: bare metal.
+    else if (helicopter && cy < s.y - s.height * 1.05) name = 'c8c939a';
     else if (
       !helicopter &&
       cx < -0.12 * L &&
@@ -532,7 +558,8 @@ function prepare(source: Source, dir: string): Prepared {
     )
       name = 'tail';
     else if (engineNames.test(names) && light) name = 'engine';
-    else if (light) name = inBody || helicopter ? 'hull' : 'wing';
+    else if (light || (!inBody && isGrey(group.color!)))
+      name = inBody || helicopter ? 'hull' : 'wing';
     else {
       // Fixed colours, rounded to eighths so that similar materials share a primitive.
       const c = group.color!.map((x) => Math.round(x * 8) / 8);
@@ -546,19 +573,26 @@ function prepare(source: Source, dir: string): Prepared {
       ...order.flatMap((k) => [normal[o + k * 3]!, normal[o + k * 3 + 1]!, normal[o + k * 3 + 2]!]),
     );
   }
-  const spinners = [...spinTriangles.values()].map(({ kind, position: list }) => {
-    const p = Float32Array.from(list);
-    const hub =
-      kind === 'rotor'
-        ? rotorHub.clone().setY(extent(p, 1)[0])
-        : new Vector3(
-            ...[0, 1, 2].map((a) => {
-              const [lo, hi] = extent(p, a);
-              return (lo + hi) / 2;
-            }),
-          );
-    return { kind, hub, position: p };
-  });
+  // Spinning parts keep their shape: scaled uniformly by the body scale about their hub, which
+  // goes where the airframe's mapping puts it.
+  const centre = (p: ArrayLike<number>) =>
+    new Vector3(
+      ...[0, 1, 2].map((a) => {
+        const [lo, hi] = extent(p, a);
+        return (lo + hi) / 2;
+      }),
+    );
+  const spinners = [...spinTriangles.values()].map(
+    ({ kind, position: mapped, rotated: source }) => {
+      const hub = centre(mapped);
+      const from = centre(source);
+      const p = Float32Array.from(source);
+      for (let i = 0; i < p.length; i += 3)
+        v.fromArray(p, i).sub(from).multiplyScalar(body).add(hub).toArray(p, i);
+      return { kind, hub, position: p };
+    },
+  );
+  console.log(`  ${type.id}: spinners ${spinners.map((s) => s.kind).join(', ') || 'none'}`);
   return {
     type,
     position: Float32Array.from(keepPosition),
@@ -574,18 +608,20 @@ function prepare(source: Source, dir: string): Prepared {
 
 // ---- window panes -----------------------------------------------------------------------------
 
-/** Cabin window rows as dark panes on the model's own skin (the sources' window textures are
- * dropped), at TASK-307's row positions, cast onto the surface; a source with modelled windows
- * keeps its own. */
-function windowPanes(prepared: Prepared, lod: number) {
-  const { type, position, part, profile } = prepared;
-  const modelled = part.filter((p) => p === 'glass').length;
+/** Door panels (LOD0) and, for a source without cabin glass, window rows as dark panes on the
+ * model's skin at TASK-307's row positions clear of TASK-315's doors (LOD1: one band per row
+ * and side). */
+function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
+  const { type, profile, position, part } = prepared;
+  // A source with cabin glass of its own (panes, or a band behind holes in the skin) keeps it.
+  const modelled = part.some((p, t) => {
+    const x = (position[t * 9]! + position[t * 9 + 3]! + position[t * 9 + 6]!) / 3;
+    return p === 'glass' && Math.abs(x) < 0.3 * type.lengthM;
+  });
   const helicopter = type.class === 'helicopter';
-  if (helicopter || modelled > 400) return [];
-  const mesh = new Mesh(
-    new BufferGeometry().setAttribute('position', new Float32BufferAttribute(position, 3)),
-    new MeshStandardMaterial({ side: DoubleSide }),
-  );
+  const doors: number[] = [];
+  if (helicopter) return { glass: [], doors };
+  const mesh = surface;
   const raycaster = new Raycaster();
   const L = type.lengthM;
   const decks = type.class === 'double_decker' ? [1.64, 0.94] : [1.28];
@@ -607,7 +643,59 @@ function windowPanes(prepared: Prepared, lod: number) {
     if (n.dot(out) < 0) n.negate();
     return { point: first.point, normal: n };
   };
+  /** `p` moved onto the skin along `normal` (outward) and lifted `lift` metres off it. */
+  const onSkin = (p: Vector3, normal: Vector3, lift: number) => {
+    raycaster.set(p.clone().addScaledVector(normal, 0.6), normal.clone().negate());
+    raycaster.far = 1.2;
+    const [first] = raycaster.intersectObject(mesh);
+    if (!first?.face) return p.clone().addScaledVector(normal, lift);
+    const n = first.face.normal.clone();
+    if (n.dot(normal) < 0) n.negate();
+    return first.point.clone().addScaledVector(n, lift);
+  };
+  const layout = aircraftLayout(type);
+  // Door panels in TASK-315's places and colour, on both sides of an airliner and on the port
+  // side of a turboprop or business jet, cast onto the model's side; near level only.
+  const twoSided = type.class !== 'propeller' && type.class !== 'private';
+  for (const door of lod === 0 ? layout.doors : []) {
+    const at = profileAt(door.x);
+    const sill = door.upper ? door.sillM : cabinFloor(type, at, false);
+    for (const side of twoSided ? [-1, 1] : [-1]) {
+      const grid: Vector3[][] = [];
+      for (let v = 0; v <= 4; v++) {
+        const row: Vector3[] = [];
+        for (let u = 0; u <= 2; u++) {
+          const x = door.x + (u / 2 - 0.5) * door.widthM;
+          const y = sill + (v / 4) * door.heightM;
+          const reach = at.width * 1.6 + 0.5;
+          raycaster.set(new Vector3(x, y, side * reach), new Vector3(0, 0, -side));
+          raycaster.far = reach;
+          const [first] = raycaster.intersectObject(mesh);
+          if (!first?.face) break;
+          const n = first.face.normal.clone();
+          if (n.z * side < 0) n.negate();
+          row.push(first.point.clone().addScaledVector(n, 0.025));
+        }
+        if (row.length < 3) break;
+        grid.push(row);
+      }
+      if (grid.length < 5) continue;
+      for (let v = 0; v < 4; v++)
+        for (let u = 0; u < 2; u++) {
+          const [a, b, c, d] = [
+            grid[v]![u]!,
+            grid[v]![u + 1]!,
+            grid[v + 1]![u + 1]!,
+            grid[v + 1]![u]!,
+          ];
+          for (const p of side > 0 ? [a, c, b, a, d, c] : [a, b, c, a, c, d])
+            doors.push(p.x, p.y, p.z);
+        }
+    }
+  }
+  if (modelled) return { glass: [], doors };
   for (const [deck, angle] of decks.entries()) {
+    const upper = type.class === 'double_decker' && deck === 1;
     const from = (type.id === 'B748' && deck === 1 ? 0.235 : -0.33) * L;
     const to = 0.37 * L;
     const count = Math.ceil((to - from) / 0.87);
@@ -626,10 +714,11 @@ function windowPanes(prepared: Prepared, lod: number) {
             b = points[j]!;
           const corner = (p: { point: Vector3; normal: Vector3 }, up: number) => {
             const tangent = new Vector3(1, 0, 0).cross(p.normal).normalize().multiplyScalar(side);
-            return p.point
-              .clone()
-              .addScaledVector(p.normal, 0.04)
-              .addScaledVector(tangent, (up * height) / 2);
+            return onSkin(
+              p.point.clone().addScaledVector(tangent, (up * height) / 2),
+              p.normal,
+              0.04,
+            );
           };
           const quad = [corner(a, -1), corner(b, -1), corner(b, 1), corner(a, 1)];
           for (const [i, k, m] of side > 0
@@ -646,7 +735,15 @@ function windowPanes(prepared: Prepared, lod: number) {
         continue;
       }
       for (let j = 0; j < count; j++) {
-        const h = hit(from + ((to - from) * j) / (count - 1), angle, side);
+        const x = from + ((to - from) * j) / (count - 1);
+        // No pane over a door of the same deck.
+        if (
+          layout.doors.some(
+            (d) => d.upper === upper && Math.abs(d.x - x) < d.widthM / 2 + width + 0.1,
+          )
+        )
+          continue;
+        const h = hit(x, angle, side);
         if (!h) continue;
         const { point, normal } = h;
         const along = new Vector3(1, 0, 0);
@@ -662,9 +759,10 @@ function windowPanes(prepared: Prepared, lod: number) {
           [-0.3, 0.5],
           [-0.5, 0.3],
         ].map(([u, w]) =>
+          // Flat, clear of the skin's curve under the pane.
           point
             .clone()
-            .addScaledVector(normal, 0.03)
+            .addScaledVector(normal, 0.05)
             .addScaledVector(along, u! * width)
             .addScaledVector(up, w! * height),
         );
@@ -676,8 +774,7 @@ function windowPanes(prepared: Prepared, lod: number) {
       }
     }
   }
-  mesh.geometry.dispose();
-  return out;
+  return { glass: out, doors };
 }
 
 // ---- simplification and export ----------------------------------------------------------------
@@ -693,16 +790,39 @@ function simplify(position: Float32Array, part: string[], target: number) {
   const index = Uint32Array.from(welded.index!.array);
   const tight = Float32Array.from(welded.getAttribute('position').array);
   let result = index;
+  // The outermost vertices (nose, tail, tips) stay put, so the extents keep the catalogue size.
+  const extremes = new Uint8Array(tight.length / 3);
+  for (const axis of [0, 1, 2]) {
+    const [lo, hi] = extent(tight, axis);
+    for (let i = 0; i < extremes.length; i++) {
+      const c = tight[i * 3 + axis]!;
+      if (c < lo + 0.02 || c > hi - 0.02) extremes[i] = 1;
+    }
+  }
   if (index.length / 3 > target) {
-    [result] = MeshoptSimplifier.simplify(index, tight, 3, target * 3, 0.02, ['Prune']) as [
-      Uint32Array,
-      number,
-    ];
-    if (result.length / 3 > target * 1.15)
-      [result] = MeshoptSimplifier.simplifySloppy(index, tight, 3, null, target * 3, 0.05) as [
+    [result] = MeshoptSimplifier.simplifyWithAttributes(
+      index,
+      tight,
+      3,
+      new Float32Array(0),
+      0,
+      [],
+      extremes,
+      target * 3,
+      0.02,
+      ['Prune'],
+    ) as [Uint32Array, number];
+    // Where open shells and seams stop the edge collapses short of the budget, the sloppy
+    // simplifier (vertex clustering) takes over; it undershoots, so its target is raised until
+    // the result comes within 80% of the budget.
+    for (let ask = target; result.length / 3 > target * 1.15 || result.length / 3 < target * 0.8;) {
+      [result] = MeshoptSimplifier.simplifySloppy(index, tight, 3, extremes, ask * 3, 1) as [
         Uint32Array,
         number,
       ];
+      if (result.length / 3 >= target * 0.8 || ask * 3 >= index.length) break;
+      ask = Math.min(index.length / 3, Math.round(ask * 1.25));
+    }
   }
   welded.setIndex(Array.from(result));
   const flat = toCreasedNormals(welded, Math.PI / 5);
@@ -749,12 +869,50 @@ class NodeFileReader {
   }
 }
 
+/** Flat-shaded geometry for the window panes and door panels added after simplification. */
+function detail(position: number[]) {
+  const geometry = new BufferGeometry().setAttribute(
+    'position',
+    new Float32BufferAttribute(position, 3),
+  );
+  return mergeVertices(toCreasedNormals(geometry, Math.PI / 5), 1e-4);
+}
+
 async function exportLod(prepared: Prepared, lod: number) {
-  const panes = windowPanes(prepared, lod);
-  const position = Float32Array.from([...prepared.position, ...panes]);
-  const part = [...prepared.part, ...Array.from({ length: panes.length / 9 }, () => 'glass')];
-  const sourceTriangles = part.length;
-  const parts = simplify(position, part, budgets[lod]! - (lod === 0 ? 0 : 0));
+  // Panes and door panels are cast onto the simplified surface; the budget leaves room for
+  // them (counted on a first pass) and for the spinning parts.
+  const sourceTriangles = prepared.part.length;
+  const spinTarget = lod === 0 ? 600 : 80;
+  const pass = (reserve: number) => {
+    const parts = simplify(
+      prepared.position,
+      prepared.part,
+      budgets[lod]! - reserve - spinTarget * prepared.spinners.length,
+    );
+    const surface = new Mesh(
+      mergeGeometries([...parts.values()].map((g) => g.clone().deleteAttribute('normal'))),
+      new MeshStandardMaterial({ side: DoubleSide }),
+    );
+    return { parts, ...windowPanes(prepared, lod, surface) };
+  };
+  const first = pass(0);
+  const reserve = (first.glass.length + first.doors.length) / 9;
+  const {
+    parts,
+    glass: panes,
+    doors,
+  } = prepared.part.length > budgets[lod]! - spinTarget * prepared.spinners.length
+    ? pass(reserve)
+    : first;
+  for (const [name, position] of [
+    ['glass', panes],
+    [doorPart, doors],
+  ] as const) {
+    if (!position.length) continue;
+    const geometry = detail(position);
+    const existing = parts.get(name);
+    parts.set(name, existing ? mergeGeometries([existing, geometry])! : geometry);
+  }
   const scene = new Scene();
   const root = new Group();
   root.name = prepared.type.id;
@@ -771,7 +929,7 @@ async function exportLod(prepared: Prepared, lod: number) {
     root.add(mesh);
   }
   for (const [i, spinner] of prepared.spinners.entries()) {
-    const target = lod === 0 ? 600 : 80;
+    const target = spinTarget;
     const local = Float32Array.from(spinner.position);
     const mount = new Group();
     mount.name = `mount-${spinner.kind}-${i}`;
@@ -800,19 +958,37 @@ async function exportLod(prepared: Prepared, lod: number) {
   }
   (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
   const glb = (await new GLTFExporter().parseAsync(scene, { binary: true })) as ArrayBuffer;
-  return { glb: new Uint8Array(glb), triangles, sourceTriangles };
+  const surface = mergeGeometries(
+    [...parts.values()].map((g) => g.toNonIndexed().deleteAttribute('normal')),
+  )!.getAttribute('position').array as Float32Array;
+  return { glb: new Uint8Array(glb), triangles, sourceTriangles, surface };
 }
 
 // ---- light mounts and doors -------------------------------------------------------------------
 
-function mounts(prepared: Prepared) {
-  const { type, position, profile } = prepared;
+/** Light mounts on the near level's surface (`position`, triangles). */
+function mounts(prepared: Prepared, position: Float32Array) {
+  const { type, profile } = prepared;
   const L = type.lengthM;
   const layout = aircraftLayout(type);
   const helicopter = type.class === 'helicopter';
   const round = (p: number[]) =>
     p.map((x) => Math.round(x * 100) / 100) as [number, number, number];
   const at = (x: number) => profile[Math.round(Math.min(40, Math.max(0, (x / L + 0.5) * 40)))]!;
+  const surface = new Mesh(
+    new BufferGeometry().setAttribute('position', new Float32BufferAttribute(position, 3)),
+    new MeshStandardMaterial({ side: DoubleSide }),
+  );
+  const cast = (from: Vector3, direction: Vector3) =>
+    new Raycaster(from, direction).intersectObject(surface)[0]?.point ?? null;
+  // Beacon on the crown above the wing box.
+  const crownTop = cast(new Vector3(0, 50, 0), new Vector3(0, -1, 0))!;
+  // Landing lights in the wing roots' leading edges, a tenth of the span out (TASK-307).
+  const rootZ = type.spanM * 0.105;
+  const leading = (side: number) => {
+    const wingY = layout.wing[0] ? layout.wing[0].y : at(0)[1];
+    return cast(new Vector3(L, wingY, side * rootZ), new Vector3(-1, 0, 0));
+  };
   // Wing tips (helicopters: the stabiliser tips): the outermost few centimetres.
   const tipFilter = (i: number) => !helicopter || position[i * 3]! < -0.25 * L;
   const [, zMax] = extent(position, 2, tipFilter);
@@ -821,24 +997,33 @@ function mounts(prepared: Prepared) {
   const [ty0, ty1] = extent(position, 1, tip);
   const chord = tx1 - tx0;
   const tipY = (ty0 + ty1) / 2;
-  const tail = (i: number) => {
-    const row = at(position[i * 3]!);
-    return Math.abs(position[i * 3 + 2]!) < 0.5 && position[i * 3 + 1]! < row[1] + row[2];
-  };
-  const [tailX] = extent(position, 0, tail);
-  const tailRow = at(tailX);
-  const mid = at(0);
+  // The tail cone's end: the rearmost point near the plane of symmetry below the crown of the
+  // rear fuselage (the fin rises above it).
+  const crown = at(-0.33 * L);
+  const tail = (i: number) =>
+    Math.abs(position[i * 3 + 2]!) < 0.4 && position[i * 3 + 1]! < crown[1] + crown[2];
+  const navZ = Math.round(zMax * 100) / 100;
+  let tailIndex = -1;
+  for (let i = 0; i < position.length / 3; i++)
+    if (tail(i) && (tailIndex < 0 || position[i * 3]! < position[tailIndex * 3]!)) tailIndex = i;
+  const tailX = position[tailIndex * 3]!,
+    tailY = position[tailIndex * 3 + 1]!;
   const nose = at(0.34 * L);
   const { noseX } = fixedWingGearStations(L);
   const root = layout.wing[0];
   return {
-    navLeft: round([tx1 - chord * 0.14, tipY, -zMax]),
-    navRight: round([tx1 - chord * 0.14, tipY, zMax]),
-    navTail: round([tailX, tailRow[1], 0]),
-    beacon: round([0, mid[1] + mid[2] + 0.08, 0]),
-    strobes: [round([tx1 - chord * 0.68, tipY, -zMax]), round([tx1 - chord * 0.68, tipY, zMax])],
+    navLeft: round([tx1 - chord * 0.14, tipY, -zMax]).map((c, i) => (i === 2 ? -navZ : c)),
+    navRight: round([tx1 - chord * 0.14, tipY, zMax]).map((c, i) => (i === 2 ? navZ : c)),
+    navTail: round([tailX, tailY, 0]),
+    beacon: round([0, crownTop.y + 0.08, 0]),
+    strobes: [round([tx1 - chord * 0.68, tipY, -navZ]), round([tx1 - chord * 0.68, tipY, navZ])],
     landing: root
-      ? [-1, 1].map((side) => round([root.x - L * 0.032, root.y, side * type.spanM * 0.105]))
+      ? [-1, 1].map((side) => {
+          const edge = leading(side);
+          return round(
+            edge ? [edge.x - 0.1, edge.y, edge.z] : [root.x - L * 0.032, root.y, side * rootZ],
+          );
+        })
       : [round([L * 0.29, at(0.29 * L)[1] - at(0.29 * L)[2] - 0.05, 0])],
     taxi: helicopter
       ? round([L * 0.24, at(0.24 * L)[1] - at(0.24 * L)[2] - 0.05, 0])
@@ -857,8 +1042,10 @@ const manifest: Record<string, unknown> = {};
 for (const source of sources) {
   const prepared = prepare(source, dir);
   const lods = [];
+  let surface = new Float32Array(0);
   for (const lod of [0, 1]) {
-    const { glb, triangles, sourceTriangles } = await exportLod(prepared, lod);
+    const { glb, triangles, sourceTriangles, ...rest } = await exportLod(prepared, lod);
+    if (lod === 0) surface = rest.surface;
     const file = `${source.type.toLowerCase()}-${lod}.glb`;
     writeFileSync(join(outDir, file), glb);
     lods.push({ file, triangles, bytes: glb.byteLength });
@@ -872,7 +1059,7 @@ for (const source of sources) {
       Object.entries(prepared.scale).map(([k, x]) => [k, Math.round(x * 1e4) / 1e4]),
     ),
     profile: prepared.profile,
-    lights: mounts(prepared),
+    lights: mounts(prepared, surface),
   };
   console.log(
     `  LOD0 ${lods[0]!.triangles} tris ${lods[0]!.bytes} B, LOD1 ${lods[1]!.triangles} tris ${lods[1]!.bytes} B`,

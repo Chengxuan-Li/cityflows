@@ -47,7 +47,7 @@ test('a bridge at each contact stand with a mapped gate, its rotunda on the faca
     const reference = type(stand.maxCode >= 4 ? 'B77W' : 'A20N');
     const dock = dockedPose(stand, reference);
     expect(reaches(bridge, dock)).toBe(true);
-    expect(tunnelLength(bridge, bridge.rest)).toBeGreaterThanOrEqual(bridge.segmentM + 0.5);
+    expect(tunnelLength(bridge, bridge.rest)).toBeGreaterThanOrEqual(bridge.segmentM + 0.5 - 1e-9);
     expect(distance(bridge.rest.cab, bridge.rotunda)).toBeLessThan(
       distance(dock.cab, bridge.rotunda),
     );

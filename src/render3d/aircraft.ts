@@ -187,7 +187,10 @@ export class Aircraft3D {
   private playing = false;
   private clockS = 0;
   private on = 0;
-  private readonly modelMaterial = new MeshLambertMaterial({ vertexColors: true });
+  private readonly modelMaterial = new MeshLambertMaterial({
+    vertexColors: true,
+    side: DoubleSide,
+  });
   private readonly requested = new Set<string>();
   /** TASK-318: `models` loads the real models (none: procedural meshes only); `onLoad` asks
    * for a frame when a model file has arrived. */

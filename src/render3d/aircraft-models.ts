@@ -103,7 +103,8 @@ export async function parseModelLod(data: ArrayBuffer): Promise<ModelLod> {
       const blade = child.children[0] as Mesh<BufferGeometry, MeshStandardMaterial>;
       child.updateMatrix();
       spinners.push({
-        kind: blade.name as SpinKind,
+        // `mount-<kind>-<n>`: the loader suffixes repeated mesh names, so the mount names it.
+        kind: child.name.replace(/^mount-|-\d+$/g, '') as SpinKind,
         matrix: child.matrix.clone(),
         geometry: blade.geometry,
         color: blade.material.color.clone(),

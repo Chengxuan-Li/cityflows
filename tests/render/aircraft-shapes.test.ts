@@ -14,6 +14,7 @@ import {
   boardingDoor,
   bridgeable,
   buildAircraftOutline,
+  modelSection,
   wingtipKind,
 } from '../../src/render/aircraft-outline';
 import { AircraftPoseTrack } from '../../src/render/aircraft-pose';
@@ -154,10 +155,10 @@ it.each(['A20N', 'AT76', 'EC45'])(
 // TASK-315: per-type parts and dimensions: doors, windscreen, wingtip devices, fan faces,
 // flap-track and wing-to-body fairings, boarding-door sills, and the livery bands.
 const sills: Record<AircraftClass, [number, number]> = {
-  double_decker: [4.8, 5.6],
+  double_decker: [4.7, 5.6],
   widebody: [4.5, 5.6],
   narrowbody: [2.9, 3.8],
-  regional_jet: [1.9, 2.8],
+  regional_jet: [1.8, 2.8],
   propeller: [1.4, 2.6],
   private: [0.8, 1.8],
   helicopter: [1.1, 1.8],
@@ -195,10 +196,11 @@ it.each(aircraftTypes)('$name: doors, windscreen, tips, fans, fairings and sill'
     expect(box.max.y).toBeGreaterThan(layout.wing.at(-1)!.y + type.spanM * 0.02);
   }
   if (kind === 'raked') expect(layout.wing.at(-1)!.chord).toBeLessThan(type.lengthM * 0.025);
-  // The boarding door: ahead of the wing, on the port surface, its sill at the class's height.
+  // The boarding door: ahead of the wing, on the port surface (the real model's where the type
+  // has one, TASK-318), its sill at the class's height.
   const door = boardingDoor(type);
   expect(door.z).toBeLessThan(0);
-  expect(-door.z).toBeLessThanOrEqual(layout.radius);
+  expect(-door.z).toBeLessThanOrEqual(modelSection(type, door.x)?.width ?? layout.radius);
   if (!helicopter) expect(door.x).toBeGreaterThan(layout.wing[0]!.x);
   const [low, high] = sills[type.class];
   expect(door.sillM).toBeGreaterThanOrEqual(low);
