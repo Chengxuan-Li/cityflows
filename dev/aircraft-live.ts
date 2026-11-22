@@ -18,6 +18,8 @@ import { pixelScale } from '../src/render3d/airfield-lights';
 // TASK-301: every catalogue type through the app's own aircraft renderer (accent colours,
 // outlines, spinning parts, gear, lights and shadow) in one sim state at a time.
 // /dev/render.html?fixture=aircraft-live&state=taxi&lighting=night
+// TASK-315: `type=A388` shows one type; `angle` (degrees round the row, 0 ahead-left) and
+// `distance` (a factor on the framing distance) move the camera in for close-ups.
 
 const states = {
   parked: { enginesRunning: false, speedMps: 0, onRunway: false, heightM: 0 },
@@ -31,6 +33,9 @@ export function showAircraftLive(query: URLSearchParams) {
   const state = (query.get('state') ?? 'taxi') as keyof typeof states;
   const mode = query.get('lighting') === 'night' ? 'night' : 'day';
   const only = query.get('class');
+  const typeId = query.get('type');
+  const angle = (Number(query.get('angle') ?? 0) * Math.PI) / 180;
+  const distance = Number(query.get('distance') ?? 1);
   document.querySelector('#fixture')!.textContent = `Aircraft in state ${state}, ${mode}`;
   const canvas = document.querySelector('canvas')!;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -48,7 +53,9 @@ export function showAircraftLive(query: URLSearchParams) {
   const aircraft = new Aircraft3D(0);
   aircraft.setLight(light.artificial);
   scene.add(aircraft.group);
-  const types = aircraftTypes.filter((t) => !only || t.class === only);
+  const types = aircraftTypes.filter(
+    (t) => (!only || t.class === only) && (!typeId || t.id === typeId),
+  );
   const s = states[state] ?? states.taxi;
   // A row along x, heading north (-y).
   const longest = Math.max(...types.map((t) => Math.max(t.lengthM, t.spanM)));
@@ -77,8 +84,14 @@ export function showAircraftLive(query: URLSearchParams) {
   const middle = ((types.length - 1) * spacing) / 2;
   controls.target.set(middle, s.heightM, 0);
   // Ahead and to the left of the row, far enough to frame it.
-  const reach = (types.length - 1) * spacing * 0.7 + longest * 1.6;
-  camera.position.set(middle - 0.45 * reach, s.heightM + 0.35 * reach, -0.85 * reach);
+  const reach = ((types.length - 1) * spacing * 0.7 + longest * 1.6) * distance;
+  const c = Math.cos(angle),
+    sn = Math.sin(angle);
+  camera.position.set(
+    middle - reach * (0.45 * c - 0.85 * sn),
+    s.heightM + 0.35 * reach,
+    -reach * (0.85 * c + 0.45 * sn),
+  );
   canvas.dataset.aircraft = String(aircraft.count);
   let last = performance.now();
   function frame(now: number) {
