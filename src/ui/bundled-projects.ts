@@ -6,6 +6,7 @@ import { scenarios } from '../fixtures/scenarios';
 import { shortTurnLane } from '../fixtures/short-turn-lane';
 import { signalApproach } from '../fixtures/signal-approach';
 import { station } from '../fixtures/station';
+import { syntheticAirport, syntheticAirportBacktrack } from '../fixtures/synthetic-airport';
 import { openProject } from '../project/open';
 import type { OpenResult } from '../project/types';
 import type { City } from '../schema';
@@ -22,6 +23,8 @@ const generators: Record<string, (seed: number) => City> = {
   shortTurnLane,
   disconnected,
   station,
+  syntheticAirport,
+  syntheticAirportBacktrack,
 };
 
 /** TASK-258: the real places of the New city panel, each a bundled archive built by

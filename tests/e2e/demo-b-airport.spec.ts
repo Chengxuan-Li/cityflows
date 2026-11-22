@@ -121,3 +121,45 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   });
   expect(errors).toEqual([]);
 });
+
+test('both synthetic airports open from Test layouts and fit the runway on the map', async ({
+  page,
+}, info) => {
+  const errors = pageErrors(page);
+  await page.goto('/?city=grid5x5');
+  await expect(button(page, 'Play')).toBeEnabled();
+  for (const { id, name, pads } of [
+    { id: 'syntheticAirport', name: 'Synthetic airport', pads: 0 },
+    { id: 'syntheticAirportBacktrack', name: 'Synthetic airport (backtrack)', pads: 2 },
+  ]) {
+    await button(page, 'New').click();
+    const layouts = page.getByRole('region', { name: 'Test layouts', exact: true });
+    await layouts.getByRole('button', { name, exact: true }).click();
+    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
+    await expect(button(page, 'Play')).toBeEnabled();
+
+    const source = await city(page);
+    expect(source.airport?.turnPads).toHaveLength(pads);
+    const ends = Object.values(source.airport!.runways)[0]!.ends.map(({ pos }) => pos);
+    const canvas = page.locator('canvas[data-airside-areas]');
+    await expect(canvas).toHaveAttribute('data-airside-areas', /^[1-9]\d*$/);
+    await expect
+      .poll(() =>
+        canvas.evaluate((element, ends) => {
+          const { width, height } = element.getBoundingClientRect();
+          return ends.every((pos) => {
+            const { x, y } = window.cityflows!.worldToScreen!(pos);
+            return x >= 0 && y >= 0 && x < width && y < height;
+          });
+        }, ends),
+      )
+      .toBe(true);
+    await page.screenshot({ path: info.outputPath(`${id}.png`) });
+
+    await page.goto(`/?city=${id}`);
+    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
+    await expect(button(page, 'Play')).toBeEnabled();
+    expect((await city(page)).airport).toEqual(source.airport);
+  }
+  expect(errors).toEqual([]);
+});

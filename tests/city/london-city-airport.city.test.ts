@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { openBundled } from '../../bench/bundled-cities';
-import type { Airport } from '../../src/schema/airport';
+import { expectAirsideTopology } from '../airside-topology';
 
 // TASK-295: London City's airside as bundled (fixtures/projects/london-city-airport.cityflows.json,
 // a fresh build of its extract by the staleness test in bundled-cities.city.test.ts).
@@ -10,23 +10,6 @@ const count = <T>(items: T[], key: (item: T) => string) =>
     (m, item) => ({ ...m, [key(item)]: (m[key(item)] ?? 0) + 1 }),
     {},
   );
-
-function component(airport: Airport, start: string) {
-  const next = new Map<string, string[]>();
-  for (const { from, to } of Object.values(airport.edges)) {
-    next.set(from, [...(next.get(from) ?? []), to]);
-    next.set(to, [...(next.get(to) ?? []), from]);
-  }
-  const seen = new Set([start]);
-  const queue = [start];
-  while (queue.length)
-    for (const node of next.get(queue.pop()!) ?? [])
-      if (!seen.has(node)) {
-        seen.add(node);
-        queue.push(node);
-      }
-  return seen;
-}
 
 test('London City: one runway, its holds, stands, gates and terminal, all on one graph', async () => {
   const { city } = await openBundled('london-city-airport');
@@ -65,9 +48,5 @@ test('London City: one runway, its holds, stands, gates and terminal, all on one
     'taxiway',
     'runway',
   ]);
-  // One graph: every edge, so every stand, reaches both runway ends.
-  const reach = component(airport, runways[0]!.ends[0].node);
-  expect(reach.has(runways[0]!.ends[1].node)).toBe(true);
-  for (const edge of edges) expect(reach.has(edge.from)).toBe(true);
-  for (const stand of stands) expect(reach.has(airport.edges[stand.leadIn[0]!]!.from)).toBe(true);
+  expectAirsideTopology(airport);
 });

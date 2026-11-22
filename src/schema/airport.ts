@@ -94,7 +94,7 @@ export interface HoldingPosition {
   side: 'left' | 'right' | null;
   /** The edge at the hold that leads to the protected runway. */
   toward: string | null;
-  osmId: number;
+  osmId?: number;
   provenance: Provenance;
 }
 
@@ -118,7 +118,7 @@ export interface Gate {
   ref?: string;
   pos: Vec2;
   terminal: string | null;
-  osmId: number;
+  osmId?: number;
 }
 
 export interface Terminal {
@@ -128,7 +128,7 @@ export interface Terminal {
   rings: Vec2[][];
   /** Terminals within 30 m of each other share a group: a detached terminal is a group alone. */
   group: number;
-  osmId: number;
+  osmId?: number;
 }
 
 export interface Helipad {
@@ -137,7 +137,7 @@ export interface Helipad {
   ring?: Vec2[];
   ref?: string;
   name?: string;
-  osmId: number;
+  osmId?: number;
 }
 
 export interface AirsideSurface {
@@ -146,7 +146,7 @@ export interface AirsideSurface {
   name?: string;
   ref?: string;
   surface?: string;
-  osmId: number;
+  osmId?: number;
 }
 
 /** A road crossing an airside edge at grade: a node the road's OSM way shares with the edge's,
@@ -166,7 +166,7 @@ export interface Airport {
   name: string | null;
   iata?: string;
   icao?: string;
-  /** The aerodrome's mapped outline, outer ring then holes. */
+  /** The aerodrome's outline, outer ring then holes. */
   boundary?: Vec2[][];
   nodes: Record<string, AirsideNode>;
   edges: Record<string, AirsideEdge>;
@@ -176,9 +176,9 @@ export interface Airport {
   gates: Record<string, Gate>;
   terminals: Record<string, Terminal>;
   helipads: Record<string, Helipad>;
-  /** Mapped paved areas: aprons, and runway, taxiway or turn-pad areas. */
+  /** Paved areas: aprons, runway, taxiway, turn-pad and helipad areas. */
   surfaces: AirsideSurface[];
-  hangars: { rings: Vec2[][]; name?: string; ref?: string; osmId: number }[];
+  hangars: { rings: Vec2[][]; name?: string; ref?: string; osmId?: number }[];
   windsocks: { pos: Vec2; lit?: boolean; osmId: number }[];
   /** `aeroway=navigationaid`: `kind` is its `navigationaid` value (papi, als, ...), `facing` its
    * `direction` in the local frame, `runway` and `end` the nearest runway end within 1.5 km. */
@@ -190,6 +190,6 @@ export interface Airport {
     end?: string;
     osmId: number;
   }[];
-  turnPads: { pos: Vec2; node?: string; osmId: number }[];
+  turnPads: { pos: Vec2; node?: string; osmId?: number }[];
   roadCrossings: RoadCrossing[];
 }

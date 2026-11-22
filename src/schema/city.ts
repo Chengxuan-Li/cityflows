@@ -322,7 +322,7 @@ export type MarkingThemeId = 'de' | 'us' | 'uk';
 
 export interface City {
   rail?: RailNetwork;
-  /** TASK-295: the airside of an airport in the area; absent where no aeroway data was imported. */
+  /** TASK-295: the airside of an imported or generated airport. */
   airport?: Airport;
   schemaVersion: 3;
   version: number; // bumps on every committed edit; caches key on it
