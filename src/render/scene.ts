@@ -20,6 +20,7 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawAircraft, pickAircraft } from './layers/aircraft';
+import { AirfieldLights2D } from './layers/airfield-lights';
 import { boxOf, type Box } from '../geo/polyline';
 import { drawStations } from './layers/stations';
 import { createLabelLayer } from './layers/labels';
@@ -228,6 +229,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-163: the evening tint and lights sit over the map, under selection and overlays.
   const labels = createLabelLayer();
   const night = new NightLayer();
+  // TASK-301: airfield and aircraft lights, with the evening's other glows.
+  const airfieldLights = new AirfieldLights2D(night.textures.glow);
+  night.container.addChild(airfieldLights.container);
   let lighting = defaultLighting;
   let lightMinute = 0;
   let light = sceneLight(defaultLighting, 0);
@@ -449,6 +453,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     drawnLight = key;
     invalidate();
     const on = night.setLight(light, layerVisibility);
+    airfieldLights.container.visible = on;
     map.tint = night.mapTint;
     syncBackground();
     vehicles.setLights(
@@ -719,6 +724,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // The map's edge: its nodes' extent (aircraft beyond it are not drawn in 2D).
       mapBounds = compiled.nodes.length ? boxOf(compiled.nodes.map((n) => n.pos)) : null;
       aircraftPoses = [];
+      airfieldLights.setCity(compiled.airside, source?.airport?.approachAids);
       parkingCounts = null;
       drawParking(parking, city, parkingCounts, camera.zoom);
       vehicles.setLights(null);
@@ -1185,6 +1191,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       redrawWalkers();
       aircraftPoses = snapshot.aircraft ?? [];
       redrawAircraft();
+      airfieldLights.update(snapshot.airfield, aircraftPoses, mapBounds);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
       for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);

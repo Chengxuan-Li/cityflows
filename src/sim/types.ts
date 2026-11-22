@@ -14,9 +14,14 @@ import type { WalkerDetail, WalkerMetrics, WalkerSnapshot } from './walkers';
 import type { PersonDetail, PersonMetrics } from './persons';
 import type { RailSnapshot } from './rail-crossings';
 import type { TransitMetrics, TransitSnapshot } from './transit';
-import type { AircraftMetrics, AircraftPoseSnapshot } from './aircraft';
+import type { AircraftMetrics, AircraftPoseSnapshot, AirfieldSnapshot } from './aircraft';
 import type { FlightOperationsMetrics } from './flight-operations';
-export type { AircraftMetrics, AircraftPoseSnapshot, AircraftState } from './aircraft';
+export type {
+  AircraftMetrics,
+  AircraftPoseSnapshot,
+  AircraftState,
+  AirfieldSnapshot,
+} from './aircraft';
 export type { TransitMetrics, TransitSnapshot } from './transit';
 export type { RailSnapshot } from './rail-crossings';
 export { CROSSING_OPEN, CROSSING_WARNING, CROSSING_CLOSED } from './rail-crossings';
@@ -88,6 +93,8 @@ export interface VehicleSnapshot {
   transit?: { vehicles: TransitSnapshot['vehicles'] };
   /** TASK-298: aircraft on the airside and on approach or climb-out, where the city has one. */
   aircraft?: AircraftPoseSnapshot[];
+  /** TASK-301: the runway ends in use and the stop bars switched off, for the airfield lights. */
+  airfield?: AirfieldSnapshot;
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;

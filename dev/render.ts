@@ -198,7 +198,9 @@ async function start() {
 export const demo =
   fixture === 'aircraft'
     ? import('./aircraft-preview').then(({ showAircraftPreview }) => showAircraftPreview(query))
-    : start();
+    : fixture === 'aircraft-live'
+      ? import('./aircraft-live').then(({ showAircraftLive }) => showAircraftLive(query))
+      : start();
 void demo.catch((error: unknown) => {
   status.textContent = String(error);
 });

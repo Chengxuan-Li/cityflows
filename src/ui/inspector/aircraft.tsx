@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { aircraftTypes } from '../../schema/aircraft';
 import type { AircraftPoseSnapshot } from '../../sim/types';
+import { Switch } from '../controls';
 import { useAppStore } from '../store';
 import { aircraftStateLabels } from '../flight-board-data';
 
@@ -18,6 +19,8 @@ const classes = {
 export function AircraftInspector({ id }: { id: number }) {
   const session = useAppStore((s) => s.session);
   const timeS = useAppStore((s) => s.run?.timeS ?? 0);
+  const following = useAppStore((s) => s.followAircraft === id);
+  const setFollow = useAppStore((s) => s.setFollowAircraft);
   const [pose, setPose] = useState<AircraftPoseSnapshot | null | undefined>(undefined);
   useEffect(() => {
     if (!session) return;
@@ -94,6 +97,11 @@ export function AircraftInspector({ id }: { id: number }) {
           </>
         )}
       </dl>
+      <Switch
+        label="Follow with camera"
+        checked={following}
+        onChange={(event) => setFollow(event.currentTarget.checked ? id : null)}
+      />
     </section>
   );
 }

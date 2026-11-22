@@ -129,6 +129,11 @@ export function createFlightOperations(
     : null;
   const arrivalEnd = configuration?.arrivalEnds[0] ?? ends[0]?.designator;
   const departureEnd = configuration?.departureEnds[0] ?? ends[0]?.designator;
+  // TASK-301: the airfield lights show these ends from the start.
+  fleet.setActiveEnds({
+    arrivalEnds: arrivalEnd ? [arrivalEnd] : [],
+    departureEnds: departureEnd ? [departureEnd] : [],
+  });
   const heading = ends.find(({ designator }) => designator === arrivalEnd)?.headingRad ?? 0;
   const profile = graph.icao === 'EGLC' ? londonCitySchedule : largeAirportSchedule;
   const typeMix: FlightScheduleInput['typeMix'] = [

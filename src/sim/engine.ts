@@ -1606,7 +1606,7 @@ function createRun({
       }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
       ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
-      ...(fleet && { aircraft: fleet.snapshot() }),
+      ...(fleet && { aircraft: fleet.snapshot(), airfield: fleet.airfield() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
