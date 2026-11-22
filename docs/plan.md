@@ -333,6 +333,13 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | merged 2026-11-22 (`931cb56`, wave A) |
 | [TASK-308](tasks/TASK-308.md) | airports | Flight schedule generator and runway configuration chooser | demand, sim | catalogue | seeded volumes, tailwind limit | merged 2026-11-22 (`6540ebb`, wave A) |
 | [TASK-309](tasks/TASK-309.md) | airports | Airside import rules on the Zurich, Boston and Heathrow extracts | importer, fixtures | 295 | counts, every stand reaches a runway | merged 2026-11-22 (`7b82aae`, wave B) |
+| [TASK-310](tasks/TASK-310.md) | airports | Load time at airport scale | project, compile, demand, scene build | - | Heathrow first frame under 10 s, identical output | in progress 2026-11-22 (wave E, Codex) |
+| [TASK-311](tasks/TASK-311.md) | airports | 3D render cost at airport scale | render3d, airfield lights | - | Heathrow 3D p95 under 6 ms, no visible change | in progress 2026-11-22 (wave E, Codex) |
+| [TASK-313](tasks/TASK-313.md) | airports | London City: a taxiway section that reads and behaves as one-way | importer, airside, markings | - | both ways as paved, LCY gates kept | in progress 2026-11-22 (wave E, Codex) |
+| [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | planned (wave F, Claude) |
+| [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | planned (wave F, Codex) |
+| [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | planned (wave F, Claude) |
+| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | planned (wave G, Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6321,6 +6328,12 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner, after testing London City): "load time and 3d rendering are good tasks for performance
+  optimization (start them before testing higher taxiing speeds)"; issues: a London City taxiway section wrongly
+  one-way ("even if it were an OSM issue, let's fix it here"), taxi speeds to check against the real world, aircraft
+  modelling realism, smooth movement (take-off and landing animation, turning rotation, nose-gear steering), 3D jet
+  bridges, airside ground vehicles. Contracts TASK-310 to 316 in waves E (310, 311, 313), F (312, 314, 315) and G (316).
 
 - 2026-11-22 (owner): "switch to don't wait for gh": the next wave starts from the locally verified merge commit;
   the wave's Full run is watched in the background, a red run blocks the next merge and is fixed forward.
