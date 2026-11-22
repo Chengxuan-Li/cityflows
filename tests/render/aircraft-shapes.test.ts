@@ -1,7 +1,15 @@
-import { Box3, Mesh, MeshLambertMaterial, Quaternion, Vector3 } from 'three';
+import {
+  Box3,
+  Mesh,
+  MeshLambertMaterial,
+  Quaternion,
+  Raycaster,
+  ShaderMaterial,
+  Vector3,
+} from 'three';
 import { expect, it } from 'vitest';
 import { buildAircraftOutline } from '../../src/render/aircraft-outline';
-import { buildAircraftMesh } from '../../src/render3d/aircraft-mesh';
+import { batchAircraftMesh, buildAircraftMesh } from '../../src/render3d/aircraft-mesh';
 import { aircraftTypes } from '../../src/schema/aircraft';
 
 it.each(aircraftTypes)('$name has catalogue extents and the parts of its class', (type) => {
@@ -90,3 +98,45 @@ it('changes the accent without recolouring the neutral fuselage', () => {
   expect(colour(second.root, 'fin')).toBe(0x31657f);
   expect(colour(first.root, 'fuselage')).toBe(colour(second.root, 'fuselage'));
 });
+
+it.each(['A20N', 'AT76', 'EC45'])(
+  'preserves %s silhouette and moving parts when batching',
+  (id) => {
+    const aircraft = buildAircraftMesh(aircraftTypes.find((type) => type.id === id)!);
+    const { root, gear, propellers, rotors } = aircraft;
+    const countMeshes = () => {
+      let count = 0;
+      root.traverse((object) => {
+        if (object instanceof Mesh) count++;
+      });
+      return count;
+    };
+    const count = countMeshes();
+    const bounds = new Box3().setFromObject(root, true);
+    const pivots = [gear, ...propellers, ...rotors];
+    const axes = pivots.map((pivot) => pivot.getWorldQuaternion(new Quaternion()));
+    let wingHeights: number[] = [];
+    const sampleWings = () => {
+      const wing = root.getObjectByName('wings');
+      const halfSpan = (wing ? new Box3().setFromObject(wing).max.z : bounds.max.z) * 0.55;
+      return [-halfSpan, halfSpan].map(
+        (z) =>
+          new Raycaster(new Vector3(-1, 30, z), new Vector3(0, -1, 0))
+            .intersectObject(root)
+            .find(({ object }) => !object.userData.outline)?.point.y ?? NaN,
+      );
+    };
+    if (id === 'A20N') wingHeights = sampleWings();
+    batchAircraftMesh(aircraft, new ShaderMaterial());
+    const after = new Box3().setFromObject(root, true);
+    expect(after.min.distanceTo(bounds.min)).toBeLessThan(1e-5);
+    expect(after.max.distanceTo(bounds.max)).toBeLessThan(1e-5);
+    expect(countMeshes()).toBeLessThan(count / 2);
+    for (const [i, pivot] of pivots.entries()) {
+      expect(pivot.children).toHaveLength(1);
+      expect(pivot.getWorldQuaternion(new Quaternion()).angleTo(axes[i]!)).toBeCloseTo(0, 5);
+    }
+    if (id === 'A20N')
+      sampleWings().forEach((height, i) => expect(height).toBeCloseTo(wingHeights[i]!, 5));
+  },
+);

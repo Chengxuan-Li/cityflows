@@ -1,10 +1,12 @@
 import {
   AdditiveBlending,
   Color,
+  DynamicDrawUsage,
   Group,
-  InstancedMesh,
+  InstancedBufferAttribute,
+  InstancedBufferGeometry,
+  Mesh,
   MeshBasicMaterial,
-  Object3D,
   PlaneGeometry,
   ShaderMaterial,
   type PerspectiveCamera,
@@ -36,15 +38,21 @@ export function pointHalos(capacity: number, minPx: number, liftM = 0) {
       uniform float pixelScale;
       uniform float minPx;
       uniform float liftM;
+      attribute vec4 centreSize;
+      attribute vec3 tint;
       varying vec2 vUv;
       varying vec3 vTint;
       void main() {
         vUv = uv;
-        vTint = instanceColor;
-        vec4 centre = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        vTint = tint;
+        if (dot(tint, tint) == 0.0) {
+          gl_Position = vec4(2.0, 0.0, 0.0, 1.0);
+          return;
+        }
+        vec4 centre = modelViewMatrix * vec4(centreSize.xyz, 1.0);
         // Towards the camera by liftM, so a lamp on a surface is not hidden by that surface.
         centre.xyz += normalize(-centre.xyz) * liftM;
-        float size = max(length(instanceMatrix[0].xyz), 2.0 * minPx * pixelScale * -centre.z);
+        float size = max(centreSize.w, 2.0 * minPx * pixelScale * -centre.z);
         centre.xy += position.xy * size;
         gl_Position = projectionMatrix * centre;
       }`,
@@ -63,10 +71,23 @@ export function pointHalos(capacity: number, minPx: number, liftM = 0) {
     blending: AdditiveBlending,
   });
   material.userData.lit = true;
-  const mesh = new InstancedMesh(new PlaneGeometry(1, 1), material, Math.max(1, capacity));
+  const plane = new PlaneGeometry(1, 1);
+  const geometry = new InstancedBufferGeometry();
+  geometry.setIndex(plane.index);
+  geometry.setAttribute('position', plane.getAttribute('position'));
+  geometry.setAttribute('uv', plane.getAttribute('uv'));
+  const centres = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+  const tints = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(
+    DynamicDrawUsage,
+  );
+  geometry.setAttribute('centreSize', centres);
+  geometry.setAttribute('tint', tints);
+  geometry.instanceCount = 0;
+  const mesh = new Mesh(geometry, material);
   mesh.renderOrder = 6;
   mesh.frustumCulled = false;
-  return mesh;
+  mesh.matrixAutoUpdate = false;
+  return { mesh, geometry, material, centres, tints };
 }
 
 /** World metres per pixel at unit depth, for `pointHalos`. */
@@ -93,8 +114,10 @@ const radiusM: Record<AirfieldLightKind, number> = {
 export class AirfieldLights3D {
   readonly group = new Group();
   readonly lights: AirfieldLight[];
-  readonly halos: InstancedMesh;
-  private readonly pools: InstancedMesh;
+  private readonly halos: ReturnType<typeof pointHalos>;
+  private readonly pools: ReturnType<typeof buildPools>;
+  private readonly color = new Color();
+  private readonly byKind: Partial<Record<AirfieldLightKind, number>> = {};
   private colors: number[] = [];
   private on = 0;
 
@@ -106,16 +129,12 @@ export class AirfieldLights3D {
     this.group.name = 'airfield-lights';
     this.lights = placeAirfieldLights(graph, approachAids);
     this.halos = pointHalos(this.lights.length, 1.8);
-    const transform = new Object3D();
+    const { centres, geometry, mesh } = this.halos;
     this.lights.forEach((l, i) => {
-      transform.position.set(l.x, groundAt(l.x, l.y) + l.heightM, l.y);
-      transform.scale.setScalar(2 * radiusM[l.kind]);
-      transform.updateMatrix();
-      this.halos.setMatrixAt(i, transform.matrix);
-      this.halos.setColorAt(i, new Color(0));
+      centres.setXYZW(i, l.x, groundAt(l.x, l.y) + l.heightM, l.y, 2 * radiusM[l.kind]);
     });
-    this.halos.count = this.lights.length;
-    this.halos.name = 'airfield-halos';
+    geometry.instanceCount = this.lights.length;
+    mesh.name = 'airfield-halos';
     this.pools = buildPools(
       // Over the aircraft standing behind the nose stop.
       graph.stands.map((stand) => ({
@@ -127,7 +146,9 @@ export class AirfieldLights3D {
       })),
     );
     this.pools.name = 'apron-floodlight-pools';
-    this.group.add(this.halos, this.pools);
+    this.pools.matrixAutoUpdate = false;
+    this.group.matrixAutoUpdate = false;
+    this.group.add(mesh, this.pools);
     this.setLight(0);
   }
 
@@ -140,14 +161,22 @@ export class AirfieldLights3D {
       papiAngles(this.graph, this.lights, poses),
     );
     let changed = false;
-    const color = new Color();
+    const { color, byKind } = this;
+    const { tints } = this.halos;
     colors.forEach((c, i) => {
       if (this.colors[i] === c) return;
-      this.halos.setColorAt(i, color.setHex(c));
+      const kind = this.lights[i]!.kind;
+      if (Boolean(c) !== Boolean(this.colors[i])) {
+        const count = (byKind[kind] ?? 0) + (c ? 1 : -1);
+        if (count) byKind[kind] = count;
+        else delete byKind[kind];
+      }
+      color.setHex(c);
+      tints.setXYZ(i, color.r, color.g, color.b);
       changed = true;
     });
     this.colors = colors;
-    if (changed) this.halos.instanceColor!.needsUpdate = true;
+    if (changed) tints.needsUpdate = true;
     return changed;
   }
 
@@ -155,21 +184,17 @@ export class AirfieldLights3D {
   setLight(on: number) {
     this.on = on;
     this.group.visible = on > 0;
-    (this.halos.material as ShaderMaterial).uniforms.intensity!.value = 1.1 * on;
+    this.halos.material.uniforms.intensity!.value = 1.1 * on;
     (this.pools.material as MeshBasicMaterial).opacity = 0.3 * on;
     this.pools.visible = on > 0;
   }
 
   setPixelScale(scale: number) {
-    (this.halos.material as ShaderMaterial).uniforms.pixelScale!.value = scale;
+    this.halos.material.uniforms.pixelScale!.value = scale;
   }
 
   /** Lit lights by kind, for tests and the canvas dataset. */
   counts() {
-    const counts: Partial<Record<AirfieldLightKind, number>> = {};
-    this.lights.forEach((l, i) => {
-      if (this.colors[i]) counts[l.kind] = (counts[l.kind] ?? 0) + 1;
-    });
-    return { on: this.on > 0, ...counts };
+    return { on: this.on > 0, ...this.byKind };
   }
 }

@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import {
   heldOutOfPanel,
   openBundled,
+  parkedProjectHashes,
   projectFile,
   realPlaceBuilds,
 } from '../../bench/bundled-cities';
@@ -40,7 +42,9 @@ test.for([
 // imports come from the import cache tests/warm-cache.ts fills, so each check costs 3 to 4 s;
 // after an importer change it imports afresh (4 to 12 s). On failure, rebuild with
 //   node --experimental-strip-types --import ./bench/register.ts bench/bundled-cities.ts
-test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
+test.for(
+  Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg' && !(id in parkedProjectHashes)),
+)(
   '%s: the bundled archive is a fresh build of its extract',
   { timeout: limit(120_000) },
   async (id) => {
@@ -49,6 +53,14 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
       manifest(await realPlaceBuilds[id]!()),
       `${projectFile(id)} is stale: run bench/bundled-cities.ts`,
     ).toEqual(manifest(archive));
+  },
+);
+
+test.for(Object.entries(parkedProjectHashes))(
+  '%s uses the exact parked archive',
+  ([id, sha256]) => {
+    const archive = readFileSync(projectFile(id));
+    expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
   },
 );
 

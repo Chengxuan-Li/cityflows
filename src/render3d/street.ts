@@ -14,7 +14,7 @@ import {
   SRGBColorSpace,
 } from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { parallelOffset } from '../geo/polyline';
+import { cumulativeLengths, parallelOffset, pointAtDistance } from '../geo/polyline';
 import type { CompiledCity } from '../network';
 import {
   themedSignLabels,
@@ -76,8 +76,22 @@ export function buildCurbs(
   const positions: number[] = [];
   for (const curb of curbs) {
     const half = curb.halfWidthM ?? 0.1;
-    const a = parallelOffset(curb.points, -half),
+    let a = parallelOffset(curb.points, -half),
       b = parallelOffset(curb.points, half);
+    if (!a.length || !b.length) continue;
+    if (a.length > b.length) {
+      // If loop trimming removes a right-hand station, resample both edges at their combined
+      // breakpoints so every left-hand station has a right-hand vertex.
+      const lengths = [cumulativeLengths(a), cumulativeLengths(b)] as const;
+      const endA = lengths[0].at(-1)!,
+        endB = lengths[1].at(-1)!;
+      if (endA === 0 || endB === 0) continue;
+      const fractions = Array.from(
+        new Set([...lengths[0].map((s) => s / endA), ...lengths[1].map((s) => s / endB)]),
+      ).sort((x, y) => x - y);
+      a = fractions.map((s) => pointAtDistance(a, lengths[0], s * endA));
+      b = fractions.map((s) => pointAtDistance(b, lengths[1], s * endB));
+    }
     const road = city.roads[curb.road]!,
       profile = heights.roads[curb.road]!;
     const vertex = (p: { x: number; y: number }, up: number) => [

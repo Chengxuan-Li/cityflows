@@ -377,7 +377,9 @@ export class Scene3D {
       this.content.add(mesh);
       return mesh;
     };
-    add(geometry.surfaces, style.asphalt, !terrain.grid);
+    // Large airfields share the same opaque asphalt texture across road surfaces. Drawing
+    // an untextured copy underneath repeats the entire road and its shadow pass.
+    if (!city.airside) add(geometry.surfaces, style.asphalt, !terrain.grid);
     if (terrain.grid) {
       // Ground asphalt cannot cast a useful shadow onto itself. Only decks and
       // raised approaches enter the shadow pass; their visible mesh is unchanged.
@@ -1309,6 +1311,7 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
+    this.aircraft?.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
     this.parking?.update(this.getView().zoom, this.selectedParking);
     this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
     if (this.city && this.geometry)
