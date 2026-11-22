@@ -111,6 +111,15 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
       '51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948',
       'London Heathrow Airport',
     ),
+  // TASK-302: the aerodrome with Kloten, Rümlang and Oberglatt's edges, the A51 and the rail
+  // station under the terminal (TASK-309's extract polygon, fixtures/osm/ATTRIBUTION.txt).
+  'zurich-airport': () =>
+    polygonImport(
+      'zurich-airport',
+      'zurich-airport.osm',
+      '47.438 8.5307 47.438 8.5802 47.4858 8.5802 47.4858 8.5307',
+      'Zurich Airport',
+    ),
 };
 
 /** TASK-284: bundles available by `?city=<id>` while their showcase gates are pending.
@@ -118,6 +127,10 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
 export const heldOutOfPanel: Record<string, string> = {
   'boston-logan': 'Airport throughput gate',
   heathrow: 'Airport throughput gate',
+  // TASK-302: its showcase morning (0.15, mode choice on) ends with 2 trips gridlocked, a stalled
+  // head and a 10,260 s visit on Flughafenstrasse (r:3407, landside, no airside crossing), and the
+  // morning takes 172 s against the city tier's 60 s per airport; ready 31 to 42 s after the click.
+  'zurich-airport': 'showcase gate: gridlock on Flughafenstrasse; load over budget',
 };
 
 /** The committed bundled project, opened as the app opens it. */

@@ -26,9 +26,10 @@ test('the panel lists every bundled real place not held out of it, and each has 
 });
 
 test.for([
-  ['london-city-airport', 'b193d1de13cb46413569e85e0d40aa212cf261d556b7893b896e5fa1ecc41dd8'],
+  ['london-city-airport', '19bab63b0627b1e367191fadfd2cfd7e8232af397a677c7cf7d49efac57dc3c3'],
+  ['zurich-airport', '4ccf6ed18192886f1087ab4dbd90a6f6f612a3ff4c15a3ec8e36f2dcc577a85d'],
   ['boston-logan', 'c80805bdc46c6f3b593a8a0072599db2016357be560992690d44c070f6392866'],
-  ['heathrow', 'bad6f00cfe54a59ab749b1dc323d778cd577d2127b306290537cd3912cff68e6'],
+  ['heathrow', 'b5b35d984ff0fbc542f4901ead3d8a5543f9afd4da207dc655a93b404241e837'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
   expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
@@ -68,6 +69,7 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
 // gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
 // since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
+// TASK-302: Zurich Airport, held out, is not run here: its morning takes 172 s (2 gridlocked).
 describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york', 'london-city-airport'])(
   '%s at the showcase demand',
   (id) => {

@@ -96,7 +96,25 @@ export const demonstratedCrosswindKt: Readonly<Record<string, number>> = {
  * derived configurations and switches by wind alone. */
 export const airportRunwayConcepts: Readonly<
   Record<string, Pick<RunwayConfigurationInput, 'configurations' | 'concepts'>>
-> = {};
+> = {
+  // TASK-302: Zurich's operating concepts, as stated approximations of the published ones (AIP
+  // Switzerland, LSZH AD 2.20): the north concept by day (landings 14, take-offs 16 and 28), the
+  // east concept in the evening (landings 28, take-offs 32 and 34), the south concept in the early
+  // morning (landings 34, take-offs 32), and the night flight ban.
+  LSZH: {
+    configurations: [
+      { id: 'north', arrivalEnds: ['14'], departureEnds: ['16', '28'] },
+      { id: 'east', arrivalEnds: ['28'], departureEnds: ['32', '34'] },
+      { id: 'south', arrivalEnds: ['34'], departureEnds: ['32'] },
+    ],
+    concepts: [
+      { startS: 6 * 3600, endS: 7 * 3600, configurationId: 'south' },
+      { startS: 7 * 3600, endS: 21 * 3600, configurationId: 'north' },
+      { startS: 21 * 3600, endS: 23.5 * 3600, configurationId: 'east' },
+      { startS: 23.5 * 3600, endS: 6 * 3600, configurationId: null },
+    ],
+  },
+};
 
 /** The headwind (negative: tailwind) and crosswind on a runway heading, knots. */
 export function windComponents(headingRad: number, wind: AirportWind) {

@@ -79,6 +79,7 @@ const HOLD_FALLBACK_M = 75;
 const PUSH_CLEAR_M = 10;
 const TUG_S = 20;
 const LINEUP_S = 5;
+const FULL_LENGTH_M = 60;
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
 /** Spare time around runway bookings and grants. */
@@ -695,6 +696,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           locked: false,
         });
     });
+    let crossings: Leg['crossings'] | undefined;
     return {
       mode,
       path,
@@ -702,7 +704,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       runwayRanges: runwayRanges.sort((a, b) => a[0] - b[0] || a[1] - b[1]),
       endM: path.lengthM - craft.lengthM / 2,
       gates: [],
-      crossings: crossingsOn(path),
+      // Found when the leg is driven: most legs built are only costed or tried.
+      get crossings() {
+        return (crossings ??= crossingsOn(path));
+      },
     };
   }
 
@@ -1177,7 +1182,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   function lineUps(craft: Craft, runway: AirsideRunwayC, end: number) {
     const p = fixedWing(craft);
     const nodes = runwayNodes(runway, end);
-    const thresholdU = fromEnd(runway, end, runway.ends[end]!.thresholdM);
+    // An entry within FULL_LENGTH_M of the end lines up for a full-length departure, even past a
+    // threshold at the end itself (Zurich 32's entry 11 m in).
+    const thresholdU = Math.max(
+      fromEnd(runway, end, runway.ends[end]!.thresholdM),
+      Math.min(FULL_LENGTH_M, runway.lengthM / 2),
+    );
     const towardEnd1 = end === 0;
     const reach = balloonReach(p.minTurnRadiusM);
     const need = p.takeoffRollM + p.rotationSpeedMps * 3;
@@ -1241,15 +1251,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return t;
   }
 
+  /** Road crossings within 15 m of a path, with their stations along it. */
   function crossingsOn(path: AircraftPath) {
-    let candidates = graph.crossings;
-    if (candidates.length > 4) {
-      const { minX, minY, maxX, maxY } = boxOf(path.points);
-      candidates = candidates.filter(
-        ({ pos }) =>
-          pos.x >= minX - 15 && pos.x <= maxX + 15 && pos.y >= minY - 15 && pos.y <= maxY + 15,
-      );
-    }
+    if (!graph.crossings.length) return [];
+    const { minX, minY, maxX, maxY } = boxOf(path.points);
+    const candidates = graph.crossings.filter(
+      ({ pos }) =>
+        pos.x >= minX - 15 && pos.x <= maxX + 15 && pos.y >= minY - 15 && pos.y <= maxY + 15,
+    );
     const nearest =
       candidates.length > 4
         ? polylineNearest(path.points)

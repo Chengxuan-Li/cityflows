@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
 import { openBundled } from '../../bench/bundled-cities';
+import { compile } from '../../src/network';
+import { arcEdge, arcEnd, reverseArc, routeAirside } from '../../src/routing/airside';
+import { aircraftCodes } from '../../src/schema/aircraft';
 import { expectAirsideTopology } from '../airside-topology';
 
 // TASK-295: London City's airside as bundled (fixtures/projects/london-city-airport.cityflows.json,
@@ -34,9 +37,8 @@ test('London City: one runway, its holds, stands, gates and terminal, all on one
       (e) => String(e.maxCode),
     ),
   ).toEqual({
-    A: 1,
-    B: 6,
-    C: 70,
+    B: 3,
+    C: 74,
     D: 20,
   });
   expect(edges.filter((e) => e.provenance.source === 'generated')).toHaveLength(0);
@@ -60,4 +62,30 @@ test('London City: one runway, its holds, stands, gates and terminal, all on one
     'runway',
   ]);
   expectAirsideTopology(airport);
+});
+
+test('London City: code C can taxi through the intermediate hold between C and D both ways', async () => {
+  const { city } = await openBundled('london-city-airport');
+  const result = compile(city);
+  if (!result.ok || !result.compiled.airside) throw new Error('London City must compile');
+  const graph = result.compiled.airside;
+  const indexOfOsmNode = (osmId: number) =>
+    graph.nodes.findIndex(({ id }) => city.airport!.nodes[id]!.osmId === osmId);
+  const west = indexOfOsmNode(3307802191);
+  const east = indexOfOsmNode(7818001804);
+  const hold = indexOfOsmNode(6695579053);
+  const route = (from: number, to: number) =>
+    routeAirside(graph, {
+      from: { node: from },
+      goal: (arc) => arcEnd(graph, arc) === to,
+      code: aircraftCodes.indexOf('C'),
+      turnRadiusM: 15,
+    })?.arcs;
+
+  const eastbound = route(west, east);
+  expect(eastbound?.map((arc) => graph.edges[arcEdge(arc)]!.ref)).toEqual(
+    Array<string>(6).fill('Apron Twy'),
+  );
+  expect(eastbound?.map((arc) => arcEnd(graph, arc))).toContain(hold);
+  expect(route(east, west)).toEqual(eastbound!.toReversed().map(reverseArc));
 });

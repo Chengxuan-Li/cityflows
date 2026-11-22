@@ -6,13 +6,19 @@ import { compile } from '../../src/network';
 import { createEngine } from '../../src/sim/engine';
 import { limit } from '../timeouts';
 
-// TASK-310: reference outputs from 47ffd63 with the parked archives installed.
+// TASK-310: reference outputs from 06e2dab with the held-out archives installed.
 const pins = [
   {
     id: 'london-city-airport',
-    compiled: 'c17bf0f58d9409507b3ac008951a943ea7ad5379a31626f037c371fd85641a28',
-    state: [1127452598, 4293246752],
-    board: '2e455d0ad82e3d72576da3bca4e93a4da85aeff400b407f0f86a29147f2e12b7',
+    compiled: '300d4ee41d2480bf169ae29a3ba1768fb1e1963d243795b6c8d182505885dafc',
+    state: [3067669136, 334463102],
+    board: 'ddc47628f289d0be781c7673d06c76c591321888e06a397965bf4dad53317ace',
+  },
+  {
+    id: 'zurich-airport',
+    compiled: '0842d13fbc4288095f0198b9eb316ac754d6d469fef5a9e012ef37e47731d8e0',
+    state: [62496529, 2841216063],
+    board: '9272e4fd978df31378c44a424aa9f623f2142a1880c317909fad4213c2601943',
   },
   {
     id: 'boston-logan',
@@ -22,9 +28,9 @@ const pins = [
   },
   {
     id: 'heathrow',
-    compiled: 'da17ee7eed980621b184ea6ed777137bfb7ffa72fc1819015cb5d5e72f851fef',
-    state: [3237156883, 3275580588],
-    board: 'c3a3cf59214f9f24bd91e8a3510bc0d2f798b9dee41787aca955899562eaf742',
+    compiled: '52a242206bf7b485fdfbe42e26adda7f8a3a5a54c64623a08d0854cfacfa7069',
+    state: [2003868899, 4110133764],
+    board: '16a8bdd274ab14d4d6aa283a7cfad907ca1fb29dc3c1f1a5e8a73e8c8df56f56',
   },
 ];
 

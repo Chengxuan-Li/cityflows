@@ -60,6 +60,11 @@ export const airsideRules = {
 };
 const rules = airsideRules;
 
+// ICAO Doc 9157 Part 2, Table 1-4. Nearly straight taxiways can use the wingspan and
+// fixed-object buffer alone because aircraft track the centreline. Keep the lateral
+// allowance on bends, where a wingtip can sweep beyond that envelope.
+const taxiwayTrackingAllowanceM: Codes = { A: 1.5, B: 2.25, C: 3, D: 4, E: 4, F: 4 };
+
 const descending = [...aircraftCodes].reverse();
 /** The largest code that `fits`, or null. */
 export const largestCode = (fits: (code: AircraftCode) => boolean): AircraftCode | null =>
@@ -153,8 +158,10 @@ export function airsideObstacles(buildings: Vec2[][]) {
     },
     containing: (points: Vec2[]) =>
       new Set(
-        buildings.flatMap((ring, i) =>
-          points.some((p) => pointInPolygon(p, close(ring))) ? [i] : [],
+        points.flatMap((p) =>
+          buildingIndex
+            .search(p.x, p.y, p.x, p.y)
+            .filter((i) => buildings[i] && pointInPolygon(p, close(buildings[i]!))),
         ),
       ),
     crossesBuilding: (a: Vec2, b: Vec2, skip?: ReadonlySet<number>) =>
@@ -166,8 +173,16 @@ export function airsideObstacles(buildings: Vec2[][]) {
 }
 export type AirsideObstacles = ReturnType<typeof airsideObstacles>;
 
+/** Stands so close that even code A aircraft could not stand on both are alternatives (a
+ * multiple-aircraft ramp's positions, TASK-302): neither limits the other's code, and aircraft
+ * keep apart by their parked bodies and push sweeps (architecture section 8). */
+const alternatives = (a: { pos: Vec2; heading: number }, b: { pos: Vec2; heading: number }) =>
+  shapeGap(standShape(a.pos, a.heading, 'A'), standShape(b.pos, b.heading, 'A')) <
+  rules.standClearanceM.A;
+
 /** A stand's code: the largest whose aircraft (`standShape`) keeps the stand clearance from the
- * same code's aircraft on every other stand and from every building but one it stands in. */
+ * same code's aircraft on every other stand but its alternatives and from every building but one
+ * it stands in. */
 export function standCode(
   stand: { pos: Vec2; heading: number },
   stands: readonly { pos: Vec2; heading: number }[],
@@ -190,6 +205,7 @@ export function standCode(
       (other) =>
         other === stand ||
         distance(other.pos, stand.pos) > 2 * reachM ||
+        alternatives(stand, other) ||
         shapeGap(shape, standShape(other.pos, other.heading, code)) >= clearance,
     );
   });
@@ -205,6 +221,8 @@ export interface CodeEdge {
   layer: number;
   /** A mapped width; without one the code starts at `startCode`. */
   mappedWidthM?: number;
+  /** A runway edge's runway (any value identifying it). */
+  runway?: unknown;
 }
 /** How far from a changed line a taxi edge's code can change: the widest separation plus the
  * graph detour that marks a junction. */
@@ -235,6 +253,13 @@ export function taxiEdgeCodes<E extends CodeEdge>(
   for (const { a, b } of lineSegments) lineIndex.add(...box([a, b]));
   if (!lineSegments.length) lineIndex.add(0, 0, 0, 0);
   lineIndex.finish();
+  const runwayNodes = new Map<unknown, Set<string>>();
+  for (const edge of edges)
+    if (edge.kind === 'runway') {
+      const nodes = runwayNodes.get(edge.runway) ?? new Set<string>();
+      nodes.add(edge.from).add(edge.to);
+      runwayNodes.set(edge.runway, nodes);
+    }
   const reach = rules.taxiwaySeparationM.F;
   const parallelAngle = (rules.parallelDeg * Math.PI) / 180;
   const overlap = rules.parallelOverlapM;
@@ -308,6 +333,12 @@ export function taxiEdgeCodes<E extends CodeEdge>(
     const lengths = cumulativeLengths(edge.line);
     const length = lengths.at(-1)!;
     const objects = edge.kind === 'taxilane' ? rules.taxilaneObjectM : rules.taxiwayObjectM;
+    const chordHeading = heading(edge.line[0]!, edge.line.at(-1)!);
+    const straightTaxiway =
+      edge.kind === 'taxiway' &&
+      edge.line
+        .slice(1)
+        .every((p, i) => angleBetween(chordHeading, heading(edge.line[i]!, p)) <= parallelAngle);
     for (let s = 0; s <= length && code !== null; s += rules.sampleM) {
       const p = pointAtDistance(edge.line, lengths, s);
       const direction = heading(
@@ -318,12 +349,18 @@ export function taxiEdgeCodes<E extends CodeEdge>(
         const wall = obstacles.toBuilding(p, objects.F, skip);
         code = lower(
           code,
-          largest((c) => objects[c] <= wall),
+          largest((c) => objects[c] - (straightTaxiway ? taxiwayTrackingAllowanceM[c] : 0) <= wall),
         );
       }
       for (const i of lineIndex.search(p.x - reach, p.y - reach, p.x + reach, p.y + reach)) {
         const segment = lineSegments[i];
         if (!segment || segment.edge === edge || segment.edge.layer !== edge.layer) continue;
+        // TASK-302: an exit or entry runs close to the runway it meets; the runway separation is
+        // for parallel taxiways (Annex 14 Table 3-1), not for the taxiways joining it.
+        if (segment.edge.kind === 'runway') {
+          const meets = runwayNodes.get(segment.edge.runway)!;
+          if (meets.has(edge.from) || meets.has(edge.to)) continue;
+        }
         const away = segmentDistance(p, segment.a, segment.b);
         const turn = angleBetween(segment.heading, direction);
         if (away > reach || Math.min(turn, Math.PI - turn) > parallelAngle) continue;
