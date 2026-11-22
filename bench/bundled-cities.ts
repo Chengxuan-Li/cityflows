@@ -95,6 +95,15 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
        -1.0754 53.9647 -1.0775`,
       'York city centre',
     ),
+  // TASK-295: the aerodrome between the Royal Albert and King George V Docks, with Hartmann
+  // Road, the Connaught Bridge, North Woolwich Road and the DLR (the lead's query-12 polygon).
+  'london-city-airport': () =>
+    polygonImport(
+      'london-city-airport',
+      'london-city-airport.osm',
+      '51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356',
+      'London City Airport',
+    ),
 };
 
 /** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New

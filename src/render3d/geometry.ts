@@ -13,6 +13,8 @@ import { buildContext } from './context';
 import { liftCanopies } from './footbridges';
 import { drape, indexTerrain, terrainAreas } from './terrain';
 import { paintedCity } from '../render/road-paint';
+import { airsideAreas } from '../render/airside-geometry';
+import { style } from '../render/style';
 
 type Vertex = [number, number, number];
 const vertex = (p: Vec2, z: number): Vertex => [p.x, z, p.y];
@@ -200,6 +202,7 @@ export function buildGeometry(
     markings: buildMarkings(city, source, heights),
     crossings: terrainBuffer(crossings, landCrossings),
     places: placeGeometry,
+    airside: source.airport ? buildAirside(source, heights) : undefined,
     piers,
     heads,
     supports,
@@ -240,6 +243,31 @@ export function buildPlaces(
   return source.terrain
     ? indexTerrain(drape(geometry, heights.terrain, -0.02, false, true))
     : geometry;
+}
+
+/** TASK-295: the airside's paving (`airsideAreas`) over the place tints, under the roads. */
+export function buildAirside(source: CityGeometry, heights: Heights) {
+  // Overlapping kinds a few millimetres apart, so a runway never fights its taxiways for depth.
+  const lift = { apron: -0.016, taxiway: -0.013, runway: -0.01 };
+  const parts = (['apron', 'taxiway', 'runway'] as const).map((kind) => {
+    const positions: number[] = [];
+    for (const area of airsideAreas(source.airport!).filter((a) => a.kind === kind)) {
+      const vectors = area.rings.map((ring) => ring.map((p) => new Vector2(p.x, p.y)));
+      const points = area.rings.flat();
+      for (const triangle of ShapeUtils.triangulateShape(vectors[0]!, vectors.slice(1)))
+        for (const i of [triangle[2]!, triangle[1]!, triangle[0]!])
+          positions.push(...vertex(points[i]!, lift[kind]));
+    }
+    const geometry = buffer(positions);
+    const { r, g, b } = new Color(style.airside[kind]);
+    const colors = Array.from({ length: positions.length / 3 }, () => [r, g, b]).flat();
+    geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    return source.terrain ? drape(geometry, heights.terrain, lift[kind], false, true) : geometry;
+  });
+  const drawn = parts.filter((part) => part.getAttribute('position').count);
+  const geometry = drawn.length ? mergeGeometries(drawn)! : parts[0]!.clone();
+  for (const part of parts) part.dispose();
+  return source.terrain ? indexTerrain(geometry) : geometry;
 }
 
 /** Buildings and the context ground (land use, water, green), in the map palette. */

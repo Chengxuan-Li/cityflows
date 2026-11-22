@@ -7,7 +7,14 @@ export const aircraftCodes = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 export type AircraftCode = (typeof aircraftCodes)[number];
 
 /** Upper wingspan bound (exclusive) of each code, metres. */
-const codeSpanLimitM: Record<AircraftCode, number> = { A: 15, B: 24, C: 36, D: 52, E: 65, F: 80 };
+export const codeSpanLimitM: Record<AircraftCode, number> = {
+  A: 15,
+  B: 24,
+  C: 36,
+  D: 52,
+  E: 65,
+  F: 80,
+};
 
 /** The code of a wingspan: the first whose bound exceeds it. */
 export function codeForSpan(spanM: number): AircraftCode {

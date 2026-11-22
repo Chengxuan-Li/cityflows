@@ -384,6 +384,9 @@ export const style = {
   },
   // TASK-162: a neutral real asphalt gray (main: 0xaebdb8, green-gray) for the neutral canvas.
   asphalt: 0xacb0b3,
+  /** TASK-295: airside paving, as roads in both appearances: concrete aprons, taxiways in the
+   * road asphalt, runways a darker asphalt. */
+  airside: { apron: 0xc9cbcc, taxiway: 0xacb0b3, runway: 0x8e9295 },
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,

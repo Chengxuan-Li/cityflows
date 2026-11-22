@@ -12,6 +12,8 @@ import type { placeTrees } from './vegetation';
 import { placeDetails, type placeStreet } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
+import { airsideAreas, type AirsideArea } from './airside-geometry';
+import { drawAirside } from './layers/airside';
 import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
@@ -244,6 +246,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance.
   let palette = mapPalettes.light;
   let contextFeatures: ContextFeature[] = [];
+  let airside: AirsideArea[] = [];
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
@@ -725,6 +728,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vegetation = drawVegetation([]);
       furniture = [];
       contextFeatures = features;
+      airside = source?.airport ? airsideAreas(source.airport) : [];
+      canvas.dataset.airsideAreas = String(airside.length);
       surroundings = drawContext(features, palette);
       contextCount = features.length;
       map.addChild(surroundings.container);
@@ -747,6 +752,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      if (airside.length) {
+        const { terrain, placeFills } = grades.get(0)!;
+        terrain.addChildAt(drawAirside(airside), terrain.getChildIndex(placeFills) + 1);
+      }
       stations = undefined;
       tramStops = compiled.rail ? drawTramStops(tramPlacements) : undefined;
       for (const [layer, { container }] of tramStops?.grades ?? []) {

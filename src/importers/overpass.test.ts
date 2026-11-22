@@ -63,7 +63,7 @@ test('TASK-290 requests parking entrance nodes with and without surroundings', (
     );
     expect(query).toContain('way(bn.parkingEntrances)[highway=service][service=driveway];');
   }
-  expect(queryVersion).toBe(12);
+  expect(queryVersion).toBe(13);
 });
 
 test('TASK-273 fetches city walls and their gates with the surroundings', () => {
@@ -76,4 +76,13 @@ test('TASK-273 fetches city walls and their gates with the surroundings', () => 
   ])
     expect(full).toContain(clause + '(53.9514,-1.0975,53.9655,-1.0713);');
   expect(buildQuery(bbox, false)).not.toContain('city_wall');
+});
+
+test('TASK-295 fetches the airside and terminal and hangar buildings, with or without surroundings', () => {
+  const bbox: [number, number, number, number] = [0.0356, 51.4995, 0.0724, 51.509];
+  for (const context of [true, false]) {
+    const query = buildQuery(bbox, context);
+    expect(query).toContain('nwr[aeroway](51.4995,0.0356,51.509,0.0724);');
+    expect(query).toContain('nwr[building~"^(terminal|hangar)$"](51.4995,0.0356,51.509,0.0724);');
+  }
 });

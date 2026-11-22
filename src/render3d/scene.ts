@@ -452,6 +452,7 @@ export class Scene3D {
     places.material.vertexColors = true;
     places.name = 'places';
     places.visible = this.placesVisible;
+    if (geometry.airside) add(geometry.airside, 0xffffff, false).material.vertexColors = true;
     this.buildings = add(
       this.buildingDetails ? geometry.context.detailedBuildings : geometry.context.buildings,
       0xffffff,
