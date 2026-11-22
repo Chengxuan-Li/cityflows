@@ -75,6 +75,7 @@ export function buildCurbs(
     const half = curb.halfWidthM ?? 0.1;
     const a = parallelOffset(curb.points, -half),
       b = parallelOffset(curb.points, half);
+    if (!a.length || !b.length) continue;
     const road = city.roads[curb.road]!,
       profile = heights.roads[curb.road]!;
     const vertex = (p: { x: number; y: number }, up: number) => [
@@ -87,7 +88,8 @@ export function buildCurbs(
     const left = a.map((p) => vertex(p, 0)),
       right = b.map((p) => vertex(p, 0));
     const top = (p: number[]) => [p[0]!, p[1]! + 0.12, p[2]!];
-    if (left.length === right.length) {
+    // Keep the original strip wherever each left station has a matching right vertex.
+    if (left.length <= right.length) {
       const stations = curbStations(left, right);
       for (let i = 1; i < stations.length; i++) {
         const before = stations[i - 1]!,
@@ -127,7 +129,7 @@ export function buildCurbs(
     }
     quad(left[0]!, right[0]!, top(right[0]!), top(left[0]!));
     const p = left.at(-1)!,
-      q = right.at(-1)!;
+      q = right[Math.min(left.length, right.length) - 1]!;
     quad(p, top(p), top(q), q);
   }
   const geometry = new BufferGeometry().setAttribute(

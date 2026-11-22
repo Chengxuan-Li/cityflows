@@ -6,13 +6,16 @@ import {
   Float32BufferAttribute,
   Group,
   InstancedMesh,
+  Matrix4,
   Mesh,
   MeshLambertMaterial,
   Object3D,
   Shape,
   SphereGeometry,
   Vector3,
+  type ShaderMaterial,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftLayout } from '../render/aircraft-outline';
 import type { AircraftType } from '../schema/aircraft';
 
@@ -39,6 +42,85 @@ export interface AircraftMesh {
   /** Passenger windows, grouped into one or two decks. */
   windowRows: Group[];
   lightMounts: AircraftLightMounts;
+}
+
+/** Bake rigid parts in the frame that moves them. Windows keep their compact pane instances,
+ * and gear and rotors retain their own visibility and animation. */
+export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
+  const { root, gear, propellers, rotors } = mesh;
+  const frames = new Set([root, gear, ...propellers, ...rotors]);
+  const rigid = new Map<Group, Mesh<BufferGeometry, MeshLambertMaterial>[]>();
+  const outlined = new Set(['fuselage', 'wings', 'tailplane', 'fin', 'engine']);
+  root.updateMatrixWorld(true);
+  root.traverse((object) => {
+    if (object instanceof Mesh && !(object instanceof InstancedMesh)) {
+      if (!(object.material instanceof MeshLambertMaterial)) return;
+      let frame = object.parent as Group;
+      while (!frames.has(frame)) frame = frame.parent as Group;
+      const parts = rigid.get(frame) ?? [];
+      parts.push(object);
+      rigid.set(frame, parts);
+    } else if (!frames.has(object as Group)) object.matrixAutoUpdate = false;
+  });
+  const material = new MeshLambertMaterial({ vertexColors: true });
+  const local = new Matrix4();
+  const geometries = new Set<BufferGeometry>();
+  for (const [frame, parts] of rigid) {
+    const inverse = frame.matrixWorld.clone().invert();
+    const body: BufferGeometry[] = [];
+    const rim: BufferGeometry[] = [];
+    for (const part of parts) {
+      const source = part.geometry;
+      geometries.add(source);
+      local.multiplyMatrices(inverse, part.matrixWorld);
+      const geometry = new BufferGeometry()
+        .setAttribute('position', source.getAttribute('position').clone())
+        .setAttribute('normal', source.getAttribute('normal').clone())
+        .applyMatrix4(local);
+      const count = geometry.getAttribute('position').count;
+      const index = source.index
+        ? Array.from(source.index.array)
+        : Array.from({ length: count }, (_, i) => i);
+      // Three reverses front faces for reflected meshes. Bake the same winding for a mirrored wing.
+      if (local.determinant() < 0)
+        for (let i = 0; i < index.length; i += 3) {
+          const first = index[i]!;
+          index[i] = index[i + 1]!;
+          index[i + 1] = first;
+        }
+      geometry.setIndex(index);
+      if (outlined.has(part.name || part.parent!.name)) rim.push(geometry.clone());
+      const { r, g, b } = part.material.color;
+      const colors = new Float32Array(count * 3);
+      for (let i = 0; i < colors.length; i += 3) {
+        colors[i] = r;
+        colors[i + 1] = g;
+        colors[i + 2] = b;
+      }
+      geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+      body.push(geometry);
+      part.removeFromParent();
+    }
+    const batch = new Mesh(mergeGeometries(body)!, material);
+    batch.matrixAutoUpdate = false;
+    frame.add(batch);
+    if (rim.length) {
+      const contour = new Mesh(mergeGeometries(rim)!, outline);
+      contour.userData.outline = true;
+      contour.matrixAutoUpdate = false;
+      frame.add(contour);
+    }
+    for (const geometry of [...body, ...rim]) geometry.dispose();
+  }
+  for (const geometry of geometries) geometry.dispose();
+  const empty: Object3D[] = [];
+  root.traverse((object) => {
+    if (object instanceof Group && !frames.has(object) && !object.children.length)
+      empty.push(object);
+  });
+  for (const object of empty) object.removeFromParent();
+  root.updateMatrixWorld(true);
+  root.matrixAutoUpdate = false;
 }
 
 /** Adjacent rings share vertices for smooth normals. Endpoints cap the rings or form a cone. */

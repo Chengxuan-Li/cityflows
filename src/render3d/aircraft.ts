@@ -5,6 +5,7 @@ import {
   Color,
   DoubleSide,
   Float32BufferAttribute,
+  DynamicDrawUsage,
   Group,
   InstancedMesh,
   Line,
@@ -12,6 +13,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   Object3D,
   PlaneGeometry,
   Raycaster,
@@ -33,7 +35,7 @@ import {
   type AircraftLightState,
 } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
-import { buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
+import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
 import { beamTexture } from './lights';
 import { pointHalos } from './airfield-lights';
 
@@ -66,6 +68,7 @@ const lightColors = {
 interface Model {
   mesh: AircraftMesh;
   type: AircraftType;
+  radiusM: number;
   shadow: Mesh<ShapeGeometry, MeshBasicMaterial>;
   drop: Line<BufferGeometry, LineBasicMaterial>;
   discs: Mesh<CircleGeometry, MeshBasicMaterial>[];
@@ -112,11 +115,16 @@ export class Aircraft3D {
   private readonly halos = pointHalos(512, 1.6, 2);
   private readonly beams: InstancedMesh;
   private readonly shadowShapes = new Map<string, ShapeGeometry>();
+  private readonly transform = new Object3D();
+  private readonly point = new Vector3();
+  private readonly color = new Color();
+  private renderedAgeS = NaN;
   private clockS = 0;
   private on = 0;
   constructor(private readonly elevationM: number) {
     this.group.name = 'aircraft';
-    this.halos.name = 'aircraft-lights';
+    this.halos.mesh.name = 'aircraft-lights';
+    this.halos.centres.setUsage(DynamicDrawUsage);
     const beamMaterial = new MeshBasicMaterial({
       map: beamTexture(),
       color: lightColors.landing,
@@ -132,10 +140,10 @@ export class Aircraft3D {
     this.beams.name = 'aircraft-beams';
     this.beams.frustumCulled = false;
     this.beams.count = 0;
-    // The colour attribute exists before the first draw compiles the shader that reads it.
-    this.halos.setColorAt(0, new Color(0));
-    this.halos.count = 0;
-    this.group.add(this.halos, this.beams);
+    this.beams.instanceMatrix.setUsage(DynamicDrawUsage);
+    this.group.matrixAutoUpdate = false;
+    this.beams.matrixAutoUpdate = false;
+    this.group.add(this.halos.mesh, this.beams);
     this.setLight(0);
   }
 
@@ -158,22 +166,6 @@ export class Aircraft3D {
     const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
     const mesh = buildAircraftMesh(type, aircraftAccent(pose.registration));
     mesh.root.userData.aircraft = pose.id;
-    // Outlines on the large parts only (the fuselage, wings, tail surfaces and nacelles).
-    const parts: Mesh[] = [];
-    mesh.root.traverse((object) => {
-      if (!(object instanceof Mesh) || object instanceof InstancedMesh) return;
-      const name = object.name || object.parent?.name;
-      if (['fuselage', 'wings', 'tailplane', 'fin', 'engine'].includes(name ?? ''))
-        parts.push(object);
-    });
-    for (const part of parts) {
-      const rim = new Mesh(part.geometry, this.outline);
-      rim.position.copy(part.position);
-      rim.quaternion.copy(part.quaternion);
-      rim.scale.copy(part.scale);
-      rim.userData.outline = true;
-      part.parent!.add(rim);
-    }
     const discs = [...mesh.propellers, ...mesh.rotors].map((spinner) => {
       let radius = 0;
       spinner.traverse((o) => {
@@ -198,6 +190,7 @@ export class Aircraft3D {
       spinner.parent!.add(disc);
       return disc;
     });
+    batchAircraftMesh(mesh, this.outline);
     const shadow = new Mesh(
       this.shadowShape(type),
       new MeshBasicMaterial({
@@ -226,6 +219,7 @@ export class Aircraft3D {
     return {
       mesh,
       type,
+      radiusM: Math.hypot(type.lengthM, type.spanM) / 2,
       shadow,
       drop,
       discs,
@@ -238,6 +232,7 @@ export class Aircraft3D {
   }
 
   update(poses: readonly AircraftPose[], timeS: number) {
+    this.renderedAgeS = NaN;
     const seen = new Set<number>();
     for (const pose of poses) {
       seen.add(pose.id);
@@ -266,9 +261,10 @@ export class Aircraft3D {
         model.shadow.removeFromParent();
         model.drop.removeFromParent();
         model.mesh.root.traverse((object) => {
-          if (!(object instanceof Mesh) || object.userData.outline) return;
+          if (!(object instanceof Mesh)) return;
           object.geometry.dispose();
-          for (const material of [object.material].flat()) material.dispose();
+          if (!object.userData.outline) (object.material as MeshLambertMaterial).dispose();
+          if (object instanceof InstancedMesh) object.dispose();
         });
         model.shadow.material.dispose();
         model.drop.geometry.dispose();
@@ -280,23 +276,20 @@ export class Aircraft3D {
   /** Places every aircraft `ageS` simulated seconds after its snapshot and advances spinning
    * parts and flashing lights by `dtS` wall seconds (0 while paused). */
   animate(ageS: number, dtS: number) {
+    if (ageS === this.renderedAgeS && dtS === 0) return;
+    this.renderedAgeS = ageS;
     this.clockS += dtS;
     const ahead = Math.min(ageS, 2);
-    const transform = new Object3D();
-    const matrix = new Matrix4();
-    const point = new Vector3();
-    const color = new Color();
+    const { transform, point, color } = this;
+    const { centres, tints, geometry } = this.halos;
     let halo = 0,
       beam = 0;
-    const addHalo = (mount: readonly number[], radiusM: number, hex: number) => {
-      if (halo >= this.halos.instanceMatrix.count) return;
+    const addHalo = (matrix: Matrix4, mount: readonly number[], radiusM: number, hex: number) => {
+      if (halo >= centres.count) return;
       point.set(mount[0]!, mount[1]!, mount[2]!).applyMatrix4(matrix);
-      transform.position.copy(point);
-      transform.rotation.set(0, 0, 0);
-      transform.scale.setScalar(2 * radiusM);
-      transform.updateMatrix();
-      this.halos.setMatrixAt(halo, transform.matrix);
-      this.halos.setColorAt(halo++, color.setHex(hex));
+      centres.setXYZW(halo, point.x, point.y, point.z, 2 * radiusM);
+      color.setHex(hex);
+      tints.setXYZ(halo++, color.r, color.g, color.b);
     };
     for (const model of this.models.values()) {
       const { pose, velocity, mesh, lights } = model;
@@ -307,7 +300,7 @@ export class Aircraft3D {
       root.position.set(x, this.elevationM + heightM, y);
       root.rotation.set(0, -pose.heading, ((pitchDeg[pose.state] ?? 0) * Math.PI) / 180, 'YXZ');
       root.updateMatrix();
-      matrix.copy(root.matrix);
+      const matrix = root.matrix;
       // Shadow and drop line, off the ground: darker the lower it flies.
       const airborne = heightM > 1.5;
       model.shadow.visible = model.drop.visible = airborne;
@@ -336,18 +329,18 @@ export class Aircraft3D {
       const m = mesh.lightMounts;
       const flash = aircraftFlash(this.clockS, pose.id);
       if (lights.nav) {
-        addHalo(m.navLeft, 0.7, lightColors.red);
-        addHalo(m.navRight, 0.7, lightColors.green);
-        addHalo(m.navTail, 0.6, lightColors.white);
+        addHalo(matrix, m.navLeft, 0.7, lightColors.red);
+        addHalo(matrix, m.navRight, 0.7, lightColors.green);
+        addHalo(matrix, m.navTail, 0.6, lightColors.white);
       }
-      if (lights.beacon && flash.beacon) addHalo(m.beacon, 1.3, lightColors.red);
+      if (lights.beacon && flash.beacon) addHalo(matrix, m.beacon, 1.3, lightColors.red);
       if (lights.strobes && flash.strobe)
-        for (const s of m.strobes) addHalo(s, 2.8, lightColors.white);
-      if (lights.landing) for (const l of m.landing) addHalo(l, 2.4, lightColors.landing);
-      if (lights.taxi) addHalo(m.taxi, 1.1, lightColors.landing);
+        for (const s of m.strobes) addHalo(matrix, s, 2.8, lightColors.white);
+      if (lights.landing) for (const l of m.landing) addHalo(matrix, l, 2.4, lightColors.landing);
+      if (lights.taxi) addHalo(matrix, m.taxi, 1.1, lightColors.landing);
       // Beams on the ground ahead of the nose: taxi lights, and landing lights near the ground.
       const lit = (lights.taxi && heightM < 1) || (lights.landing && heightM < 30);
-      if (lit && beam < this.beams.instanceMatrix.count) {
+      if (this.on > 0 && lit && beam < this.beams.instanceMatrix.count) {
         const length = lights.landing ? 150 : 45,
           width = lights.landing ? 46 : 22;
         const c = Math.cos(pose.heading),
@@ -364,23 +357,36 @@ export class Aircraft3D {
         this.beams.setMatrixAt(beam++, transform.matrix);
       }
     }
-    this.halos.count = halo;
-    this.halos.instanceMatrix.needsUpdate = true;
-    if (this.halos.instanceColor) this.halos.instanceColor.needsUpdate = true;
-    this.beams.count = this.on > 0 ? beam : 0;
-    this.beams.instanceMatrix.needsUpdate = true;
+    geometry.instanceCount = halo;
+    if (halo) centres.needsUpdate = tints.needsUpdate = true;
+    this.beams.count = beam;
+    if (beam) this.beams.instanceMatrix.needsUpdate = true;
   }
 
   /** `on`: the scene's artificial light. Aircraft lights shine by day too, dimmer. */
   setLight(on: number) {
+    if (this.on !== on) this.renderedAgeS = NaN;
     this.on = on;
-    (this.halos.material as ShaderMaterial).uniforms.intensity!.value = 0.45 + 0.75 * on;
+    this.halos.material.uniforms.intensity!.value = 0.45 + 0.75 * on;
     (this.beams.material as MeshBasicMaterial).opacity = 0.45 * on;
   }
 
   setPixelScale(scale: number) {
-    (this.halos.material as ShaderMaterial).uniforms.pixelScale!.value = scale;
+    this.halos.material.uniforms.pixelScale!.value = scale;
     this.outline.uniforms.pixelScale!.value = scale;
+  }
+
+  /** Cabin panes are at most 54 cm across on fixed-wing aircraft. Omit the rows when
+   * even the near side of the aircraft projects each pane to less than a tenth of a pixel. */
+  setDetail(camera: PerspectiveCamera, scale: number) {
+    const view = camera.matrixWorldInverse.elements;
+    for (const { mesh, type, radiusM } of this.models.values()) {
+      if (type.class === 'helicopter') continue;
+      const { x, y, z } = mesh.root.position;
+      const depth = -(view[2]! * x + view[6]! * y + view[10]! * z + view[14]!);
+      const detailed = (depth - radiusM) * scale < 5.4;
+      for (const row of mesh.windowRows) row.visible = detailed;
+    }
   }
 
   /** Where an aircraft is drawn now, or null. */

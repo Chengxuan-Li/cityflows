@@ -160,7 +160,8 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     // Freiburg's frame budgets (freiburg-landing.spec.ts); CI's software GPU skips them.
     if (!process.env.CI) {
       expect(report['2d'].renderP95Ms, '2D render CPU p95').toBeLessThanOrEqual(4);
-      expect(report['3d'].renderP95Ms, '3D render CPU p95').toBeLessThanOrEqual(6);
+      const threeDBudget = id === 'london-city-airport' ? 4 : 6;
+      expect(report['3d'].renderP95Ms, '3D render CPU p95').toBeLessThanOrEqual(threeDBudget);
     }
     expect(errors).toEqual([]);
   });

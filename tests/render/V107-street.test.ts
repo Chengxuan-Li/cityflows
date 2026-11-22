@@ -472,6 +472,33 @@ unitTest('V107 a tight return builds both curb sides when the inside offset lose
   mesh.dispose();
 });
 
+unitTest(
+  'V107 a tight curb retains corners on both sides when their offsets trim differently',
+  () => {
+    const b = buildCity('tight curb', 1);
+    b.road(b.node(0, 0), b.node(100, 0));
+    const city = compiled(b.city);
+    const points = [
+      { x: 30, y: 0 },
+      { x: 31, y: 0 },
+      { x: 31, y: 0.15 },
+      { x: 30.001, y: 0.15 },
+    ];
+    const outside = parallelOffset(points, -0.1);
+    const inside = parallelOffset(points, 0.1);
+    expect(outside.length).toBeGreaterThan(inside.length);
+    const geometry = buildCurbs([{ road: 0, points }], city, cityHeights(city, b.city));
+    const vertices = geometry.getAttribute('position');
+    for (const p of [...inside, ...outside])
+      expect(
+        Array.from({ length: vertices.count }, (_, i) =>
+          Math.hypot(vertices.getX(i) - p.x, vertices.getZ(i) - p.y),
+        ).some((distance) => distance < 1e-5),
+      ).toBe(true);
+    geometry.dispose();
+  },
+);
+
 unitTest('V107 curved curb meshes bound plan error to 1cm without dense subpixel vertices', () => {
   const b = buildCity('curved curb mesh', 1),
     a = b.node(0, 0),

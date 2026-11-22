@@ -81,13 +81,15 @@ export class AirfieldLights2D {
       papiAngles(this.graph, this.lights, poses),
     );
     const particles = this.particles;
+    let changed = false;
     colors.forEach((c, i) => {
       if (this.colors[i] === c) return;
       particles[i]!.tint = c;
       particles[i]!.alpha = c ? (this.lights[i]!.kind === 'apron-flood' ? 0.35 : 1) : 0;
+      changed = true;
     });
     this.colors = colors;
-    this.points.update();
+    if (changed) this.points.update();
     const craft: Particle[] = [];
     for (const pose of poses) {
       if (
