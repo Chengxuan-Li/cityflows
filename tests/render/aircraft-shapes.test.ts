@@ -8,9 +8,16 @@ import {
   Vector3,
 } from 'three';
 import { expect, it } from 'vitest';
-import { buildAircraftOutline } from '../../src/render/aircraft-outline';
+import { aircraftLivery } from '../../src/render/aircraft-livery';
+import {
+  aircraftLayout,
+  boardingDoor,
+  bridgeable,
+  buildAircraftOutline,
+  wingtipKind,
+} from '../../src/render/aircraft-outline';
 import { batchAircraftMesh, buildAircraftMesh } from '../../src/render3d/aircraft-mesh';
-import { aircraftTypes } from '../../src/schema/aircraft';
+import { aircraftTypes, type AircraftClass } from '../../src/schema/aircraft';
 
 it.each(aircraftTypes)('$name has catalogue extents and the parts of its class', (type) => {
   const helicopter = type.class === 'helicopter';
@@ -140,3 +147,98 @@ it.each(['A20N', 'AT76', 'EC45'])(
       sampleWings().forEach((height, i) => expect(height).toBeCloseTo(wingHeights[i]!, 5));
   },
 );
+
+// TASK-315: per-type parts and dimensions: doors, windscreen, wingtip devices, fan faces,
+// flap-track and wing-to-body fairings, boarding-door sills, and the livery bands.
+const sills: Record<AircraftClass, [number, number]> = {
+  double_decker: [4.8, 5.6],
+  widebody: [4.5, 5.6],
+  narrowbody: [2.9, 3.8],
+  regional_jet: [1.9, 2.8],
+  propeller: [1.4, 2.6],
+  private: [0.8, 1.8],
+  helicopter: [1.1, 1.8],
+};
+it.each(aircraftTypes)('$name: doors, windscreen, tips, fans, fairings and sill', (type) => {
+  const layout = aircraftLayout(type);
+  const helicopter = type.class === 'helicopter';
+  const jet = !helicopter && type.class !== 'propeller';
+  const { root } = buildAircraftMesh(type, aircraftLivery('G-ABCD'));
+  const parts = (name: string) => root.children.filter((c) => c.name === name);
+  const fans = root.children
+    .filter(({ name }) => name === 'engine')
+    .flatMap((engine) => engine.children.filter(({ name }) => name === 'fan'));
+  const twoSided = (jet && type.class !== 'private') || helicopter;
+  expect(parts('door')).toHaveLength(layout.doors.length * (twoSided ? 2 : 1));
+  expect(parts('windscreen')).toHaveLength(helicopter ? 0 : 4);
+  expect(Boolean(root.getObjectByName('cockpit'))).toBe(helicopter);
+  const engineCount = type.engines.mount === 'none' ? 0 : type.engines.count;
+  expect(fans).toHaveLength(engineCount * (jet ? 3 : 1));
+  const tracks = { double_decker: 5, widebody: 4, narrowbody: 3, regional_jet: 2 }[
+    type.class as 'widebody'
+  ];
+  const lowWing = jet && layout.wing[0]!.y < layout.bodyY;
+  expect(parts('fairing')).toHaveLength(
+    (tracks ?? 0) * 2 + (lowWing ? 1 : 0) + (type.id === 'AT76' ? 2 : 0),
+  );
+  // Tip devices rise above the tip inside the published span; raked tips taper the planform.
+  const tips = root.getObjectByName('winglets');
+  const kind = wingtipKind(type);
+  if (kind === 'none' || kind === 'raked') expect(tips).toBeUndefined();
+  else {
+    expect(tips!.children).toHaveLength(kind === 'fence' ? 4 : 2);
+    const box = new Box3().setFromObject(tips!, true);
+    expect(box.max.z).toBeLessThanOrEqual(type.spanM / 2 + 1e-9);
+    expect(box.max.y).toBeGreaterThan(layout.wing.at(-1)!.y + type.spanM * 0.02);
+  }
+  if (kind === 'raked') expect(layout.wing.at(-1)!.chord).toBeLessThan(type.lengthM * 0.025);
+  // The boarding door: ahead of the wing, on the port surface, its sill at the class's height.
+  const door = boardingDoor(type);
+  expect(door.z).toBeLessThan(0);
+  expect(-door.z).toBeLessThanOrEqual(layout.radius);
+  if (!helicopter) expect(door.x).toBeGreaterThan(layout.wing[0]!.x);
+  const [low, high] = sills[type.class];
+  expect(door.sillM).toBeGreaterThanOrEqual(low);
+  expect(door.sillM).toBeLessThanOrEqual(high);
+  expect(bridgeable(type)).toBe(
+    type.class !== 'propeller' && type.class !== 'private' && !helicopter,
+  );
+});
+
+it.each([
+  ['tail', 0],
+  ['cheatline', 2],
+  ['belly', 1],
+  ['tailcone', 1],
+  ['crown', 1],
+] as const)('paints the %s scheme in %i bands besides the belly', (style, bands) => {
+  const livery = { style, tail: 0x1f3f78, trim: null, engines: 0x1f3f78, belly: 0xc9ced4 };
+  const { root } = buildAircraftMesh(
+    aircraftTypes.find((t) => t.id === 'A20N')!,
+    livery,
+  );
+  const painted = root.children.filter((c) => c.name === 'livery') as Mesh<
+    never,
+    MeshLambertMaterial
+  >[];
+  expect(painted.filter((m) => m.material.color.getHex() === 0x1f3f78)).toHaveLength(bands);
+  expect(painted.filter((m) => m.material.color.getHex() === 0xc9ced4)).toHaveLength(1);
+  const engine = root.children.find((c) => c.name === 'engine')!.children[0] as Mesh<
+    never,
+    MeshLambertMaterial
+  >;
+  expect(engine.material.color.getHex()).toBe(0x1f3f78);
+  expect(
+    (root.getObjectByName('fin') as Mesh<never, MeshLambertMaterial>).material.color.getHex(),
+  ).toBe(0x1f3f78);
+});
+
+it('gives every registration one of the schemes, the same each time', () => {
+  const seen = new Set<string>();
+  for (let i = 0; i < 400; i++) {
+    const livery = aircraftLivery(`G-${i.toString(36).toUpperCase().padStart(4, 'A')}`);
+    expect(aircraftLivery(`G-${i.toString(36).toUpperCase().padStart(4, 'A')}`)).toBe(livery);
+    seen.add(JSON.stringify(livery));
+  }
+  expect(seen.size).toBe(10);
+});

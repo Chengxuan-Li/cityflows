@@ -397,6 +397,8 @@ export const style = {
     edge: 0x566474,
     disc: 0x365267,
   },
+  /** TASK-315: jet bridges from above. */
+  apron: { bridge: 0xb4bbc3, edge: 0x566474 },
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,

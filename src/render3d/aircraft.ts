@@ -28,12 +28,8 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { aircraftTypes, type AircraftType } from '../schema/aircraft';
 import { buildAircraftOutline } from '../render/aircraft-outline';
-import {
-  aircraftAccent,
-  aircraftFlash,
-  aircraftLights,
-  type AircraftLightState,
-} from '../render/airfield-lights';
+import { aircraftLivery } from '../render/aircraft-livery';
+import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
 import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
 import { beamTexture } from './lights';
@@ -164,7 +160,7 @@ export class Aircraft3D {
 
   private build(pose: AircraftPose): Model {
     const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
-    const mesh = buildAircraftMesh(type, aircraftAccent(pose.registration));
+    const mesh = buildAircraftMesh(type, aircraftLivery(pose.registration));
     mesh.root.userData.aircraft = pose.id;
     const discs = [...mesh.propellers, ...mesh.rotors].map((spinner) => {
       let radius = 0;

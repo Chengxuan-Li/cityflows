@@ -11,6 +11,47 @@ const bodyWidth: Record<AircraftClass, number> = {
   helicopter: 0.17,
 };
 
+/** TASK-315: wingtip devices by type. Raked tips sweep the outer wing further back; the others
+ * rise from the tip inside the published span. */
+export type WingtipKind = 'none' | 'raked' | 'sharklet' | 'blended' | 'winglet' | 'fence';
+const wingtips: Partial<Record<string, WingtipKind>> = {
+  A388: 'fence',
+  B748: 'raked',
+  B77W: 'raked',
+  A359: 'sharklet',
+  A333: 'winglet',
+  B789: 'raked',
+  A20N: 'sharklet',
+  B738: 'blended',
+  A21N: 'sharklet',
+  BCS3: 'raked',
+  E190: 'winglet',
+  E175: 'winglet',
+  CRJ9: 'winglet',
+  GLF6: 'blended',
+};
+export const wingtipKind = (type: AircraftType): WingtipKind => wingtips[type.id] ?? 'none';
+
+/** Passenger and service doors, as fractions of the length from the nose, on the main deck
+ * unless `upper`. The first is the boarding door a jet bridge docks at (TASK-315). */
+const doorFractions: Record<AircraftClass, { from: number; upper?: true; small?: true }[]> = {
+  double_decker: [
+    { from: 0.13 },
+    { from: 0.3 },
+    { from: 0.49 },
+    { from: 0.66 },
+    { from: 0.86 },
+    { from: 0.25, upper: true },
+    { from: 0.53, upper: true },
+  ],
+  widebody: [{ from: 0.12 }, { from: 0.3 }, { from: 0.62 }, { from: 0.86 }],
+  narrowbody: [{ from: 0.125 }, { from: 0.47, small: true }, { from: 0.86 }],
+  regional_jet: [{ from: 0.12 }, { from: 0.86 }],
+  propeller: [{ from: 0.13 }, { from: 0.8 }],
+  private: [{ from: 0.17 }],
+  helicopter: [{ from: 0.38 }],
+};
+
 /** Local metres, with +x forward, +y up, +z to starboard, and the ground at y = 0.
  * The top view uses {x, y: z}. These proportions are visual approximations. */
 export function aircraftLayout(type: AircraftType) {
@@ -20,11 +61,23 @@ export function aircraftLayout(type: AircraftType) {
   const doubleDecker = category === 'double_decker';
   const radius = (length * bodyWidth[category]) / 2;
   const halfSpan = span / 2;
-  const bodyY = radius * (helicopter ? 1.65 : turboprop ? 2.25 : 1.95);
   const rotorX = length / 2 - halfSpan;
-  const rotorY = bodyY + radius * 1.42;
   const tTail = type.engines.mount === 'rear' || type.id === 'AT76' || type.id === 'DH8D';
   const highWing = type.id === 'AT76' || type.id === 'DH8D';
+  // TASK-315: high-wing turboprops and rear-engined jets sit lower on their gear than jets
+  // with engines (or propellers) under a low wing.
+  const bodyY =
+    radius *
+    (helicopter
+      ? 1.65
+      : highWing
+        ? 1.75
+        : turboprop
+          ? 2.25
+          : type.engines.mount === 'rear'
+            ? 1.6
+            : 1.95);
+  const rotorY = bodyY + radius * 1.42;
   // Each station is [position along the length, width radius, vertical radius, vertical offset].
   const stations: [x: number, width: number, height: number, rise: number][] = helicopter
     ? [
@@ -70,6 +123,8 @@ export function aircraftLayout(type: AircraftType) {
   });
   const wingY = bodyY + radius * (highWing ? 0.6 : -0.43);
   const dihedral = halfSpan * (turboprop ? 0.026 : 0.065);
+  const tip = wingtipKind(type);
+  const raked = tip === 'raked';
   const wing = helicopter
     ? []
     : [
@@ -83,12 +138,18 @@ export function aircraftLayout(type: AircraftType) {
         ),
         section(
           turboprop ? 0.048 : -0.14,
-          turboprop ? 0.055 : 0.068,
-          0.91,
-          wingY + dihedral * 0.91,
+          turboprop ? 0.055 : raked ? 0.075 : 0.068,
+          raked ? 0.86 : 0.91,
+          wingY + dihedral * (raked ? 0.86 : 0.91),
           0.045,
         ),
-        section(turboprop ? 0.034 : -0.18, turboprop ? 0.033 : 0.037, 1, wingY + dihedral, 0.022),
+        section(
+          turboprop ? 0.034 : raked ? -0.215 : -0.18,
+          turboprop ? 0.033 : raked ? 0.024 : 0.037,
+          1,
+          wingY + dihedral,
+          0.022,
+        ),
       ];
   const finY = bodyY + radius * (helicopter ? 0.56 : 0.67);
   const finTop = bodyY + radius * (helicopter ? 1.47 : 2.93);
@@ -131,7 +192,69 @@ export function aircraftLayout(type: AircraftType) {
             propRadius: turboprop ? span * 0.075 : 0,
           };
         });
-  return { body, radius, bodyY, wing, tailplane, fin, engines, rotorX, rotorY };
+  /** The fuselage section at `x`: centre height, half width and half height. */
+  function bodyAt(x: number) {
+    const i = Math.max(
+      1,
+      body.findIndex((station) => station.x >= x),
+    );
+    const a = body[i - 1]!;
+    const b = body[i]!;
+    const t = Math.min(1, Math.max(0, (x - a.x) / (b.x - a.x)));
+    const lerp = (from: number, to: number) => from + (to - from) * t;
+    return { y: lerp(a.y, b.y), width: lerp(a.width, b.width), height: lerp(a.height, b.height) };
+  }
+  const doorSize: [width: number, height: number] = {
+    double_decker: [1.07, 1.93],
+    widebody: [1.07, 1.89],
+    narrowbody: [0.81, 1.85],
+    regional_jet: [0.81, 1.75],
+    propeller: [0.72, 1.6],
+    private: [0.61, 1.3],
+    helicopter: [1.25, 1.25],
+  }[category] as [number, number];
+  const doors = doorFractions[category].map(({ from, upper, small }) => {
+    const x = length * (0.5 - from);
+    const at = bodyAt(x);
+    // Cabin floors: one deck a third of the way below the centreline, or the A380 and 747 decks.
+    const sillM =
+      at.y + at.height * (upper ? 0.12 : doubleDecker ? -0.45 : helicopter ? -0.55 : -0.33);
+    const [widthM, heightM] = small ? [0.51, 0.97] : doorSize;
+    return { x, sillM: small ? sillM + 0.75 : sillM, widthM, heightM, upper: !!upper };
+  });
+  return {
+    body,
+    bodyAt,
+    radius,
+    bodyY,
+    wing,
+    tailplane,
+    fin,
+    engines,
+    rotorX,
+    rotorY,
+    tip,
+    doors,
+  };
+}
+
+/** TASK-315: the classes a jet bridge serves; turboprops, business jets and helicopters board
+ * by stairs. */
+export const bridgeable = (type: AircraftType) =>
+  type.class === 'double_decker' ||
+  type.class === 'widebody' ||
+  type.class === 'narrowbody' ||
+  type.class === 'regional_jet';
+
+/** The boarding door (first main-deck door, port side) in local metres: x forward, the sill's
+ * height above the ground, and z on the fuselage's port surface (negative). */
+export function boardingDoor(type: AircraftType) {
+  const layout = aircraftLayout(type);
+  const door = layout.doors[0]!;
+  const at = layout.bodyAt(door.x);
+  // Where the sill height meets the elliptical section.
+  const c = Math.min(1, Math.abs(door.sillM + door.heightM / 2 - at.y) / at.height);
+  return { x: door.x, sillM: door.sillM, z: -at.width * Math.sqrt(1 - c * c) };
 }
 
 type PolygonPart = 'fuselage' | 'wing' | 'tailplane' | 'fin' | 'engine';
