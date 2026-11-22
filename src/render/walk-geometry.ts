@@ -3,11 +3,16 @@ import { earcut } from 'pixi.js';
 import {
   areaD,
   booleanOpD,
+  Clipper64,
   ClipType,
   EndType,
   FillRule,
   inflatePathsD,
   JoinType,
+  PathType,
+  ReuseableDataContainer64,
+  scalePaths64,
+  type Paths64,
 } from 'clipper2-ts';
 import {
   distance,
@@ -108,6 +113,9 @@ function buildWalkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape
   for (const o of obstacles) tree.add(...box(o.rings[0]!));
   if (!obstacles.length) tree.add(0, 0, 0, 0);
   tree.finish();
+  const clipData: (ReuseableDataContainer64 | undefined)[] = [];
+  const scale = 1000;
+  const invScale = 1 / scale;
   const shapes: WalkShape[] = [];
   const drawn = (link: CWalkLink) =>
     link.kind !== 'access' && link.kind !== 'crossing' && link.kind !== 'living_street';
@@ -141,13 +149,31 @@ function buildWalkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape
         }
       }
     }
-    const clips = tree.search(...box(rings.flat())).flatMap((i) => {
+    const clips = tree.search(...box(rings.flat())).filter((i) => {
       const o = obstacles[i];
-      return o && (o.layer === link.layer || (o.building && link.layer === 0)) ? o.rings : [];
+      return o && (o.layer === link.layer || (o.building && link.layer === 0));
     });
-    // NonZero merges the strip with its discs in the same pass.
-    if (clips.length) rings = booleanOpD(ClipType.Difference, rings, clips, FillRule.NonZero, 3);
-    else if (joined) rings = booleanOpD(ClipType.Union, rings, null, FillRule.NonZero, 3);
+    // The same road or building clips many links. Reuse its quantized vertices and local minima
+    // while keeping each link's original obstacle order and millimetre scale.
+    if (clips.length) {
+      const clipper = new Clipper64();
+      clipper.addSubject(scalePaths64(rings, scale));
+      for (const i of clips) {
+        let data = clipData[i];
+        if (!data) {
+          data = new ReuseableDataContainer64();
+          data.addPaths(scalePaths64(obstacles[i]!.rings, scale), PathType.Clip, false);
+          clipData[i] = data;
+        }
+        clipper.addReuseableData(data);
+      }
+      const solution: Paths64 = [];
+      rings = clipper.execute(ClipType.Difference, FillRule.NonZero, solution)
+        ? solution.map((path) =>
+            path.map((p) => ({ x: p.x * invScale, y: p.y * invScale, z: p.z || 0 })),
+          )
+        : [];
+    } else if (joined) rings = booleanOpD(ClipType.Union, rings, null, FillRule.NonZero, 3);
     // Millimetre clipping can leave collinear slivers too small to triangulate or display.
     rings = rings.filter((ring) => Math.abs(areaD(ring)) > 0.005);
     if (!rings.length) continue;

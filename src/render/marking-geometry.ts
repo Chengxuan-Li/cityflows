@@ -2085,19 +2085,35 @@ function segmentLanes(city: CompiledCity): Int32Array {
   return lanes;
 }
 
-function lineDistance(p: Vec2, line: Vec2[]): number {
-  let best = Infinity;
+function seamSegmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
+function withinSeam(p: Vec2, line: Vec2[], distanceM: number): boolean {
+  // The padded box only rejects distant segments. The distance test still decides the threshold.
+  const pad = distanceM + 1e-6;
+  const minX = p.x - pad,
+    maxX = p.x + pad,
+    minY = p.y - pad,
+    maxY = p.y + pad;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const length2 = dx * dx + dy * dy;
-    const t =
-      length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
-    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+    if (
+      (a.x < minX && b.x < minX) ||
+      (a.x > maxX && b.x > maxX) ||
+      (a.y < minY && b.y < minY) ||
+      (a.y > maxY && b.y > maxY)
+    )
+      continue;
+    if (seamSegmentDistance(p, a, b) <= distanceM) return true;
   }
-  return best;
+  return false;
 }
 
 const seamCache = new WeakMap<CompiledCity, Map<number, Vec2[][]>>();
@@ -2115,13 +2131,14 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
   const lengths = cumulativeLengths(edge);
   const owner = segmentLanes(city);
   const candidates = new Set<number>();
-  for (let s = 0; ; s = Math.min(lengths.at(-1)!, s + 4)) {
+  const total = lengths.at(-1)!;
+  for (let s = 0; ; s = Math.min(total, s + 4)) {
     const p = pointAtDistance(edge, lengths, s);
     for (const k of city.laneSpatial.search(p.x - 3, p.y - 3, p.x + 3, p.y + 3)) {
       const lane = city.lanes[owner[k]!]!;
       if (lane.road !== road.idx && lane.left < 0) candidates.add(lane.idx);
     }
-    if (s === lengths.at(-1)!) break;
+    if (s === total) break;
   }
   const found: Vec2[][] = [];
   for (const index of candidates) {
@@ -2138,8 +2155,7 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
       run = [];
     };
     for (const q of edge) {
-      const d = lineDistance(q, left);
-      if (d <= (run.length ? 0.25 : 0.1)) run.push(q);
+      if (withinSeam(q, left, run.length ? 0.25 : 0.1)) run.push(q);
       else close();
     }
     close();
@@ -2153,12 +2169,14 @@ function sameWay(run: Vec2[], left: Vec2[]): boolean {
   const a = run[0]!,
     b = run[1]!;
   let closest = 1;
-  for (let i = 2; i < left.length; i++)
-    if (
-      lineDistance(a, [left[i - 1]!, left[i]!]) <
-      lineDistance(a, [left[closest - 1]!, left[closest]!])
-    )
+  let best = seamSegmentDistance(a, left[0]!, left[1]!);
+  for (let i = 2; i < left.length; i++) {
+    const distance = seamSegmentDistance(a, left[i - 1]!, left[i]!);
+    if (distance < best) {
       closest = i;
+      best = distance;
+    }
+  }
   const c = left[closest - 1]!,
     d = left[closest]!;
   return (b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y) > 0;

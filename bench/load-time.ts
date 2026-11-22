@@ -3,17 +3,19 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { compile } from '../src/network';
 import { crossingEnabled, crossingStyle } from '../src/network/crossings';
+import { junctionCorners } from '../src/network/junctions';
 import { openProject } from '../src/project/open';
 import { cityMarkingTheme } from '../src/schema/marking-theme';
 import {
   crossingStripes,
   nodeMarkingGeometry,
   roadMarkingGeometry,
+  seams,
   transitionMarkings,
   zebraBeacons,
 } from '../src/render/marking-geometry';
 import { curbBands, curbTaper, roadEndEdges } from '../src/render/layers/nodes';
-import { paintedCity } from '../src/render/road-paint';
+import { paintedCity, transitionLanes } from '../src/render/road-paint';
 import { placeDetails } from '../src/render/street';
 import { markingThemes } from '../src/render/style';
 import { walkGeometry } from '../src/render/walk-geometry';
@@ -23,8 +25,8 @@ import { projectFile } from './bundled-cities';
 // archive, compile without the walk graph, the 2D road, node, transition and crossing markings
 // and the curb joins of the first frame, then the walk graph, trees and street furniture, and
 // the walk shapes), each run from a fresh compile so no cache carries over, with a sha256 of
-// each stage's output, of the compiled city and its diagnostics, and of every road end's
-// crossing style. Type transforms, not stripping: the render modules use parameter properties.
+// each stage's output, including junctions, transition seams, the compiled city and its
+// diagnostics, and every road end's crossing style. The render modules use parameter properties.
 // Usage:
 // node --experimental-transform-types --import ./bench/register.ts bench/load-time.ts
 //   [york freiburg munich ...] [--runs N]
@@ -33,7 +35,9 @@ const args = process.argv.slice(2);
 const runsAt = args.indexOf('--runs');
 const runs = runsAt < 0 ? 3 : Number(args[runsAt + 1]);
 const names = args.filter((a, i) => !a.startsWith('--') && (runsAt < 0 || i !== runsAt + 1));
-const cities = names.length ? names : ['york', 'freiburg', 'munich', 'luebeck', 'sindelfingen'];
+const cities = names.length
+  ? names
+  : ['york', 'freiburg', 'philadelphia', 'munich', 'luebeck', 'sindelfingen'];
 
 const hashOf = (value: unknown) =>
   createHash('sha256')
@@ -87,6 +91,7 @@ for (const name of cities) {
     const details = time('details', () => placeDetails(city, source));
     const walk = time('walkShapes', () => walkGeometry(city, source));
     if (run === 0) {
+      const transitionCity = transitionLanes(city);
       const ends = city.roads.flatMap((r) =>
         [false, true].map((atEnd) => [
           crossingEnabled(city, r, atEnd, source),
@@ -96,6 +101,8 @@ for (const name of cities) {
       Object.assign(hashes, {
         compiled: hashOf({ ...compiled.compiled, walk: undefined }),
         diagnostics: hashOf(compiled.diagnostics),
+        junctions: hashOf(city.nodes.map((node) => [node.outline, junctionCorners(node)])),
+        seams: hashOf(transitionCity.roads.map((road) => seams(transitionCity, road))),
         crossings: hashOf(ends),
         markings: hashOf(markings),
         beacons: hashOf(zebraBeacons(city, source, theme)),
