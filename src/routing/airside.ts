@@ -25,19 +25,42 @@ export function arcLine(graph: AirsideGraph, arc: number): Vec2[] {
   return arcForward(arc) ? line : line.toReversed();
 }
 
-/** Arcs leaving `node`; a oneway edge only along its line. */
-export function arcsFrom(graph: AirsideGraph, node: number) {
-  const arcs: number[] = [];
-  for (const e of graph.nodes[node]!.edges) {
-    const edge = graph.edges[e]!;
-    if (edge.from === node) arcs.push(arcOf(e, true));
-    if (edge.to === node && !edge.oneway) arcs.push(arcOf(e, false));
+const leaving = new WeakMap<AirsideGraph, (readonly number[])[]>();
+
+/** Arcs leaving `node`; a oneway edge only along its line. Kept per graph: do not modify. */
+export function arcsFrom(graph: AirsideGraph, node: number): readonly number[] {
+  let all = leaving.get(graph);
+  if (!all) {
+    all = graph.nodes.map(({ idx, edges }) => {
+      const arcs: number[] = [];
+      for (const e of edges) {
+        const edge = graph.edges[e]!;
+        if (edge.from === idx) arcs.push(arcOf(e, true));
+        if (edge.to === idx && !edge.oneway) arcs.push(arcOf(e, false));
+      }
+      return arcs;
+    });
+    leaving.set(graph, all);
   }
-  return arcs;
+  return all[node]!;
 }
 
-/** Direction of travel over the first (or last) `windowM` of an arc. */
+const directions = new WeakMap<AirsideGraph, Map<number, Float64Array>>();
+
+/** Direction of travel over the first (or last) `windowM` of an arc, kept per graph and window
+ * (routing asks for the same turns again and again). */
 function arcDirection(graph: AirsideGraph, arc: number, atEnd: boolean, windowM: number) {
+  let byWindow = directions.get(graph);
+  if (!byWindow) directions.set(graph, (byWindow = new Map()));
+  let cache = byWindow.get(windowM);
+  if (!cache) byWindow.set(windowM, (cache = new Float64Array(graph.edges.length * 4).fill(NaN)));
+  const slot = arc * 2 + Number(atEnd);
+  const known = cache[slot]!;
+  if (!Number.isNaN(known)) return known;
+  return (cache[slot] = measureDirection(graph, arc, atEnd, windowM));
+}
+
+function measureDirection(graph: AirsideGraph, arc: number, atEnd: boolean, windowM: number) {
   const { line, cumulative, lengthM } = graph.edges[arcEdge(arc)]!;
   const window = Math.min(windowM, lengthM);
   const at = (travelM: number) =>

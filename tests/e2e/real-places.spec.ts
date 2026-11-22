@@ -9,7 +9,7 @@ import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 // figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
 // morning plays, and the 3D build).
 // A place held out of the panel (`heldOutOfPanel` in bench/bundled-cities.ts) is listed in
-// `heldOut` and opens by `?city=` only; none is held out now.
+// `heldOut` and opens by `?city=` only: Zurich Airport (TASK-302).
 
 test.use({ trace: 'off' });
 if (process.platform === 'win32')
@@ -28,14 +28,15 @@ const realPlaces = [
   { id: 'york', name: 'York city centre' },
   { id: 'london-city-airport', name: 'London City Airport' },
 ];
-/** Bundled, opened by `?city=`, not in the panel. */
-const heldOut: { id: string; name: string }[] = [];
+/** Bundled, opened by `?city=`, not in the panel (TASK-302: Zurich's showcase gate and load). */
+const heldOut: { id: string; name: string }[] = [{ id: 'zurich-airport', name: 'Zurich Airport' }];
 
 const opened = async (page: Page, name: string) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
-  // the 20 s default once another city is drawn and the machine is loaded.
+  // the 20 s default once another city is drawn and the machine is loaded. Zurich Airport's
+  // engine is ready 30 to 45 s after it opens (TASK-302).
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 60_000 });
-  await expect(button(page, 'Play')).toBeEnabled();
+  await expect(button(page, 'Play')).toBeEnabled({ timeout: 120_000 });
   await expect(page.getByLabel('Simulation clock', { exact: true })).toHaveText('07:00:00.0');
 };
 
@@ -94,7 +95,7 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     await page.goto(`/?city=${id}`);
     await opened(page, name);
     // TASK-295: an airport's airside is drawn as paving (aprons, taxiways, the runway).
-    if (id === 'london-city-airport')
+    if (id === 'london-city-airport' || id === 'zurich-airport')
       expect(
         Number(await page.locator('canvas[data-airside-areas]').getAttribute('data-airside-areas')),
       ).toBeGreaterThan(2);

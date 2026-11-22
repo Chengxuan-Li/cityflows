@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  airportRunwayConcepts,
   chooseRunwayConfiguration,
   createRunwayChooser,
   windComponents,
@@ -98,6 +99,29 @@ describe('runway configurations', () => {
       chooseRunwayConfiguration({ ...input, crosswindLimitsKt: { E190: 11, C25C: 8 } }, 0, east),
     ).toBeNull();
     expect(chooseRunwayConfiguration(input, 0, { fromDeg: 0, speedKt: 8 })).toBeNull();
+  });
+
+  it("follows Zurich's concepts through the day and leaves them in a strong westerly", () => {
+    // Runway bearings 137, 317, 095, 275, 155 and 335 degrees, as CityFlows headings.
+    const bearings = { '14': 137, '32': 317, '10': 95, '28': 275, '16': 155, '34': 335 };
+    const chooser = createRunwayChooser({
+      ends: Object.entries(bearings).map(([designator, deg]) => ({
+        designator,
+        headingRad: ((deg - 90) * Math.PI) / 180,
+      })),
+      ...airportRunwayConcepts.LSZH,
+      crosswindLimitsKt: { C25C: 25 },
+    });
+    const prevailing = { fromDeg: 240, speedKt: 8 };
+    expect(
+      [2, 6.5, 12, 22, 23.75].map((h) => chooser.choose(h * hourS, prevailing)?.id ?? null),
+    ).toEqual([null, 'south', 'north', 'east', null]);
+    expect(chooser.choose(12 * hourS, prevailing)).toMatchObject({
+      arrivalEnds: ['14'],
+      departureEnds: ['16', '28'],
+    });
+    // 270 at 15 kt is 10 kt of tailwind on 14: the east concept takes over by day.
+    expect(chooser.choose(12 * hourS, { fromDeg: 270, speedKt: 15 })?.id).toBe('east');
   });
 
   it('reports wind components and whether a configuration keeps its limits', () => {

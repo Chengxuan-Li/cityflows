@@ -24,7 +24,7 @@ interface WeightedWindow extends TimeWindow {
   weight: number;
 }
 
-interface ScheduleProfile {
+export interface ScheduleProfile {
   /** Fixed-wing arrivals plus departures. Omit for the turns-per-stand rule. */
   dailyMovements?: number;
   turnsPerStand?: number;
@@ -95,6 +95,50 @@ export const largeAirportSchedule = {
   irregularTowRate: 0.04,
   helicopterMovements: 12,
 } satisfies ScheduleProfile;
+
+/** TASK-302: Zurich (LSZH), stated approximations of its published figures: the night flight ban
+ * from 23:30 to 06:00, the hub's banks (morning, midday, late afternoon, evening), the home
+ * carrier's A220s, A320 family, Embraer and long-haul widebodies, an A380 and a 747 now and
+ * then, business jets, and the helicopters of the air rescue and charter operators based there.
+ * The airport handles some 700 to 750 movements a day; 150 is what the airside model completes
+ * within its floor today (whole-route direction locks and whole-sweep admission serialise
+ * Zurich's long taxi routes: at 730 plus the helicopters a day completes 181 of 750). */
+export const zurichSchedule = {
+  dailyMovements: 150,
+  hourlyProfile: [0, 0, 0, 0, 0, 0, 6, 10, 8, 7, 9, 8, 6, 8, 7, 6, 8, 9, 8, 6, 6, 8, 5, 2],
+  curfew: { startS: 23.5 * hourS, endS: 6 * hourS },
+  typeMix: [
+    { typeId: 'BCS3', weight: 20 },
+    { typeId: 'A20N', weight: 18 },
+    { typeId: 'A21N', weight: 8 },
+    { typeId: 'B738', weight: 6 },
+    { typeId: 'E190', weight: 12 },
+    { typeId: 'E175', weight: 4 },
+    { typeId: 'CRJ9', weight: 3 },
+    { typeId: 'DH8D', weight: 3 },
+    { typeId: 'AT76', weight: 2 },
+    { typeId: 'A333', weight: 1.2 },
+    { typeId: 'B77W', weight: 0.8 },
+    { typeId: 'A359', weight: 0.5 },
+    { typeId: 'B789', weight: 0.5 },
+    { typeId: 'A388', weight: 0.25 },
+    { typeId: 'B748', weight: 0.25 },
+    { typeId: 'C25C', weight: 2 },
+    { typeId: 'PC24', weight: 2 },
+    { typeId: 'GLF6', weight: 2 },
+  ],
+  overnightShare: 0.15,
+  maintenanceRate: 0.02,
+  irregularTowRate: 0.04,
+  helicopterMovements: 20,
+} satisfies ScheduleProfile;
+
+/** The schedule profiles of airports with their own, by ICAO code; others take the large
+ * airport default. */
+export const airportSchedules: Readonly<Record<string, ScheduleProfile>> = {
+  EGLC: londonCitySchedule,
+  LSZH: zurichSchedule,
+};
 
 function openHours({ hourlyProfile, curfew }: FlightScheduleInput) {
   let open: TimeWindow[] = [{ startS: 0, endS: dayS }];
