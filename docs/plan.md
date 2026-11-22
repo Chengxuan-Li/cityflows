@@ -327,7 +327,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-301](tasks/TASK-301.md) | airports | 3D aircraft, flight paths, airfield and aircraft lighting | render3d, lighting | 297, 299 | light rules, PAPI, screenshots | merged 2026-11-22 (`e098862`, wave C) |
 | [TASK-302](tasks/TASK-302.md) | airports | Zurich Airport bundled: crossing runways, Dock E, helicopters, concepts | all airport modules | 300, 301 | ZRH day, crossing interlock, load budget | in progress 2026-11-22 (wave D, Claude) |
 | [TASK-303](tasks/TASK-303.md) | airports | Boston Logan: crossing-runway complexity test | all airport modules | 302 | rules carry over, six crossing pairs | in progress 2026-11-22 (wave D, Codex) |
-| [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | in progress 2026-11-22 (wave D, Codex) |
+| [TASK-304](tasks/TASK-304.md) | airports | Heathrow: operational-scale test | all airport modules, perf | 302 | 1,300 movements, step and frame time | parked 2026-11-22 (`c0b4b2f`: 56/1,306 movements, load 37 s; scale findings in review) |
 | [TASK-305](tasks/TASK-305.md) | airports | Airport editing: stands, taxiways, holding points, limits, configurations | editor, UI | 302 | edits recompile, undo, saved and reopened | in progress 2026-11-22 (wave D, Claude) |
 | [TASK-306](tasks/TASK-306.md) | airports | Aircraft performance figures and motion profiles | schema catalogue, sim motion | catalogue | profiles within figures, determinism | merged 2026-11-22 (`761b6bd`, wave A) |
 | [TASK-307](tasks/TASK-307.md) | airports | Aircraft shapes: 2D outlines and procedural 3D models | render, render3d | catalogue | extents equal dimensions, part lists | merged 2026-11-22 (`931cb56`, wave A) |
@@ -5879,6 +5879,17 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   the local-only London City 3D render p95 (6.5 ms against 6 under four agents' load; main a3c557b reads 6.2 to 6.5 ms
   under the same load, 5.9 ms on a re-run): the lights from TASK-301 put London City near the budget. Follow-up:
   London City 3D render cost.
+
+Airports wave D:
+- TASK-304 (Codex; parked `c0b4b2f`, initial and variant in one branch): Heathrow bundled (2 runways, 1,501 taxiway
+  edges, 307 stands of which 45 code F, 288 holds), 1,306 movements scheduled with A380 and 747-8 turns, segregated
+  mode with the 15:00 swap (opened on time). The scale test fails: the day completes 56/1,306 (4.3%) with 494
+  diversions and 119 arrivals still queued; six overlap samples from one pair under the branch's changed clearance
+  logic; first frame 36.7 s and ready 71.7 s from the panel (Freiburg 2.7 / 6.3 s, York 3.8 / 9.1 s); 3D render p95
+  19.4 ms (budget 6). Airside step 0.45 to 2.6 ms at 40 to 65 visible aircraft. Findings for a scale follow-up: stand
+  allocation and route retries collapse throughput (whole-route direction locks remain), the bundled-city build and
+  first frame scale badly with 1,500 taxi edges and a large surround, and the 3D scene draws too much at airport
+  scale. Existing cities and London City unchanged on the branch.
 
 Airports wave C, first two (2026-11-22; lead tiers green, existing hashes identical):
 - TASK-299 (Codex; v1 `e908658` sent back, variant `bdea18d` merged): seeded operations through TASK-298's API
