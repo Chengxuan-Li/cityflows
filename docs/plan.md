@@ -314,7 +314,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-288](tasks/TASK-288.md) | city | Populations draw gateway trips only among gateways the home's car reaches (TASK-283's follow-up) | `src/demand` | 283 | Lübeck, Cambridge, traffic, merge rule | done 2026-11-21 (merged on the owner's go; Munich and Freiburg identical; Sindelfingen 280 to 890 trips a day) |
 | [TASK-289](tasks/TASK-289.md) | 9 | York's lot deadlock: a car at the entry and cars inside waiting on each other (TASK-288's v1) | `src/sim/parking.ts` | 288 | reproduction, synthetic test, traffic, merge rule | in progress 2026-11-21 (owner's go) |
 | [TASK-290](tasks/TASK-290.md) | city | Parking garage entrances read from OSM (`amenity=parking_entrance`) | importer parking, Overpass query | 281 | counts, traffic, merge rule | in progress 2026-11-21 (wave C, Codex) |
-| [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | in progress 2026-11-21 (wave C, Codex) |
+| [TASK-291](tasks/TASK-291.md) | render | Road clearance under rail bridges lowered by TASK-280 | `render3d` rail heights | 280 | clearance census, close-ups, hashes | done 2026-11-21 (merged; Freiburg roads under 4.5 m 34 to 1, walks under 2.5 m 22 to 5; Codex) |
 | [TASK-292](tasks/TASK-292.md) | render | York's load time, second pass (junction polygons, seams, walkway unions, 2D batching) | render hot paths | 287 | identical output, budgets | queued 2026-11-21 (wave C, Codex; after TASK-289's measurements) |
 | [TASK-293](tasks/TASK-293.md) | city | Philadelphia's import warnings and load time (TASK-285 F1, F2) | importer reading, load | 285 | warning counts, budgets, merge rule | in progress 2026-11-21 (wave C, Codex) |
 | [TASK-294](tasks/TASK-294.md) | city | "Anlieger frei" pockets in Lübeck: residents' access by zone | zones, router access, lot reachability | 281, 283 | Lübeck facilities, traffic, merge rule | queued 2026-11-21 (wave C, Claude; after TASK-289 merges) |
@@ -5791,6 +5791,17 @@ day Lübeck 12,959 to 13,602 (pre-283 13,516), Cambridge 3,867 to 4,674 (4,546);
 every showcase gate passes. Populations change in Lübeck, York, Philadelphia, Sindelfingen: Sindelfingen 280 to 890
 trips a day (gateway residents whose local work place their car could not reach now commute to another gateway; delay
 27.3 to 17.1 s), Philadelphia +10 to 24 s a seed within its gate. Held for the owner on the Sindelfingen demand; owner: merge.
+
+TASK-291 (Codex CLI, gpt-6.2-sol high, 2026-11-21; merged `0afa9b1` after one send-back): rail decks over low passages.
+Where a road or walkway passes under an independent rail deck below 4.5 / 2.5 m, the rail profile is raised there,
+keeping the 4% rail and 6% tram grades and capping the lift at fixed connections (a first trial lifted freely and made
+grades up to 222%); deck, paint, trains and catenary follow the same profile. Freiburg roads below 4.5 m 34 to 1, walks
+below 2.5 m 22 to 5; Munich's six low crossings all higher (3.17 to 3.26 m at worst; tram approaches limit them); no
+pair below main. First version `2c6deb9` sent back: Freiburg's rail build 964 to 2,516 ms and one Schwabentorbrücke
+walk 11 mm lower; the fix (on-demand candidate polygons, the 2D view's rail shapes reused) left Freiburg's 3D build
++67 ms median (three interleaved rounds), Munich even. Simulation hashes identical. Extra files `catenary.ts`,
+`scene.ts`, `src/render/rail-geometry.ts`. Follow-ups: `maxheight` read by the importer (Breisacher Straße 3.4 m),
+the shared road-and-tram deck at Kaiser-Joseph-Straße (`wl:9187/1`), 12 grade-limited pairs.
 
 TASK-211 (Claude Code subagent, Opus 5.5 high, 2026-11-19; merged): four exact cuts in `src/sim`.
 (1) `parking.arrivalStop` is asked only when the car is on its destination lane, on a movement into
