@@ -2,7 +2,8 @@ import { headingAtDistance, pointAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { CLane, CMovement, CompiledCity } from '../network';
 import type { Route } from '../routing';
-import type { VehicleClass } from '../schema';
+import { vehicleClasses, type VehicleClass } from '../schema';
+import { zoneReach } from '../network/zones';
 
 export function patchChanges(before: CompiledCity, after: CompiledCity) {
   const map = (items: { id: string }[], index: Map<string, number>) =>
@@ -39,13 +40,27 @@ export function patchChanges(before: CompiledCity, after: CompiledCity) {
   }
   const changedRoads = new Set<number>();
   const accessChangedRoads = new Set<number>();
+  // TASK-294: the zones whose trips may use each zone; a change there changes its roads' access.
+  const usedBy = (city: CompiledCity) =>
+    vehicleClasses.map((_, kind) => {
+      const reach = zoneReach(city, kind);
+      const by = new Map<number, string>();
+      reach.forEach((zones, z) => zones.forEach((y) => by.set(y, `${by.get(y) ?? ''},${z}`)));
+      return by;
+    });
+  const usedBefore = usedBy(before),
+    usedAfter = usedBy(after);
   for (const road of before.roads) {
     const next = roads[road.idx]!;
     const replacement = after.roads[next];
     const accessChanged =
       replacement &&
       (road.access.some((rule, kind) => rule !== replacement.access[kind]) ||
-        road.zone.some((zone, kind) => zone !== replacement.zone[kind]));
+        road.zone.some(
+          (zone, kind) =>
+            zone !== replacement.zone[kind] ||
+            usedBefore[kind]!.get(zone) !== usedAfter[kind]!.get(zone),
+        ));
     if (accessChanged) accessChangedRoads.add(road.idx);
     if (
       !replacement ||

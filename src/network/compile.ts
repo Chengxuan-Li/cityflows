@@ -27,6 +27,7 @@ import { populateStops } from './stops';
 import { compileBayDepartures, compileParking, compileVisibleParking } from './parking';
 import { generateStalls } from './stalls';
 import { compileLotPaths } from './lot-paths';
+import { assignPocketZones } from './zones';
 import type {
   CConnector,
   CLane,
@@ -588,6 +589,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     },
     laneSpatial: buildLaneSpatial(lanes),
   };
+  assignPocketZones(compiled);
   compileParking(city, compiled, diagnostics, centroid);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);

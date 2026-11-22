@@ -3,6 +3,7 @@ import { isLaneDrop } from '../network/lane-drop';
 import type { VehicleClass } from '../schema';
 import { vehicleClasses } from '../schema';
 import { movementPenaltyS } from './costs';
+import { zoneReach } from '../network/zones';
 
 /** A road's access rule for the graph's class, as a code (TASK-243: read per edge). */
 export const ACCESS_NO = 0;
@@ -27,6 +28,8 @@ export interface RoadGraph {
    * all `ACCESS_YES` and -1 for the unrestricted graph. */
   access: Uint8Array;
   zone: Int32Array;
+  /** `zoneReach(compiled, class)` (TASK-294); empty for the unrestricted graph. */
+  zoneReach: number[][];
 }
 
 const accessCodes = { no: ACCESS_NO, yes: ACCESS_YES, delivery: ACCESS_DELIVERY } as const;
@@ -83,7 +86,18 @@ function buildGraph(compiled: CompiledCity, vehicleClass: VehicleClass | null): 
       zone[road.idx] = road.zone[classIndex]!;
     }
   const toLane = Int32Array.from(compiled.movements, (movement) => movement.toLane);
-  return { edgeStart, edgeTo, edgePenalty, outgoing, allowed, penalties, toLane, access, zone };
+  return {
+    edgeStart,
+    edgeTo,
+    edgePenalty,
+    outgoing,
+    allowed,
+    penalties,
+    toLane,
+    access,
+    zone,
+    zoneReach: classIndex === -1 ? [] : zoneReach(compiled, classIndex),
+  };
 }
 
 export function createGraphCache() {

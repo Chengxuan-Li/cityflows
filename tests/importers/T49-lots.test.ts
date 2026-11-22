@@ -46,7 +46,8 @@ const baseline = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's aisle-stripped compile places garage connector c:1911 on r:1070.
-    '623b3dbc6c62b96cda58db4f2361cda082d010739175a3e6f500bd0ec0f4ced8',
+    // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+    '0a8d7ac7b16fd3e461e4b89bf4c27d122af2d48f69f820616651f9a528136e06',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

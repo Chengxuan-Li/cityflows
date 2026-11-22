@@ -185,7 +185,8 @@ const baselines = {
   // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
   // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
   // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
-  'munich-donnersberger': 'e89706fd95a07aef6ed066d8533dfc8350e80e12f5a4143c927b694d3543a38b',
+  // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+  'munich-donnersberger': 'a218755f4870a1591d2611861e6bc21634470999700d34655cdf6a466b62ac97',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -195,7 +196,8 @@ const baselines = {
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
   // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
-  'sindelfingen-a81': '827867701b73f17be4388e88481279f27ee60a1162bbcac0b9c2f05d35cc93a4',
+  // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+  'sindelfingen-a81': '825d248a8b603d8104ede35d983c9f1672b99252cad46f87cc74cd50983eabcd',
 };
 const lampCounts = {
   grid: [0, 0],

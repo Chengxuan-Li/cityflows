@@ -243,7 +243,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // by curation: the same roads and walk links, with 3 road nodes and 21 walk nodes where a
     // passage meets a tagged layer -1 way at grade (the importer's portal rule).
     // TASK-290: nine mapped entrances link five garages, and Bahnhofsgarage keeps its old entry.
-    '02798b75c2469ad1335ff14f560ba611c7b8ed733c51c4281a9a8fa138bcd4eb',
+    // TASK-294: rebuilt; three places and their garages keep their driveways in pockets behind
+    // destination streets (the place repair no longer moves them out).
+    '380c013e05a158bb723ac14e5ba0846abff97cd682498ccd11a93baa2cba5b29',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -288,7 +290,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
   // Lead merge: TASK-277 and 271 on main, 1,532 completed, 59.8 s.
   // TASK-290: nine mapped garage entrances move the morning to 1,533 completed and 62.7 s delay.
-  expect(morning.stateHash).toBe(3314728190);
+  // TASK-294: pockets behind destination streets are served from them (1,533 to 1,531
+  // completed, 62.7 to 62.8 s).
+  expect(morning.stateHash).toBe(1710089250);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
