@@ -1869,22 +1869,22 @@ carry no persons and generate no road trips.
   where a parked aircraft stands in the way of the mover (factor 50), and an aircraft whose way an
   aircraft parks across waits short of it until it leaves its stand. Edges an aircraft will use are
   still marked with its direction; routes taxiing against such a mark cost 3 times as much.
-- **Runways.** One aircraft holds a runway (and every runway sharing a node with it) at a time.
-  A ground leg stops at the mapped runway hold within 300 m before the runway node it enters
-  (else 75 m short of it) until granted; it asks when first in line there, and is granted if no
-  aircraft holds the runway and no arrival's booking falls before its estimated clear time
-  (line-up and take-off to the far end, or the crossing) plus 20 s. A crossing releases the runway
-  when its tail passes the next hold beyond (else 75 m past the runway). An arrival appears about
-  10 km out (`FINAL_M`) on the extended centreline when its window (30 s before the threshold
-  less 5 s, to its estimated vacating plus 5 s: about 90 s from one landing to the next, TASK-312)
-  is free of bookings and holders, books it, and
-  takes the runway 30 s before the threshold, going around (straight ahead at approach speed and
-  its climb gradient, then queued again) if another aircraft holds it then; it releases the
-  runway when its tail passes the first hold of that runway after its exit (else 75 m past it). A
-  departure releases it passing the far end. An aircraft that has waited 30 s at a hold for a
-  runway window gets a gap: a new arrival to that runway (or one sharing a node with it) appears
-  only when its window starts the waiting aircraft's occupancy plus twice 20 s after the last
-  window booked (TASK-312: crossings and departures between arrivals).
+- **Runways.** A grant covers the runway a movement uses and each intersection area its path
+  reaches (TASK-327). An intersection area is the overlap of two runway strips at their shared
+  node, widened by the aircraft protection margin. The aircraft releases each area when its tail
+  clears it. A ground leg stops at the mapped hold within 300 m before the runway node it enters
+  (else 75 m short of it) until granted. It asks when first in line and gets the grant when each
+  resource is free and the estimated clear time plus 20 s fits before its next booking. A crossing
+  releases the runway when its tail passes the next hold beyond (else 75 m past the runway). An
+  arrival appears about 10 km out (`FINAL_M`) on the extended centreline when its windows are free
+  of bookings and holders. It books each resource from 35 s before the threshold to 5 s after
+  estimated clearance, then takes them 30 s before the threshold. If a holder remains, it goes
+  around straight ahead at approach speed and its climb gradient, then queues again. It releases
+  its runway when its tail passes the first hold beyond its exit (else 75 m past it). A departure
+  releases its runway passing the far end. A ground aircraft that has waited 30 s for a runway
+  window gets a gap on the resources it needs. A new arrival that needs one of those resources
+  appears only when its window starts the waiting aircraft's occupancy plus twice 20 s after the
+  last window on that resource (TASK-312).
 - **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
   (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
   roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the

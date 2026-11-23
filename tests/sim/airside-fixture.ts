@@ -16,7 +16,12 @@ import type { Airport, AirsideEdge, StandKind } from '../../src/schema/airport';
 
 const generated = { source: 'generated' as const };
 
-export function airportFixture({ backtrack = false, road = false, hook = false } = {}) {
+export function airportFixture({
+  backtrack = false,
+  road = false,
+  hook = false,
+  intersectionX,
+}: { backtrack?: boolean; road?: boolean; hook?: boolean; intersectionX?: number } = {}) {
   const { city, node, road: addRoad, place } = buildCity('Inline airport', 298);
   const airport: Airport = {
     name: 'Inline',
@@ -189,6 +194,47 @@ export function airportFixture({ backtrack = false, road = false, hook = false }
     osmIds: [],
     provenance: generated,
   };
+  if (intersectionX !== undefined) {
+    const x = intersectionX;
+    const south = p(x, 1800);
+    const north = p(x, -1400);
+    const crossing = p(x, -800);
+    const centre = p(x, 0);
+    const end = (point: Vec2, designator: string, heading: number) => ({
+      designator,
+      node: nodeAt(point),
+      pos: point,
+      threshold: { node: nodeAt(point), pos: point },
+      displacedM: 0,
+      heading,
+    });
+    airport.runways['rw:2'] = {
+      ...airport.runways['rw:1'],
+      id: 'rw:2',
+      ref: '36/18',
+      ends: [end(south, '36', -Math.PI / 2), end(north, '18', Math.PI / 2)],
+      edges: [
+        edge('runway', [south, centre], 'E', { runway: 'rw:2' }),
+        edge('runway', [centre, crossing], 'E', { runway: 'rw:2' }),
+        edge('runway', [crossing, north], 'E', { runway: 'rw:2' }),
+      ],
+      lengthM: 3200,
+    };
+    const mouth = p(x, 2100);
+    edge('taxiway', [mouth, south], 'E');
+    edge('taxiway', [p(x, 2200), mouth], 'E');
+    const west = p(x - 240, crossing.y);
+    const east = p(x + 240, crossing.y);
+    edge('taxiway', [west, crossing], 'E');
+    edge('taxiway', [crossing, east], 'E');
+    edge('taxiway', [p(west.x - 100, west.y), west], 'E');
+    edge('taxiway', [east, p(east.x + 100, east.y)], 'E');
+    Object.assign(stands, {
+      South: stand('South', mouth, p(x + 90, mouth.y), 'E', 'contact'),
+      West: stand('West', west, p(west.x, west.y + 90), 'E', 'contact'),
+      East: stand('East', east, p(east.x, east.y + 90), 'E', 'contact'),
+    });
+  }
   airport.helipads['hl:1'] = { id: 'hl:1', pos: p(0, 700), ref: 'H', osmId: 1 };
   if (road) {
     // A service road across the link at y = 300, with homes and work at either end.
@@ -214,5 +260,8 @@ export function airportFixture({ backtrack = false, road = false, hook = false }
     addRoad(b, a);
   }
   city.airport = airport;
-  return { city, stands };
+  return {
+    city,
+    stands: stands as typeof stands & Partial<Record<'South' | 'West' | 'East', string>>,
+  };
 }
