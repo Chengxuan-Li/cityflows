@@ -3389,6 +3389,35 @@ The inspector reads that same authoritative snapshot, identifies synthetic tram 
 names its direction, served stops, next stop and stopped/running status. It does not replace
 a held controller pose with a raw timetable sample.
 
+TASK-332 draws 3D trains as models (drawing only: the sim, timetable and car poses are
+unchanged; 2D keeps TASK-127's bodies). `render3d/train-variants.ts` holds one record per kind of
+rolling stock (profile, width, height, floor, nose, windows, doors, bogie and pantograph designs,
+car types with their bogie, pantograph, roof-housing and door positions and livery, and the
+formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take the low-floor tram;
+otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
+metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
+elsewhere), then the route kind (`mainline` the DB locomotive-hauled train, `sbahn` the
+Elizabeth-line-style EMU in a left-hand-traffic city and the ET 423-like S-Bahn elsewhere). Only
+the tram and the S-Bahn are built; the S-Bahn stands in for the others (TASK-333, TASK-334).
+`render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
+by all its cars and created only for variants a route uses: the body (the profile extruded, both
+cab noses lofted from it, end walls, inset bellows, couplers), the gear (three bogie, two pantograph and two
+roof-housing slots) and the far box. Body vertices carry an anchor (rear end, middle, front end)
+and a part, so the vertex shader draws a car at its own length without stretching its noses and
+hides the parts a car does not show; gear slots move to each car's positions. Windows, doors,
+livery bands, windscreens, lamps and destination displays are painted by the body shader in the
+car's metres, with TASK-163's night glow (cabins, head lamps at the train's front, tail lamps at
+its rear, the lead cab's display). Formations count from the route's forward end, so a make-up
+keeps its order when a terminal train reverses; a unit's last car is turned round, so its cab
+faces out, and a car's front faces the direction of travel or away from it accordingly. Cars
+coupled without bellows show a coupler reaching the middle of the sim's gap (at most 0.6 m, so a
+short car centred in its pose keeps its gangway space), and a coupled cab reaches up to 0.2 m into
+the gap. Each car
+is drawn near (the model) from 60 px along its length and far (the box) below 48 px, chosen per
+car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
+shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
+TASK-127's.
+
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
 lights and stop marking. Explicit bell tags add a bell housing. Both views read the

@@ -52,10 +52,16 @@ test('T64 3D train bodies pitch with the rail ramp and tunnel bodies follow belo
   let time = table.departures[0]!.timeS;
   while ((trainsAt(rail, table, time)[0]?.cars[0]?.trackM ?? 0) < 40) time += 0.25;
   const trains = trainsAt(rail, table, time);
-  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled), table);
+  const layer = new Trains3D(
+    rail,
+    cityHeights(compiled, city),
+    heightsOf(compiled),
+    table,
+    city.drivingSide,
+  );
   layer.update(trains, false, null);
   const matrix = new Matrix4();
-  layer.body.getMatrixAt(0, matrix);
+  layer.pickMesh.getMatrixAt(0, matrix);
   const direction = new Vector3(1, 0, 0).transformDirection(matrix);
   expect(direction.y).toBeGreaterThan(0.001);
   expect(layer.pick(0).id).toBe(trains[0]!.id);
@@ -66,11 +72,12 @@ test('T64 3D train bodies pitch with the rail ramp and tunnel bodies follow belo
       cityHeights(tunnel.compiled, tunnel.city),
       heightsOf(tunnel.compiled),
       table,
+      tunnel.city.drivingSide,
     );
   below.update(trains, false, null);
-  expect(below.body.count).toBe(0);
+  expect(below.pickMesh.count).toBe(0);
   below.update(trains, true, null);
-  expect(below.body.count).toBeGreaterThan(0);
+  expect(below.pickMesh.count).toBeGreaterThan(0);
 });
 
 test('T64 a train hidden below a bridge cannot intercept the bridge pick', () => {
@@ -113,38 +120,48 @@ test('T64 instance capacity includes trains still in the city from earlier timet
       cityHeights(compiled, city),
       heightsOf({ ...compiled, rail }),
       table,
+      city.drivingSide,
     );
   layer.update(poses, false, null);
-  expect(layer.body.count).toBeGreaterThan(32);
-  expect(layer.body.count).toBeLessThanOrEqual(layer.body.instanceMatrix.count);
+  expect(layer.pickMesh.count).toBeGreaterThan(32);
+  expect(layer.pickMesh.count).toBeLessThanOrEqual(layer.pickMesh.instanceMatrix.count);
+  const { far } = layer.variants[0]!;
+  expect(far.count).toBe(layer.pickMesh.count);
+  expect(far.count).toBeLessThanOrEqual(far.instanceMatrix.count);
 });
 
-test('T76 controlled service clocks grow both 3D batches without dropping actors and reset empty poses', () => {
+test('T76 controlled service clocks grow the 3D batches without dropping actors and reset empty poses', () => {
   const { city, compiled, rail } = fixture(),
     table = trainTimetable(rail);
-  const layer = new Trains3D(rail, cityHeights(compiled, city), heightsOf(compiled), table);
+  const layer = new Trains3D(
+    rail,
+    cityHeights(compiled, city),
+    heightsOf(compiled),
+    table,
+    city.drivingSide,
+  );
   const pose = trainsAt(rail, table, table.departures[0]!.timeS + 20)[0]!;
-  const oldBody = layer.body,
-    oldRoof = layer.roof;
+  const variant = layer.variants[0]!,
+    oldFar = variant.far;
   let disposed = 0;
-  oldBody.addEventListener('dispose', () => disposed++);
-  oldRoof.addEventListener('dispose', () => disposed++);
+  oldFar.addEventListener('dispose', () => disposed++);
   const actors = Array.from({ length: 20 }, (_, i) => ({ ...pose, id: `controlled:${i}` }));
   layer.update(actors, false, null);
   const count = actors.length * pose.cars.length;
-  expect(layer.body.count).toBe(count);
-  expect(layer.roof.count).toBe(count);
-  expect(layer.body.instanceMatrix.count).toBeGreaterThanOrEqual(count);
-  expect(layer.roof.instanceMatrix.count).toBeGreaterThanOrEqual(count);
+  expect(layer.pickMesh.count).toBe(count);
+  expect(variant.far.count).toBe(count);
+  expect(variant.far.instanceMatrix.count).toBeGreaterThanOrEqual(count);
+  expect(variant.body.instanceMatrix.count).toBeGreaterThanOrEqual(count);
   expect(layer.pick(count - 1).id).toBe('controlled:19');
-  expect(disposed).toBe(2);
-  expect(layer.group.children).toEqual([layer.body, layer.roof]);
-  expect(layer.body.geometry).toBe(oldBody.geometry);
-  expect(layer.roof.material).toBe(oldRoof.material);
+  expect(disposed).toBe(1);
+  expect(layer.group.children).toHaveLength(4);
+  expect(layer.group.children).toContain(variant.far);
+  expect(variant.far.geometry).toBe(oldFar.geometry);
+  expect(variant.far.material).toBe(oldFar.material);
   layer.update([], false, null);
-  expect(layer.body.count).toBe(0);
-  expect(layer.roof.count).toBe(0);
+  expect(layer.pickMesh.count).toBe(0);
+  expect(variant.far.count).toBe(0);
   layer.update([pose], false, null);
-  expect(layer.body.count).toBe(pose.cars.length);
+  expect(variant.far.count).toBe(pose.cars.length);
   expect(layer.pick(0).id).toBe(pose.id);
 });
