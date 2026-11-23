@@ -32,6 +32,7 @@ import {
   formationOf,
   gearGeometry,
   gearMaterial,
+  gearSlots,
   type FormationOf,
 } from './train-kit';
 import { builtVariant, trainVariantFor, type TrainVariant } from './train-variants';
@@ -204,7 +205,8 @@ export class Trains3D {
         meshes = this.variants[v]!;
       const length = trainDefaults[route.kind].lengthM,
         n = Math.ceil(length / serviceCarLengthM(route.kind)),
-        pitch = length / n;
+        pitch = length / n,
+        fullPoseLengthM = pitch - 0.7;
       const lead = train.cars[0];
       if (!lead) continue;
       // The sim turns a car's heading round after a terminal's turn; front and rear stay in the
@@ -247,6 +249,7 @@ export class Trains3D {
           i * 4,
           this.gears,
           i * 8,
+          fullPoseLengthM,
         );
         const y = this.elevation(car);
         const dx = car.front.x - car.rear.x,
@@ -258,9 +261,15 @@ export class Trains3D {
         );
         this.rotation.set(0, -car.heading - (turn ? Math.PI : 0), turn ? -pitchRad : pitchRad);
         this.matrix.makeRotationFromEuler(this.rotation).setPosition(car.x, y, car.y);
+        const shift = this.gears[i * 8 + gearSlots.bodyOffset]!;
+        if (shift !== 0) {
+          // Shift along the drawn car's axis, including the track pitch, before staging and picking.
+          const m = this.matrix.elements;
+          this.matrix.setPosition(car.x + shift * m[0]!, y + shift * m[1]!, car.y + shift * m[2]!);
+        }
         this.matrix.toArray(this.matrices, i * 16);
         const variant = meshes.formation.variant;
-        this.matrix.scale(this.scale.set(car.lengthM, variant.heightM, variant.widthM));
+        this.matrix.scale(this.scale.set(this.cars[i * 4]! * 2, variant.heightM, variant.widthM));
         if (i >= this.pickMesh.instanceMatrix.count) {
           this.group.remove(this.pickMesh);
           this.pickMesh.dispose();

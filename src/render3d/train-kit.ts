@@ -16,7 +16,7 @@ import type { CarPosition, TrainVariant } from './train-variants';
 /** TASK-332: the train model kit. Every variant is built from its record by the same code into
  * three instanced geometries, shared by all its cars:
  *
- * - `body`: the profile extruded along the car, both cab noses, end walls, bellows and couplers.
+ * - `body`: the profile extruded along the car, both cab noses, end walls, bellows, couplers and buffers.
  *   Vertices carry an anchor (-1 the rear end, 0 the middle, 1 the front end) and an offset from
  *   it, so the vertex shader places them at any drawn length without stretching a nose, and a
  *   part number, so the shader hides the parts a car does not show (`carFlags`).
@@ -39,6 +39,8 @@ export const bodyParts = {
   rearNose: 6,
   frontCoupler: 7,
   rearCoupler: 8,
+  frontBuffers: 9,
+  rearBuffers: 10,
 } as const;
 
 /** Per-car flags (`aCar.z`), in the car's own frame. */
@@ -56,14 +58,23 @@ export const carFlags = {
    * by up to 0.2 m, and a far box's end wall shows. */
   coupledFront: 512,
   coupledRear: 1024,
+  closedGangwayFront: 2048,
+  closedGangwayRear: 4096,
 } as const;
 
 /** Gear slots: bogies 0-2, pantographs 3-4, roof housings 5-6. A slot at `hidden` is not drawn. */
-export const gearSlots = { bogies: 0, pantographs: 3, roofBoxes: 5, count: 7 } as const;
+export const gearSlots = {
+  bogies: 0,
+  pantographs: 3,
+  roofBoxes: 5,
+  count: 7,
+  bodyOffset: 7,
+} as const;
 export const hidden = 1000;
 const maxCarTypes = 4,
   maxDoors = 6,
-  bellowsM = 0.42;
+  bellowsM = 0.42,
+  defaultCouplerMaxM = 0.6;
 /** The sim leaves 0.7 m between car poses (`trainPoseAt`); a joint bogie sits in its middle. */
 const jointM = 0.35;
 
@@ -240,8 +251,7 @@ export function bodyGeometry(v: TrainVariant) {
       part,
       axis,
     );
-  // Couplers: x 0 marks the end inside the body, 1 the end in the gap's middle (`aCar.w`), at
-  // most 0.6 m out: a short car centred in a long pose keeps its gangway space.
+  // Couplers: x 0 marks the end inside the body, 1 the end at the joint or buffer faces.
   const c = v.nose.couplerM;
   for (const [anchor, part] of [
     [1, bodyParts.frontCoupler],
@@ -265,6 +275,34 @@ export function bodyGeometry(v: TrainVariant) {
       part,
       (p) => new Vector3(p.x, c, 0),
     );
+    if (v.nose.buffers) {
+      const { halfSpacingM, reachM } = v.nose.buffers;
+      const bufferPart = anchor > 0 ? bodyParts.frontBuffers : bodyParts.rearBuffers;
+      for (const side of [-1, 1])
+        for (const [from, to, height, width] of [
+          [-0.12, reachM - 0.1, 0.14, 0.14],
+          [reachM - 0.1, reachM, 0.24, 0.34],
+        ] as const) {
+          const box = new BoxGeometry(to - from, height, width).translate(
+            (anchor * (from + to)) / 2,
+            c,
+            side * halfSpacingM,
+          );
+          const p = box.getAttribute('position'),
+            n = box.getAttribute('normal');
+          const first = mesh.position.length / 3;
+          const normal = new Vector3();
+          for (let i = 0; i < p.count; i++)
+            vertex(
+              mesh,
+              corner(p.getX(i), p.getY(i), p.getZ(i)),
+              normal.fromBufferAttribute(n, i),
+              bufferPart,
+            );
+          for (const index of box.index!.array) mesh.index.push(first + index);
+          box.dispose();
+        }
+    }
   }
   // Noses: the front one, and the rear one turned round (x and z negated).
   const rings = noseRings(v, half);
@@ -470,6 +508,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
       value: new Vector4(v.windows.sillM, v.windows.headM, v.windows.paneM, v.windows.pillarM),
     },
     uCar: { value: new Vector4(v.floorM, v.doorTopM, v.windows.endMarginM, v.nose.lengthM) },
+    uBufferReachM: { value: v.nose.buffers?.reachM ?? 0 },
     uGlass: { value: new Vector4(glass.bottomM, glass.topM, glass.halfWidthM, v.profile.cantM) },
     uLamps: { value: new Vector4(lamps.yM, lamps.zM, lamps.radiusM, 0) },
     uDisplay: {
@@ -482,7 +521,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader =
-      `attribute vec4 aCar; attribute float aAnchor; attribute float aPart; uniform vec4 uCar;
+      `attribute vec4 aCar; attribute float aAnchor; attribute float aPart; uniform vec4 uCar; uniform float uBufferReachM;
       varying vec3 vCar; varying vec3 vCarNormal;
       flat varying float vPart; flat varying float vType; flat varying float vFlags; flat varying float vHalf;\n` +
       shader.vertexShader.replace(
@@ -494,11 +533,15 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
           float coupled = aAnchor > 0.5 ? float((f >> 9) & 1) : aAnchor < -0.5 ? float((f >> 10) & 1) : 0.0;
           // A coupled cab reaches into the gap, leaving 0.12 m to its neighbour's middle.
           float reach = coupled * clamp(aCar.w - 0.12, 0.0, 0.2);
-          if (part >= 7) transformed.x = aAnchor * (position.x > 0.5 ? aCar.x + min(aCar.w + 0.02, 0.6) : aCar.x - 0.3);
-          else transformed.x += aAnchor * (aCar.x - cab * (uCar.w - reach));
+          if (part >= 9) transformed.x += aAnchor * (aCar.x + cab * reach);
+          else if (part >= 7) {
+            float end = uBufferReachM > 0.0 ? uBufferReachM + cab * reach : min(aCar.w + 0.02, ${defaultCouplerMaxM});
+            transformed.x = aAnchor * (position.x > 0.5 ? aCar.x + end : aCar.x - 0.3);
+          } else transformed.x += aAnchor * (aCar.x - cab * (uCar.w - reach));
           bool shown = part < 3 || (part == 3 && (f & 4) != 0) || (part == 4 && (f & 8) != 0)
             || (part == 5 && (f & 1) != 0) || (part == 6 && (f & 2) != 0)
-            || (part == 7 && (f & 512) != 0) || (part == 8 && (f & 1024) != 0);
+            || ((part == 7 || part == 9) && (f & 512) != 0)
+            || ((part == 8 || part == 10) && (f & 1024) != 0);
           if (!shown) transformed = vec3(0.0);
           vCar = transformed; vCarNormal = objectNormal;
           vPart = aPart; vType = aCar.y; vFlags = aCar.z; vHalf = aCar.x;
@@ -594,6 +637,11 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
         if (part >= 7) return vec3(0.14);
         if (part == 1 || part == 2) {
           bool front = part == 1;
+          if ((f & (front ? 2048 : 4096)) != 0) {
+            float inset = min(0.55 - abs(p.z), min(p.y - uCar.x - 0.04, uCar.y - 0.06 - p.y));
+            if (inset > 0.0) c = mix(c, uColours[t * 8 + 7], inset < 0.035 ? 0.65 : 0.16);
+            return c;
+          }
           // A coupled end: the livery, with the gangway's opening (or end door) in the middle.
           if ((f & (front ? 516 : 1032)) != 0)
             return abs(p.z) < 0.55 && p.y > uCar.x && p.y < uCar.y ? uColours[t * 8 + 7] : c;
@@ -689,11 +737,6 @@ function carAt(f: FormationOf, n: number, j: number) {
   };
 }
 
-/** Writes car `j` of `n` (counted from the route's forward end): `aCar` (drawn half-length, car
- * type, `carFlags`, 0) at `car[c..c+3]` and the gear slots at `gear[g..g+7]`, all in the car's
- * own frame. `reversed`: the train runs towards the route's start (after a terminal's turn), so
- * its head lamps are at the route's rear end. Returns whether the car's front faces against the
- * direction of travel. */
 /** Car `j`'s layout in a train of `n`: its type, whether it is turned round, its flags in its
  * own frame without lamps or selection, the lamp flags when the train runs forward and when it
  * runs reversed, and whether a Jacobs bogie sits under the joint behind it. */
@@ -719,6 +762,7 @@ function layoutOf(f: FormationOf, n: number) {
       bellowsRr = v.bellows && !self.unitRear && !self.cabRear && !behind!.cabFront;
     const coupledFr = ahead !== null && !bellowsFr,
       coupledRr = behind !== null && !bellowsRr;
+    const closed = f.types[self.type]!.closedGangway === true;
     const [front, rear] = self.flip ? [1, 0] : [0, 1];
     const bits = (fr: boolean, rr: boolean, flag: readonly [number, number]) =>
       (fr ? flag[front]! : 0) | (rr ? flag[rear]! : 0);
@@ -731,7 +775,11 @@ function layoutOf(f: FormationOf, n: number) {
       flags:
         bits(self.cabFront, self.cabRear, [carFlags.cabFront, carFlags.cabRear]) |
         bits(bellowsFr, bellowsRr, [carFlags.bellowsFront, carFlags.bellowsRear]) |
-        bits(coupledFr, coupledRr, [carFlags.coupledFront, carFlags.coupledRear]),
+        bits(coupledFr, coupledRr, [carFlags.coupledFront, carFlags.coupledRear]) |
+        bits(closed && !self.cabFront && !bellowsFr, closed && !self.cabRear && !bellowsRr, [
+          carFlags.closedGangwayFront,
+          carFlags.closedGangwayRear,
+        ]),
       lamps: lamps(false),
       lampsReversed: lamps(true),
       jacobs: v.jacobs && !self.unitRear,
@@ -744,8 +792,8 @@ function layoutOf(f: FormationOf, n: number) {
 const position = (p: CarPosition, halfM: number) => p[0] * halfM + p[1];
 
 /** Writes car `j` of `n` (counted from the route's forward end): `aCar` (drawn half-length, car
- * type, `carFlags`, distance from the drawn end to the middle of the gap) at `car[c..c+3]` and
- * the gear slots at `gear[g..g+7]`, all in the car's own frame. `reversed`: the train runs
+ * type, `carFlags`, distance from the drawn end to the pose joint) at `car[c..c+3]`, the gear
+ * slots at `gear[g..g+6]` and the body shift at `gear[g+7]`, in the car's own frame. `reversed`: the train runs
  * towards the route's start (after a terminal's turn), so its head lamps are at the route's rear
  * end. Returns whether the car's front faces against the direction of travel. Allocates nothing
  * once a train length's layout is built. */
@@ -760,17 +808,27 @@ export function carState(
   c: number,
   gear: Float32Array,
   g: number,
+  fullPoseLengthM = poseLengthM,
 ) {
   const slot = layoutOf(f, n)[j]!;
   const type = f.types[slot.type]!;
-  const halfM = (type.lengthM ?? poseLengthM) / 2;
+  const clipped = type.lengthM !== undefined && poseLengthM < fullPoseLengthM - 1e-6;
+  const lengthM = type.lengthM ?? poseLengthM;
+  const halfM = (clipped ? Math.min(lengthM, poseLengthM) : lengthM) / 2;
   car[c] = halfM;
   car[c + 1] = slot.type;
   car[c + 2] =
     slot.flags | (reversed ? slot.lampsReversed : slot.lamps) | (selected ? carFlags.selected : 0);
-  car[c + 3] = poseLengthM / 2 - halfM + jointM;
+  const gap = poseLengthM / 2 - halfM + jointM;
+  let shift = 0;
+  if (type.coupledGapM !== undefined && gap > type.coupledGapM) {
+    const coupled = slot.flags & (carFlags.coupledFront | carFlags.coupledRear);
+    if (coupled === carFlags.coupledFront) shift = gap - type.coupledGapM;
+    if (coupled === carFlags.coupledRear) shift = type.coupledGapM - gap;
+  }
+  car[c + 3] = gap - Math.abs(shift);
   gear.fill(hidden, g, g + gearSlots.count);
-  gear[g + 7] = 0;
+  gear[g + gearSlots.bodyOffset] = shift;
   let s = gearSlots.bogies;
   for (let i = 0; i < type.bogies.length; i++) gear[g + s++] = position(type.bogies[i]!, halfM);
   // A Jacobs bogie under the joint behind, in the middle of the sim's gap between poses.
@@ -780,6 +838,8 @@ export function carState(
     gear[g + gearSlots.pantographs + i] = position(type.pantographs[i]!, halfM);
   for (let i = 0; i < type.roofBoxes.length; i++)
     gear[g + gearSlots.roofBoxes + i] = position(type.roofBoxes[i]!, halfM);
+  if (clipped)
+    for (let i = g; i < g + gearSlots.count; i++) if (Math.abs(gear[i]!) > halfM) gear[i] = hidden;
   return slot.flip !== reversed;
 }
 
@@ -792,6 +852,7 @@ export function placedX(
   flags: number,
   noseM: number,
   gapM = 0.35,
+  bufferReachM = 0,
 ) {
   const cab = anchor > 0.5 ? flags & 1 : anchor < -0.5 ? (flags >> 1) & 1 : 0;
   const coupled = anchor > 0.5 ? (flags >> 9) & 1 : anchor < -0.5 ? (flags >> 10) & 1 : 0;
@@ -802,9 +863,14 @@ export function placedX(
     (part === 4 && flags & 8) ||
     (part === 5 && flags & 1) ||
     (part === 6 && flags & 2) ||
-    (part === 7 && flags & 512) ||
-    (part === 8 && flags & 1024);
+    ((part === 7 || part === 9) && flags & 512) ||
+    ((part === 8 || part === 10) && flags & 1024);
   if (!shown) return null;
-  if (part >= 7) return anchor * (x > 0.5 ? halfM + Math.min(gapM + 0.02, 0.6) : halfM - 0.3);
+  if (part >= 9) return x + anchor * (halfM + cab * reach);
+  if (part >= 7) {
+    const end =
+      bufferReachM > 0 ? bufferReachM + cab * reach : Math.min(gapM + 0.02, defaultCouplerMaxM);
+    return anchor * (x > 0.5 ? halfM + end : halfM - 0.3);
+  }
   return x + anchor * (halfM - cab * (noseM - reach));
 }
