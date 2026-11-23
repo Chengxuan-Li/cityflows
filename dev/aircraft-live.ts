@@ -13,13 +13,17 @@ import { defaultLighting, sceneLight } from '../src/render/lighting';
 import type { AircraftPose } from '../src/render/types';
 import { aircraftTypes } from '../src/schema/aircraft';
 import { Aircraft3D } from '../src/render3d/aircraft';
+import { AircraftModels } from '../src/render3d/aircraft-models';
 import { pixelScale } from '../src/render3d/airfield-lights';
 
 // TASK-301: every catalogue type through the app's own aircraft renderer (accent colours,
 // outlines, spinning parts, gear, lights and shadow) in one sim state at a time.
 // /dev/render.html?fixture=aircraft-live&state=taxi&lighting=night
 // TASK-315: `type=A388` shows one type; `angle` (degrees round the row, 0 ahead-left) and
-// `distance` (a factor on the framing distance) move the camera in for close-ups.
+// `distance` (a factor on the framing distance) move the camera in for close-ups; `rise` sets
+// the camera's height as a share of that distance (TASK-318).
+// TASK-318: the real models by level of detail as the camera moves; `compare=1` adds a second row
+// of the procedural meshes beside them, `lod=0` holds every real model at its near level.
 
 const states = {
   parked: { enginesRunning: false, speedMps: 0, onRunway: false, heightM: 0 },
@@ -36,6 +40,7 @@ export function showAircraftLive(query: URLSearchParams) {
   const typeId = query.get('type');
   const angle = (Number(query.get('angle') ?? 0) * Math.PI) / 180;
   const distance = Number(query.get('distance') ?? 1);
+  const rise = Number(query.get('rise') ?? 0.35);
   document.querySelector('#fixture')!.textContent = `Aircraft in state ${state}, ${mode}`;
   const canvas = document.querySelector('canvas')!;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -50,9 +55,14 @@ export function showAircraftLive(query: URLSearchParams) {
     new MeshLambertMaterial({ color: mode === 'night' ? 0x3a3f4a : 0x9ea3a8 }),
   );
   scene.add(sky, sun, ground);
-  const aircraft = new Aircraft3D(0);
-  aircraft.setLight(light.artificial);
-  scene.add(aircraft.group);
+  const aircraft = new Aircraft3D(0, new AircraftModels());
+  const procedural = query.has('compare') ? new Aircraft3D(0) : null;
+  for (const set of [aircraft, procedural]) {
+    if (!set) continue;
+    set.setLight(light.artificial);
+    scene.add(set.group);
+  }
+  const near = query.get('lod') === '0';
   const types = aircraftTypes.filter(
     (t) => (!only || t.class === only) && (!typeId || t.id === typeId),
   );
@@ -60,11 +70,13 @@ export function showAircraftLive(query: URLSearchParams) {
   // A row along x, heading north (-y).
   const longest = Math.max(...types.map((t) => Math.max(t.lengthM, t.spanM)));
   const spacing = longest + 15;
+  // With `compare`, each real model has its procedural mesh to its right.
+  const slots = procedural ? 2 : 1;
   const poses: AircraftPose[] = types.map((type, i) => ({
     id: i + 1,
     registration: `G-${type.id}`,
     typeId: type.id,
-    x: i * spacing,
+    x: i * slots * spacing,
     y: 0,
     heightM: s.heightM,
     heading: -Math.PI / 2,
@@ -79,17 +91,21 @@ export function showAircraftLive(query: URLSearchParams) {
     route: [],
   }));
   aircraft.update(poses, 0);
+  procedural?.update(
+    poses.map((pose) => ({ ...pose, x: pose.x + spacing })),
+    0,
+  );
   const camera = new PerspectiveCamera(35, 1, 1, 20000);
   const controls = new MapControls(camera, canvas);
-  const middle = ((types.length - 1) * spacing) / 2;
+  const middle = ((types.length * slots - 1) * spacing) / 2;
   controls.target.set(middle, s.heightM, 0);
   // Ahead and to the left of the row, far enough to frame it.
-  const reach = ((types.length - 1) * spacing * 0.7 + longest * 1.6) * distance;
+  const reach = ((types.length * slots - 1) * spacing * 0.7 + longest * 1.6) * distance;
   const c = Math.cos(angle),
     sn = Math.sin(angle);
   camera.position.set(
     middle - reach * (0.45 * c - 0.85 * sn),
-    s.heightM + 0.35 * reach,
+    s.heightM + rise * reach,
     -reach * (0.85 * c + 0.45 * sn),
   );
   canvas.dataset.aircraft = String(aircraft.count);
@@ -103,11 +119,18 @@ export function showAircraftLive(query: URLSearchParams) {
       camera.updateProjectionMatrix();
     }
     controls.update();
-    aircraft.setPixelScale(pixelScale(camera, height));
-    aircraft.animate(0, Math.min(0.1, (now - last) / 1000));
+    const scale = pixelScale(camera, height);
+    for (const set of [aircraft, procedural]) {
+      if (!set) continue;
+      set.setPixelScale(scale);
+      set.animate(0, Math.min(0.1, (now - last) / 1000));
+      camera.updateMatrixWorld();
+      set.setDetail(camera, near ? scale * 1e-3 : scale);
+    }
     last = now;
     renderer.render(scene, camera);
     canvas.dataset.report = JSON.stringify(aircraft.report());
+    canvas.dataset.levels = JSON.stringify(aircraft.levels());
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

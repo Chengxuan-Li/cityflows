@@ -1,3 +1,4 @@
+import models from '../../fixtures/aircraft/models.json';
 import type { Vec2 } from '../geo/vec2';
 import type { AircraftClass, AircraftType } from '../schema/aircraft';
 
@@ -217,8 +218,7 @@ export function aircraftLayout(type: AircraftType) {
     const x = length * (0.5 - from);
     const at = bodyAt(x);
     // Cabin floors: one deck a third of the way below the centreline, or the A380 and 747 decks.
-    const sillM =
-      at.y + at.height * (upper ? 0.12 : doubleDecker ? -0.45 : helicopter ? -0.55 : -0.33);
+    const sillM = cabinFloor(type, at, !!upper);
     const [widthM, heightM] = small ? [0.51, 0.97] : doorSize;
     return { x, sillM: small ? sillM + 0.75 : sillM, widthM, heightM, upper: !!upper };
   });
@@ -246,15 +246,55 @@ export const bridgeable = (type: AircraftType) =>
   type.class === 'narrowbody' ||
   type.class === 'regional_jet';
 
+/** Cabin floors: one deck a third of the way below the centreline, or the A380 and 747 decks. */
+export function cabinFloor(type: AircraftType, at: { y: number; height: number }, upper: boolean) {
+  const factor = upper
+    ? 0.12
+    : type.class === 'double_decker'
+      ? -0.45
+      : type.class === 'helicopter'
+        ? -0.55
+        : -0.33;
+  return at.y + at.height * factor;
+}
+
+const modelProfiles = models as unknown as Record<string, { profile: number[][] }>;
+
+/** TASK-318: the fuselage section of a type's real model at `x` (`bench/aircraft-models.ts`
+ * measures one every 2.5% of the length), or null for a type drawn procedurally only. */
+export function modelSection(type: AircraftType, x: number) {
+  const profile = modelProfiles[type.id]?.profile;
+  if (!profile) return null;
+  const f = Math.min(
+    profile.length - 1,
+    Math.max(0, (x / type.lengthM + 0.5) * (profile.length - 1)),
+  );
+  const a = profile[Math.floor(f)]!,
+    b = profile[Math.min(profile.length - 1, Math.floor(f) + 1)]!;
+  const t = f - Math.floor(f);
+  const lerp = (i: number) => a[i]! + (b[i]! - a[i]!) * t;
+  return { y: lerp(1), height: lerp(2), width: lerp(3) };
+}
+
 /** The boarding door (first main-deck door, port side) in local metres: x forward, the sill's
- * height above the ground, and z on the fuselage's port surface (negative). */
+ * height, and z where the door's middle meets the fuselage side, on the real model where the
+ * type has one (TASK-318), else on the procedural body. */
 export function boardingDoor(type: AircraftType) {
+  return boardingDoors(type)[0]!;
+}
+
+/** Main-deck passenger doors that a bridge can serve, on the real model's fuselage where the
+ * type has one (TASK-318). */
+export function boardingDoors(type: AircraftType) {
   const layout = aircraftLayout(type);
-  const door = layout.doors[0]!;
-  const at = layout.bodyAt(door.x);
-  // Where the sill height meets the elliptical section.
-  const c = Math.min(1, Math.abs(door.sillM + door.heightM / 2 - at.y) / at.height);
-  return { x: door.x, sillM: door.sillM, z: -at.width * Math.sqrt(1 - c * c) };
+  return layout.doors.flatMap((door) => {
+    if (door.upper || door.heightM < 1.2) return [];
+    const at = modelSection(type, door.x) ?? layout.bodyAt(door.x);
+    const sillM = cabinFloor(type, at, false);
+    // Where the sill height meets the elliptical section.
+    const c = Math.min(1, Math.abs(sillM + door.heightM / 2 - at.y) / at.height);
+    return [{ x: door.x, sillM, z: -at.width * Math.sqrt(1 - c * c) }];
+  });
 }
 
 type PolygonPart = 'fuselage' | 'wing' | 'tailplane' | 'fin' | 'engine';

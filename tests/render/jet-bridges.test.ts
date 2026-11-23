@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { distance, pointInPolygon, segmentDistance } from '../../src/geo/polyline';
 import { syntheticAirport } from '../../src/fixtures/synthetic-airport';
-import { boardingDoor } from '../../src/render/aircraft-outline';
+import { boardingDoor, boardingDoors } from '../../src/render/aircraft-outline';
 import {
   apronLayout,
   bridgeSize,
@@ -9,6 +9,7 @@ import {
   closed,
   dockedPose,
   JetBridgeStates,
+  placeJetBridges,
   reaches,
   tunnelLength,
 } from '../../src/render/apron';
@@ -47,7 +48,7 @@ test('a bridge at each contact stand with a mapped gate, its rotunda on the faca
     const reference = type(stand.maxCode >= 4 ? 'B77W' : 'A20N');
     const dock = dockedPose(stand, reference);
     expect(reaches(bridge, dock)).toBe(true);
-    expect(tunnelLength(bridge, bridge.rest)).toBeGreaterThanOrEqual(bridge.segmentM + 0.5);
+    expect(tunnelLength(bridge, bridge.rest)).toBeGreaterThanOrEqual(bridge.segmentM + 0.5 - 1e-9);
     expect(distance(bridge.rest.cab, bridge.rotunda)).toBeLessThan(
       distance(dock.cab, bridge.rotunda),
     );
@@ -96,7 +97,37 @@ test('the docked cab meets each jet at its boarding door, at its sill height', (
   }
 });
 
-test('bridges dock while a jet stands parked after arrival and retract as its push starts', () => {
+test('mapped links keep their bends and dock to distinct doors on the same aircraft', () => {
+  const stand = graph.stands.find((s) => s.ref === '1')!;
+  const jet = type('A333');
+  const docks = boardingDoors(jet)
+    .slice(0, 2)
+    .map((door) => dockedPose(stand, jet, door));
+  const lines = docks.map((dock, i) => {
+    const c = Math.cos(dock.facing);
+    const s = Math.sin(dock.facing);
+    const pivot = { x: dock.cab.x - c * 20, y: dock.cab.y - s * 20 };
+    return {
+      osmId: i + 1,
+      stand: stand.id,
+      line: [{ x: pivot.x + 4, y: pivot.y - 10 }, { x: pivot.x, y: pivot.y - 8 }, pivot, dock.cab],
+    };
+  });
+  const mapped = placeJetBridges({ ...airport, jetBridges: lines }, graph, city.context);
+  expect(mapped).toHaveLength(2);
+  const fleet = createAircraftFleet(graph, 1);
+  expect(fleet.spawnParked({ typeId: jet.id, stand: stand.id }).ok).toBe(true);
+  const states = new JetBridgeStates(mapped);
+  states.update(fleet.snapshot(), 0);
+  for (const [i, bridge] of mapped.entries()) {
+    expect(bridge.link).toEqual(lines[i]!.line.slice(0, -1));
+    const actual = states.poseAt(i, 0);
+    expect(distance(actual.cab, docks[i]!.cab)).toBeLessThan(1e-6);
+    expect(actual.floorM).toBeCloseTo(docks[i]!.floorM);
+  }
+});
+
+test('bridges dock after parking and retract before the tug moves the aircraft', () => {
   const fleet = createAircraftFleet(graph, 1);
   fleet.setActiveEnds({ arrivalEnds: ['27'], departureEnds: ['27'] });
   const standId = (ref: string) => graph.stands.find((s) => s.ref === ref)!.id;
@@ -105,21 +136,24 @@ test('bridges dock while a jet stands parked after arrival and retract as its pu
   const jet = fleet.spawnParked({ typeId: 'A333', stand: standId('1') });
   const prop = fleet.spawnParked({ typeId: 'AT76', stand: standId('2') });
   if (!jet.ok || !prop.ok) throw new Error('spawn');
+  const startS = 36_000;
   const states = new JetBridgeStates(bridges);
-  states.update(fleet.snapshot(), 0);
+  states.update(fleet.snapshot(), startS);
+  const skipped = new JetBridgeStates(bridges);
+  skipped.update(fleet.snapshot(), startS);
   const one = bridgeAt('1'),
     two = bridgeAt('2'),
     four = bridgeAt('4');
-  expect(states.progress(one, 0)).toBe(1);
-  expect(states.progress(two, 0)).toBe(0);
-  expect(states.counts(0)).toMatchObject({ bridges: bridges.length, docked: 1, moving: 0 });
+  expect(states.progress(one, startS)).toBe(1);
+  expect(states.progress(two, startS)).toBe(0);
+  expect(states.counts(startS)).toMatchObject({ bridges: bridges.length, docked: 1, moving: 0 });
   // Docked at the parked aircraft's own boarding door, from its pose.
   const parked = fleet.snapshot().find((p) => p.id === jet.id)!;
   const door = boardingDoor(type('A333'));
   const c = Math.cos(parked.heading),
     s = Math.sin(parked.heading);
   const doorAt = { x: parked.x + c * door.x - s * door.z, y: parked.y + s * door.x + c * door.z };
-  const docked = states.poseAt(one, 0);
+  const docked = states.poseAt(one, startS);
   const front = {
     x: docked.cab.x + (Math.cos(docked.facing) * bridgeSize.cabDepthM) / 2,
     y: docked.cab.y + (Math.sin(docked.facing) * bridgeSize.cabDepthM) / 2,
@@ -130,39 +164,41 @@ test('bridges dock while a jet stands parked after arrival and retract as its pu
   expect(fleet.requestArrival({ typeId: 'E175', runwayEnd: '27', stand: standId('4') }).ok).toBe(
     true,
   );
-  let pushStartS = NaN,
+  let readyS = NaN,
+    pushStartS = NaN,
     movedS = NaN,
     parkedS = NaN;
   const start = { x: parked.x, y: parked.y };
   for (let step = 1; step * 0.1 <= 900; step++) {
-    const t = step * 0.1;
+    const t = startS + step * 0.1;
     fleet.step(t);
     const poses = fleet.snapshot();
     states.update(poses, t);
     const mine = poses.find((p) => p.id === jet.id);
+    if (mine?.state === 'ready-for-pushback') {
+      readyS = mine.pushbackReadySinceS!;
+      expect(distance(mine, start)).toBe(0);
+      expect(mine.speedMps).toBe(0);
+      expect(mine.enginesRunning).toBe(false);
+    }
     if (Number.isNaN(pushStartS) && mine?.state === 'pushback') pushStartS = t;
-    if (mine && t - pushStartS <= 6) {
-      // While it retracts, the cab's front stays outside the fuselage as the aircraft backs away.
-      const cab = states.poseAt(one, t);
-      const f = { x: Math.cos(mine.heading), y: Math.sin(mine.heading) };
-      const front = {
-        x: cab.cab.x + (Math.cos(cab.facing) * bridgeSize.cabDepthM) / 2 - mine.x,
-        y: cab.cab.y + (Math.sin(cab.facing) * bridgeSize.cabDepthM) / 2 - mine.y,
-      };
-      expect(Math.abs(front.x * f.y - front.y * f.x)).toBeGreaterThanOrEqual(-door.z - 1e-6);
-      if (t - pushStartS >= 4) expect(states.progress(one, t)).toBe(0);
+    if (mine?.state === 'pushback') {
+      expect(states.progress(one, t)).toBe(0);
+      skipped.update(poses, t);
+      expect(skipped.progress(one, t)).toBe(0);
     }
     if (Number.isNaN(movedS) && mine && distance(mine, start) > 0.05) {
       movedS = t;
-      // It starts to retract with the push.
-      expect(states.progress(one, t)).toBeGreaterThan(0.8);
+      expect(states.progress(one, t)).toBe(0);
     }
     const arrival = poses.find((p) => p.typeId === 'E175');
     if (Number.isNaN(parkedS) && arrival?.state === 'parked') parkedS = t;
     if (Number.isNaN(parkedS)) expect(states.progress(four, t)).toBe(0);
     if (!Number.isNaN(parkedS) && !Number.isNaN(movedS) && t > parkedS + 60) break;
   }
-  expect(pushStartS).toBeGreaterThan(0);
+  expect(readyS).toBe(startS + 0.1);
+  expect(pushStartS - readyS).toBeGreaterThanOrEqual(8);
+  expect(states.progress(one, readyS + 2)).toBeCloseTo(0.5);
   expect(movedS - pushStartS).toBeLessThan(1);
   // The arrival's bridge extends after it parks and has docked within 45 s.
   expect(parkedS).toBeGreaterThan(0);

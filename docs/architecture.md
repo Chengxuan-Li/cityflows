@@ -542,6 +542,7 @@ interface Airport {
   stands: Record<string, Stand>;             // st:
   gates: Record<string, Gate>;               // gt:  { ref?, pos, terminal: tm: | null, osmId? }
   terminals: Record<string, Terminal>;       // tm:  { name?, rings, group, osmId? }
+  jetBridges?: { osmId: number; line: Vec2[]; stand: string | null }[]; // terminal end first
   helipads: Record<string, Helipad>;         // hl:  { pos, ring?, ref?, name?, osmId? }
   surfaces: AirsideSurface[];                // aprons, runway, taxiway, turn-pad and helipad areas
   hangars: { rings; name?; ref?; osmId? }[];
@@ -606,6 +607,8 @@ held. `RoadCrossing.roads` are the directed roads at the crossing as imported; a
 them, so a reader resolves by `pos` and `roadOsmIds` as rail crossings do by OSM way. Nothing in
 the section bounds aircraft to the map: runway ends, headings and thresholds define the extended
 centrelines that approaches and climbs (TASK-298, TASK-301) follow some 10 km past the polygon.
+Mapped jet bridges retain the imported stand association. The renderer leaves a bridge stowed
+if an edit removes the stand, and resolves it again if undo restores the stand.
 Compile reads it only into `CompiledCity.airside` (TASK-298, below); no lane, connector or road
 route reads it. The 2D and 3D maps draw it as paving (`render/airside-geometry.ts`):
 mapped aprons, then taxiways and taxilanes buffered to their widths with round ends, then each
@@ -1909,6 +1912,11 @@ carry no persons and generate no road trips.
   Pushback reserves its
   swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
   push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
+  TASK-319: a fixed-wing departure or tow enters `ready-for-pushback` once requested. The
+  aircraft holds its stand and stays stationary with engines off while its tug prepares to
+  move it. The minimum durations are 10 s for double-deckers, 8 s for widebodies, 6 s for
+  narrowbodies and regional jets, and 5 s for turboprops and private aircraft. Off-block is
+  recorded when the departure has clearance and starts moving. Helicopters depart as before.
 - **Stands and service.** Stand selection checks that the type can land, reach the stand,
   push back and depart on the chosen ends. Passenger flights prefer contact stands. Private
   and cargo flights prefer their designated stands where available. Within each kind the
@@ -1932,9 +1940,11 @@ carry no persons and generate no road trips.
   and the inspector shows the board and the code, kind and occupancy of a picked stand.
 - **Snapshot.** `VehicleSnapshot.aircraft`: id, registration-like id (by ICAO prefix), type,
   position, height, heading, speed, state (approach, flare, landing-roll, go-around, taxi,
-  holding, line-up, takeoff-roll, rotation, climb, parked, pushback, tow and the helicopter
+  holding, line-up, takeoff-roll, rotation, climb, parked, ready-for-pushback, pushback, tow and the helicopter
   phases), engines running, on runway, airborne, gear down (on the ground, below 600 m on
   approach, below 150 m climbing), stand, runway end and the airside edges ahead.
+  In `ready-for-pushback`, `pushbackReadySinceS` gives the simulation time when retraction
+  began. Bridges stow within 4 s and use the timestamp when snapshots skip part of that interval.
   `VehicleSnapshot.airfield` (TASK-301, `fleet.airfield()`): per runway the end arrivals and the
   end departures use (-1: none), the holding positions whose stop bar is off (an aircraft granted
   past it whose tail has not passed the hold node) and the glide slope. The ends in use are the
@@ -3256,6 +3266,24 @@ while the run is paused. The camera follows the selected aircraft (`Scene3D.foll
 switch "Follow with camera"), and a distant aircraft picks within 12 px. In 2D the night layer
 shows the same lights steadily (`render/layers/airfield-lights.ts`).
 
+TASK-318: real aircraft models in 3D. `bench/aircraft-models.ts` prepares Flightradar24's
+GPL-2.0 glTF set (FlightGear FGMEMBERS models; NOTICE) offline into `fixtures/aircraft`: per
+mapped catalogue type two glTF 2.0 files, LOD0 (at most 15,000 triangles) and LOD1 (at most
+2,000), with flat part colours (`hull`, `tail`, `engine` take the flight's livery; `wing`,
+`glass` and `c<rrggbb>` parts keep theirs), spinning parts as `mount-<kind>-<n>` nodes turning
+about their local +y, and `models.json` (files, triangles, bytes, scale, a fuselage profile every
+2.5% of the length, light mounts on the model). Each model is turned to +x forward, +y up, +z
+starboard, scaled to the catalogue length and span (the wings outside the fuselage stretched to
+the span, the fuselage section scaled no more than the length), and set with its belly on the
+procedural body's so that TASK-307's procedural landing gear, drawn with every level, reaches it.
+`render3d/aircraft-models.ts` fetches a file the first time an aircraft of its type needs that
+level and shares each level's geometry, merged and coloured per livery, between aircraft.
+`Aircraft3D.setDetail` picks the level by the aircraft's on-screen size across its length and
+span (`lodPixels`: LOD0 from 260 px down to 210, LOD1 from 8 px down to 6, else TASK-315's
+procedural mesh, which also stands in while a file loads and for types without a model). The
+real levels use the model's light mounts, the model's own skids on a helicopter, and
+`boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
+
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
 switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
@@ -4405,6 +4433,14 @@ editor re-runs, TASK-305):
   by the stand's or its containing apron's tags (`cargo=yes`, `apron=*`) or name (cargo, freight;
   GA, general aviation, business aviation, executive, FBO); else contact with a gate; else
   maintenance by tags or name (maintenance, hangar) or within 60 m of a hangar; else remote.
+- **Jet bridges.** Complete linear `aeroway=jet_bridge` ways retain their projected geometry.
+  The aeroway tag excludes the way from road and pedestrian import and from ground path drawing.
+  The terminal end is the endpoint shared with a gate node, or the one nearest a terminal
+  footprint, with distance from the stands breaking ties. The apron end selects the nearest stop
+  position among stands serving that mapped gate, or among all stands if the gate has none.
+  At airports with mapped bridges the 2D and 3D maps follow the mapped
+  fixed links and dock the tunnels to the occupied stands' closest reachable port-side boarding
+  doors. Where no bridges are mapped, placement follows TASK-315's terminal and stand rule.
 - **Stand codes.** The largest code whose aircraft keeps the stand clearance (A, B 3 m; C 4.5 m; D
   to F 7.5 m) from the same code's aircraft on every other stand and from every building but one
   it stands in. The aircraft is a fuselage as long as the code's span (a capsule of radius 5.5% of

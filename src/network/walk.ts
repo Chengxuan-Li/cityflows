@@ -892,6 +892,9 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     layer = 0,
     preferred?: Vec2,
   ) => {
+    // At airports with mapped bridges, a ramp connector can otherwise snap to the abutment
+    // of a raised sidewalk on another level and mask the parking lot's pedestrian entrance.
+    const checkEndpointLayer = type === 'connectors' && Boolean(source.airport?.jetBridges?.length);
     const points = shape.kind === 'point' ? [shape.pos] : [...shape.ring, shape.ring[0]!];
     const nearShape = shape.kind === 'polygon' ? prepareNearest(points) : undefined;
     let x0 = Infinity,
@@ -961,6 +964,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
                     (Math.abs(n.away - best.away) <= 1e-6 &&
                       distance(n.point, preferred) >= distance(best.b, preferred))
                   : n.away > best.away || (n.away === best.away && j >= best.j))))) ||
+          (checkEndpointLayer && layerAt(target, n.point) !== layer) ||
           !clear(a, n.point, layer)
         )
           continue;

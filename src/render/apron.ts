@@ -10,7 +10,7 @@ import type { AirsideGraph } from '../network/airside';
 import { aircraftTypes, type AircraftType } from '../schema/aircraft';
 import type { Airport } from '../schema/airport';
 import type { City } from '../schema/city';
-import { aircraftLayout, boardingDoor, bridgeable } from './aircraft-outline';
+import { aircraftLayout, boardingDoor, boardingDoors, bridgeable } from './aircraft-outline';
 import { FLOOD_AHEAD_M, placeAirfieldLights, type AirfieldLight } from './airfield-lights';
 import type { AircraftPose } from './types';
 
@@ -25,10 +25,9 @@ import type { AircraftPose } from './types';
 // is farther than a tunnel reaches gets a fixed link out to a rotunda on the apron. Three telescopic tunnels run from the rotunda to the cab, sized so
 // the reference aircraft docks at four fifths of their extension. A bridge docks at the parked
 // aircraft's own door when the aircraft is a jet it can reach, extending over 45 s after the
-// aircraft parks. The snapshot shows no phase between boarding and the push (the sim grants the
-// push and starts it in the same step), so the bridge retracts in 4 s as the push starts: the
-// tug accelerates the aircraft from rest at under 1 m/s2, and the cab, backing away across the
-// fuselage, stays clear of it.
+// aircraft parks and retracting in 4 s after the aircraft becomes ready for pushback.
+// TASK-319: where bridges are mapped, use their lines for the fixed links and rotundas, and
+// dock the movable tunnel and cab to the closest reachable boarding door.
 //
 // Furniture: a floodlight mast under each of TASK-301's apron floodlights (none inside a
 // terminal or hangar); a stand guidance board for each bridged stand, on the facade ahead of the
@@ -64,12 +63,14 @@ export interface BridgePose {
 }
 
 export interface JetBridge {
-  stand: string;
-  /** The compiled stand index. */
+  stand: string | null;
+  /** The compiled stand index, or -1 if the bridge serves no stand. */
   index: number;
   rotunda: Vec2;
-  /** The facade end of a fixed link out to the rotunda, or null. */
-  link: Vec2 | null;
+  /** Fixed link from the facade to the rotunda, or null. */
+  link: Vec2[] | null;
+  /** The aircraft-side endpoint of a mapped line. */
+  mappedTip?: Vec2;
   /** Length of each of the three tunnels. */
   segmentM: number;
   rest: BridgePose;
@@ -84,12 +85,16 @@ interface StandPlace {
 export const closed = (ring: readonly Vec2[]) => [...ring, ring[0]!];
 
 const typeById = new Map(aircraftTypes.map((t) => [t.id, t]));
+const doorsByType = new Map(aircraftTypes.filter(bridgeable).map((t) => [t.id, boardingDoors(t)]));
 const reference = (code: number) =>
   typeById.get(code >= 5 ? 'A388' : code === 4 ? 'B77W' : 'A20N')!;
 
 /** Where a jet bridge's cab stands docked at `type`'s boarding door, parked at `stand`. */
-export function dockedPose(stand: StandPlace, type: AircraftType): BridgePose {
-  const door = boardingDoor(type);
+export function dockedPose(
+  stand: StandPlace,
+  type: AircraftType,
+  door = boardingDoor(type),
+): BridgePose {
   const fx = Math.cos(stand.heading),
     fy = Math.sin(stand.heading);
   // Starboard is (-fy, fx) in the map frame (y south); the door's z is negative, to port.
@@ -155,11 +160,53 @@ function heightsAt(context: City['context']) {
   };
 }
 
+function mappedBridges(
+  lines: NonNullable<Airport['jetBridges']>,
+  graph: AirsideGraph,
+): JetBridge[] {
+  return lines.map(({ line, stand }) => {
+    const index = (stand === null ? undefined : graph.index.stand.get(stand)) ?? -1;
+    const tip = line.at(-1)!;
+    // The last substantial segment is the swing tunnel. Short segments after it trace the cab.
+    let pivot = 0;
+    for (let i = line.length - 2; i > 0; i--) {
+      if (distance(line[i]!, line[i + 1]!) < 6 || distance(line[i]!, tip) < 6) continue;
+      pivot = i;
+      break;
+    }
+    const rotunda = line[pivot]!;
+    const dx = tip.x - rotunda.x;
+    const dy = tip.y - rotunda.y;
+    const span = Math.hypot(dx, dy);
+    const segmentM = Math.max(
+      2,
+      (span - bridgeSize.rotundaRadiusM + 2 * bridgeSize.overlapM) / 2.1,
+    );
+    const stowedM = bridgeSize.rotundaRadiusM + segmentM + bridgeSize.cabDepthM / 2 + 0.5;
+    const restM = Math.max(stowedM, span - bridgeSize.restPullM);
+    const facing = Math.atan2(dy, dx);
+    return {
+      stand: index >= 0 ? stand : null,
+      index,
+      rotunda,
+      link: pivot ? line.slice(0, pivot + 1) : null,
+      segmentM,
+      mappedTip: tip,
+      rest: {
+        cab: { x: rotunda.x + Math.cos(facing) * restM, y: rotunda.y + Math.sin(facing) * restM },
+        facing,
+        floorM: bridgeSize.restFloorM,
+      },
+    };
+  });
+}
+
 export function placeJetBridges(
   airport: Airport,
   graph: AirsideGraph,
   context: City['context'],
 ): JetBridge[] {
+  if (airport.jetBridges?.length) return mappedBridges(airport.jetBridges, graph);
   const rings = Object.values(airport.terminals).map((t) => closed(t.rings[0]!));
   const edges = rings.flatMap((ring) => ring.slice(1).map((b, i) => [ring[i]!, b] as const));
   const heightAt = heightsAt(context);
@@ -222,7 +269,7 @@ export function placeJetBridges(
       stand: stand.id,
       index: stand.idx,
       rotunda,
-      link,
+      link: link ? [link, rotunda] : null,
       segmentM,
       rest: {
         cab: { x: dock.cab.x + towards.x * pull, y: dock.cab.y + towards.y * pull },
@@ -234,8 +281,7 @@ export function placeJetBridges(
   return bridges;
 }
 
-/** Each bridge's movement between its parked pose and the door of the aircraft at its stand,
- * from the aircraft snapshot (state `parked` at the stand docks; anything else retracts). */
+/** Each bridge's movement between its stowed pose and the door of the aircraft at its stand. */
 export class JetBridgeStates {
   private readonly states: {
     from: number;
@@ -250,40 +296,54 @@ export class JetBridgeStates {
     this.states = bridges.map(() => ({ from: 0, target: 0, changedS: 0, dock: null }));
   }
 
-  /** The docked pose for an aircraft, or null when this bridge does not serve it. */
-  /** The docked pose at the parked aircraft's own boarding door, from its displayed pose
-   * (TASK-314's visual pose, else the snapshot's), or null when this bridge does not serve it. */
-  dockFor(
-    i: number,
-    pose:
-      | Pick<AircraftPose, 'typeId' | 'state' | 'stand' | 'x' | 'y' | 'heading' | 'visual'>
-      | undefined,
-  ) {
-    const bridge = this.bridges[i]!;
-    if (!pose || pose.state !== 'parked' || pose.stand !== bridge.stand) return null;
-    const type = typeById.get(pose.typeId);
-    if (!type || !bridgeable(type)) return null;
-    const { x, y, heading } = pose.visual ?? pose;
-    const half = type.lengthM / 2;
-    const nose = { x: x + Math.cos(heading) * half, y: y + Math.sin(heading) * half };
-    const dock = dockedPose({ pos: nose, heading }, type);
-    return reaches(bridge, dock) ? dock : null;
-  }
-
   update(poses: readonly AircraftPose[], timeS: number) {
     const atStand = new Map<string, AircraftPose>();
-    for (const pose of poses) if (pose.stand) atStand.set(pose.stand, pose);
+    for (const pose of poses)
+      if (pose.stand && (pose.state === 'parked' || pose.state === 'ready-for-pushback'))
+        atStand.set(pose.stand, pose);
+    const candidates: { bridge: number; door: string; dock: BridgePose; away: number }[] = [];
+    for (const [i, bridge] of this.bridges.entries()) {
+      const pose = bridge.stand ? atStand.get(bridge.stand) : undefined;
+      if (pose?.state !== 'parked') continue;
+      const doors = doorsByType.get(pose.typeId);
+      if (!doors) continue;
+      const type = typeById.get(pose.typeId)!;
+      const { x, y, heading } = pose.visual ?? pose;
+      const c = Math.cos(heading);
+      const s = Math.sin(heading);
+      const pos = { x: x + (c * type.lengthM) / 2, y: y + (s * type.lengthM) / 2 };
+      for (const [j, door] of doors.entries()) {
+        if (j > 0 && !bridge.mappedTip) break;
+        if (bridge.mappedTip && (bridge.rotunda.x - x) * s - (bridge.rotunda.y - y) * c < -door.z)
+          continue;
+        const dock = dockedPose({ pos, heading }, type, door);
+        if (!reaches(bridge, dock)) continue;
+        const away = bridge.mappedTip ? distance(bridge.mappedTip, dock.cab) : 0;
+        candidates.push({ bridge: i, door: `${pose.id}:${j}`, dock, away });
+      }
+    }
+    candidates.sort((a, b) => a.away - b.away);
+    const assigned = new Map<number, BridgePose>();
+    const occupiedDoors = new Set<string>();
+    for (const { bridge, door, dock } of candidates) {
+      if (assigned.has(bridge) || occupiedDoors.has(door)) continue;
+      assigned.set(bridge, dock);
+      occupiedDoors.add(door);
+    }
     for (const [i, bridge] of this.bridges.entries()) {
       const state = this.states[i]!;
-      const dock = this.dockFor(i, atStand.get(bridge.stand));
+      const dock = assigned.get(i) ?? null;
       const target = dock ? 1 : 0;
       if (!this.started) Object.assign(state, { from: target, target, changedS: timeS, dock });
       else if (target !== state.target) {
-        state.from = this.progress(i, timeS);
+        const ready = bridge.stand ? atStand.get(bridge.stand)?.pushbackReadySinceS : undefined;
+        const changedS = target ? timeS : (ready ?? timeS);
+        // A skipped ready snapshot can leave the next snapshot already in motion.
+        state.from = target || ready !== undefined ? this.progress(i, changedS) : 0;
         state.target = target;
-        state.changedS = timeS;
-        if (dock) state.dock = dock;
+        state.changedS = changedS;
       }
+      if (dock) state.dock = dock;
     }
     this.started = true;
   }
@@ -378,7 +438,10 @@ export function placeApronFurniture(
     .filter((l) => l.kind === 'apron-flood' && !blocked.some((ring) => pointInPolygon(l, ring)))
     .map((l) => ({ pos: { x: l.x, y: l.y }, heightM: l.heightM }));
   const boards: StandBoard[] = [];
+  const bridgedStands = new Set<number>();
   for (const bridge of bridges) {
+    if (bridge.index < 0 || bridgedStands.has(bridge.index)) continue;
+    bridgedStands.add(bridge.index);
     const stand = graph.stands[bridge.index]!;
     const fx = Math.cos(stand.heading),
       fy = Math.sin(stand.heading);
