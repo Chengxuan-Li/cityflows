@@ -339,10 +339,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | in progress 2026-11-22 (wave F, Claude) |
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | merged 2026-11-22 (`5eac69c`, `82c33ef`) |
-| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | variant requested 2026-11-23 (Claude) |
+| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | parked 2026-11-23 (v1 `ebcabee`, variant `0003a59`; waits for TASK-320) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
+| [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | planned (Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5891,6 +5892,14 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-316 (Claude Code subagent, Opus 5.5 high; parked: v1 `ebcabee`, variant `0003a59`): airside ground vehicles
+  in their own modules (service lanes from mapped closed service roads, turnaround vehicle sets, tugs coupling at the
+  ready-for-pushback hold, 3D instanced models with beacons), aircraft untouched (fleet state identical with and
+  without vehicles). Variant: zero vehicle-aircraft overlaps at London City and Zurich by reading the fleet's movement
+  space (`fleet.movementSpace()`), tow notice; Zurich serves 89% of visits, 86 of 98 pushes with a vehicle tug;
+  London City only 52% and 46 of 99, and 27 vehicles a day leave as a last resort. Cause: London City's parked
+  aircraft sit up to 61 degrees off their stand heading physically (drawn on it) and two stands' tails lie over the
+  single apron road. Parked until TASK-320 corrects parking poses, then re-run.
 - TASK-318 (Claude Code subagent, Opus 5.5 high; merged `51b03cb` and the main merge `2d7d55d`): 18 catalogue types
   draw Flightradar24/FlightGear meshes (glTF 1.0 read by a bench reader, simplified with three's bundled
   meshoptimizer, scaled to catalogue length and span by stretching only the outer wings, flat part colours instead of
