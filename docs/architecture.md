@@ -1856,8 +1856,8 @@ carry no persons and generate no road trips.
   legs). Where bodies would touch, the one earlier in the order passes first: the later stops one
   sample short of the conflict until the earlier is one sample past it; on a stretch both follow
   each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
-  and the claims keep them apart from there. The order is the order of admission, with tows after
-  every arrival and departure; a re-routed departure (runway change) is ordered anew. One total
+  and the claims keep them apart from there. The order is the order of admission (tows included:
+  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew. One total
   order for every conflict means no ring of aircraft can wait on each other. An aircraft waited for
   ignores the margins (claims, push-sweep check) of those waiting for it, which stand clear of its
   path. An arrival appears only when every conflict before its tail is off its runway is passed. A

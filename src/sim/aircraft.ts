@@ -118,9 +118,6 @@ const RETRY_S = 5;
 /** Swept bodies are sampled for the order at most this far apart (bodies are 15 m and more
  * long): a wait stops one sample short. */
 const SAMPLE_M = 6;
-/** The order of admission puts tows after every arrival and departure: a tow, slow and without
- * passengers, waits anywhere (at a runway hold in particular) rather than hold up others. */
-const RANK_CLASS = 1e9;
 /** An aircraft waiting this long at a hold gets a gap between arrivals. */
 const RUNWAY_GAP_WAIT_S = 30;
 const STUCK_S = 900;
@@ -1800,7 +1797,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       for (const option of landings(craft, runway, request.end, request.stand)) {
         const landing = option();
         if (!landing) continue;
-        craft.rank = ++admitted + RANK_CLASS;
+        craft.rank = ++admitted;
         const decided = order(craft, [{ leg: landing.leg, fromM: 0 }]);
         if (!decided) continue;
         commitOrder(craft, decided);
@@ -2162,7 +2159,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!planned) return;
       const { legs } = planned;
       for (const leg of legs.slice(0, -1)) addGates(craft, leg, -1);
-      craft.rank = ++admitted + (request.kind === 'tow' ? 2 : 1) * RANK_CLASS;
+      craft.rank = ++admitted;
       const decided = order(
         craft,
         legs.map((leg) => ({ leg, fromM: 0 })),
@@ -2518,9 +2515,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         for (const gate of next.gates)
           if (gate.vacateM < s - half) gate.granted = gate.released = true;
         if (next.gates.some((g) => !g.granted && g.holdM < s - 0.01)) continue;
-        // The new leg is ordered as a newcomer, after every departure admitted so far.
+        // The new leg is ordered as a newcomer, after every movement admitted so far.
         const rank = craft.rank;
-        craft.rank = admitted + 1 + RANK_CLASS;
+        craft.rank = admitted + 1;
         replacing = { next, target };
         const decided = order(craft, [{ leg: next, fromM: current ? s - 1 : 0 }]);
         replacing = null;
