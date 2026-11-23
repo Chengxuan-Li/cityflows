@@ -2976,8 +2976,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // Claims end at the leg's end, where the next leg takes over, or at its order's stop.
     if (craft.claimHi < capHi - 1e-6) stop = Math.min(stop, craft.claimHi - margin - half);
     stop = Math.max(Math.min(stop, cap - 0.5), s);
-    // A stop moved back by a new order is still within braking reach (canWaitAt).
-    if (craft.plan && stop < craft.planStop - 0.01) {
+    // A stop moved back by a new order is still within braking reach (canWaitAt), and so is a
+    // stop on a re-routed leg, whose plan the re-route dropped while moving (TASK-320: Zurich
+    // after the 21:00 concept switch).
+    if (craft.plan ? stop < craft.planStop - 0.01 : v > 0 && stop < s + brake) {
       stop = Math.max(stop, Math.min(leg.endM, s + brake + 0.05));
       craft.plan = null;
     }
