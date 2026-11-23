@@ -8,7 +8,7 @@ import {
   polylineNearest,
 } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { AirsideGraph, AirsideRunwayC } from '../network/airside';
+import type { AirsideGraph, AirsideRunwayC, AirsideStandC } from '../network/airside';
 import {
   arcEdge,
   arcEnd,
@@ -118,6 +118,14 @@ const RETRY_S = 5;
 /** Swept bodies are sampled for the order at most this far apart (bodies are 15 m and more
  * long): a wait stops one sample short. */
 const SAMPLE_M = 6;
+/** TASK-320: a parked aircraft's last metre on the stand line in front of its centre, so its
+ * heading there is the line's; and how far off the stand heading a line counts as on it. */
+const STAND_MARGIN_M = 1;
+const STRAIGHT_RAD = (0.5 * Math.PI) / 180;
+/** TASK-320: a parked body's clearance from an apron service road's edge, and how far back along
+ * the stand's line its stop may move to keep it. */
+const ROAD_CLEAR_M = 1;
+const STOP_BACK_M = 20;
 /** An aircraft waiting this long at a hold gets a gap between arrivals. */
 const RUNWAY_GAP_WAIT_S = 30;
 const STUCK_S = 900;
@@ -500,8 +508,9 @@ interface Segment {
 }
 
 /** Round each corner with the aircraft's turning radius where its segments leave room (the
- * tangent at most 45% of either), and map stations of the raw line onto the rounded one. */
-function rounded(raw: Vec2[], radiusM: number) {
+ * tangent at most 45% of either, and no turn within `startM` of the start or `endM` of the end),
+ * and map stations of the raw line onto the rounded one. */
+function rounded(raw: Vec2[], radiusM: number, startM = 0, endM = 0) {
   const points: Vec2[] = [raw[0]!];
   const rawBreaks = [0];
   const breaks: { index: number }[] = [{ index: 0 }];
@@ -518,7 +527,12 @@ function rounded(raw: Vec2[], radiusM: number) {
       vy = (c.y - b.y) / after;
     const sweep = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
     const half = Math.abs(sweep) / 2;
-    const tangent = Math.min(radiusM * Math.tan(half), 0.45 * Math.min(before, after));
+    const tangent = Math.min(
+      radiusM * Math.tan(half),
+      0.45 * Math.min(before, after),
+      rawStations[i]! - startM,
+      rawStations.at(-1)! - endM - rawStations[i]!,
+    );
     if (half < (1.5 * Math.PI) / 180 || half > (85 * Math.PI) / 180 || tangent < 0.5) {
       points.push(b);
       rawBreaks.push(rawStations[i]!);
@@ -556,6 +570,69 @@ function rounded(raw: Vec2[], radiusM: number) {
     return mapped[i - 1]! + Math.max(0, Math.min(1, t)) * (mapped[i]! - mapped[i - 1]!);
   };
   return { path, map };
+}
+
+/** TASK-320: a line that ends at a stand's stop ends on the stand's line (through the stop on
+ * its heading), at the stop moved `shiftM` along it, straight for `straightM`. Where the line's
+ * last straight stretch on that heading is too short, its end is replaced by an alignment
+ * segment: from the line a turning radius before, to a point `straightM` plus a turning radius
+ * back from the stop on the stand's line, and on to the stop. Segment bounds (stations of the raw
+ * line) past the cut are scaled onto the new end. */
+function alignEnd(
+  raw: Vec2[],
+  bounds: [number, number][],
+  heading: number,
+  straightM: number,
+  radiusM: number,
+  shiftM: number,
+) {
+  const stations = cumulativeLengths(raw);
+  const total = stations.at(-1)!;
+  const mapped = raw.at(-1)!;
+  const ux = Math.cos(heading),
+    uy = Math.sin(heading);
+  const stop = { x: mapped.x + shiftM * ux, y: mapped.y + shiftM * uy };
+  let i = raw.length - 1;
+  while (
+    i > 0 &&
+    deflection(Math.atan2(mapped.y - raw[i - 1]!.y, mapped.x - raw[i - 1]!.x), heading) <
+      STRAIGHT_RAD
+  )
+    i--;
+  if (total - stations[i]! + shiftM >= straightM) {
+    if (shiftM >= 0) return { raw: shiftM > 0 ? [...raw, stop] : raw, bounds };
+    const end = total + shiftM;
+    return {
+      raw: slice(raw, stations, 0, end),
+      bounds: bounds.map(([a, b]) => [Math.min(a, end), Math.min(b, end)] as [number, number]),
+    };
+  }
+  const backM = straightM + radiusM;
+  const cutM = Math.max(0, total + Math.min(0, shiftM) - backM - radiusM);
+  const join = { x: stop.x - backM * ux, y: stop.y - backM * uy };
+  const line = [...(cutM > 0 ? slice(raw, stations, 0, cutM) : [raw[0]!]), join, stop];
+  const scale = (cumulativeLengths(line).at(-1)! - cutM) / (total - cutM);
+  const map = (m: number) => (m <= cutM ? m : cutM + (m - cutM) * scale);
+  return { raw: line, bounds: bounds.map(([a, b]) => [map(a), map(b)] as [number, number]) };
+}
+
+/** The same at the start: a line that starts at a stand's stop (a pushback). */
+function alignStart(
+  raw: Vec2[],
+  bounds: [number, number][],
+  heading: number,
+  straightM: number,
+  radiusM: number,
+  shiftM: number,
+) {
+  const total = cumulativeLengths(raw).at(-1)!;
+  const flip = (b: [number, number][], length: number) =>
+    b.map(([x, y]) => [length - y, length - x] as [number, number]).reverse();
+  const end = alignEnd(raw.toReversed(), flip(bounds, total), heading, straightM, radiusM, shiftM);
+  return {
+    raw: end.raw.toReversed(),
+    bounds: flip(end.bounds, cumulativeLengths(end.raw).at(-1)!),
+  };
 }
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
@@ -729,6 +806,46 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return { points, edge: -1, fromE: 0, toE: 0, startNode: -1, endNode: -1, runway };
   }
 
+  /** TASK-320: how far a type's stop moves along its stand's heading (negative: back) so that
+   * its parked body keeps `ROAD_CLEAR_M` clear of the apron service roads across the stand's
+   * line: the least move, within the paved room ahead or `STOP_BACK_M` back, whose body clears
+   * every road there and stands in no taxiway's way (TASK-312's rule). None (0) where the body
+   * is clear already or no move clears it. */
+  const stopShifts = new Map<string, number>();
+  function stopShift(craft: Craft, stand: AirsideStandC) {
+    const key = standKey(craft.type.id, stand.idx);
+    const known = stopShifts.get(key);
+    if (known !== undefined) return known;
+    const length = craft.lengthM;
+    const clear = (shiftM: number) =>
+      stand.roadBandsM.every(
+        ([from, to]) => to < -shiftM - ROAD_CLEAR_M || from > length - shiftM + ROAD_CLEAR_M,
+      );
+    let shift = 0;
+    if (!clear(0)) {
+      const options = stand.roadBandsM
+        .flatMap(([from, to]) => [length + ROAD_CLEAR_M - from + 0.01, -(to + ROAD_CLEAR_M + 0.01)])
+        .filter((m) => m <= stand.aheadM && m >= -STOP_BACK_M && clear(m))
+        .sort((a, b) => Math.abs(a) - Math.abs(b) || a - b);
+      const ux = Math.cos(stand.heading),
+        uy = Math.sin(stand.heading);
+      shift =
+        options.find((m) => {
+          const back = length / 2 - m;
+          const centre = { x: stand.pos.x - back * ux, y: stand.pos.y - back * uy };
+          return !blocksTaxiway(craft, bodyAt(craft, centre, stand.heading));
+        }) ?? 0;
+    }
+    stopShifts.set(key, shift);
+    return shift;
+  }
+
+  /** The stand whose stop a segment on its lead-in ends (or starts) at. */
+  function stopStand(segment: Segment, atEnd: boolean) {
+    const stand = segment.edge >= 0 ? graph.stands[graph.edges[segment.edge]!.stand] : undefined;
+    return stand && (atEnd ? segment.endNode : segment.startNode) === stand.stop ? stand : null;
+  }
+
   function buildLeg(craft: Craft, mode: Leg['mode'], segments: Segment[]): Leg {
     const raw: Vec2[] = [];
     const bounds: [number, number][] = [];
@@ -743,14 +860,41 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
       bounds.push([start, at]);
     }
+    const turnM = craft.type.performance.kind === 'fixedWing' ? radius(craft) : 5;
+    // TASK-320: at a stand's stop the leg runs straight on the stand heading for half the length
+    // and a margin, so the parked aircraft (and a pushback's start) stands on the stand's pose.
+    const straightM = craft.lengthM / 2 + STAND_MARGIN_M;
+    const endStand = stopStand(segments.at(-1)!, true);
+    const startStand = stopStand(segments[0]!, false);
+    let line = { raw, bounds };
+    if (endStand)
+      line = alignEnd(
+        line.raw,
+        line.bounds,
+        endStand.heading,
+        straightM,
+        turnM,
+        stopShift(craft, endStand),
+      );
+    if (startStand)
+      line = alignStart(
+        line.raw,
+        line.bounds,
+        startStand.heading,
+        straightM,
+        turnM,
+        stopShift(craft, startStand),
+      );
     const { path, map } = rounded(
-      raw,
-      craft.type.performance.kind === 'fixedWing' ? radius(craft) : 5,
+      line.raw,
+      turnM,
+      startStand ? straightM : 0,
+      endStand ? straightM : 0,
     );
     const pieces: Piece[] = [];
     const runwayRanges: Leg['runwayRanges'] = [];
     segments.forEach((segment, i) => {
-      const [a, b] = bounds[i]!;
+      const [a, b] = line.bounds[i]!;
       const startM = map(a),
         endM = map(b);
       if (segment.runway >= 0) {
@@ -1981,8 +2125,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   function poseOnLeg(craft: Craft, leg: Leg, speedMps: number): AircraftPose {
+    return poseAt(leg, craft.stationM, speedMps);
+  }
+  function poseAt(leg: Leg, stationM: number, speedMps = 0): AircraftPose {
     const { points, stationsM } = leg.path;
-    const m = Math.max(0, Math.min(craft.stationM, leg.path.lengthM));
+    const m = Math.max(0, Math.min(stationM, leg.path.lengthM));
     const position = pointAtDistance(points, stationsM, m);
     const ahead = pointAtDistance(points, stationsM, Math.min(leg.path.lengthM, m + 0.5));
     const behind = pointAtDistance(points, stationsM, Math.max(0, m - 0.5));
@@ -2829,8 +2976,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // Claims end at the leg's end, where the next leg takes over, or at its order's stop.
     if (craft.claimHi < capHi - 1e-6) stop = Math.min(stop, craft.claimHi - margin - half);
     stop = Math.max(Math.min(stop, cap - 0.5), s);
-    // A stop moved back by a new order is still within braking reach (canWaitAt).
-    if (craft.plan && stop < craft.planStop - 0.01) {
+    // A stop moved back by a new order is still within braking reach (canWaitAt), and so is a
+    // stop on a re-routed leg, whose plan the re-route dropped while moving (TASK-320: Zurich
+    // after the 21:00 concept switch).
+    if (craft.plan ? stop < craft.planStop - 0.01 : v > 0 && stop < s + brake) {
       stop = Math.max(stop, Math.min(leg.endM, s + brake + 0.05));
       craft.plan = null;
     }
@@ -3044,22 +3193,22 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const bank = airborneAttitude(path, pose.stationM, pose.speedMps, pose.heightM);
         visual = { ...visual, ...bank, ...profile.attitudeAt?.(nowS - startS, pose) };
       } else if (craft.leg && craft.type.performance.kind === 'fixedWing') {
-        const { path, mode, pushStand, endM } = craft.leg;
+        const { path, mode, pushStand, endM, startM } = craft.leg;
         const next = craft.next[0];
-        const standIndex =
-          pushStand ??
-          (craft.mode === 'parked' ? craft.stand : next?.kind === 'park' ? next.stand : -1);
-        const stand = graph.stands[standIndex];
+        // The drawn pose settles into the pose the aircraft parks in (or pushes back from).
+        const stopM =
+          pushStand !== undefined
+            ? startM
+            : craft.mode === 'parked' || next?.kind === 'park'
+              ? Math.max(0, endM)
+              : -1;
+        const stop = stopM >= 0 ? poseAt(craft.leg, stopM) : null;
         const ground = groundAttitude(
           path,
           craft.stationM,
           craft.lengthM,
           mode === 'pushback',
-          stand && {
-            pos: stand.pos,
-            heading: stand.heading,
-            centreM: pushStand === undefined ? Math.max(0, endM) : craft.lengthM / 2,
-          },
+          stop ? { pos: stop.position, heading: stop.headingRad, centreM: stopM } : undefined,
         );
         const taxi =
           craft.mode === 'waiting'

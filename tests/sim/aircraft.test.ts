@@ -81,6 +81,45 @@ test('an arrival appears 10 km out, lands, vacates at the first usable exit and 
   expect(fleet.standOccupant(stand.idx)).toBe(id);
 });
 
+test('an arrival parks on its stand heading clear of the apron road and pushes back from there', () => {
+  // TASK-320: stand K's lead-in turns back 137 degrees 25 m short of its stop; an apron service
+  // road crosses the stand's line behind it.
+  const { fleet, stands, graph } = fleetOf({ hook: true });
+  const stand = graph.stands[graph.index.stand.get(stands.K!)!]!;
+  const arrival = fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.K! });
+  if (!arrival.ok) throw new Error(arrival.reason);
+  const { poses } = run(fleet, 900, () => fleet.idle(arrival.id));
+  const parked = fleet.snapshot().find((p) => p.id === arrival.id)!;
+  expect(parked.state).toBe('parked');
+  const off = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+  expect(off(parked.heading - stand.heading)).toBeLessThan((3 * Math.PI) / 180);
+  // The drawn pose is the simulation's.
+  const drawn = parked.visual!;
+  expect(Math.hypot(drawn.x - parked.x, drawn.y - parked.y)).toBeLessThan(0.01);
+  expect(off(drawn.heading - parked.heading)).toBeLessThan(1e-3);
+  // The nose on the stand's line, moved ahead of the stop so the tail keeps 1 m off the road.
+  const ux = Math.cos(stand.heading),
+    uy = Math.sin(stand.heading);
+  const dx = parked.x + ux * 18.1 - stand.pos.x,
+    dy = parked.y + uy * 18.1 - stand.pos.y;
+  const ahead = dx * ux + dy * uy;
+  expect(Math.abs(dx * uy - dy * ux)).toBeLessThan(0.05);
+  const [road] = stand.roadBandsM;
+  expect(ahead).toBeGreaterThan(0);
+  expect(ahead).toBeLessThanOrEqual(stand.aheadM);
+  expect(36.2 - ahead + 1).toBeLessThanOrEqual(road![0] + 0.05);
+  // The pushback starts from that pose.
+  expect(fleet.requestDeparture(arrival.id, '27').ok).toBe(true);
+  let moving: AircraftPoseSnapshot | undefined;
+  for (let timeS = poses.get(arrival.id)!.at(-1)!.timeS; !moving?.speedMps;) {
+    expect(timeS).toBeLessThan(1500);
+    fleet.step((timeS += 0.1));
+    moving = fleet.snapshot().find((p) => p.id === arrival.id && p.state === 'pushback');
+  }
+  expect(Math.hypot(moving!.x - parked.x, moving!.y - parked.y)).toBeLessThan(0.1);
+  expect(off(moving!.heading - parked.heading)).toBeLessThan((0.5 * Math.PI) / 180);
+});
+
 test('a departure pushes back, taxis, holds for a landing, lines up and climbs out', () => {
   const { fleet, stands } = fleetOf();
   const parked = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });

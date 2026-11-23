@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { nearestOnPolyline } from '../src/geo/polyline';
+import { compile } from '../src/network';
 import { compileAirside } from '../src/network/airside';
 import { openProject } from '../src/project/open';
 import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-schedule';
@@ -16,16 +17,20 @@ import { overlaps } from '../tests/sim/aircraft-checks';
 // starts at --from with the apron as the schedule has it and goes on --drain hours past --to
 // (default 1, or to midnight for a whole day). --daily: fixed-wing movements in place of the
 // airport's schedule size. --checks: count body overlaps and runway conflicts each second.
+// --roads (TASK-320): compile the whole city as the app does (road crossings, and the apron roads
+// that parked aircraft keep clear of) in place of the airside alone.
 const args = process.argv.slice(2);
 const flag = (name: string) => {
   const at = args.indexOf(`--${name}`);
-  return at < 0 ? undefined : (args.splice(at, name === 'checks' ? 1 : 2)[1] ?? '');
+  const bare = name === 'checks' || name === 'roads';
+  return at < 0 ? undefined : (args.splice(at, bare ? 1 : 2)[1] ?? '');
 };
 const fromH = Number(flag('from') ?? 0);
 const toH = Number(flag('to') ?? 24);
 const drainH = Number(flag('drain') ?? (toH >= 24 ? 0 : 1));
 const daily = flag('daily');
 const checks = flag('checks') !== undefined;
+const roads = flag('roads') !== undefined;
 const [projectPath, seedArg, output] = args;
 if (!projectPath || !seedArg || !output) throw new Error('Expected project path, seed and output');
 const seed = Number(seedArg);
@@ -33,12 +38,16 @@ const project = await openProject(readFileSync(projectPath));
 if (!project.ok) throw new Error('Project did not open');
 const { city } = project.project;
 if (!city.airport) throw new Error('Project has no airport');
-const graph = compileAirside(city.airport, city, {
-  roads: [],
-  lanes: [],
-  movements: [],
-  index: { road: new Map() },
-});
+const whole = roads ? compile(city) : null;
+if (whole && !whole.ok) throw new Error('City did not compile');
+const graph =
+  whole?.compiled.airside ??
+  compileAirside(city.airport, city, {
+    roads: [],
+    lanes: [],
+    movements: [],
+    index: { road: new Map() },
+  });
 if (daily !== undefined)
   (airportSchedules[graph.icao ?? ''] ?? largeAirportSchedule).dailyMovements = Number(daily);
 const fleet = createAircraftFleet(graph, seed);
