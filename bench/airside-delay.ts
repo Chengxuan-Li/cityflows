@@ -92,6 +92,14 @@ function track(id: number) {
 }
 
 let timeS = startS;
+// TASK-329: aircraft stuck 5 min or more (on the ground away from a stand: not parked or ready
+// for pushback, still for 300 s), and a gridlock: 3 or more of them with no landing or departure
+// for 30 min.
+let lastCompletionS = startS;
+const stillSince = new Map<number, number>();
+let peakStuck5 = 0;
+let stuck5 = 0;
+let gridlockS: number | null = null;
 const requestArrival = fleet.requestArrival;
 fleet.requestArrival = (...args) => {
   const result = requestArrival(...args);
@@ -117,6 +125,7 @@ fleet.drainEvents = () => {
     const row = track(event.id);
     switch (event.kind) {
       case 'landed':
+        lastCompletionS = event.timeS;
         row.touchdownS = event.timeS;
         break;
       case 'parked':
@@ -126,6 +135,7 @@ fleet.drainEvents = () => {
         row.offBlockS = event.timeS;
         break;
       case 'departed':
+        lastCompletionS = event.timeS;
         row.departedS = event.timeS;
         break;
       case 'go-around':
@@ -186,6 +196,20 @@ for (let step = startS * 10; step < endS * 10; step++) {
     if (row.departureRequestS !== undefined && row.offBlockS === undefined)
       row.departure.startWaitS++;
   }
+  stuck5 = 0;
+  for (const pose of poses) {
+    if (
+      pose.airborne ||
+      pose.state === 'parked' ||
+      pose.state === 'ready-for-pushback' ||
+      pose.speedMps > 0.3
+    )
+      stillSince.delete(pose.id);
+    else if (timeS - (stillSince.get(pose.id) ?? (stillSince.set(pose.id, timeS), timeS)) >= 300)
+      stuck5++;
+  }
+  peakStuck5 = Math.max(peakStuck5, stuck5);
+  if (gridlockS === null && stuck5 >= 3 && timeS - lastCompletionS >= 1800) gridlockS = timeS;
   const metrics = fleet.metrics();
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
@@ -202,6 +226,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
         active: metrics.active,
         queued: metrics.queuedArrivals,
         stuck: metrics.stuck,
+        stuck5,
       }),
     );
 }
@@ -283,6 +308,10 @@ const summary = {
   goArounds: arrivals.reduce((n, m) => n + m.goArounds, 0),
   peakActive,
   peakStuck,
+  peakStuck5,
+  endStuck5: stuck5,
+  endQueued: fleet.metrics().queuedArrivals,
+  gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
   ...(checks && { overlapCount, runwayConflicts }),
   day: operations.metrics(),
   fleet: fleet.metrics(),

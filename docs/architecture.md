@@ -1860,8 +1860,16 @@ carry no persons and generate no road trips.
   sample short of the conflict until the earlier is one sample past it; on a stretch both follow
   each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
   and the claims keep them apart from there. The order is the order of admission (tows included:
-  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew. One total
-  order for every conflict means no ring of aircraft can wait on each other. An aircraft waited for
+  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew.
+  TASK-329: an aircraft that has started (left its stand, appeared on approach) never waits for one
+  that has not. Starting, it goes before the departures and tows ordered before it that are still
+  at their stands (they wait for it instead, unless their parked body is in its way); it does not
+  start while it would still wait for a queued arrival or an aircraft parked in its way (it waits at
+  its stand or in the air). Started aircraft are thus in the order they started and
+  the others follow in the order of admission. Rings of waits can still close through aircraft
+  parked in the way (a stand's or a helipad's); one that lasts 60 s is broken where an aircraft can
+  give way (one not started first, else the latest admitted; a started one only to another that
+  has started). An aircraft waited for
   ignores the margins (claims, push-sweep check) of those waiting for it, which stand clear of its
   path. An arrival appears only when every conflict before its tail is off its runway is passed. A
   stand does not take a type whose parked body would stand in the way of one like it taxiing past
