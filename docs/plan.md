@@ -344,6 +344,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | in progress 2026-11-22 (Claude) |
+| TASK-321 | airports | Abstract block-signalling validation (bench only) | bench | 312 | gridlocks per policy, real layouts | merged 2026-11-23 (`6809c54`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5892,6 +5893,17 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-321 (Claude Code subagent, Opus 5.5 high; merged `6809c54`, bench only): the owner's proposal tested on an
+  abstract block simulator (`bench/block-signalling.ts`; 150 m blocks, aircraft as points): A today's style, B
+  railway-style block clearance (enter a junction only if the block beyond is free; lock the direction of every
+  segment through to the next safe place), C B plus dynamic one-way preferences per runway configuration (soft,
+  wrong-way allowed at a cost), D C plus a loop-capacity rule. 315 runs (four pilots, Heathrow both directions,
+  Zurich, Boston): no gridlock under B, C or D; A gridlocks wherever flows oppose (first after 3 to 22 minutes at
+  80/h). At 80/h: Heathrow 56 to 73/h (B, C), Zurich north 8.6 / 61.2 / 71.7, Boston northeast 3.8 / 56.1 / 71.8
+  (go-arounds 81 to 4 under C). Preferences shrink clearances from 11 to 20 segments to about one; at Heathrow 204
+  of 236 segments oriented in both configurations flip between westerly and easterly. D never fired. Recommended:
+  block clearance plus per-configuration preferences in `src/sim/aircraft.ts` in place of TASK-312's order of
+  admission (about one and a half tasks).
 - TASK-312 (Claude Code subagent, Opus 5.5 high, resumed after a session restart; merged `29128cb` with gaps, as a
   chain task leaving existing cities identical): a fast airside-only peak-window bench; an order of admission
   replaces whole-route direction locks and the whole-route admission check (in one Zurich window the old check
@@ -6414,6 +6426,11 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): proposed railway-style protected blocks and one-way taxi flows to prevent airside gridlock,
+  the flows being a dynamic ATC practice set by the runway direction in use (soft, for taxi efficiency, not in the
+  map data); validate on small pilots first. TASK-321 confirmed it (no gridlock under block clearance). TASK-320
+  restarted on the owner's word after an app interruption stopped it.
 
 - 2026-11-22 (owner): "Yes, apply all" five time cuts: TASK-317 finished on partial Heathrow data; TASK-312 builds
   a fast peak-window airside bench first; TASK-316 and TASK-319 started in parallel with TASK-312; lead tiers run in
