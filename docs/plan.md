@@ -336,14 +336,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-310](tasks/TASK-310.md) | airports | Load time at airport scale | project, compile, demand, scene build | - | Heathrow first frame under 10 s, identical output | merged 2026-11-22 (`25ee0d5`, aims not met: Heathrow first frame 14 s) |
 | [TASK-311](tasks/TASK-311.md) | airports | 3D render cost at airport scale | render3d, airfield lights | - | Heathrow 3D p95 under 6 ms, no visible change | merged 2026-11-22 (`8f4cde8`, wave E) |
 | [TASK-313](tasks/TASK-313.md) | airports | London City: a taxiway section that reads and behaves as one-way | importer, airside, markings | - | both ways as paved, LCY gates kept | merged 2026-11-22 (`947f9d7`, wave E) |
-| [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | in progress 2026-11-22 (wave F, Claude) |
+| [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | merged 2026-11-22 with gaps (`29128cb`; large airports short of 98%) |
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | merged 2026-11-22 (`5eac69c`, `82c33ef`) |
 | [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | parked 2026-11-23 (v1 `ebcabee`, variant `0003a59`; waits for TASK-320) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
-| [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | planned (Claude) |
+| [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | in progress 2026-11-22 (Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5892,6 +5892,19 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-312 (Claude Code subagent, Opus 5.5 high, resumed after a session restart; merged `29128cb` with gaps, as a
+  chain task leaving existing cities identical): a fast airside-only peak-window bench; an order of admission
+  replaces whole-route direction locks and the whole-route admission check (in one Zurich window the old check
+  refused 9,997 times against 17 starts); intersection departures before long runway backtracks (Zurich 16
+  departures no longer taxi 1.8 km along the runway); arrival windows about 90 s with gaps for aircraft waiting 30 s
+  at a hold; a stand no longer takes a type whose parked body blocks a taxiway; Boston and Heathrow schedule profiles
+  and runway tables (Heathrow segregated with the 15:00 swap). London City seeds 1 to 3: 150 / 150 / 149, mean delay
+  14.7 / 12.6 / 21.8 s, worst 190 / 216 / 255 s, zero go-arounds, overlaps, conflicts. Full volume, seed 1: Zurich
+  181 to 498 of 750 (101 diverted, 26 go-arounds, 1 overlap sample, 17 stuck), Boston 227 to 452 of 1,000 (190
+  go-arounds, 22 overlap samples), Heathrow gridlocks from about 10:00 (64 by 13:00). Remaining causes: Zurich's
+  remote stands read code A/B (too few usable stands) and the 21:00 concept switch; Boston's arrivals going around
+  on claimed exits; Heathrow's rings through following-distance claims. Zurich keeps its 150 cap; Boston and
+  Heathrow stay held out. Startup pins re-pinned for all four airports. A second throughput pass is the owner's call.
 - TASK-316 (Claude Code subagent, Opus 5.5 high; parked: v1 `ebcabee`, variant `0003a59`): airside ground vehicles
   in their own modules (service lanes from mapped closed service roads, turnaround vehicle sets, tugs coupling at the
   ready-for-pushback hold, 3D instanced models with beacons), aircraft untouched (fleet state identical with and
