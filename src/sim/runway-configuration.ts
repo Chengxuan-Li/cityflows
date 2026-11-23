@@ -97,10 +97,8 @@ export const demonstratedCrosswindKt: Readonly<Record<string, number>> = {
 export const airportRunwayConcepts: Readonly<
   Record<string, Pick<RunwayConfigurationInput, 'configurations' | 'concepts'>>
 > = {
-  // TASK-302: Zurich's operating concepts, as stated approximations of the published ones (AIP
-  // Switzerland, LSZH AD 2.20): the north concept by day (landings 14, take-offs 16 and 28), the
-  // east concept in the evening (landings 28, take-offs 32 and 34), the south concept in the early
-  // morning (landings 34, take-offs 32), and the night flight ban.
+  // Zurich's operating concepts approximate AIP Switzerland, LSZH AD 2.20. TASK-328 uses
+  // north from opening to curfew and keeps east and south as wind alternatives.
   LSZH: {
     configurations: [
       { id: 'north', arrivalEnds: ['14'], departureEnds: ['16', '28'] },
@@ -108,9 +106,7 @@ export const airportRunwayConcepts: Readonly<
       { id: 'south', arrivalEnds: ['34'], departureEnds: ['32'] },
     ],
     concepts: [
-      { startS: 6 * 3600, endS: 7 * 3600, configurationId: 'south' },
-      { startS: 7 * 3600, endS: 21 * 3600, configurationId: 'north' },
-      { startS: 21 * 3600, endS: 23.5 * 3600, configurationId: 'east' },
+      { startS: 6 * 3600, endS: 23.5 * 3600, configurationId: 'north' },
       { startS: 23.5 * 3600, endS: 6 * 3600, configurationId: null },
     ],
   },
@@ -123,9 +119,9 @@ export const airportRunwayConcepts: Readonly<
       { id: 'northeast', arrivalEnds: ['4R'], departureEnds: ['4L'] },
     ],
   },
-  // TASK-304 / TASK-312: Heathrow's segregated mode, stated approximations of the published
-  // runway alternation: in the westerly flow landings on 27L and take-offs from 27R until 15:00,
-  // then the other way round; in an easterly the 09 pair likewise (the wind chooses it).
+  // Heathrow's segregated mode approximates the published runway alternation (TASK-304/312).
+  // TASK-328 keeps one pair of assignments per wind direction for the whole day.
+  // The reciprocal role assignments are still available to saved custom concepts.
   EGLL: {
     configurations: [
       { id: '27L arrivals', arrivalEnds: ['27L'], departureEnds: ['27R'] },
@@ -133,10 +129,7 @@ export const airportRunwayConcepts: Readonly<
       { id: '09L arrivals', arrivalEnds: ['09L'], departureEnds: ['09R'] },
       { id: '09R arrivals', arrivalEnds: ['09R'], departureEnds: ['09L'] },
     ],
-    concepts: [
-      { startS: 0, endS: 15 * 3600, configurationId: '27L arrivals' },
-      { startS: 15 * 3600, endS: 0, configurationId: '27R arrivals' },
-    ],
+    concepts: [{ startS: 0, endS: dayS, configurationId: '27L arrivals' }],
   },
 };
 

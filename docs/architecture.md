@@ -1992,11 +1992,12 @@ carry no persons and generate no road trips.
 - **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
   airport's runway ends, with the configurations and time-of-day concepts of the airport's own
   `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
-  code (London City has none: derived configurations, wind only; Zurich's north, east and south
-  concepts and night closure, TASK-302; Boston's southwest and northeast flows on the
-  non-crossing parallels and Heathrow's segregated mode, landings 27L and take-offs 27R until
-  15:00 then the other way round, TASK-312), field by field, the airport's tailwind limit or 5 kt
-  and the strictest maximum demonstrated crosswind of the types in
+  code, field by field. London City derives configurations by wind alone. Boston uses its
+  southwest and northeast flows on non-crossing parallels. Under TASK-328, Zurich lands on 14
+  and departs on 16 and 28 from 06:00 to the 23:30 night closure, with east and south as wind
+  alternatives. Heathrow keeps landings on 27L and take-offs on 27R all day in westerly wind, with
+  09L arrivals and 09R departures in easterly wind. The chooser applies the airport's tailwind
+  limit or 5 kt and the strictest maximum demonstrated crosswind of the types in
   the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
   figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
   (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
@@ -2006,12 +2007,15 @@ carry no persons and generate no road trips.
   departure is granted its line-up there; ends kept in the same role stay open); approaches
   already on final land, aircraft lined up, rolling, climbing out or going around from a closed
   end and runway grants for it complete. Queued arrivals and departures not yet started take the
-  first new end that reaches their stand; a taxiing departure bound for a closed end is re-routed
-  (tried each second): its leg is kept up to the first node far enough ahead to brake and turn
-  (and at least half its last edge ahead), continued by a route to the new end's line-up (a
-  runway backtrack where the taxiways leave no other way), with passed runway gates kept as
-  passed, its new edges locked and its swept path clear; a departure holding a runway grant keeps
-  its route. The new ends open when no aircraft uses a closed end any more. Each change records its
+  first new end that reaches their stand. Departures from a stand with multiple eligible ends
+  weigh the taxi distance against the departures queued for each end. A taxiing departure bound
+  for a closed end is re-routed (tried each second). While moving, it keeps its leg up to the
+  first node far enough ahead to brake and turn (and at least half its last edge ahead), then
+  continues toward the new line-up. Passed runway gates stay passed and new edges are locked
+  after checking the swept path. At a closed hold, the new leg must preserve the stopped pose
+  and any required clearance. The aircraft keeps its admission order and taxis back to a
+  compatible stand if it cannot reach an open end. A departure holding a runway grant keeps its route.
+  The new ends open when no aircraft uses a closed end any more. Each change records its
   start, opening and the departures re-routed (`fleet.runwayTransitions()`, `metrics().aircraft
   .reconfigurations` and `.rerouted`). Stands are chosen for the configuration in use; with
   several ends, each turn takes the arrival and departure end pair that serves its stand at least

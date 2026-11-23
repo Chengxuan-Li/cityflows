@@ -231,11 +231,13 @@ export interface AirfieldSnapshot {
   runways?: RunwaySnapshot;
 }
 
-export interface AircraftEvent {
+export type AircraftEvent = {
   timeS: number;
   id: number;
-  kind: 'landed' | 'parked' | 'off-block' | 'departed' | 'towed' | 'go-around';
-}
+} & (
+  | { kind: 'landed' | 'parked' | 'off-block' | 'departed' | 'towed' | 'go-around' }
+  | { kind: 'returned'; stand: number }
+);
 
 export type AircraftResult = { ok: true; id: number } | { ok: false; reason: string };
 
@@ -353,6 +355,7 @@ interface Air {
 
 type Next =
   | { kind: 'park'; stand: number }
+  | { kind: 'return'; stand: number }
   | { kind: 'rest' }
   | { kind: 'taxi'; leg: Leg; pauseS: number }
   | { kind: 'takeoff'; end: number; lineUpU: number; pauseS: number };
@@ -2742,11 +2745,22 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
   }
 
-  /** Whether a taxiing departure is bound for an end the target configuration does not use. */
+  function atDepartureHold(craft: Craft) {
+    const gate = craft.leg!.gates.find((g) => !g.granted);
+    return (
+      gate?.vacateM === Infinity && craft.speedMps === 0 && craft.stationM >= gate.holdM - 0.01
+    );
+  }
+
+  /** Whether a departure is bound for a closed end and can taxi elsewhere. */
   function needsReroute(craft: Craft) {
-    if (!runways.restricted || craft.mode !== 'ground' || !runways.departures.size) return false;
+    if (craft.mode !== 'ground') return false;
     const takeoff = craft.next.find((n) => n.kind === 'takeoff');
-    return !!takeoff && !runways.departures.has(endKey(craft.runway, takeoff.end));
+    return (
+      !!takeoff &&
+      !runways.departures.has(endKey(craft.runway, takeoff.end)) &&
+      (runways.departures.size > 0 || atDepartureHold(craft))
+    );
   }
 
   /** Re-routes a taxiing departure to a departure end of the target configuration: its taxi leg
@@ -2758,60 +2772,99 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const leg = craft.leg!;
     if (leg.gates.some((g) => g.granted && !g.released)) return false;
     const current = takeoff === 0;
+    const held = current && atDepartureHold(craft);
     const before = craft.next[takeoff - 1];
     if (!current && before?.kind !== 'taxi') return false;
     const target = current || before?.kind !== 'taxi' ? leg : before.leg;
     const p = fixedWing(craft);
     const s = current ? craft.stationM : -Infinity;
     const brake = current ? craft.speedMps ** 2 / (2 * p.brakingDecelerationMps2) : 0;
-    // The kept leg ends at a node far enough ahead that its corner is not yet rounded.
-    const k = target.pieces.findIndex(
-      (piece) =>
-        piece.endNode >= 0 &&
-        piece.endM - Math.max(brake + 20, 0.5 * (piece.endM - piece.startM)) >= s,
-    );
-    if (k < 0) return false;
-    const last = target.pieces[k]!;
-    const kept = target.pieces
-      .slice(0, k + 1)
-      .map((piece) =>
-        arcSegment(arcOf(piece.edge, piece.toE >= piece.fromE), piece.fromE, piece.toE),
-      );
-    for (const key of runways.departures) {
-      const runway = graph.runways[key >> 1]!;
-      if (runway.maxCode < craft.code) continue;
-      for (const option of lineUps(craft, runway, key & 1)) {
-        const route = routeAirside(graph, {
-          code: craft.code,
-          turnRadiusM: p.minTurnRadiusM,
-          from: { arc: arcOf(last.edge, last.toE >= last.fromE) },
-          goal: (a) => a === option.goal,
-          stand: -1,
-          factor: (arc) => oppositeFactor(craft, arc),
-        });
-        if (!route) continue;
-        const next = buildLeg(craft, 'taxi', [
-          ...kept,
-          ...route.arcs.slice(0, -1).map((a) => arcSegment(a)),
-          ...option.after(),
-        ]);
-        addGates(craft, next, runway.idx);
+    // While moving, keep the original braking and turning clearance. At a hold, let the
+    // replacement path show whether a turn can begin from the aircraft's stopped pose.
+    const cuts: number[] = [];
+    for (const [k, piece] of target.pieces.entries()) {
+      const clearance = held ? 0 : Math.max(brake + 20, 0.5 * (piece.endM - piece.startM));
+      if (piece.endNode < 0 || piece.endM - clearance < s) continue;
+      cuts.push(k);
+      if (!held) break;
+    }
+    const heldPose = held ? poseAt(target, s) : undefined;
+    const heldGate = held ? leg.gates.find((gate) => !gate.granted) : undefined;
+    if (runways.departures.size) for (const k of cuts) if (rerouteFrom(k, false)) return true;
+    if (held) for (const k of cuts) if (rerouteFrom(k, true)) return true;
+    return false;
+
+    function rerouteFrom(k: number, returning: boolean) {
+      const last = target.pieces[k]!;
+      const kept = target.pieces
+        .slice(0, k + 1)
+        .map((piece) =>
+          arcSegment(arcOf(piece.edge, piece.toE >= piece.fromE), piece.fromE, piece.toE),
+        );
+      const query = {
+        code: craft.code,
+        turnRadiusM: p.minTurnRadiusM,
+        from: { arc: arcOf(last.edge, last.toE >= last.fromE) },
+        stand: -1,
+        factor: (arc: number) => oppositeFactor(craft, arc),
+      };
+      function replaceTaxi(next: Leg, runway: number) {
+        if (heldPose) {
+          const { position, headingRad } = poseAt(next, s);
+          if (
+            Math.hypot(position.x - heldPose.position.x, position.y - heldPose.position.y) > 0.01 ||
+            deflection(headingRad, heldPose.headingRad) > 0.01
+          )
+            return false;
+        }
+        addGates(craft, next, runway);
         // Runway gates already passed stay passed; one it would have to stop at behind it fails.
         const half = craft.lengthM / 2;
         for (const gate of next.gates)
           if (gate.vacateM < s - half) gate.granted = gate.released = true;
-        if (next.gates.some((g) => !g.granted && g.holdM < s - 0.01)) continue;
-        // The new leg is ordered as a newcomer, after every movement admitted so far.
+        if (
+          heldGate &&
+          !next.runwayRanges.some(([entry, exit]) => entry < s + half && exit > s - half)
+        ) {
+          // Rounding the new turn can move the same hold's station slightly. Keep the
+          // established stop and still require a grant before entering the runway.
+          const same = next.gates.find(
+            (gate) =>
+              !gate.granted &&
+              gate.runway === heldGate.runway &&
+              gate.hold === heldGate.hold &&
+              Math.abs(gate.holdNodeM - heldGate.holdNodeM) < p.minTurnRadiusM,
+          );
+          if (same) same.holdM = Math.max(s, same.holdM);
+        }
+        if (next.gates.some((g) => !g.granted && g.holdM < s - 0.01)) return false;
+        const remainingTaxi = [{ leg: next, fromM: current ? s - 1 : 0 }];
+        // A parked aircraft's planned pushback can remain pending through a closure.
+        // Its current body still occupies the stand even when order() sees its future route.
+        if (
+          held &&
+          crafts.some(
+            (other) =>
+              other !== craft &&
+              other.mode === 'parked' &&
+              other.admission &&
+              other.stand >= 0 &&
+              parkedConflict(craft, remainingTaxi, other),
+          )
+        )
+          return false;
+        // A departure at its hold must stay ahead of aircraft already following it there.
+        // Other re-routes are ordered as newcomers.
         const rank = craft.rank;
-        craft.rank = admitted + 1;
+        if (!held) craft.rank = admitted + 1;
         replacing = { next, target };
-        const decided = order(craft, [{ leg: next, fromM: current ? s - 1 : 0 }]);
+        const decided = order(craft, remainingTaxi);
         replacing = null;
         if (!decided) {
           craft.rank = rank;
-          continue;
+          return false;
         }
-        admitted++;
+        if (!held) admitted++;
         craft.waits = craft.waits.filter((w) => w.leg !== target);
         commitOrder(craft, decided);
         for (const piece of target.pieces.slice(k + 1))
@@ -2823,6 +2876,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           craft.leg = next;
           craft.plan = null;
           craft.claimHi = Math.max(Math.min(craft.claimHi, last.endM), s + half);
+          craft.runwayWait = undefined;
           publish(craft);
         } else
           craft.next[takeoff - 1] = {
@@ -2830,18 +2884,65 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             pauseS: before?.kind === 'taxi' ? before.pauseS : 0,
             leg: next,
           };
-        craft.next[takeoff] = {
-          kind: 'takeoff',
-          end: key & 1,
-          lineUpU: option.lineUpU,
-          pauseS: LINEUP_S,
-        };
-        craft.runway = runway.idx;
-        craft.end = key & 1;
         return true;
       }
+
+      if (!returning) {
+        for (const key of runways.departures) {
+          const runway = graph.runways[key >> 1]!;
+          if (runway.maxCode < craft.code) continue;
+          for (const option of lineUps(craft, runway, key & 1)) {
+            const route = routeAirside(graph, {
+              ...query,
+              goal: (a) => a === option.goal,
+            });
+            if (!route) continue;
+            const next = buildLeg(craft, 'taxi', [
+              ...kept,
+              ...route.arcs.slice(0, -1).map((a) => arcSegment(a)),
+              ...option.after(),
+            ]);
+            if (!replaceTaxi(next, runway.idx)) continue;
+            craft.next[takeoff] = {
+              kind: 'takeoff',
+              end: key & 1,
+              lineUpU: option.lineUpU,
+              pauseS: LINEUP_S,
+            };
+            craft.runway = runway.idx;
+            craft.end = key & 1;
+            return true;
+          }
+        }
+        return false;
+      }
+      // At a closed hold with no departure route, taxi back to the original stand if possible.
+      const stands = [
+        ...(craft.stand >= 0 ? [craft.stand] : []),
+        ...graph.stands.map(({ idx }) => idx).filter((i) => i !== craft.stand),
+      ];
+      for (const stand of stands) {
+        if (standCheck(craft, stand)) continue;
+        const route = routeAirside(graph, { ...query, goal: standGoal(stand), stand });
+        if (!route) continue;
+        const next = buildLeg(craft, 'taxi', [
+          ...kept,
+          ...route.arcs.map((arc) => arcSegment(arc)),
+        ]);
+        if (
+          blocksTaxiway(
+            craft,
+            bodyAt(craft, poseAt(next, next.endM).position, graph.stands[stand]!.heading),
+          )
+        )
+          continue;
+        if (!replaceTaxi(next, -1)) continue;
+        standBound[stand] = craft.id;
+        craft.next[takeoff] = { kind: 'return', stand };
+        return true;
+      }
+      return false;
     }
-    return false;
   }
 
   /** Whether an aircraft still uses a runway end: on approach to it, lined up or rolling on it,
@@ -3182,7 +3283,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (leg.mode === 'pushback') craft.pushSweep = undefined;
     const next = craft.next.shift();
     if (!next) throw new Error(`Aircraft ${craft.registration} finished a leg with nothing next`);
-    if (next.kind === 'park') {
+    if (next.kind === 'return') {
+      park(craft, leg, next.stand, timeS);
+      craft.runway = craft.end = -1;
+      events.push({ timeS, id: craft.id, kind: 'returned', stand: next.stand });
+    } else if (next.kind === 'park') {
       park(craft, leg, next.stand, timeS);
       events.push({ timeS, id: craft.id, kind: leg.mode === 'tow' ? 'towed' : 'parked' });
       if (leg.mode === 'tow') counts.towed++;
