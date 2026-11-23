@@ -114,6 +114,30 @@ export const airportRunwayConcepts: Readonly<
       { startS: 23.5 * 3600, endS: 6 * 3600, configurationId: null },
     ],
   },
+  // TASK-312: Boston's main flows, stated approximations of Massport's preferential runway use:
+  // southwest flow (landings 22L, take-offs 22R) and northeast flow (landings 4R, take-offs 4L),
+  // on the parallel pair that does not cross itself; the wind chooses between them.
+  KBOS: {
+    configurations: [
+      { id: 'southwest', arrivalEnds: ['22L'], departureEnds: ['22R'] },
+      { id: 'northeast', arrivalEnds: ['4R'], departureEnds: ['4L'] },
+    ],
+  },
+  // TASK-304 / TASK-312: Heathrow's segregated mode, stated approximations of the published
+  // runway alternation: in the westerly flow landings on 27L and take-offs from 27R until 15:00,
+  // then the other way round; in an easterly the 09 pair likewise (the wind chooses it).
+  EGLL: {
+    configurations: [
+      { id: '27L arrivals', arrivalEnds: ['27L'], departureEnds: ['27R'] },
+      { id: '27R arrivals', arrivalEnds: ['27R'], departureEnds: ['27L'] },
+      { id: '09L arrivals', arrivalEnds: ['09L'], departureEnds: ['09R'] },
+      { id: '09R arrivals', arrivalEnds: ['09R'], departureEnds: ['09L'] },
+    ],
+    concepts: [
+      { startS: 0, endS: 15 * 3600, configurationId: '27L arrivals' },
+      { startS: 15 * 3600, endS: 0, configurationId: '27R arrivals' },
+    ],
+  },
 };
 
 /** The headwind (negative: tailwind) and crosswind on a runway heading, knots. */
