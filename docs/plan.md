@@ -346,7 +346,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | merged 2026-11-23 (`4fa2884`) |
 | TASK-321 | airports | Abstract block-signalling validation (bench only) | bench | 312 | gridlocks per policy, real layouts | merged 2026-11-23 (`6809c54`) |
 | [TASK-322](tasks/TASK-322.md) | airports | Block signalling and dynamic taxi flows in the airside simulation | sim, routing | 321 | no gridlock anywhere, LCY kept, large-airport days | in progress 2026-11-23 (Claude) |
-| [TASK-323](tasks/TASK-323.md) | airports | Dynamic taxi-flow preferences per runway configuration | sim module | 321 | flips with runway direction, fast, small route cost | in progress 2026-11-23 (Codex) |
+| [TASK-323](tasks/TASK-323.md) | airports | Dynamic taxi-flow preferences per runway configuration | sim module | 321 | flips with runway direction, fast, small route cost | merged 2026-11-23 (`ad9bc75`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5895,6 +5895,10 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-323 (Codex; merged `ad9bc75`): `src/sim/taxi-flow-preferences.ts`, TASK-321's policy C on the compiled airside:
+  directions from the configuration's exits, line-ups and stand routes, cached per graph and configuration (about
+  0.1 s uncached at Zurich and Heathrow); route length cost 0 to 3.4%; every baseline route keeps a compatible route;
+  flips between configurations (London City 41 of 41, Heathrow 27L/09L 538 of 627). Wired by TASK-322.
 - TASK-320 (Claude Code subagents, Opus 5.5 high; restarted after an app interruption; merged `4fa2884`): arrival legs
   end with a straight run on the stand heading (or an alignment segment), the stop shifts along the heading to keep
   the parked body 1 m clear of apron roads where paving allows, pushback starts from that pose, drawn pose = sim pose
