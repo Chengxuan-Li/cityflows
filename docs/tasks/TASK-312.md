@@ -1,6 +1,6 @@
 # TASK-312 — Airside throughput at scale and realistic taxi speeds
 
-Status: in progress 2026-11-22 (airports wave F; based on the lead line with TASK-310, 311, 302, 313, 314, 315 and TASK-317's taxi-speed fix). Proposed owner: Claude Code subagent
+Status: delivered with gaps 2026-11-22 (report in the commit body; Zurich, Boston and Heathrow still miss 98%) (airports wave F; based on the lead line with TASK-310, 311, 302, 313, 314, 315 and TASK-317's taxi-speed fix). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/312-airside-scale`, worktree `D:\cityflows-wt\312`, ports 5512 / 5612.
 
 ## Goal
