@@ -78,3 +78,44 @@ test('a departure whose way out meets a queued arrival still far out starts, and
   expect(!atLanding || atLanding.x > 100 || atLanding.y < 150).toBe(true);
   expect(longestTaxiStop(arrivalTrack)).toBeLessThan(30);
 });
+
+/** Touchdown times by aircraft, from the snapshots' landing roll. */
+const touchdownS = (poses: Map<number, Track>, id: number) =>
+  firstS(poses.get(id)!, (p) => p.state === 'landing-roll');
+
+test('arrivals are spaced on final, several at once, and land without going around', () => {
+  const { fleet, stands } = fleetOf();
+  // Four A320neos for the contact stands all vacate at x = -300 and taxi east along the parallel
+  // taxiway: each still follows the one ahead off the runway.
+  const ids = [stands.E1, stands.E2, stands.C1, stands.C2].map((stand) => {
+    const result = fleet.requestArrival({ typeId: 'A20N', runwayEnd: '27', stand });
+    if (!result.ok) throw new Error(result.reason);
+    return result.id;
+  });
+  let together = 0;
+  const poses = run(fleet, 900, (step) => {
+    if (step % 10) return;
+    const airborne = fleet.snapshot().filter((p) => p.state === 'approach').length;
+    together = Math.max(together, airborne);
+  });
+  expect(fleet.metrics()).toMatchObject({ landed: 4, goArounds: 0, stuck: 0 });
+  expect(together).toBeGreaterThanOrEqual(2);
+  const times = ids.map((id) => touchdownS(poses, id)).sort((a, b) => a - b);
+  const gaps = times.slice(1).map((t, i) => t - times[i]!);
+  // At least 2.5 NM at 71 m/s apart, and not one landing every few minutes (200 s before).
+  for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual((2.5 * 1852) / 71 - 1);
+  expect(Math.max(...gaps)).toBeLessThan(150);
+});
+
+test('a medium arrival behind a heavy keeps the wake spacing', () => {
+  const { fleet, stands } = fleetOf();
+  const heavy = fleet.requestArrival({ typeId: 'B77W', runwayEnd: '27', stand: stands.E1 });
+  const medium = fleet.requestArrival({ typeId: 'A20N', runwayEnd: '27', stand: stands.C1 });
+  if (!heavy.ok || !medium.ok) throw new Error('requests');
+  const poses = run(fleet, 600);
+  expect(fleet.metrics()).toMatchObject({ landed: 2, goArounds: 0 });
+  // 5 NM at the A320neo's 71 m/s.
+  expect(touchdownS(poses, medium.id) - touchdownS(poses, heavy.id)).toBeGreaterThanOrEqual(
+    (5 * 1852) / 71 - 1,
+  );
+});

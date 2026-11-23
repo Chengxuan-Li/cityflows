@@ -83,6 +83,9 @@ import type { RunwayConfiguration } from './runway-configuration';
 //   A ring of waits that still closes (through those parked in the way) is broken after 60 s.
 //   TASK-330: a queued arrival that cannot reach where it meets a departure or tow before that
 //   aircraft is past does not hold it at its stand: the starter goes before it.
+//   TASK-330: arrivals are spaced on final (2.5 NM or the wake pair); one appears behind an
+//   arrival ahead to the same runway when that one will be clear of its way off the runway by its
+//   landing commitment, not only once it is.
 //   Edges an aircraft will use are still marked with its direction: routes avoid running against
 //   them where they can.
 // - Runways: one aircraft holds each runway it uses and each intersection area its path reaches.
@@ -133,6 +136,24 @@ const RING_S = 60;
  * against a queued arrival it goes before. */
 const LANDING_GAP_S = 90;
 const HORIZON_S = 120;
+/** TASK-330: radar spacing on final, threshold to threshold: the minimum, and the wake pairs
+ * (ICAO Doc 4444; leader category, then follower's) where longer. */
+const NM = 1852;
+const FINAL_SPACING_M = 2.5 * NM;
+type Wake = 'super' | 'heavy' | 'medium' | 'light';
+const wakeSpacingNm: Partial<Record<Wake, Partial<Record<Wake, number>>>> = {
+  super: { heavy: 6, medium: 7, light: 8 },
+  heavy: { heavy: 4, medium: 5, light: 6 },
+  medium: { light: 5 },
+};
+const wakeOf = (type: AircraftType): Wake =>
+  type.id === 'A388'
+    ? 'super'
+    : type.class === 'double_decker' || type.class === 'widebody'
+      ? 'heavy'
+      : type.class === 'private'
+        ? 'light'
+        : 'medium';
 /** Swept bodies are sampled for the order at most this far apart (bodies are 15 m and more
  * long): a wait stops one sample short. */
 const SAMPLE_M = 6;
@@ -2274,10 +2295,32 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
     const landing = craft.admission.landing!;
     const pass = passing(craft);
-    if (waitCap(craft, landing.leg, pass) < safeOf(craft, landing.leg)) return false;
+    // TASK-330: an arrival ahead on final to the same runway does not keep it from appearing as
+    // long as it will be clear of the way off the runway by this one's landing commitment; it is
+    // spaced on final from it instead.
+    const ahead = (w: Wait) => w.pred.air?.kind === 'approach' && w.pred.runway === craft.runway;
+    const leg = landing.leg;
+    const safeM = safeOf(craft, leg);
+    if (
+      craft.waits.some(
+        (w) => w.leg === leg && w.atM < safeM && !ahead(w) && !passed(w) && !pass.has(w.pred),
+      )
+    )
+      return false;
     if (waitsForUnstarted(craft, pass)) return false;
     const air = approachAir(craft, landing, timeS);
     const thresholdS = timeS + air.thresholdM / fixedWing(craft).approachSpeedMps;
+    if (!spacedOnFinal(craft, thresholdS)) return false;
+    const wantM = Math.min(leg.path.lengthM, leg.gates[0]!.vacateM + craft.lengthM + margin);
+    for (const w of craft.waits)
+      if (ahead(w) && w.atM < wantM && !passed(w)) {
+        const leader = w.pred;
+        const clearS =
+          leader.air!.startS +
+          leader.air!.profile.durationS +
+          (wantM + leader.lengthM / 2 + margin) / fixedWing(leader).taxiTurnMps;
+        if (clearS > thresholdS - DECISION_S) return false;
+      }
     const exitS = timeS + air.profile.durationS;
     const taxi = taxiProfile(landing.leg.path, fixedWing(craft), {
       startStationM: craft.lengthM / 2,
@@ -2315,6 +2358,21 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     standBound[request.stand] = craft.id;
     craft.request = null;
     craft.admission = null;
+    return true;
+  }
+
+  /** TASK-330: whether an arrival crossing the threshold at `thresholdS` keeps its spacing on
+   * final from the arrivals on approach to the same runway, at the follower's approach speed. */
+  function spacedOnFinal(craft: Craft, thresholdS: number) {
+    for (const other of crafts) {
+      if (other === craft || other.air?.kind !== 'approach' || other.runway !== craft.runway)
+        continue;
+      const otherS = other.arrivalBooking!.fromS + DECISION_S + ARRIVAL_PAD_S;
+      const [leader, follower] = otherS <= thresholdS ? [other, craft] : [craft, other];
+      const nm = wakeSpacingNm[wakeOf(leader.type)]?.[wakeOf(follower.type)] ?? 0;
+      const gapS = Math.max(FINAL_SPACING_M, nm * NM) / fixedWing(follower).approachSpeedMps;
+      if (Math.abs(thresholdS - otherS) < gapS) return false;
+    }
     return true;
   }
 
