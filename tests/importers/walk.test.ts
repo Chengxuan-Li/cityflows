@@ -98,6 +98,30 @@ const imported = (xml: string) => {
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   return result.city;
 };
+
+test('imports jet bridges as airside geometry without walk links or ground paths', () => {
+  const ways = ['footway', 'corridor', 'steps', 'cycleway', 'residential'].map(
+    (highway, i) =>
+      `<way id="${60 + i}"><nd ref="62"/><nd ref="63"/>${tag('aeroway', 'jet_bridge')}${tag('highway', highway)}${tag('bridge', 'yes')}${highway === 'cycleway' ? tag('footway', 'crossing') : ''}</way>`,
+  );
+  const fixture = xml.replace(
+    '</osm>',
+    `<node id="60" lat="48.004" lon="11.004"/><node id="61" lat="48.004" lon="11.006"/>
+     <node id="62" lat="48.0045" lon="11.0045"/><node id="63" lat="48.0045" lon="11.0055"/>
+     <node id="64" lat="48.005" lon="11.006"/><node id="65" lat="48.005" lon="11.004"/>
+     <way id="65"><nd ref="60"/><nd ref="61"/><nd ref="64"/><nd ref="65"/><nd ref="60"/>${tag('natural', 'wood')}</way>
+     <way id="66"><nd ref="60"/><nd ref="62"/>${tag('highway', 'footway')}</way>
+     </osm>`,
+  );
+  const control = imported(fixture);
+  const city = imported(fixture.replace('</osm>', `${ways.join('')}</osm>`));
+  expect(control.context!.features.some((f) => f.kind === 'area' && f.sub === 'path')).toBe(true);
+  expect(city.walk).toEqual(control.walk);
+  expect(city.roads).toEqual(control.roads);
+  expect(city.context).toEqual(control.context);
+  expect(city.airport?.jetBridges?.map((bridge) => bridge.osmId)).toEqual([60, 61, 62, 63, 64]);
+});
+
 /** Walk links made from node 7. */
 const nodeLinks = (city: ReturnType<typeof imported>) =>
   Object.values(city.walk!.links).filter(

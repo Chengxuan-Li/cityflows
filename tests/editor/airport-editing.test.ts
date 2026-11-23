@@ -120,6 +120,17 @@ describe('stands', () => {
     ).toThrow(/within 150 m/);
     expect(editor.history).toHaveLength(0);
   });
+
+  test('a mapped jet bridge survives deletion and undo of its imported stand', () => {
+    const city = syntheticAirport();
+    const stand = byRef(city.airport!, '1');
+    const bridges = [{ osmId: 1, stand: stand.id, line: [{ x: 10, y: 20 }, stand.pos] }];
+    city.airport!.jetBridges = bridges;
+    const editor = createEditor(city);
+    const { after } = applied(editor, { kind: 'deleteStand', standId: stand.id });
+    expect(after.stands[stand.id]).toBeUndefined();
+    expect(after.jetBridges).toEqual(bridges);
+  });
 });
 
 describe('taxiways', () => {
@@ -192,11 +203,12 @@ describe('taxiways', () => {
       const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
       if (!parked.ok) throw new Error(parked.reason);
       expect(fleet.requestDeparture(parked.id, '09').ok).toBe(true);
-      for (let step = 0; step <= 50; step++) fleet.step(step * 0.1);
-      return fleet
-        .snapshot()
-        .find((p) => p.id === parked.id)!
-        .route.map((e) => graph.edges[e]!);
+      for (let step = 0; step <= 100; step++) {
+        fleet.step(step * 0.1);
+        const pose = fleet.snapshot().find((p) => p.id === parked.id)!;
+        if (pose.route.length) return pose.route.map((e) => graph.edges[e]!);
+      }
+      throw new Error('Departure did not receive a route');
     };
     const stretch = Object.values(airport(editor).edges).filter(
       (e) => e.kind === 'taxiway' && e.maxCode === 'C',

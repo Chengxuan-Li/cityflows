@@ -237,6 +237,31 @@ describe('TASK-295 airside import', () => {
   });
 });
 
+test('imports jet bridge lines from the terminal end and associates the apron end with a stand', () => {
+  const { city } = imported(
+    osm(
+      [...nodes, [50, 0.0041, 51.499], [51, 0.0043, 51.49907], [52, 0.00446, 51.49907]],
+      [
+        ...ways,
+        [110, [51, 50, 14], { aeroway: 'jet_bridge' }],
+        [111, [32, 52], { aeroway: 'jet_bridge' }],
+        [112, [14, 999, 51], { aeroway: 'jet_bridge' }],
+      ],
+    ),
+  );
+  const airport = city.airport!;
+  const [first, second] = airport.jetBridges!;
+  expect(airport.jetBridges).toHaveLength(2);
+  expect(first).toMatchObject({
+    osmId: 110,
+    line: [expect.anything(), expect.anything(), expect.anything()],
+  });
+  expect(first!.line[0]).toEqual(Object.values(airport.gates)[0]!.pos);
+  expect(airport.stands[first!.stand!]?.ref).toBe('1');
+  expect(second!.line[0]).toEqual(Object.values(airport.terminals)[0]!.rings[0]![2]);
+  expect(airport.stands[second!.stand!]?.ref).toBe('2');
+});
+
 test('splits a same-layer runway crossing at one shared node and preserves both chains', () => {
   const { city } = imported(
     osm(

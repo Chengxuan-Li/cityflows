@@ -280,13 +280,21 @@ export function modelSection(type: AircraftType, x: number) {
  * height, and z where the door's middle meets the fuselage side, on the real model where the
  * type has one (TASK-318), else on the procedural body. */
 export function boardingDoor(type: AircraftType) {
+  return boardingDoors(type)[0]!;
+}
+
+/** Main-deck passenger doors that a bridge can serve, on the real model's fuselage where the
+ * type has one (TASK-318). */
+export function boardingDoors(type: AircraftType) {
   const layout = aircraftLayout(type);
-  const door = layout.doors[0]!;
-  const at = modelSection(type, door.x) ?? layout.bodyAt(door.x);
-  const sillM = door.upper ? door.sillM : cabinFloor(type, at, false);
-  // Where the sill height meets the elliptical section.
-  const c = Math.min(1, Math.abs(sillM + door.heightM / 2 - at.y) / at.height);
-  return { x: door.x, sillM, z: -at.width * Math.sqrt(1 - c * c) };
+  return layout.doors.flatMap((door) => {
+    if (door.upper || door.heightM < 1.2) return [];
+    const at = modelSection(type, door.x) ?? layout.bodyAt(door.x);
+    const sillM = cabinFloor(type, at, false);
+    // Where the sill height meets the elliptical section.
+    const c = Math.min(1, Math.abs(sillM + door.heightM / 2 - at.y) / at.height);
+    return [{ x: door.x, sillM, z: -at.width * Math.sqrt(1 - c * c) }];
+  });
 }
 
 type PolygonPart = 'fuselage' | 'wing' | 'tailplane' | 'fin' | 'engine';

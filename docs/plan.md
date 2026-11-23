@@ -342,7 +342,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | in progress 2026-11-22 (started early, Claude) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | in progress 2026-11-22 (Claude) |
-| [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | in progress 2026-11-22 (Codex) |
+| [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5891,6 +5891,12 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-319 (Codex; merged `fc3ea8d` and `4a252dc`): mapped `aeroway=jet_bridge` ways imported into the airport
+  section and docked to the reachable passenger door (Boston 22 to 111 bridges, Heathrow 1 to 15; London City and
+  Zurich keep TASK-315's rule, 0 and 20); a 5 to 10 s ready-for-pushback hold with the tug attached so a bridge stows
+  before the aircraft moves (London City delays within a few seconds). On the owner's note, a way tagged as a jet
+  bridge is never a walkway: Boston drops 111 walk ways and 313 walk links under its bridges, no walk component
+  splits; Heathrow (bridges mapped as corridors) unchanged.
 - TASK-315 (Claude Code subagent, Opus 5.5 high; merged `5eac69c` and the main merge `82c33ef`): aircraft detail
   (doors, windscreen, winglets or raked tips, fan faces and cones, fairings, ATR gear pods), ten seeded liveries,
   jet bridges docking to the posed parked aircraft and retracting at pushback, stand guidance boards, floodlight

@@ -150,6 +150,9 @@ export const airportSchema = z
         osmId: z.int().optional(),
       }),
     ),
+    jetBridges: z
+      .array(z.object({ osmId: z.int(), line: z.array(point).min(2), stand: standId.nullable() }))
+      .optional(),
     helipads: z.record(
       id('hl'),
       z.object({
