@@ -60,6 +60,7 @@ import {
   type AircraftVisualPose,
 } from './aircraft-motion';
 import type { RunwayConfiguration } from './runway-configuration';
+import { taxiFlowPreferences } from './taxi-flow-preferences';
 
 // TASK-298: aircraft on the airside (docs/architecture.md section 8, "Aircraft"). Aircraft move
 // along legs: a ground leg follows graph arcs (taxi, pushback, tow) under three rules that keep
@@ -102,6 +103,8 @@ const steepApproachDeg: Record<string, number> = { EGLC: 5.5 };
 const GLIDE_DEG = 3;
 /** A landing hands over to taxi this far before its exit node. */
 const HANDOVER_M = 40;
+/** TASK-330 (fix 4): how far a rounded bend may run inside the drawn centre line. */
+const CORNER_CUT_M = 3;
 /** Without a mapped holding position, aircraft hold this far short of the runway node. */
 const HOLD_FALLBACK_M = 75;
 /** After a push the nose stands this far past the stand's lead-in root. */
@@ -132,6 +135,11 @@ const ARRIVAL_PAD_S = 5;
 const RETRY_S = 5;
 /** TASK-329: a ring of waits lasting this long is broken. */
 const RING_S = 60;
+// TASK-330 Phase 1d pilot switch (temporary): T330P=<metres> orders conflicts only once one of the
+// two aircraft is within that distance of it along its route; later ones as the aircraft move.
+const ORDER_HORIZON_M = Number(
+  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330P || 'Infinity',
+);
 /** TASK-330: one landing to the next on a runway end, and the time a starter keeps in hand
  * against a queued arrival it goes before. */
 const LANDING_GAP_S = 90;
@@ -178,6 +186,11 @@ const GEAR_APPROACH_M = 600;
 const GEAR_CLIMB_M = 150;
 /** Cost factor of a parallel taxiway arc against the runway configuration's flow. */
 const FLOW_FACTOR = 3;
+// TASK-330 fix 5 pilot switch (temporary): T330F=<factor> routes against TASK-323's taxi flow
+// preferences at that cost, in place of TASK-300's parallel-taxiway factor.
+const PREF_FACTOR = Number(
+  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330F || '0',
+);
 
 export const aircraftStates = [
   'approach',
@@ -585,8 +598,12 @@ function rounded(raw: Vec2[], radiusM: number, startM = 0, endM = 0) {
       vy = (c.y - b.y) / after;
     const sweep = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
     const half = Math.abs(sweep) / 2;
+    // TASK-330 (fix 4): a gentle bend is taken on the widest arc that keeps within
+    // CORNER_CUT_M of the drawn line (and fits the segments), not at the minimum radius: a
+    // smooth exit or curve drawn as short straight pieces is run at the speed its curve allows.
+    const widest = Math.max(radiusM, CORNER_CUT_M / (1 / Math.cos(half) - 1));
     const tangent = Math.min(
-      radiusM * Math.tan(half),
+      widest * Math.tan(half),
       0.45 * Math.min(before, after),
       rawStations[i]! - startM,
       rawStations.at(-1)! - endM - rawStations[i]!,
@@ -735,6 +752,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const arrivalOpen = new Uint8Array(graph.runways.length * 2);
   const departureOpen = new Uint8Array(graph.runways.length * 2);
   let flowFactor: Float64Array | null = null;
+  let flowPreferred: Int8Array | null = null;
   const runways = {
     restricted: false,
     active: null as RunwayConfiguration | null,
@@ -1477,6 +1495,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         .sort((a, b) => a - b)
         .join(',') ?? '';
     if (key !== lastRing.key) lastRing = { key, sinceS: nowS };
+    if (ring && !late.ringKeys.has(key)) {
+      late.ringKeys.add(key);
+      late.rings++;
+    }
     if (!ring || nowS - lastRing.sinceS < RING_S) return;
     let best: { craft: Craft; other: Craft; waits: Wait[] } | null = null;
     for (const [i, craft] of ring.entries()) {
@@ -1493,7 +1515,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const waits = yieldWaits(craft, other);
       if (waits) best = { craft, other, waits };
     }
-    if (best) giveWay(best.craft, best.other, best.waits);
+    if (best) {
+      giveWay(best.craft, best.other, best.waits);
+      late.ringsBroken++;
+    } else if (!late.deadKeys.has(key)) {
+      late.deadKeys.add(key);
+      late.deadlocks++;
+    }
   }
 
   /** How two swept bodies meet: not (0), in conflict (1), or following on the same arcs (2). */
@@ -1628,11 +1656,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
    * their admission (the header comment): the one admitted first passes first. On a stretch both
    * follow each other on, the later one enters once the first is in ahead of it. Null where an
    * aircraft would have to wait where it can no longer stop. */
+  /** TASK-330: the distance along `spans` from their start to station `m` of `leg` (Infinity if
+   * the leg is not among them). */
+  function along(spans: Span[], leg: Leg, m: number) {
+    let d = 0;
+    for (const span of spans) {
+      if (span.leg === leg) return d + Math.max(0, m - span.fromM);
+      d += Math.max(0, span.leg.endM - span.fromM);
+    }
+    return Infinity;
+  }
+  /** TASK-330: whether a conflict is near enough to either aircraft to be ordered now. */
+  const nearEnough = (own: Span[], c: Conflict, theirs: Span[]) =>
+    along(own, c.leg, c.b1) <= ORDER_HORIZON_M ||
+    along(theirs, c.otherLeg, c.x1) <= ORDER_HORIZON_M;
+
   function order(craft: Craft, own: Span[]) {
     const mine: Wait[] = [];
     const theirs: { owner: Craft; wait: Wait }[] = [];
     for (const other of crafts) {
       if (other === craft || other.mode === 'done') continue;
+      const otherSpans = remaining(other);
       // An aircraft parked in the way (at a stand or, TASK-329, a helipad): wait short of it until
       // it has left.
       if (
@@ -1660,10 +1704,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       // A re-routed aircraft, moving, goes before those not started.
       const first = craft.mode === 'ground' && unstarted(other);
       for (const c of conflicts(craft, own, other)) {
+        if (!nearEnough(own, c, otherSpans)) {
+          late.deferred++;
+          continue;
+        }
         if (other.rank < craft.rank && !yields && !first) {
           const atM = c.b1 - SAMPLE_M;
           if (!canWaitAt(craft, c.leg, atM)) return null;
-          const predM = c.follow ? c.x1 + other.lengthM : c.x2 + SAMPLE_M;
+          let predM = c.follow ? c.x1 + other.lengthM : c.x2 + SAMPLE_M;
+          // TASK-330 (fix 3): an arrival behind another on the same way off the runway needs only
+          // room to stop with its tail clear of it: the leader's tail a margin past the nose of
+          // one standing at the safe point (both legs start at the exit's hand-over point, so a
+          // station on the leader's leg is the same place as one on its own leg less half their
+          // difference in length).
+          if (
+            craft.mode === 'queued' &&
+            own[0]?.leg === c.leg &&
+            c.leg.gates[0]?.holdM === -Infinity &&
+            c.otherLeg.gates[0]?.holdM === -Infinity &&
+            c.b1 < safeOf(craft, c.leg)
+          )
+            predM = Math.min(predM, safeOf(craft, c.leg) + margin + other.lengthM);
           mine.push({ leg: c.leg, atM, pred: other, predLeg: c.otherLeg, predM });
         } else {
           // A re-routed aircraft keeps its place before those admitted after it.
@@ -1678,6 +1739,165 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
     }
     return { mine, theirs };
+  }
+
+  /** TASK-330 Phase 1d: counters of the progressive order (pilot). */
+  const late = {
+    deferred: 0,
+    decided: 0,
+    flipped: 0,
+    held: 0,
+    forced: 0,
+    rings: 0,
+    ringsBroken: 0,
+    deadlocks: 0,
+    ringKeys: new Set<string>(),
+    deadKeys: new Set<string>(),
+  };
+  /** Whether `from` waits, directly or through others, for `to`. */
+  function waitsOn(from: Craft, to: Craft) {
+    const seen = new Set<Craft>([from]);
+    const queue = [from];
+    while (queue.length) {
+      const c = queue.pop()!;
+      for (const w of c.waits) {
+        if (passed(w) || w.pred.mode === 'done') continue;
+        if (w.pred === to) return true;
+        if (!seen.has(w.pred)) {
+          seen.add(w.pred);
+          queue.push(w.pred);
+        }
+      }
+    }
+    return false;
+  }
+  /** Seconds until an aircraft reaches station `m` of `leg` along `spans`. */
+  function etaS(craft: Craft, spans: Span[], leg: Leg, m: number) {
+    const d = along(spans, leg, m);
+    if (craft.mode === 'ground') return d / Math.max(3, craft.speedMps);
+    if (craft.mode === 'air' && craft.air)
+      return (
+        Math.max(0, craft.air.startS + craft.air.profile.durationS - nowS) +
+        d / fixedWing(craft).taxiTurnMps
+      );
+    return Infinity;
+  }
+  /** The waits that order `loser` after `winner` through these conflicts (from `winner`'s side:
+   * `c.leg` is the winner's); null if the loser can no longer stop short of one. */
+  function laterWaits(winner: Craft, loser: Craft, list: Conflict[]) {
+    const waits: Wait[] = [];
+    for (const c of list) {
+      const atM = c.x1 - SAMPLE_M;
+      if (inside(loser, c.otherLeg, atM) || !canWaitAt(loser, c.otherLeg, atM)) return null;
+      const predM = c.follow ? c.b1 + winner.lengthM : c.b2 + SAMPLE_M;
+      waits.push({ leg: c.otherLeg, atM, pred: winner, predLeg: c.leg, predM });
+    }
+    return waits;
+  }
+  /** TASK-330 Phase 1d: orders, as aircraft move, the conflicts of their remaining routes that
+   * have come within the horizon and are not yet ordered. A pair already ordered keeps its
+   * direction. Otherwise the one that cannot stop short goes first; else a started one before one
+   * not started; else the one that reaches it first (ties by admission). A direction that would
+   * close a ring of waits is not taken; if both would, it is left open while both can still stop. */
+  function extendOrder() {
+    for (const craft of crafts) {
+      if (craft.mode !== 'ground') continue;
+      const own = remaining(craft);
+      for (const other of crafts) {
+        if (other === craft || other.mode === 'done') continue;
+        if (other.mode === 'parked' && other.pose && (other.stand >= 0 || other.helipad >= 0)) {
+          // An aircraft parked in the way, now within the horizon: wait short of it until it has
+          // left (with a request or not).
+          const at = craft.waits.some((w) => w.pred === other && w.predM === Infinity && !passed(w))
+            ? null
+            : parkedConflict(craft, own, other);
+          if (
+            at &&
+            along(own, at.leg, at.m) <= ORDER_HORIZON_M &&
+            canWaitAt(craft, at.leg, at.m - SAMPLE_M)
+          ) {
+            craft.waits.push({
+              leg: at.leg,
+              atM: at.m - SAMPLE_M,
+              pred: other,
+              predLeg: other.leg!,
+              predM: Infinity,
+            });
+            late.decided++;
+          }
+          if (!other.admission) continue;
+        }
+        const theirs = remaining(other);
+        if (!theirs.length) continue;
+        const near = conflicts(craft, own, other).filter((c) => nearEnough(own, c, theirs));
+        if (!near.length) continue;
+        // A conflict on a pair of legs the two are already ordered on is covered.
+        const open = near.filter(
+          (c) =>
+            !craft.waits.some(
+              (w) => w.pred === other && w.leg === c.leg && w.predLeg === c.otherLeg && !passed(w),
+            ) &&
+            !other.waits.some(
+              (w) => w.pred === craft && w.leg === c.otherLeg && w.predLeg === c.leg && !passed(w),
+            ),
+        );
+        if (!open.length) continue;
+        // From the other's side the same conflicts read the other way round.
+        const flip = (c: Conflict): Conflict => ({
+          leg: c.otherLeg,
+          b1: c.x1,
+          b2: c.x2,
+          other: craft,
+          otherLeg: c.leg,
+          x1: c.b1,
+          x2: c.b2,
+          follow: c.follow,
+        });
+        const craftFirst = () => laterWaits(craft, other, open);
+        const otherFirst = () => laterWaits(other, craft, open.map(flip));
+        const ordered = craft.waits.some((w) => w.pred === other && !passed(w))
+          ? 'other'
+          : other.waits.some((w) => w.pred === craft && !passed(w))
+            ? 'craft'
+            : null;
+        const a = craftFirst();
+        const b = otherFirst();
+        let choice: 'craft' | 'other' | null = ordered;
+        if (!choice) {
+          if (!a && !b) continue;
+          if (!a) choice = 'other';
+          else if (!b) choice = 'craft';
+          else if (unstarted(other) !== unstarted(craft))
+            choice = unstarted(other) ? 'craft' : 'other';
+          else {
+            const ec = Math.min(...open.map((c) => etaS(craft, own, c.leg, c.b1)));
+            const eo = Math.min(...open.map((c) => etaS(other, theirs, c.otherLeg, c.x1)));
+            choice = ec < eo || (ec === eo && craft.rank < other.rank) ? 'craft' : 'other';
+          }
+          // Not the direction that closes a ring of waits.
+          const closes = (first: Craft, after: Craft) => waitsOn(first, after);
+          const bad = choice === 'craft' ? closes(craft, other) : closes(other, craft);
+          if (bad) {
+            const alt = choice === 'craft' ? 'other' : 'craft';
+            const altOk = alt === 'craft' ? a && !closes(craft, other) : b && !closes(other, craft);
+            if (altOk) {
+              choice = alt;
+              late.flipped++;
+            } else if (a && b) {
+              late.held++;
+              continue;
+            } else late.forced++;
+          }
+        }
+        const waits = choice === 'craft' ? a : b;
+        if (!waits) continue;
+        late.decided++;
+        commitOrder(craft, {
+          mine: [],
+          theirs: waits.map((wait) => ({ owner: choice === 'craft' ? other : craft, wait })),
+        });
+      }
+    }
   }
 
   /** The first own station whose swept body touches a parked aircraft's body. */
@@ -1890,7 +2110,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const edge = arcEdge(arc);
     if (graph.edges[edge]!.kind === 'runway') return 1000;
     const dir = arcForward(arc) ? 1 : -1;
-    const flow = flowFactor?.[arc] ?? 1;
+    const flow = flowPreferred
+      ? flowPreferred[edge] === (arcForward(arc) ? -1 : 1)
+        ? PREF_FACTOR
+        : 1
+      : (flowFactor?.[arc] ?? 1);
     const blocked = parkedInTheWay(craft, edge) ? PARKED_FACTOR : 1;
     return edgeLocks[edge]!.some((l) => l.id !== craft.id && l.dir === -dir)
       ? 3 * flow * blocked
@@ -2941,6 +3165,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const arrivals = resolveEnds(configuration?.arrivalEnds ?? []);
     const departures = resolveEnds(configuration?.departureEnds ?? []);
     flowFactor = flowFactors(new Set([...arrivals, ...departures]));
+    flowPreferred =
+      PREF_FACTOR && configuration
+        ? taxiFlowPreferences(graph, {
+            arrivalEnds: [...configuration.arrivalEnds],
+            departureEnds: [...configuration.departureEnds],
+          }).preferred
+        : null;
     if (!runways.restricted) {
       runways.restricted = true;
       for (const key of arrivals) arrivalOpen[key] = 1;
@@ -3638,7 +3869,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;
+      if (ORDER_HORIZON_M < Infinity) extendOrder();
       breakRings();
+      if (
+        Math.floor(timeS / 3600) > Math.floor((timeS - RETRY_S) / 3600) &&
+        ORDER_HORIZON_M < Infinity
+      )
+        console.error(
+          'PROGRESSIVE',
+          (timeS / 3600).toFixed(1),
+          JSON.stringify({ ...late, ringKeys: undefined, deadKeys: undefined }),
+        );
     }
     settleRunways();
     updateCrossings();
