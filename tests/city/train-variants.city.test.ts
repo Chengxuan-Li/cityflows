@@ -23,6 +23,7 @@ test.for([
   const rail = result.compiled.rail!;
   const table = railTimetable(rail);
   const counts: Record<string, number> = {};
+  const subwayLines = new Set<string>();
   for (const route of table.routes) {
     const variant = trainVariantFor(route, rail, city.drivingSide);
     counts[variant] = (counts[variant] ?? 0) + 1;
@@ -33,7 +34,28 @@ test.for([
           /Broad Street|Market-Frankford/.test(rail.tracks[s.track]!.name ?? ''),
         ),
       ).toBe(true);
-    if (variant !== 'tube' && variant !== 'nyc') expect(builtVariant(variant).id).toBe(variant);
+    if (variant === 'tube' || variant === 'nyc') {
+      for (const { track } of route.sections) {
+        const { kind, name } = rail.tracks[track]!;
+        if (kind === 'subway' && name) subwayLines.add(name);
+      }
+    }
+    expect(builtVariant(variant).id).toBe(variant);
   }
   expect(counts).toEqual(expected);
+  if (id === 'heathrow')
+    expect(subwayLines).toEqual(
+      new Set(['Piccadilly Line (Heathrow Branch)', 'Piccadilly Line (Heathrow T4 Loop)']),
+    );
+  if (id === 'philadelphia') {
+    expect(subwayLines).toEqual(new Set(['Broad Street Line', 'Market-Frankford Line']));
+    // PATCO is mapped but has no scheduled route in this extract. Classify its real track
+    // in isolation so the presentation rule is tested without changing the timetable.
+    const patco = rail.tracks.find((track) => track.name === 'PATCO High Speed Line')!;
+    const route = {
+      ...table.routes[0]!,
+      sections: [{ track: patco.idx, forward: true, startM: 0, endM: patco.lengthM }],
+    };
+    expect(builtVariant(trainVariantFor(route, rail, city.drivingSide)).id).toBe('nyc');
+  }
 });

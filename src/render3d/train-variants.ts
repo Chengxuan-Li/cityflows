@@ -102,6 +102,8 @@ export interface Nose {
   buffers?: { halfSpacingM: number; reachM: number };
   /** Destination display above the windscreen (blank: no route numbers). */
   display: { bottomM: number; topM: number; halfWidthM: number } | null;
+  /** Central door from the floor to `topM`, on cab fronts and coupled end walls. */
+  endDoor?: { topM: number; halfWidthM: number };
 }
 
 /** How cars make up a train, counted from the route's forward end, so the make-up keeps its
@@ -137,6 +139,10 @@ export interface TrainVariant {
     endMarginM: number;
   };
   doorTopM: number;
+  /** Shaded horizontal ribs below the livery's skirt height, along the sides. */
+  flutedSkirt?: boolean;
+  /** A painted band along the upper sides, in metres above the rail top. */
+  roofBand?: { bottomM: number; topM: number; colour: number };
   bogie: {
     wheelbaseM: number;
     wheelDiameterM: number;
@@ -564,13 +570,146 @@ const intercity: TrainVariant = {
   },
 };
 
-/** TASK-334 adds the remaining two records. */
+const tubeCar: CarType = {
+  cabs: 'none',
+  bogies: [
+    [1, -2.7],
+    [-1, 2.7],
+  ],
+  pantographs: [],
+  roofBoxes: [],
+  doors: [
+    [0, -6.2, 0.9],
+    [0, -2.35, 1.45],
+    [0, 2.35, 1.45],
+    [0, 6.2, 0.9],
+  ],
+  windows: true,
+  livery: {
+    body: 0xf2f1eb,
+    band: 0x193574,
+    bandTopM: 1.02,
+    skirt: 0x262b34,
+    skirtTopM: 0.44,
+    door: 0xcc192a,
+    roof: 0xc3c6c9,
+    front: 0xcc192a,
+    windowBand: null,
+    gangway: 0x34363b,
+  },
+};
+
+const tube: TrainVariant = {
+  id: 'tube',
+  reference: 'Generic London deep-tube stock: 2.6 m wide, roof 2.9 m, close-coupled cars',
+  widthM: 2.6,
+  heightM: 2.9,
+  floorM: 0.65,
+  profile: {
+    bottomM: 0.32,
+    skirtInsetM: 0.19,
+    waistM: 1.02,
+    cantM: 1.72,
+    cantInsetM: 0.045,
+    roofSquareness: 2,
+  },
+  nose: {
+    lengthM: 0.36,
+    rakeM: 0.035,
+    rakeFromM: 1.15,
+    cornerM: 0.26,
+    glass: { bottomM: 1.47, topM: 2.4, halfWidthM: 0.94 },
+    lamps: { yM: 1.06, zM: 0.82, radiusM: 0.095 },
+    couplerM: 0.54,
+    display: { bottomM: 2.48, topM: 2.66, halfWidthM: 0.46 },
+  },
+  windows: { sillM: 1.42, headM: 2.12, paneM: 1.7, pillarM: 0.18, endMarginM: 0.5 },
+  doorTopM: 2.4,
+  bogie: { wheelbaseM: 1.9, wheelDiameterM: 0.68, shoes: true },
+  pantograph: null,
+  roofBox: { lengthM: 0, widthM: 0, heightM: 0 },
+  bellows: false,
+  jacobs: false,
+  formation: { unitCars: 0, first: 'cab', middle: ['car'], last: 'cab' },
+  carTypes: { cab: { ...tubeCar, cabs: 'front' }, car: tubeCar },
+};
+
+const nycCar: CarType = {
+  cabs: 'none',
+  bogies: [
+    [1, -2.55],
+    [-1, 2.55],
+  ],
+  pantographs: [],
+  roofBoxes: [],
+  doors: [
+    [0, -5.75, 1.5],
+    [0, -1.92, 1.5],
+    [0, 1.92, 1.5],
+    [0, 5.75, 1.5],
+  ],
+  windows: true,
+  livery: {
+    body: 0xc9cdd0,
+    band: 0xbbc0c4,
+    bandTopM: 1.47,
+    skirt: 0x8e969c,
+    skirtTopM: 1.06,
+    door: 0xd6d9dc,
+    roof: 0xafb4b8,
+    front: 0xc5cacd,
+    windowBand: null,
+    gangway: 0x686f74,
+  },
+};
+
+const nyc: TrainVariant = {
+  id: 'nyc',
+  reference: 'Generic R46/R68-style subway stock: 75 ft (22.9 m) reference, 3 m wide, roof 3.65 m',
+  widthM: 3,
+  heightM: 3.65,
+  floorM: 1.08,
+  profile: {
+    bottomM: 0.48,
+    skirtInsetM: 0.085,
+    waistM: 1.02,
+    cantM: 3.26,
+    cantInsetM: 0,
+    roofSquareness: 4,
+  },
+  nose: {
+    lengthM: 0.26,
+    rakeM: 0.015,
+    rakeFromM: 1.3,
+    cornerM: 0.16,
+    glass: { bottomM: 1.91, topM: 2.94, halfWidthM: 1.19 },
+    lamps: { yM: 1.48, zM: 1.02, radiusM: 0.105 },
+    couplerM: 0.73,
+    display: { bottomM: 3.07, topM: 3.28, halfWidthM: 0.48 },
+    endDoor: { topM: 3.02, halfWidthM: 0.37 },
+  },
+  windows: { sillM: 1.96, headM: 2.9, paneM: 1.92, pillarM: 0.16, endMarginM: 0.61 },
+  doorTopM: 3.02,
+  flutedSkirt: true,
+  roofBand: { bottomM: 3.08, topM: 3.25, colour: 0x556c7a },
+  bogie: { wheelbaseM: 2.1, wheelDiameterM: 0.86, shoes: true },
+  pantograph: null,
+  roofBox: { lengthM: 0, widthM: 0, heightM: 0 },
+  bellows: false,
+  jacobs: false,
+  formation: { unitCars: 0, first: 'cab', middle: ['car'], last: 'cab' },
+  carTypes: { cab: { ...nycCar, cabs: 'front' }, car: nycCar },
+};
+
+/** Every variant, by id. */
 export const trainVariants: Partial<Record<TrainVariantId, TrainVariant>> = {
   tram,
   sbahn,
   dlr,
   elizabeth,
   intercity,
+  tube,
+  nyc,
 };
 
 /** The variant a route is drawn with, by its kind, the rail kind covering most of its length and

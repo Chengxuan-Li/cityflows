@@ -13,6 +13,7 @@ import {
   bodyParts,
   carFlags,
   carState,
+  farGeometry,
   formationOf,
   gearGeometry,
   gearSlots,
@@ -38,7 +39,13 @@ describe.for(variants)('TASK-332 $id model', (v) => {
     const count = v.nose.buffers ? 11 : 9;
     expect([...parts].sort((a, b) => a - b)).toEqual(Object.values(bodyParts).slice(0, count));
     const slots = new Set(gear.getAttribute('aSlot').array);
-    const expected = [0, 1, 2, ...(v.pantograph ? [3, 4] : []), 5, 6];
+    const expected = [
+      0,
+      1,
+      2,
+      ...(v.pantograph ? [3, 4] : []),
+      ...(v.roofBox.heightM > 0 ? [5, 6] : []),
+    ];
     expect([...slots].sort()).toEqual(expected);
     expect(gearSlots.count).toBe(7);
     // Every triangle counts, also those a car hides.
@@ -223,76 +230,60 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   expect(front.dot(heading)).toBeCloseTo(1, 3);
 });
 
-// TASK-334 will replace this stand-in with its production record.
-const base = trainVariants.sbahn!;
-const plainCar = base.carTypes.middle!;
-const tubeLike: TrainVariant = {
-  ...base,
-  id: 'tube',
-  widthM: 2.6,
-  heightM: 2.9,
-  floorM: 0.6,
-  // The deep-tube profile: the roof follows the tunnel's circle, the doors cut into it.
-  profile: {
-    bottomM: 0.35,
-    skirtInsetM: 0.05,
-    waistM: 0.9,
-    cantM: 1.7,
-    cantInsetM: 0.05,
-    roofSquareness: 2,
-  },
-  nose: { ...base.nose, lengthM: 0.4, rakeM: 0.05, rakeFromM: 1.2, cornerM: 0.2, couplerM: 0.7 },
-  doorTopM: 2.4,
-  bogie: { ...base.bogie, shoes: true },
-  pantograph: null,
-  bellows: false,
-  jacobs: false,
-  formation: { unitCars: 0, first: 'cab', middle: ['car'], last: 'cab' },
-  carTypes: {
-    cab: {
-      ...plainCar,
-      lengthM: 17,
-      cabs: 'front',
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-    },
-    car: {
-      ...plainCar,
-      lengthM: 17,
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-      doors: [
-        [0, -5.5, 0.9],
-        [0, -2.2, 1.4],
-        [0, 2.2, 1.4],
-        [0, 5.5, 0.9],
-      ],
-    },
-  },
-};
-
-test.for([tubeLike])(
-  'TASK-332 the builder draws a $id-like record within the budget and at its stated size',
-  (v) => {
-    const body = bodyGeometry(v),
-      gear = gearGeometry(v);
-    expect((body.index!.count + gear.index!.count) / 3).toBeLessThanOrEqual(1500);
+test.for([
+  ['tube', 2, [-6.2, -2.35, 2.35, 6.2], 1.7],
+  ['nyc', 4, [-5.75, -1.92, 1.92, 5.75], 1.92],
+] as const)(
+  'TASK-334 %s fills both pose sizes with close coupling and fixed door and window spacing',
+  ([id, doubleDoors, doorCentres, paneM]) => {
+    const v = builtVariant(id);
+    expect(v.id).toBe(id);
+    expect(v.windows.paneM).toBe(paneM);
     const f = formationOf(v);
     const car = new Float32Array(4),
-      slots = new Float32Array(8);
-    const n = 6;
-    for (let j = 0; j < n; j++) {
-      carState(f, n, j, 24.3, false, false, car, 0, slots, 0);
-      const type = f.types[car[1]!]!;
-      // Drawn at the type's own length, centred in the pose, the rest left as gangway space.
-      expect(car[0]! * 2).toBeCloseTo(type.lengthM ?? 24.3, 5);
-      expect(car[3]!).toBeCloseTo((24.3 - car[0]! * 2) / 2 + 0.35, 5);
+      gear = new Float32Array(8);
+    const body = bodyGeometry(v),
+      far = farGeometry(v);
+    expect(far.index!.count / 3).toBe(12);
+    for (const length of [21.8, 24.3]) {
+      carState(f, 3, 1, length, false, false, car, 0, gear, 0);
+      const halfM = car[0]!,
+        type = f.types[car[1]!]!,
+        flags = car[2]!,
+        gapM = car[3]!;
+      expect(halfM * 2).toBeCloseTo(length, 5);
+      expect(gapM * 2).toBeCloseTo(0.7, 5);
+      expect(type.doors.map(([anchor, offset]) => anchor * halfM + offset)).toEqual(doorCentres);
+      expect(type.doors.filter((door) => door[2] > 1.2)).toHaveLength(doubleDoors);
+      expect(flags & (carFlags.coupledFront | carFlags.coupledRear)).toBe(
+        carFlags.coupledFront | carFlags.coupledRear,
+      );
+      for (const geometry of [body, far]) {
+        const detailFlags =
+          geometry === far ? flags & ~(carFlags.cabFront | carFlags.cabRear) : flags;
+        const position = geometry.getAttribute('position'),
+          anchor = geometry.getAttribute('aAnchor'),
+          part = geometry.getAttribute('aPart');
+        const xs = Array.from({ length: position.count }, (_, i) =>
+          part.getX(i) >= bodyParts.frontCoupler
+            ? null
+            : placedX(
+                position.getX(i),
+                anchor.getX(i),
+                part.getX(i),
+                halfM,
+                detailFlags,
+                v.nose.lengthM,
+                gapM,
+              ),
+        ).filter((x) => x !== null);
+        expect(Math.min(...xs)).toBeCloseTo(-length / 2, 5);
+        expect(Math.max(...xs)).toBeCloseTo(length / 2, 5);
+      }
+      expect(placedX(1, 1, bodyParts.frontCoupler, halfM, flags, v.nose.lengthM, gapM)).toBeCloseTo(
+        (length + 0.7) / 2 + 0.02,
+        5,
+      );
     }
   },
 );

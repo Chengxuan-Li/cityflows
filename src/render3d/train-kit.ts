@@ -455,14 +455,14 @@ export function gearGeometry(v: TrainVariant) {
       add(box(0.05, wire - 0.04, 0, 0.3, 0.08, 1.9), 0x2d2f31, slot);
     }
   const roof = new Color(Object.values(v.carTypes)[0]!.livery.roof).multiplyScalar(0.9).getHex();
-  for (let s = 0; s < 2; s++) {
-    const { lengthM, widthM, heightM } = v.roofBox;
-    add(
-      box(0, top - 0.04 + heightM / 2, 0, lengthM, heightM, widthM),
-      roof,
-      gearSlots.roofBoxes + s,
-    );
-  }
+  const { lengthM, widthM, heightM } = v.roofBox;
+  if (heightM > 0)
+    for (let s = 0; s < 2; s++)
+      add(
+        box(0, top - 0.04 + heightM / 2, 0, lengthM, heightM, widthM),
+        roof,
+        gearSlots.roofBoxes + s,
+      );
   const merged = mergeGeometries(parts)!;
   for (const part of parts) part.dispose();
   return merged;
@@ -498,7 +498,12 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
       doors.push(door ? new Vector3(door[0], door[1], door[2]) : new Vector3());
     }
   }
-  const { glass, lamps, display } = v.nose;
+  const { glass, lamps, display, endDoor } = v.nose;
+  const { flutedSkirt, roofBand } = v;
+  const paintFeatures = `${endDoor ? '#define TRAIN_END_DOOR\n' : ''}${
+    flutedSkirt ? '#define TRAIN_FLUTED_SKIRT\n' : ''
+  }${roofBand ? '#define TRAIN_ROOF_BAND\n' : ''}`;
+  if (paintFeatures) material.customProgramCacheKey = () => paintFeatures;
   const uniforms = {
     cabinLights: lights,
     uColours: { value: colours },
@@ -516,6 +521,11 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
         ? new Vector4(display.bottomM, display.topM, display.halfWidthM, 1)
         : new Vector4(0, 0, 0, 0),
     },
+    ...(endDoor && { uEndDoor: { value: [endDoor.halfWidthM, endDoor.topM] } }),
+    ...(roofBand && {
+      uRoofBand: { value: [roofBand.bottomM, roofBand.topM] },
+      uRoofBandColour: { value: new Color(roofBand.colour) },
+    }),
     uSelection: { value: new Color(style.selection) },
   };
   material.onBeforeCompile = (shader) => {
@@ -548,6 +558,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
         }`,
       );
     shader.fragmentShader =
+      paintFeatures +
       `uniform float cabinLights; uniform vec3 uColours[${maxCarTypes * 8}];
       uniform vec4 uLivery[${maxCarTypes}]; uniform vec3 uDoors[${maxCarTypes * maxDoors}];
       uniform vec4 uWindows; uniform vec4 uCar; uniform vec4 uGlass; uniform vec4 uLamps;
@@ -556,11 +567,33 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
       flat varying float vPart; flat varying float vType; flat varying float vFlags; flat varying float vHalf;
       const vec3 glassDay = vec3(0.1, 0.13, 0.17);
       const vec3 cabinGlow = vec3(0.95, 0.87, 0.68);
+      #ifdef TRAIN_END_DOOR
+      uniform vec2 uEndDoor;
+      // Distance to the inside of the central door's jamb, head or sill.
+      float endDoorInset(vec3 p) {
+        return min(uEndDoor.x - abs(p.z), min(uEndDoor.y - p.y, p.y - uCar.x));
+      }
+      #endif
+      #ifdef TRAIN_ROOF_BAND
+      uniform vec2 uRoofBand;
+      uniform vec3 uRoofBandColour;
+      bool inRoofBand(float y) { return y > uRoofBand.x && y < uRoofBand.y; }
+      #endif
       // A front: a nose's front face, or a far box's end without a neighbour.
       void trainFront(inout vec3 c, inout vec3 glow, int t, int f, bool front, bool selected) {
         vec3 p = vCar;
         float az = abs(p.z);
         if (p.y >= uLivery[t].x) c = selected ? uSelection : uColours[t * 8 + 5];
+        #ifdef TRAIN_ROOF_BAND
+        if (!selected && inRoofBand(p.y)) c = uRoofBandColour;
+        #endif
+        #ifdef TRAIN_END_DOOR
+        float inset = endDoorInset(p);
+        if (inset > 0.0) {
+          if (inset < 0.035) { c *= 0.22; return; }
+          c *= 0.86;
+        }
+        #endif
         if (p.y > uGlass.x && p.y < uGlass.y && az < uGlass.z) {
           c = glassDay + 0.06 * (p.y - uGlass.x) / (uGlass.y - uGlass.x);
           return;
@@ -643,8 +676,17 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
             return c;
           }
           // A coupled end: the livery, with the gangway's opening (or end door) in the middle.
-          if ((f & (front ? 516 : 1032)) != 0)
+          if ((f & (front ? 516 : 1032)) != 0) {
+            #ifdef TRAIN_END_DOOR
+            float inset = endDoorInset(p);
+            if (inset <= 0.0) return c;
+            if (inset < 0.035 || (p.y > uGlass.x && p.y < uGlass.y && abs(p.z) < uEndDoor.x - 0.11))
+              return glassDay * 0.55;
+            return uColours[t * 8 + 7];
+            #else
             return abs(p.z) < 0.55 && p.y > uCar.x && p.y < uCar.y ? uColours[t * 8 + 7] : c;
+            #endif
+          }
           trainFront(c, glow, t, f, front, selected);
           return c;
         }
@@ -654,7 +696,18 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
           trainFront(c, glow, t, f, part == 5, selected);
           return c;
         }
-        if (abs(n.z) > 0.35) trainSide(c, glow, t, f, selected, part);
+        if (abs(n.z) > 0.35) {
+          #ifdef TRAIN_FLUTED_SKIRT
+          // Fade ribs before their spacing becomes subpixel.
+          float resolved = 1.0 - smoothstep(0.04, 0.12, fwidth(p.y));
+          float rib = smoothstep(0.15, 0.55, fract(p.y * 9.0));
+          if (p.y < livery.x) c *= 1.0 + resolved * (0.24 * rib - 0.12);
+          #endif
+          #ifdef TRAIN_ROOF_BAND
+          if (!selected && inRoofBand(p.y)) c = uRoofBandColour;
+          #endif
+          trainSide(c, glow, t, f, selected, part);
+        }
         return c;
       }\n` +
       shader.fragmentShader

@@ -3422,8 +3422,7 @@ otherwise the rail kind covering most of the route's length decides (`light_rail
 metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
 elsewhere). TASK-333 draws the remaining routes in left-hand-traffic cities as Elizabeth-line
 EMUs, including through-running `mainline` routes. In right-hand-traffic cities, `mainline`
-takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn. The S-Bahn stands in for the
-two subway models until TASK-334.
+takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn.
 `render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
 by all its cars and created only for variants a route uses: the body (the profile extruded, both
 cab noses lofted from it, end walls, inset bellows, couplers and optional buffers), the gear (three bogie, two pantograph and two
@@ -3449,6 +3448,13 @@ at the opposite end. The locomotive sits towards its coach end, so the buffers m
 1 m body gap. A plain Intercity coach end without bellows shows a closed gangway door. Fixed-length
 bodies shorten with poses clipped at the extract edge, and pick boxes follow the drawn bodies.
 The models use operator colours without logos or names.
+
+The London tube train draws 2.6 m wide cars with an elliptical roof, two single and two double
+red doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train uses the 75 ft (22.9 m) R46/R68 as a reference, with four double doors per side,
+a fluted stainless-steel skirt, a muted upper band and flat ends with storm doors. Both fill
+the existing car spans (21.8 m at a 22.5 m pitch), leaving the pose's 0.7 m between bodies for
+the couplers and dark gangway or storm doors. Door spacing and window pitch are fixed in metres.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
