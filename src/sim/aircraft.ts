@@ -2831,7 +2831,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           const same = next.gates.find(
             (gate) =>
               !gate.granted &&
-              gate.runway === heldGate.runway &&
+              gate.uses[0]?.resource === heldGate.uses[0]?.resource &&
               gate.hold === heldGate.hold &&
               Math.abs(gate.holdNodeM - heldGate.holdNodeM) < p.minTurnRadiusM,
           );
