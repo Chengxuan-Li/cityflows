@@ -339,9 +339,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | in progress 2026-11-22 (wave F, Claude) |
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | merged 2026-11-22 (`5eac69c`, `82c33ef`) |
-| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | in progress 2026-11-22 (started early, Claude) |
+| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | variant requested 2026-11-23 (Claude) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
-| [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | in progress 2026-11-22 (Claude) |
+| [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5891,6 +5891,16 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-318 (Claude Code subagent, Opus 5.5 high; merged `51b03cb` and the main merge `2d7d55d`): 18 catalogue types
+  draw Flightradar24/FlightGear meshes (glTF 1.0 read by a bench reader, simplified with three's bundled
+  meshoptimizer, scaled to catalogue length and span by stretching only the outer wings, flat part colours instead of
+  source textures, doors, panes and livery bands added): LOD0 13 to 15 thousand triangles from 260 px on screen, LOD1
+  1.3 to 1.8 thousand from 8 px, TASK-315's procedural mesh below and for SF34, PC24, GLF6. 8.96 MiB in
+  `fixtures/aircraft`, fetched per type on first need (London City 262 KB). Render p95 and load within noise; bridges
+  dock at the real fuselage's doors (TASK-319's reachability). Stand-ins: EC135 for both helicopters, ATR 42 for ATR
+  72, E170 for E175, Citation II for the Citation entry. NOTICE entry for the GPL-2.0 set.
+- TASK-319's Full run 45086019678 failed in the full traffic tier: `bundled-airport-load.test.ts` pins Boston's and
+  Heathrow's startup digests, which TASK-319 changed; re-pinned (`f1e5f7e`), and the lead tiers now run that test.
 - TASK-319 (Codex; merged `fc3ea8d` and `4a252dc`): mapped `aeroway=jet_bridge` ways imported into the airport
   section and docked to the reachable passenger door (Boston 22 to 111 bridges, Heathrow 1 to 15; London City and
   Zurich keep TASK-315's rule, 0 and 20); a 5 to 10 s ready-for-pushback hold with the tug attached so a bridge stows
