@@ -2019,6 +2019,12 @@ carry no persons and generate no road trips.
   departure threshold: the other direction costs three times its length in routing (the factor of
   an edge locked the other way), so taxiing against the flow is avoided where an alternative
   exists. Mapped one-way taxiways keep their direction.
+- **Taxi-flow preferences** (TASK-323). `sim/taxi-flow-preferences.ts` derives a direction for
+  each taxi edge from the open runway ends. It iteratively routes between stand roots, arrival
+  exits and departure line-ups, charging up to three times the distance against assigned flows.
+  It keeps majority directions where the resulting routes agree and leaves shared access and
+  unused edges neutral. The resulting threefold routing cost is a soft preference. Results are
+  cached per compiled graph and set of ends in each role for TASK-322's block clearance.
 - **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
