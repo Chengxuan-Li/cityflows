@@ -63,7 +63,8 @@ export const gearSlots = { bogies: 0, pantographs: 3, roofBoxes: 5, count: 7 } a
 export const hidden = 1000;
 const maxCarTypes = 4,
   maxDoors = 6,
-  bellowsM = 0.42;
+  bellowsM = 0.42,
+  defaultCouplerMaxM = 0.6;
 /** The sim leaves 0.7 m between car poses (`trainPoseAt`); a joint bogie sits in its middle. */
 const jointM = 0.35;
 
@@ -240,8 +241,8 @@ export function bodyGeometry(v: TrainVariant) {
       part,
       axis,
     );
-  // Couplers: x 0 marks the end inside the body, 1 the end in the gap's middle (`aCar.w`), at
-  // most 0.6 m out: a short car centred in a long pose keeps its gangway space.
+  // Couplers: x 0 marks the end inside the body, 1 the end in the gap's middle (`aCar.w`),
+  // subject to the variant's reach limit.
   const c = v.nose.couplerM;
   for (const [anchor, part] of [
     [1, bodyParts.frontCoupler],
@@ -470,6 +471,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
       value: new Vector4(v.windows.sillM, v.windows.headM, v.windows.paneM, v.windows.pillarM),
     },
     uCar: { value: new Vector4(v.floorM, v.doorTopM, v.windows.endMarginM, v.nose.lengthM) },
+    uCouplerMaxM: { value: v.nose.couplerMaxM ?? defaultCouplerMaxM },
     uGlass: { value: new Vector4(glass.bottomM, glass.topM, glass.halfWidthM, v.profile.cantM) },
     uLamps: { value: new Vector4(lamps.yM, lamps.zM, lamps.radiusM, 0) },
     uDisplay: {
@@ -482,7 +484,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader =
-      `attribute vec4 aCar; attribute float aAnchor; attribute float aPart; uniform vec4 uCar;
+      `attribute vec4 aCar; attribute float aAnchor; attribute float aPart; uniform vec4 uCar; uniform float uCouplerMaxM;
       varying vec3 vCar; varying vec3 vCarNormal;
       flat varying float vPart; flat varying float vType; flat varying float vFlags; flat varying float vHalf;\n` +
       shader.vertexShader.replace(
@@ -494,7 +496,7 @@ export function bodyMaterial(v: TrainVariant, lights: { value: number }) {
           float coupled = aAnchor > 0.5 ? float((f >> 9) & 1) : aAnchor < -0.5 ? float((f >> 10) & 1) : 0.0;
           // A coupled cab reaches into the gap, leaving 0.12 m to its neighbour's middle.
           float reach = coupled * clamp(aCar.w - 0.12, 0.0, 0.2);
-          if (part >= 7) transformed.x = aAnchor * (position.x > 0.5 ? aCar.x + min(aCar.w + 0.02, 0.6) : aCar.x - 0.3);
+          if (part >= 7) transformed.x = aAnchor * (position.x > 0.5 ? aCar.x + min(aCar.w + 0.02, uCouplerMaxM) : aCar.x - 0.3);
           else transformed.x += aAnchor * (aCar.x - cab * (uCar.w - reach));
           bool shown = part < 3 || (part == 3 && (f & 4) != 0) || (part == 4 && (f & 8) != 0)
             || (part == 5 && (f & 1) != 0) || (part == 6 && (f & 2) != 0)
@@ -760,10 +762,13 @@ export function carState(
   c: number,
   gear: Float32Array,
   g: number,
+  fullPoseLengthM = poseLengthM,
 ) {
   const slot = layoutOf(f, n)[j]!;
   const type = f.types[slot.type]!;
-  const halfM = (type.lengthM ?? poseLengthM) / 2;
+  const clipped = type.lengthM !== undefined && poseLengthM < fullPoseLengthM - 1e-6;
+  const lengthM = type.lengthM ?? poseLengthM;
+  const halfM = (clipped ? Math.min(lengthM, poseLengthM) : lengthM) / 2;
   car[c] = halfM;
   car[c + 1] = slot.type;
   car[c + 2] =
@@ -780,6 +785,8 @@ export function carState(
     gear[g + gearSlots.pantographs + i] = position(type.pantographs[i]!, halfM);
   for (let i = 0; i < type.roofBoxes.length; i++)
     gear[g + gearSlots.roofBoxes + i] = position(type.roofBoxes[i]!, halfM);
+  if (clipped)
+    for (let i = g; i < g + gearSlots.count; i++) if (Math.abs(gear[i]!) > halfM) gear[i] = hidden;
   return slot.flip !== reversed;
 }
 
@@ -792,6 +799,7 @@ export function placedX(
   flags: number,
   noseM: number,
   gapM = 0.35,
+  couplerMaxM = defaultCouplerMaxM,
 ) {
   const cab = anchor > 0.5 ? flags & 1 : anchor < -0.5 ? (flags >> 1) & 1 : 0;
   const coupled = anchor > 0.5 ? (flags >> 9) & 1 : anchor < -0.5 ? (flags >> 10) & 1 : 0;
@@ -805,6 +813,7 @@ export function placedX(
     (part === 7 && flags & 512) ||
     (part === 8 && flags & 1024);
   if (!shown) return null;
-  if (part >= 7) return anchor * (x > 0.5 ? halfM + Math.min(gapM + 0.02, 0.6) : halfM - 0.3);
+  if (part >= 7)
+    return anchor * (x > 0.5 ? halfM + Math.min(gapM + 0.02, couplerMaxM) : halfM - 0.3);
   return x + anchor * (halfM - cab * (noseM - reach));
 }

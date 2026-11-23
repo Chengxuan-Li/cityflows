@@ -204,7 +204,8 @@ export class Trains3D {
         meshes = this.variants[v]!;
       const length = trainDefaults[route.kind].lengthM,
         n = Math.ceil(length / serviceCarLengthM(route.kind)),
-        pitch = length / n;
+        pitch = length / n,
+        fullPoseLengthM = pitch - 0.7;
       const lead = train.cars[0];
       if (!lead) continue;
       // The sim turns a car's heading round after a terminal's turn; front and rear stay in the
@@ -247,6 +248,7 @@ export class Trains3D {
           i * 4,
           this.gears,
           i * 8,
+          fullPoseLengthM,
         );
         const y = this.elevation(car);
         const dx = car.front.x - car.rear.x,
@@ -260,7 +262,7 @@ export class Trains3D {
         this.matrix.makeRotationFromEuler(this.rotation).setPosition(car.x, y, car.y);
         this.matrix.toArray(this.matrices, i * 16);
         const variant = meshes.formation.variant;
-        this.matrix.scale(this.scale.set(car.lengthM, variant.heightM, variant.widthM));
+        this.matrix.scale(this.scale.set(this.cars[i * 4]! * 2, variant.heightM, variant.widthM));
         if (i >= this.pickMesh.instanceMatrix.count) {
           this.group.remove(this.pickMesh);
           this.pickMesh.dispose();

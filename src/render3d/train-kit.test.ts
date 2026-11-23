@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Vector3 } from 'three';
+import { Matrix4, PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, test } from 'vitest';
 import { buildCity } from '../fixtures/build-city';
 import { compile, type CompiledCity } from '../network';
@@ -16,14 +16,18 @@ import {
   formationOf,
   gearGeometry,
   gearSlots,
+  hidden,
   placedX,
 } from './train-kit';
-import { trainVariants, type TrainVariant } from './train-variants';
+import { builtVariant, trainVariants, type TrainVariant } from './train-variants';
 import { Trains3D } from './trains';
 
 const variants = Object.values(trainVariants) as TrainVariant[];
 /** The sim's car pose length for each variant's own service. */
-const poseM = (v: TrainVariant) => (v.id === 'tram' ? 8.3 : 21.8);
+const poseM = (v: TrainVariant) => {
+  if (v.id === 'tram') return 8.3;
+  return v.id === 'elizabeth' || v.id === 'intercity' ? 24.3 : 21.8;
+};
 
 describe.for(variants)('TASK-332 $id model', (v) => {
   const body = bodyGeometry(v),
@@ -171,6 +175,9 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   );
   layer.update(trains, false, null);
   layer.group.updateMatrixWorld(true);
+  const pickBox = new Matrix4();
+  layer.pickMesh.getMatrixAt(0, pickBox);
+  expect(new Vector3().setFromMatrixColumn(pickBox, 0).length()).toBeCloseTo(19);
   const lead = trains[0]!.cars[0]!;
   const camera = new PerspectiveCamera(45, 1, 0.5, 5000);
   for (const [distance, level] of [
@@ -207,60 +214,9 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   );
 });
 
-// TASK-333 and TASK-334 add their variants as records only. These stand-ins, built from the
-// S-Bahn's record, show the builder already draws what they need.
+// TASK-334 will replace this stand-in with its production record.
 const base = trainVariants.sbahn!;
 const plainCar = base.carTypes.middle!;
-const dlrLike: TrainVariant = {
-  ...base,
-  id: 'dlr',
-  // Two-section articulated units with plain ends (a large window, no windscreen), shoes.
-  nose: { ...base.nose, lengthM: 0.6, rakeM: 0.1, cornerM: 0.3 },
-  bogie: { ...base.bogie, shoes: true },
-  pantograph: null,
-  formation: { unitCars: 2, first: 'end', middle: [], last: 'end' },
-  carTypes: { end: { ...plainCar, cabs: 'front', bogies: [[1, -2.5]], pantographs: [] } },
-};
-const pushPull: TrainVariant = {
-  ...base,
-  id: 'intercity',
-  jacobs: false,
-  formation: { unitCars: 0, first: 'loco', middle: ['coach'], last: 'control' },
-  carTypes: {
-    loco: {
-      ...plainCar,
-      lengthM: 19,
-      cabs: 'both',
-      bogies: [
-        [1, -3.5],
-        [-1, 3.5],
-      ],
-      pantographs: [
-        [0, -4],
-        [0, 4],
-      ],
-      doors: [],
-      windows: false,
-    },
-    coach: {
-      ...plainCar,
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-    },
-    control: {
-      ...plainCar,
-      cabs: 'front',
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-    },
-  },
-};
 const tubeLike: TrainVariant = {
   ...base,
   id: 'tube',
@@ -312,7 +268,7 @@ const tubeLike: TrainVariant = {
   },
 };
 
-test.for([dlrLike, pushPull, tubeLike])(
+test.for([tubeLike])(
   'TASK-332 the builder draws a $id-like record within the budget and at its stated size',
   (v) => {
     const body = bodyGeometry(v),
@@ -332,7 +288,9 @@ test.for([dlrLike, pushPull, tubeLike])(
   },
 );
 
-test('TASK-332 a push-pull make-up keeps its locomotive at one end whichever way it runs', () => {
+test('TASK-333 the locomotive and control car lead at opposite ends in push-pull operation', () => {
+  const pushPull = builtVariant('intercity');
+  expect(pushPull.id).toBe('intercity');
   const f = formationOf(pushPull);
   const car = new Float32Array(4),
     gear = new Float32Array(8);
@@ -354,13 +312,81 @@ test('TASK-332 a push-pull make-up keeps its locomotive at one end whichever way
     ]);
     // The leading end carries the head lamps: the locomotive forward, the control car reversed.
     carState(f, 8, reversed ? 7 : 0, 24.3, reversed, false, car, 0, gear, 0);
-    expect(car[2]! & (carFlags.headFront | carFlags.headRear)).toBeTruthy();
+    expect(car[2]! & carFlags.headFront).toBeTruthy();
+    expect(car[0]! * 2).toBeCloseTo(reversed ? 24.8 : 19);
+    expect([...gear.slice(0, 2)].every((pos) => Math.abs(pos) < car[0]!)).toBe(true);
   }
   // Locomotive and coach couple without bellows: a coupler bridges the gap.
   carState(f, 8, 0, 24.3, false, false, car, 0, gear, 0);
   expect(car[2]! & carFlags.coupledRear).toBeTruthy();
   expect(car[2]! & carFlags.bellowsRear).toBeFalsy();
+  expect(
+    placedX(
+      1,
+      -1,
+      bodyParts.rearCoupler,
+      car[0]!,
+      car[2]!,
+      pushPull.nose.lengthM,
+      car[3]!,
+      pushPull.nose.couplerMaxM,
+    ),
+  ).toBeCloseTo(-12.52);
+  carState(f, 8, 2, 24.3, false, false, car, 0, gear, 0);
+  expect(car[2]! & (carFlags.bellowsFront | carFlags.bellowsRear)).toBe(12);
 });
+
+test('TASK-333 DB bodies shorten with poses clipped at the extract edge', () => {
+  const f = formationOf(builtVariant('intercity'));
+  const car = new Float32Array(4),
+    gear = new Float32Array(8);
+  for (const j of [0, 1, 7]) {
+    carState(f, 8, j, 12, false, false, car, 0, gear, 0, 24.3);
+    expect(car[0]! * 2).toBe(12);
+    carState(f, 8, j, 2, false, false, car, 0, gear, 0, 24.3);
+    expect(car[0]! * 2).toBe(2);
+    expect([...gear.slice(0, gearSlots.count)].every((p) => p === hidden)).toBe(true);
+  }
+});
+
+test('TASK-333 the DLR has three bogies per articulated unit and couples between units', () => {
+  const v = builtVariant('dlr');
+  expect(v.id).toBe('dlr');
+  const f = formationOf(v);
+  const car = new Float32Array(4),
+    gear = new Float32Array(8);
+  const states = Array.from({ length: 6 }, (_, j) => {
+    carState(f, 6, j, 21.8, false, false, car, 0, gear, 0);
+    expect([...gear.slice(3, 5)]).toEqual([hidden, hidden]);
+    return { flags: car[2]!, bogies: [...gear.slice(0, 3)].filter((x) => x < 900).length };
+  });
+  expect(states.map(({ bogies }) => bogies)).toEqual([2, 1, 2, 1, 2, 1]);
+  expect(states.map(({ flags }) => flags & 12)).toEqual([8, 8, 8, 8, 8, 8]);
+  expect(states.map(({ flags }) => flags & carFlags.coupledFront)).toEqual([
+    0, 512, 512, 512, 512, 0,
+  ]);
+});
+
+test.for([6, 8])(
+  'TASK-333 a %i-car Elizabeth line train has only end cabs and two pantographs',
+  (n) => {
+    const v = builtVariant('elizabeth');
+    expect(v.id).toBe('elizabeth');
+    const f = formationOf(v);
+    const car = new Float32Array(4),
+      gear = new Float32Array(8);
+    const powered = [];
+    for (let j = 0; j < n; j++) {
+      carState(f, n, j, 24.3, false, false, car, 0, gear, 0);
+      expect(car[2]! & 3).toBe(j === 0 || j === n - 1 ? carFlags.cabFront : 0);
+      if (gear[gearSlots.pantographs]! < 900) powered.push(j);
+      const type = f.types[car[1]!]!;
+      expect(type.doors).toHaveLength(3);
+      for (const door of type.doors) expect(door[2]).toBeGreaterThan(1.2);
+    }
+    expect(powered).toEqual([1, 3]);
+  },
+);
 
 test('TASK-332 coupled cab ends reach into the gap and a coupler meets the neighbour', () => {
   const v = trainVariants.sbahn!,

@@ -5,15 +5,16 @@ import { railTimetable } from '../../src/network/trams';
 import { builtVariant, trainVariantFor } from '../../src/render3d/train-variants';
 
 // TASK-332: the variant each bundled city's routes are drawn with. London City's Elizabeth Line
-// runs as `mainline` (it calls nowhere in the extract), so the rule gives it the DB train; the
-// Heathrow extract's timetable has no Link Line route, only the Piccadilly line.
+// runs as `mainline` (it calls nowhere in the extract). TASK-333 draws both stopping and through
+// rail services in left-hand-traffic cities as Elizabeth-line trains. Heathrow's timetable has
+// no Link Line route, only the Piccadilly line.
 test.for([
-  ['london-city-airport', { dlr: 4, intercity: 2 }],
+  ['london-city-airport', { dlr: 4, elizabeth: 2 }],
   ['heathrow', { tube: 1 }],
   ['munich', { sbahn: 2, intercity: 18, tram: 4 }],
   ['freiburg', { sbahn: 5, tram: 8 }],
   ['philadelphia', { nyc: 4, sbahn: 3, tram: 1 }],
-  ['york', { intercity: 4 }],
+  ['york', { elizabeth: 4 }],
   ['luebeck', { intercity: 3 }],
 ] as const)('%s routes take their variants', async ([id, expected]) => {
   const { city } = await openBundled(id);
@@ -32,8 +33,7 @@ test.for([
           /Broad Street|Market-Frankford/.test(rail.tracks[s.track]!.name ?? ''),
         ),
       ).toBe(true);
-    // Until TASK-333 and TASK-334, the S-Bahn stands in for the variants not built yet.
-    expect(builtVariant(variant).id).toBe(variant === 'tram' ? 'tram' : 'sbahn');
+    if (variant !== 'tube' && variant !== 'nyc') expect(builtVariant(variant).id).toBe(variant);
   }
   expect(counts).toEqual(expected);
 });

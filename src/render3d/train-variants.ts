@@ -38,9 +38,9 @@ export interface Livery {
  * keeps the near level at two draw calls); they differ in length, cabs, running gear, doors,
  * windows and livery. */
 export interface CarType {
-  /** Drawn body length, centred in the sim's car pose and leaving the rest of the pose as
-   * gangway space; omitted, the pose's own length. The sim's poses are 21.8 m (S-Bahn), 24.3 m
-   * (main line) and 8.3 m (tram) with 0.7 m between them. */
+  /** Drawn body length, centred in the sim's car pose. Omitted, the pose's own length. At the
+   * extract edge the body is limited to the visible pose length. Full poses are 21.8 m (S-Bahn),
+   * 24.3 m (main line) and 8.3 m (tram) with 0.7 m between them. */
   lengthM?: number;
   /** Driver's cabs: at the car's front, at both ends, or none. The formation turns a unit's last
    * car round, so its front cab faces the unit's rear. A cab is drawn as the variant's nose. */
@@ -94,6 +94,9 @@ export interface Nose {
   lamps: { yM: number; zM: number; radiusM: number };
   /** Height of the coupler's middle, drawn where the car is coupled without bellows. */
   couplerM: number;
+  /** Maximum reach from the body, in metres. Defaults to 0.6 m. Short bodies centred in
+   * their poses can need a longer drawbar to meet the next car. */
+  couplerMaxM?: number;
   /** Destination display above the windscreen (blank: no route numbers). */
   display: { bottomM: number; topM: number; halfWidthM: number } | null;
 }
@@ -312,8 +315,258 @@ const sbahn: TrainVariant = {
   },
 };
 
-/** The variants built so far. TASK-333 and TASK-334 add the others as records. */
-export const trainVariants: Partial<Record<TrainVariantId, TrainVariant>> = { tram, sbahn };
+/** Driverless light metro with two articulated sections and a shared bogie at the joint. The
+ * kit's end shape carries a broad passenger window and end lamps. */
+const dlr: TrainVariant = {
+  id: 'dlr',
+  reference: 'B07-like light metro: two articulated sections, 2.65 m wide, on three bogies',
+  widthM: 2.65,
+  heightM: 3.45,
+  floorM: 1.02,
+  profile: {
+    bottomM: 0.54,
+    skirtInsetM: 0.09,
+    waistM: 1.3,
+    cantM: 3.01,
+    cantInsetM: 0.08,
+    roofSquareness: 4,
+  },
+  nose: {
+    lengthM: 0.48,
+    rakeM: 0.08,
+    rakeFromM: 1.52,
+    cornerM: 0.24,
+    glass: { bottomM: 1.62, topM: 2.94, halfWidthM: 1.01 },
+    lamps: { yM: 1.3, zM: 0.88, radiusM: 0.095 },
+    couplerM: 0.66,
+    display: null,
+  },
+  windows: { sillM: 1.68, headM: 2.87, paneM: 2.35, pillarM: 0.31, endMarginM: 0.42 },
+  doorTopM: 3.0,
+  bogie: { wheelbaseM: 1.9, wheelDiameterM: 0.67, shoes: true },
+  pantograph: null,
+  roofBox: { lengthM: 3.4, widthM: 1.48, heightM: 0.22 },
+  bellows: true,
+  jacobs: true,
+  formation: { unitCars: 2, first: 'section', middle: [], last: 'section' },
+  carTypes: {
+    section: {
+      cabs: 'front',
+      bogies: [[1, -2.9]],
+      pantographs: [],
+      roofBoxes: [[0, 0]],
+      doors: [
+        [1, -4.7, 1.55],
+        [-1, 4.4, 1.55],
+      ],
+      windows: true,
+      livery: {
+        body: 0xf1f2f4,
+        band: 0x163d79,
+        bandTopM: 1.63,
+        skirt: 0xc51830,
+        skirtTopM: 1.19,
+        door: 0xe4e9ee,
+        roof: 0x7a828c,
+        front: 0xc51830,
+        windowBand: 0x282e34,
+        gangway: 0x30363a,
+      },
+    },
+  },
+};
+
+const elizabethLivery: Livery = {
+  body: 0xf3f3f4,
+  band: 0x633796,
+  bandTopM: 1.54,
+  skirt: 0x3e3d46,
+  skirtTopM: 0.91,
+  door: 0x653999,
+  roof: 0xa7a8ad,
+  front: 0x25272c,
+  windowBand: 0x34353b,
+  gangway: 0x2c2c30,
+};
+const elizabethTrailer: CarType = {
+  cabs: 'none',
+  bogies: [
+    [1, -3.25],
+    [-1, 3.25],
+  ],
+  pantographs: [],
+  roofBoxes: [[0, 0]],
+  doors: [
+    [1, -4.5, 1.65],
+    [0, 0, 1.65],
+    [-1, 4.5, 1.65],
+  ],
+  windows: true,
+  livery: elizabethLivery,
+};
+
+/** One through-gangway EMU, with cabs at the outer ends and two powered middle cars. */
+const elizabeth: TrainVariant = {
+  id: 'elizabeth',
+  reference: 'Class 345-like EMU: 2.77 m wide, 3.76 m over the rail, 25 m pose pitch on mainline',
+  widthM: 2.77,
+  heightM: 3.76,
+  floorM: 1.1,
+  profile: {
+    bottomM: 0.55,
+    skirtInsetM: 0.14,
+    waistM: 1.4,
+    cantM: 3.23,
+    cantInsetM: 0.09,
+    roofSquareness: 3.8,
+  },
+  nose: {
+    lengthM: 2.05,
+    rakeM: 0.95,
+    rakeFromM: 1.43,
+    cornerM: 0.55,
+    glass: { bottomM: 1.96, topM: 3.19, halfWidthM: 1.01 },
+    lamps: { yM: 1.44, zM: 0.73, radiusM: 0.095 },
+    couplerM: 0.93,
+    display: { bottomM: 3.23, topM: 3.44, halfWidthM: 0.57 },
+  },
+  windows: { sillM: 1.76, headM: 3.01, paneM: 2.5, pillarM: 0.16, endMarginM: 0.46 },
+  doorTopM: 3.08,
+  bogie: { wheelbaseM: 2.45, wheelDiameterM: 0.84, shoes: false },
+  pantograph: { baseWidthM: 1.21 },
+  roofBox: { lengthM: 4.7, widthM: 1.7, heightM: 0.21 },
+  bellows: true,
+  jacobs: false,
+  formation: {
+    unitCars: 0,
+    first: 'cab',
+    middle: ['powered', 'trailer', 'powered', 'trailer', 'trailer', 'trailer'],
+    last: 'cab',
+  },
+  carTypes: {
+    cab: { ...elizabethTrailer, cabs: 'front' },
+    trailer: elizabethTrailer,
+    powered: { ...elizabethTrailer, pantographs: [[0, -6.5]] },
+  },
+};
+
+const intercityRed = 0xcc1725;
+const intercityWhite = 0xf0eeea;
+const intercityLivery: Livery = {
+  body: intercityWhite,
+  band: intercityRed,
+  bandTopM: 1.53,
+  skirt: intercityWhite,
+  skirtTopM: 1.22,
+  door: intercityWhite,
+  roof: 0x97999d,
+  front: intercityWhite,
+  windowBand: null,
+  gangway: 0x2b2c2d,
+};
+const intercityCoach: CarType = {
+  // Keep a gap for bellows on the simulation's 25 m pitch.
+  lengthM: 24.8,
+  cabs: 'none',
+  bogies: [
+    [1, -3.45],
+    [-1, 3.45],
+  ],
+  pantographs: [],
+  roofBoxes: [],
+  doors: [
+    [1, -1.5, 0.92],
+    [-1, 1.5, 0.92],
+  ],
+  windows: true,
+  livery: intercityLivery,
+};
+
+/** Push-pull Intercity set: a BR 101-like electric locomotive, coaches and a control car. */
+const intercity: TrainVariant = {
+  id: 'intercity',
+  reference: 'BR 101-like 19 m electric locomotive with 26 m-style Intercity coaches',
+  widthM: 2.93,
+  heightM: 4.12,
+  floorM: 1.23,
+  profile: {
+    bottomM: 0.77,
+    skirtInsetM: 0.12,
+    waistM: 1.45,
+    cantM: 3.56,
+    cantInsetM: 0.13,
+    roofSquareness: 3.4,
+  },
+  nose: {
+    lengthM: 1.82,
+    rakeM: 0.84,
+    rakeFromM: 1.75,
+    cornerM: 0.51,
+    glass: { bottomM: 2.48, topM: 3.48, halfWidthM: 1.04 },
+    lamps: { yM: 1.53, zM: 0.88, radiusM: 0.12 },
+    couplerM: 0.99,
+    couplerMaxM: 3.05,
+    display: null,
+  },
+  windows: { sillM: 1.98, headM: 3.17, paneM: 1.94, pillarM: 0.41, endMarginM: 0.65 },
+  doorTopM: 3.17,
+  bogie: { wheelbaseM: 2.65, wheelDiameterM: 1.02, shoes: false },
+  pantograph: { baseWidthM: 1.3 },
+  roofBox: { lengthM: 3.7, widthM: 1.83, heightM: 0.32 },
+  bellows: true,
+  jacobs: false,
+  formation: { unitCars: 0, first: 'loco', middle: ['coach'], last: 'control' },
+  carTypes: {
+    loco: {
+      lengthM: 19,
+      cabs: 'both',
+      bogies: [
+        [0, -5.2],
+        [0, 5.2],
+      ],
+      pantographs: [
+        [0, -5.4],
+        [0, 5.4],
+      ],
+      roofBoxes: [
+        [0, -1.9],
+        [0, 1.9],
+      ],
+      doors: [],
+      windows: false,
+      livery: {
+        body: intercityRed,
+        band: intercityRed,
+        bandTopM: 1.38,
+        skirt: 0x414347,
+        skirtTopM: 1.2,
+        door: intercityRed,
+        roof: 0x62676c,
+        front: intercityRed,
+        windowBand: null,
+        gangway: 0x2b2c2d,
+      },
+    },
+    coach: intercityCoach,
+    control: {
+      ...intercityCoach,
+      cabs: 'front',
+      doors: [
+        [1, -3.8, 0.92],
+        [-1, 1.5, 0.92],
+      ],
+    },
+  },
+};
+
+/** TASK-334 adds the remaining two records. */
+export const trainVariants: Partial<Record<TrainVariantId, TrainVariant>> = {
+  tram,
+  sbahn,
+  dlr,
+  elizabeth,
+  intercity,
+};
 
 /** The variant a route is drawn with, by its kind, the rail kind covering most of its length and
  * the city's driving side (standing in for the country; projects carry none). */
@@ -338,8 +591,8 @@ export function trainVariantFor(
   const left = drivingSide === 'left';
   if (mostly === 'light_rail') return 'dlr';
   if (mostly === 'subway') return left ? 'tube' : 'nyc';
-  if (route.kind === 'mainline') return 'intercity';
-  return left ? 'elizabeth' : 'sbahn';
+  if (left) return 'elizabeth';
+  return route.kind === 'mainline' ? 'intercity' : 'sbahn';
 }
 
 /** A built variant; the S-Bahn stands in for one not built yet. */

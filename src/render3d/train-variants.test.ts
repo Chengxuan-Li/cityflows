@@ -61,7 +61,7 @@ test('TASK-332 the variant rule gives each of the seven variants', () => {
       'right',
       'sbahn',
     ],
-    ['mainline', [['rail', 700]], 'left', 'intercity'],
+    ['mainline', [['rail', 700]], 'left', 'elizabeth'],
     ['mainline', [['rail', 700]], 'right', 'intercity'],
     // The kind covering most of the length decides, not the most sections.
     [
@@ -82,6 +82,6 @@ test('TASK-332 the variant rule gives each of the seven variants', () => {
     );
   }
   expect(builtVariant('tram').id).toBe('tram');
-  for (const id of ['dlr', 'tube', 'nyc', 'elizabeth', 'intercity', 'sbahn'] as const)
-    expect(builtVariant(id).id).toBe('sbahn');
+  for (const id of ['dlr', 'elizabeth', 'intercity', 'sbahn'] as const)
+    expect(builtVariant(id).id).toBe(id);
 });

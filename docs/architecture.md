@@ -3406,9 +3406,10 @@ car types with their bogie, pantograph, roof-housing and door positions and live
 formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take the low-floor tram;
 otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
 metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
-elsewhere), then the route kind (`mainline` the DB locomotive-hauled train, `sbahn` the
-Elizabeth-line-style EMU in a left-hand-traffic city and the ET 423-like S-Bahn elsewhere). Only
-the tram and the S-Bahn are built; the S-Bahn stands in for the others (TASK-333, TASK-334).
+elsewhere). TASK-333 draws the remaining routes in left-hand-traffic cities as Elizabeth-line
+EMUs, including through-running `mainline` routes. In right-hand-traffic cities, `mainline`
+takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn. The S-Bahn stands in for the
+two subway models until TASK-334.
 `render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
 by all its cars and created only for variants a route uses: the body (the profile extruded, both
 cab noses lofted from it, end walls, inset bellows, couplers), the gear (three bogie, two pantograph and two
@@ -3420,13 +3421,19 @@ car's metres, with TASK-163's night glow (cabins, head lamps at the train's fron
 its rear, the lead cab's display). Formations count from the route's forward end, so a make-up
 keeps its order when a terminal train reverses; a unit's last car is turned round, so its cab
 faces out, and a car's front faces the direction of travel or away from it accordingly. Cars
-coupled without bellows show a coupler reaching the middle of the sim's gap (at most 0.6 m, so a
-short car centred in its pose keeps its gangway space), and a coupled cab reaches up to 0.2 m into
-the gap. Each car
+coupled without bellows show a coupler reaching the middle of the sim's gap (limited to 0.6 m by
+default), and a coupled cab reaches up to 0.2 m into the gap. Each car
 is drawn near (the model) from 60 px along its length and far (the box) below 48 px, chosen per
 car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
 shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
 TASK-127's.
+
+TASK-333 adds the DLR's coupled two-section units with shared joint bogies and collector shoes,
+the Elizabeth-line EMU with two pantographs and gangways between its cars, and the DB push-pull
+Intercity with a 19 m locomotive centred in its pose, 24.8 m coach bodies on the 25 m pose pitch,
+and a control car at the opposite end. Its coupler draws across the extra space behind the short
+locomotive. Fixed-length bodies shorten with poses clipped at the extract edge, and pick boxes
+use the drawn lengths. The models use operator colours without logos or names.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
