@@ -130,3 +130,31 @@ On top of B, one at a time:
 
 Re-run the Phase 1 windows after each step. Report the Phase 1 table, plus landings per hour per arrival end and the
 median gap between arrivals. Then stop and report again.
+
+## Phase 1c — Heathrow landing rate (owner, 2026-11-23)
+
+Phase 1b result (964d47c): faster tows and spacing on final are kept; faster taxiing is dropped. Zurich now lands
+16–19 an hour and Boston 22, close to what these windows schedule. Heathrow 27L stays at 14 an hour. Owner: "14 landings
+per hour is still off normal values." Real Heathrow lands about 40–45 an hour on its arrival runway, and the schedule
+asks for about 40 in this window.
+
+1. **Diagnose first.** For every arrival on 27L in the Heathrow 05:00–09:00 window, record what held its release and
+   for how long:
+   - spacing on final;
+   - runway occupancy;
+   - an exit-order wait, and on which aircraft;
+   - stand availability;
+   - anything else.
+   Report the breakdown before you change anything.
+2. **Fix what binds, as real operations do.** Landing traffic has priority over ground traffic that has not yet
+   reached the crossing or the merge point. A landed aircraft vacates and, if its way on is not free, holds on the
+   taxiway clear of the runway; it never stops on the runway.
+   Candidate rules:
+   - order the arrival's exit and first stretch at landing commitment, ahead of ground aircraft that have not reached
+     the hold before that conflict;
+   - let it hold just clear of the runway after vacating;
+   - pick a free exit.
+   Keep runway conflicts at 0, add no new deadlocks, and keep go-arounds rare.
+3. **Pilot**, the same small windows: Heathrow 05:00–09:00 seed 1 is the target, with about 35–45 an hour on 27L.
+   Zurich and Boston must not regress. Report the same table plus the hold-reason breakdown after the change. Then stop
+   and report.
