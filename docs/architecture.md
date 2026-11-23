@@ -3285,6 +3285,16 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-335 draws six generic road vehicle models in 3D. Cars hash their vehicle IDs to a sedan,
+hatchback or SUV. Vans, trucks and buses use one model each. Parking uses the same geometry and
+hash, falling back to the space index for anonymous occupancy. The models fit the existing class
+dimensions and retain the presentation colour. One instanced batch per visible model draws the
+body and four wheels, with dark glass and TASK-163 lamps painted in the shader. Models are used at
+6 px/m of camera depth at street zoom. The existing boxes draw farther away and parked cars still
+become dots below the detail zoom. The moving boxes remain the pick and selection volumes, carry
+the existing headlight beam transforms, and alone cast vehicle shadows. Parked stock stays unlit
+and casts no shadow.
+
 TASK-298: aircraft are drawn from the snapshot with TASK-307's outlines in 2D (over the map,
 under the evening tint; one off the ground casts a shadow displaced by its height; drawn only
 within the map's node extent) and its meshes in 3D (heights above the first runway's middle,

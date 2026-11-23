@@ -1,4 +1,4 @@
-import { Color, Group, Matrix4, Vector3 } from 'three';
+import { Color, Matrix4, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { buildCity } from '../fixtures/build-city';
 import { pointAtDistance, headingAtDistance } from '../geo/polyline';
@@ -7,6 +7,7 @@ import { VehiclePoses, type PresentationSnapshot } from '../render/vehicle-pose'
 import { cityHeights, heightAt, roadStation } from './heights';
 import { Vehicles3D } from './vehicles';
 import { style } from '../render/style';
+import { VehicleDetailView } from './vehicle-detail';
 
 it('places instances at the shared 2D poses, with ramp height, pitch, hue and movement height', () => {
   const b = buildCity('3D poses', 98);
@@ -42,13 +43,13 @@ it('places instances at the shared 2D poses, with ramp height, pitch, hue and mo
   };
   const poses2D = new VehiclePoses();
   const vehicles = new Vehicles3D();
-  new Group().add(vehicles.mesh);
+  const view = new VehicleDetailView();
   poses2D.setGeometry(city, 2);
   vehicles.setGeometry(city, 2);
   poses2D.update(snapshot);
   vehicles.setSnapshot(snapshot);
   for (const elapsed of [0, 0.1, 0.5]) {
-    vehicles.animate(elapsed, city, heights);
+    vehicles.animate(elapsed, city, heights, view);
     for (let i = 0; i < snapshot.count; i++) {
       const pose = poses2D.at(i, elapsed),
         matrix = new Matrix4();
@@ -100,7 +101,7 @@ it('keeps vehicle pitch through an inclined, outline-free road join', () => {
     vclass: new Uint8Array([0]),
     fade: new Float32Array([1]),
   });
-  vehicles.animate(0, city, heights);
+  vehicles.animate(0, city, heights, new VehicleDetailView());
   const matrix = new Matrix4();
   vehicles.mesh.getMatrixAt(0, matrix);
   expect(matrix.elements[1]).toBeGreaterThan(0.01);
@@ -131,7 +132,7 @@ it('sizes each class, preserves destination colours and recolours a paused snaps
     fade: new Float32Array([1, 1, 1, 0.5]),
     vehicleHues: new Uint32Array(4).fill(0x78b397),
   });
-  vehicles.animate(0, city, cityHeights(city, b.city));
+  vehicles.animate(0, city, cityHeights(city, b.city), new VehicleDetailView());
   const lengths = [4.5, 5.5, 12, 12];
   const heights = [1.5, 2.2, 3.5, 3.2];
   const widths = [1.8, 2, 2.5, 2.55];

@@ -13,7 +13,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
-  Matrix4,
   Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -67,7 +66,7 @@ import { buildWalkSignals, Walkers3D } from './walkers';
 import { clipGround, groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
 import { stripGeometry } from './strips';
-import { terrainVehicleOffset } from './heights';
+import { VehicleDetailView, vehicleShadowLayer } from './vehicle-detail';
 import { buildTerrainGround } from './context';
 import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
@@ -201,7 +200,7 @@ export class Scene3D {
   private basemap: Basemap3D | undefined;
   private tilesEnabled = defaultLayers.basemap;
   private lastRenderMs = performance.now();
-  private readonly vehicleMatrix = new Matrix4();
+  private readonly vehicleDetail = new VehicleDetailView();
   private shadowView = '';
   private compilePending = false;
   private readonly restoreContext = () => {
@@ -222,8 +221,7 @@ export class Scene3D {
       this.sun,
       this.sun.target,
       this.content,
-      this.vehicles.mesh,
-      this.vehicles.beams,
+      this.vehicles.group,
       this.walkers.mesh,
       this.selection,
       this.labels.group,
@@ -234,6 +232,7 @@ export class Scene3D {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.00008;
     this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.camera.layers.enable(vehicleShadowLayer);
     this.controls = new MapControls(this.camera, canvas);
     this.controls.addEventListener('change', this.invalidate);
     this.controls.minPolarAngle = (5 * Math.PI) / 180;
@@ -275,8 +274,7 @@ export class Scene3D {
     this.shadowView = '';
     this.disposeContent();
     if (this.city !== city) {
-      this.vehicles.poses.snapshot = null;
-      this.vehicles.mesh.count = this.vehicles.beams.count = 0;
+      this.vehicles.clear();
       this.walkers.mesh.count = 0;
       this.parkedSnapshot = null;
     }
@@ -368,11 +366,11 @@ export class Scene3D {
     this.parking.group.visible = this.parkingVisible;
     this.parking.setCounts(this.parkingCounts);
     this.content.add(this.parking.group);
-    this.parkedCars = new ParkedCars3D(city, geometry.heights);
-    this.parkedCars.mesh.visible = this.parkedVisible;
+    this.parkedCars = new ParkedCars3D(city, geometry.heights, this.vehicles.modelGeometries);
+    this.parkedCars.group.visible = this.parkedVisible;
     this.parkedCars.setStyle(this.getView().zoom, this.colourByClass);
     this.parkedCars.setSnapshot(this.parkedSnapshot);
-    this.content.add(this.parkedCars.mesh);
+    this.content.add(this.parkedCars.group);
     this.updateParkedDataset();
     if (this.source?.geo !== source.geo || this.renderedTerrain !== this.terrainEnabled) {
       this.basemap?.destroy();
@@ -415,8 +413,7 @@ export class Scene3D {
         }),
       );
       caster.castShadow = true;
-      caster.layers.set(1);
-      this.sun.shadow.camera.layers.enable(1);
+      caster.layers.set(vehicleShadowLayer);
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
@@ -805,7 +802,7 @@ export class Scene3D {
   setParkedCarsVisible(visible: boolean) {
     if (visible === this.parkedVisible) return;
     this.parkedVisible = visible;
-    if (this.parkedCars) this.parkedCars.mesh.visible = visible;
+    if (this.parkedCars) this.parkedCars.group.visible = visible;
     this.updateParkedDataset();
     this.invalidate();
   }
@@ -1340,22 +1337,14 @@ export class Scene3D {
       if (this.canvas.dataset.aircraftModels !== models)
         this.canvas.dataset.aircraftModels = models;
     }
-    this.parking?.update(this.getView().zoom, this.selectedParking);
-    this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
+    const zoom =
+      this.canvas.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360) * distance);
+    const vehicleViewChanged = this.vehicleDetail.update(this.camera, zoom, distance);
+    this.parking?.update(zoom, this.selectedParking);
+    this.parkedCars?.setStyle(zoom, this.colourByClass);
+    this.parkedCars?.setDetail(this.vehicleDetail, vehicleViewChanged);
     if (this.city && this.geometry)
-      this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
-    if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {
-      const heights = this.geometry.heights,
-        snapshot = this.vehicles.poses.snapshot;
-      for (let i = 0; i < snapshot.count; i++) {
-        this.vehicles.mesh.getMatrixAt(i, this.vehicleMatrix);
-        const e = this.vehicleMatrix.elements,
-          p = { x: e[12]!, y: e[14]! },
-          lane = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : snapshot.lane[i]!;
-        e[13]! += terrainVehicleOffset(this.city, heights, lane, p);
-        this.vehicles.mesh.setMatrixAt(i, this.vehicleMatrix);
-      }
-    }
+      this.vehicles.animate(elapsedS, this.city, this.geometry.heights, this.vehicleDetail);
     const index =
       this.selectedId === null
         ? -1
@@ -1522,6 +1511,8 @@ export class Scene3D {
       (this.surroundings?.geometry === opaque ? transparent : opaque).dispose();
     }
     this.terrainGround = undefined;
+    this.parkedCars?.destroy();
+    this.parkedCars = undefined;
     this.content.traverse((object) => {
       if (object instanceof Mesh) {
         object.geometry.dispose();
