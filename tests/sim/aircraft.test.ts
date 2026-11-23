@@ -9,7 +9,7 @@ import {
   type AircraftPoseSnapshot,
 } from '../../src/sim/aircraft';
 import { createEngine } from '../../src/sim/engine';
-import { overlaps, onRunway } from './aircraft-checks';
+import { overlaps, onRunway, runwayConflictCheck } from './aircraft-checks';
 import { airportFixture } from './airside-fixture';
 import { setup } from './fixtures';
 
@@ -36,6 +36,7 @@ function run(
 ) {
   const poses = new Map<number, (AircraftPoseSnapshot & { timeS: number })[]>();
   const events: ReturnType<AircraftFleet['drainEvents']> = [];
+  const checkRunways = runwayConflictCheck(fleet.graph);
   for (let step = 0; step * 0.1 <= untilS; step++) {
     const timeS = step * 0.1;
     at(step);
@@ -49,7 +50,9 @@ function run(
     }
     if (step % 10 === 0) {
       expect(overlaps(snapshot), `bodies at ${timeS} s`).toEqual([]);
-      expect(onRunway(snapshot).length, `runway at ${timeS} s`).toBeLessThanOrEqual(1);
+      if (fleet.graph.runways.length === 1)
+        expect(onRunway(snapshot).length, `runway at ${timeS} s`).toBeLessThanOrEqual(1);
+      else expect(checkRunways(snapshot), `runway at ${timeS} s`).toBe(0);
     }
     if (done()) break;
   }
@@ -264,6 +267,62 @@ test('with no taxiway to the 27 end a departure backtracks and turns round on th
   expect(Math.cos(roll.heading)).toBeLessThan(-0.999);
   expect(roll.x).toBeGreaterThan(1400);
   expect(fleet.metrics().departed).toBe(1);
+});
+
+test.each([
+  { intersectionX: -900, waits: false },
+  { intersectionX: 300, waits: true },
+])(
+  'a departure waits for an intersecting arrival only if it reaches the intersection ($intersectionX m)',
+  ({ intersectionX, waits }) => {
+    const { fleet, stands } = fleetOf({ intersectionX });
+    const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.South! });
+    const arrival = fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 });
+    if (!parked.ok) throw new Error(parked.reason);
+    if (!arrival.ok) throw new Error(arrival.reason);
+    const { poses } = run(
+      fleet,
+      900,
+      () => fleet.metrics().departed === 1 && fleet.idle(arrival.id),
+      (step) => {
+        if (step === 500) expect(fleet.requestDeparture(parked.id, '36').ok).toBe(true);
+      },
+    );
+    const departure = poses.get(parked.id)!;
+    const landing = poses.get(arrival.id)!;
+    expect(fleet.metrics()).toMatchObject({ departed: 1, landed: 1, goArounds: 0, stuck: 0 });
+    expect(departure.some(({ state }) => state === 'holding')).toBe(waits);
+    const grant = departure.find(({ state }) => state === 'line-up')!;
+    const arrivalAtGrant = landing.find(({ timeS }) => timeS === grant.timeS)!;
+    if (waits) {
+      expect(arrivalAtGrant.y).toBeGreaterThan(70);
+      expect(arrivalAtGrant.y).toBeLessThan(100);
+    } else expect(arrivalAtGrant.onRunway).toBe(true);
+  },
+);
+
+test('a crossing of an unused runway can pass while the intersecting runway is occupied elsewhere', () => {
+  const { fleet, stands } = fleetOf({ intersectionX: -900 });
+  const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.West! });
+  const arrival = fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 });
+  if (!parked.ok) throw new Error(parked.reason);
+  if (!arrival.ok) throw new Error(arrival.reason);
+  const { poses } = run(
+    fleet,
+    900,
+    () => fleet.idle(parked.id) && fleet.idle(arrival.id),
+    (step) => {
+      if (step === 200) expect(fleet.requestTow(parked.id, { stand: stands.East! }).ok).toBe(true);
+    },
+  );
+  const crossing = poses.get(parked.id)!.find(({ x, y }) => Math.abs(x + 900) < 5 && y < -780)!;
+  expect(crossing.onRunway).toBe(true);
+  const landing = poses.get(arrival.id)!.filter(({ onRunway }) => onRunway);
+  expect(
+    landing.some(({ timeS }) => timeS === crossing.timeS),
+    `crossing at ${crossing.timeS} s, landing at ${landing[0]?.timeS}–${landing.at(-1)?.timeS} s`,
+  ).toBe(true);
+  expect(fleet.metrics()).toMatchObject({ towed: 1, landed: 1, goArounds: 0, stuck: 0 });
 });
 
 test('two aircraft on crossing taxi paths never overlap: one waits short of the junction', () => {

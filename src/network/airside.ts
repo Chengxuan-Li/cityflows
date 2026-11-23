@@ -1,4 +1,10 @@
-import { boxOf, cumulativeLengths, nearestOnPolyline, pointInPolygon } from '../geo/polyline';
+import {
+  boxOf,
+  cumulativeLengths,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointInPolygon,
+} from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import { aircraftCodes, codeSpanLimitM, type AircraftCode } from '../schema/aircraft';
 import type { AirsideEdgeKind, Airport, RunwayOperations, StandKind } from '../schema/airport';
@@ -118,6 +124,44 @@ export interface AirsideGraph {
   /** TASK-305: the airport's own runway configuration table, where it has one. */
   runwayOperations?: RunwayOperations;
   index: { node: Map<string, number>; edge: Map<string, number>; stand: Map<string, number> };
+}
+
+/** The overlap of two protected runway strips at a shared node. Each band bounds the
+ * projection on its axis, relative to the node. */
+export interface RunwayIntersectionArea {
+  idx: number;
+  runways: [number, number];
+  pos: Vec2;
+  bands: { axis: Vec2; min: number; max: number }[];
+}
+
+export function runwayIntersectionAreas(graph: AirsideGraph, marginM: number) {
+  const areas: RunwayIntersectionArea[] = [];
+  const stations = graph.runways.map((runway) => cumulativeLengths(runway.line));
+  for (const node of graph.nodes) {
+    if (node.runways.length < 2) continue;
+    const strips = node.runways.map((idx) => {
+      const runway = graph.runways[idx]!;
+      const station = runway.stationsM[runway.nodes.indexOf(node.idx)]!;
+      const heading = headingAtDistance(runway.line, stations[idx]!, station);
+      const x = Math.cos(heading);
+      const y = Math.sin(heading);
+      const width = runway.widthM / 2 + marginM;
+      return [
+        { axis: { x: -y, y: x }, min: -width, max: width },
+        { axis: { x, y }, min: -station - marginM, max: runway.lengthM - station + marginM },
+      ];
+    });
+    for (let i = 0; i < strips.length; i++)
+      for (let j = i + 1; j < strips.length; j++)
+        areas.push({
+          idx: graph.runways.length + areas.length,
+          runways: [node.runways[i]!, node.runways[j]!],
+          pos: node.pos,
+          bands: [...strips[i]!, ...strips[j]!],
+        });
+  }
+  return areas;
 }
 
 const codeIndex = (code: AircraftCode | null) => (code ? aircraftCodes.indexOf(code) : -1);

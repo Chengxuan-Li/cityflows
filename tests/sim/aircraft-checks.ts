@@ -1,4 +1,6 @@
+import { nearestOnPolyline } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
+import { runwayIntersectionAreas, type AirsideGraph } from '../../src/network/airside';
 import { aircraftTypes } from '../../src/schema/aircraft';
 import type { AircraftPoseSnapshot } from '../../src/sim/aircraft';
 
@@ -60,3 +62,50 @@ export function overlaps(poses: readonly AircraftPoseSnapshot[]) {
 /** Aircraft on a runway at once: more than one is a conflict. */
 export const onRunway = (poses: readonly AircraftPoseSnapshot[]) =>
   poses.filter((p) => p.onRunway).map((p) => p.registration);
+
+/** Conflicts measured from physical poses: two aircraft on the same runway, or two within
+ * the same protected intersection. An aircraft can pass a junction with another runway
+ * occupied elsewhere along it. */
+export function runwayConflictCheck(graph: AirsideGraph) {
+  const areas = runwayIntersectionAreas(graph, (graph.maxSpanM || 36) / 2 + 12);
+  return (poses: readonly AircraftPoseSnapshot[]) => {
+    const on = poses.filter((p) => p.onRunway);
+    if (on.length < 2) return 0;
+    const runway = on.map((pose) => {
+      let closest = -1;
+      let away = Infinity;
+      for (const r of graph.runways) {
+        const near = nearestOnPolyline(r.line, pose);
+        if (near.away > r.widthM / 2 + 5) continue;
+        if (
+          pose.state !== 'taxi' &&
+          pose.state !== 'tow' &&
+          r.ends.some((end) => end.designator === pose.runwayEnd)
+        )
+          return r.idx;
+        if (near.away < away) {
+          away = near.away;
+          closest = r.idx;
+        }
+      }
+      return closest;
+    });
+    const within = on.map(({ x, y }) =>
+      areas.filter(({ pos, bands }) =>
+        bands.every(({ axis, min, max }) => {
+          const u = (x - pos.x) * axis.x + (y - pos.y) * axis.y;
+          return u >= min && u <= max;
+        }),
+      ),
+    );
+    let count = 0;
+    for (let i = 0; i < on.length; i++)
+      for (let j = i + 1; j < on.length; j++)
+        if (
+          (runway[i]! >= 0 && runway[i] === runway[j]) ||
+          within[i]!.some((area) => within[j]!.includes(area))
+        )
+          count++;
+    return count;
+  };
+}

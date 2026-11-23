@@ -1,13 +1,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { nearestOnPolyline } from '../src/geo/polyline';
 import { compile } from '../src/network';
 import { compileAirside } from '../src/network/airside';
 import { openProject } from '../src/project/open';
 import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-schedule';
 import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircraft';
 import { createFlightOperations } from '../src/sim/flight-operations';
-import { overlaps } from '../tests/sim/aircraft-checks';
+import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
 
 // TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
 // second, with each movement's time split by the state it spends it in.
@@ -154,15 +153,7 @@ function sample(timing: Timing, pose: AircraftPoseSnapshot) {
   }
 }
 
-// Two aircraft on one runway, or on two runways sharing a node, at once are a conflict.
-const interlocked = graph.runways.map((a) =>
-  graph.runways.map((b) => a.idx === b.idx || a.nodes.some((n) => b.nodes.includes(n))),
-);
-const under = (x: number, y: number) =>
-  graph.runways.flatMap((r) => {
-    const near = nearestOnPolyline(r.line, { x, y });
-    return near.away <= r.widthM / 2 + 5 && near.along > 0 && near.along < r.lengthM ? [r.idx] : [];
-  });
+const checkRunwayConflicts = runwayConflictCheck(graph);
 let overlapCount = 0;
 let runwayConflicts = 0;
 let peakStuck = 0;
@@ -200,10 +191,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
     overlapCount += overlaps(poses).length;
-    const on = poses.filter((a) => a.onRunway).map((a) => under(a.x, a.y));
-    for (let i = 0; i < on.length; i++)
-      for (let j = i + 1; j < on.length; j++)
-        if (on[i]!.some((p) => on[j]!.some((q) => interlocked[p]![q]))) runwayConflicts++;
+    runwayConflicts += checkRunwayConflicts(poses);
   }
   if (timeS % 3600 === 0 && timeS > startS)
     console.info(
