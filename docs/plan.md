@@ -354,9 +354,9 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | merged 2026-11-23 (`58e23c2`) |
 | [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | merged 2026-11-23 (`be7aef1`) |
 | [TASK-331](tasks/TASK-331.md) | render | Aircraft: one row of cabin windows and realistic landing gear | aircraft model prep, render3d gear | 318 | one pane row per deck, wheel counts per type, render budget | in progress 2026-11-23 (Claude Opus 5.5 high, `D:\cityflows-wt\331`) |
-| [TASK-332](tasks/TASK-332.md) | render | Train model kit, with the tram and the S-Bahn | render3d trains, variant rule | - | variant per route, budgets, picking, sim hashes identical | in progress 2026-11-23 (Claude Opus 5.5 high, `D:\cityflows-wt\332`) |
-| [TASK-333](tasks/TASK-333.md) | render | DLR, Elizabeth line and DB intercity trains | render3d train variants | 332 | variants at LCY/Munich, loco and cab car ends, render budget | queued 2026-11-23: starts on 332's reviewed branch tip (Codex sol high) |
-| [TASK-334](tasks/TASK-334.md) | render | Generic tube and New York subway trains | render3d train variants | 332 | Piccadilly and Philadelphia variants, real car length | queued 2026-11-23: starts on 332's reviewed branch tip (Codex sol high) |
+| [TASK-332](tasks/TASK-332.md) | render | Train model kit, with the tram and the S-Bahn | render3d trains, variant rule | - | variant per route, budgets, picking, sim hashes identical | merged 2026-11-23 (`7909254`, two feedback rounds; sim hashes identical, 3D p95 within noise) |
+| [TASK-333](tasks/TASK-333.md) | render | DLR, Elizabeth line and DB intercity trains | render3d train variants | 332 | variants at LCY/Munich, loco and cab car ends, render budget | in progress 2026-11-23 (Codex sol high, from main after 332) |
+| [TASK-334](tasks/TASK-334.md) | render | Generic tube and New York subway trains | render3d train variants | 332 | Piccadilly and Philadelphia variants, real car length | in progress 2026-11-23 (Codex sol high, from main after 332) |
 | [TASK-335](tasks/TASK-335.md) | render | Generic road vehicle models | render3d vehicles, parked cars | - | extents per class, stable choice, shadow cost, render budget | merged 2026-11-23 (`9f2a7d0`, one visual round; sim and 2D hashes identical, 3D p95 within noise) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -6490,6 +6490,11 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 - 2026-11-23 (owner): "Yes, start all three" (TASK-331, 332, 335 in parallel), then "arrange the queued tasks to
   auto start after the blocking tasks are done": TASK-333 and TASK-334 start, side by side, as soon as the lead has
   reviewed TASK-332's branch, from its tip rather than waiting for the merge to main.
+- 2026-11-23 (lead, after TASK-332): London City's Elizabeth Line routes run as `mainline` (no stops inside the
+  extract), so the contract's table would draw them as the DB intercity. Rule changed in TASK-333: in left-hand-traffic
+  cities every heavy-rail route, stopping or not, gets the Elizabeth-line EMU; the DB intercity is for right-hand-traffic
+  cities only. York's through trains therefore draw as Class 345-like EMUs. S-Bahn units are drawn as two 67.4 m units
+  over the sim's 135 m train (TASK-332's choice, kept). TASK-333 and 334 start from main after TASK-332's merge.
 
 - 2026-11-23 (owner, after the lead's real-sim clips and wait graphs of Boston, Heathrow and Zurich): the
   three root causes are legitimate, fix them. "Let's not change runway direction mid day for now, that would be
