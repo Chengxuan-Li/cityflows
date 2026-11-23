@@ -345,6 +345,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | in progress 2026-11-22 (Claude) |
 | TASK-321 | airports | Abstract block-signalling validation (bench only) | bench | 312 | gridlocks per policy, real layouts | merged 2026-11-23 (`6809c54`) |
+| [TASK-322](tasks/TASK-322.md) | airports | Block signalling and dynamic taxi flows in the airside simulation | sim, routing | 321 | no gridlock anywhere, LCY kept, large-airport days | in progress 2026-11-23 (Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6426,6 +6427,9 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-23 (owner): "build the block signaling into the real sim now before we actually try to even scale":
+  TASK-322 started, in parallel with TASK-320.
 
 - 2026-11-22 (owner): proposed railway-style protected blocks and one-way taxi flows to prevent airside gridlock,
   the flows being a dynamic ATC practice set by the runway direction in use (soft, for taxi efficiency, not in the
