@@ -353,6 +353,11 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-327](tasks/TASK-327.md) | airports | Runway interlocks at intersections only | sim | 312 | Boston days, no runway conflicts, Zurich and LCY kept | merged 2026-11-23 (`bb78390`, `32dd6f5`) |
 | [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | merged 2026-11-23 (`58e23c2`) |
 | [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | merged 2026-11-23 (`be7aef1`) |
+| [TASK-331](tasks/TASK-331.md) | render | Aircraft: one row of cabin windows and realistic landing gear | aircraft model prep, render3d gear | 318 | one pane row per deck, wheel counts per type, render budget | planned 2026-11-23 |
+| [TASK-332](tasks/TASK-332.md) | render | Train model kit, with the tram and the S-Bahn | render3d trains, variant rule | - | variant per route, budgets, picking, sim hashes identical | planned 2026-11-23 |
+| [TASK-333](tasks/TASK-333.md) | render | DLR, Elizabeth line and DB intercity trains | render3d train variants | 332 | variants at LCY/Munich, loco and cab car ends, render budget | planned 2026-11-23 |
+| [TASK-334](tasks/TASK-334.md) | render | Generic tube and New York subway trains | render3d train variants | 332 | Piccadilly and Philadelphia variants, real car length | planned 2026-11-23 |
+| [TASK-335](tasks/TASK-335.md) | render | Generic road vehicle models | render3d vehicles, parked cars | - | extents per class, stable choice, shadow cost, render budget | planned 2026-11-23 |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6474,6 +6479,14 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-23 (owner): "realistic train models and car models without loss of performance": one tram, one light-rail
+  (DLR), an Elizabeth-line EMU, a DB locomotive with coaches, an S-Bahn EMU, and (follow-up) "1 generic tube style
+  train and 1 generic nyc subway train"; cars "fine with a few generic models"; aircraft windows show two rows close
+  up and the landing gear is not realistic. Accepted the lead's decisions: drawing only (sim lengths and hashes
+  unchanged), the variant chosen per route by track kind, train kind and driving side (left-hand traffic standing in
+  for the UK), operator colours without logos. Tasks TASK-331 (aircraft) to TASK-335 (cars) written; 332 first among
+  the trains, 333 and 334 after it, 331 and 335 independent.
 
 - 2026-11-23 (owner, after the lead's real-sim clips and wait graphs of Boston, Heathrow and Zurich): the
   three root causes are legitimate, fix them. "Let's not change runway direction mid day for now, that would be
