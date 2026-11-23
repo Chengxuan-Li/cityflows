@@ -288,29 +288,33 @@ test.for([dlrLike, pushPull])(
 );
 
 test.for([
-  ['tube', 17, 2],
-  ['nyc', 18, 4],
+  ['tube', 2, [-6.2, -2.35, 2.35, 6.2], 1.7],
+  ['nyc', 4, [-5.75, -1.92, 1.92, 5.75], 1.92],
 ] as const)(
-  'TASK-334 %s keeps its short body centred in a 25 m pose',
-  ([id, length, doubleDoors]) => {
+  'TASK-334 %s fills both pose sizes with close coupling and fixed door and window spacing',
+  ([id, doubleDoors, doorCentres, paneM]) => {
     const v = builtVariant(id);
     expect(v.id).toBe(id);
+    expect(v.windows.paneM).toBe(paneM);
     const f = formationOf(v);
     const car = new Float32Array(4),
       gear = new Float32Array(8);
     const body = bodyGeometry(v),
       far = farGeometry(v);
     expect(far.index!.count / 3).toBe(12);
-    for (let j = 0; j < 3; j++) {
-      carState(f, 3, j, 24.3, false, false, car, 0, gear, 0);
+    for (const length of [21.8, 24.3]) {
+      carState(f, 3, 1, length, false, false, car, 0, gear, 0);
       const halfM = car[0]!,
         type = f.types[car[1]!]!,
         flags = car[2]!,
         gapM = car[3]!;
-      expect(halfM * 2).toBe(length);
-      expect(gapM).toBeCloseTo((25 - length) / 2, 5);
-      expect(type.doors).toHaveLength(4);
+      expect(halfM * 2).toBeCloseTo(length, 5);
+      expect(gapM * 2).toBeCloseTo(0.7, 5);
+      expect(type.doors.map(([anchor, offset]) => anchor * halfM + offset)).toEqual(doorCentres);
       expect(type.doors.filter((door) => door[2] > 1.2)).toHaveLength(doubleDoors);
+      expect(flags & (carFlags.coupledFront | carFlags.coupledRear)).toBe(
+        carFlags.coupledFront | carFlags.coupledRear,
+      );
       for (const geometry of [body, far]) {
         const detailFlags =
           geometry === far ? flags & ~(carFlags.cabFront | carFlags.cabRear) : flags;
@@ -333,6 +337,10 @@ test.for([
         expect(Math.min(...xs)).toBeCloseTo(-length / 2, 5);
         expect(Math.max(...xs)).toBeCloseTo(length / 2, 5);
       }
+      expect(placedX(1, 1, bodyParts.frontCoupler, halfM, flags, v.nose.lengthM, gapM)).toBeCloseTo(
+        (length + 0.7) / 2 + 0.02,
+        5,
+      );
     }
   },
 );

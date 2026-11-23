@@ -3428,11 +3428,12 @@ car every rendered frame; a car behind the camera is far. Picking raycasts an un
 shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
 TASK-127's.
 
-The London tube train draws 17 m cars with an elliptical roof, two single and two double red
-doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
-subway train draws 18 m stainless-steel cars with four double doors per side, a fluted skirt,
-a muted upper band and flat ends with storm doors. Both draw their bodies centred in the
-existing poses, leaving gangway space between cars. Neither uses pantographs or roof housings.
+The London tube train draws 2.6 m wide cars with an elliptical roof, two single and two double
+red doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train uses the 75 ft (22.9 m) R46/R68 as a reference, with four double doors per side,
+a fluted stainless-steel skirt, a muted upper band and flat ends with storm doors. Both fill
+the existing car spans (21.8 m at a 22.5 m pitch), leaving the pose's 0.7 m between bodies for
+the couplers and dark gangway or storm doors. Door spacing and window pitch are fixed in metres.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning

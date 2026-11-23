@@ -319,7 +319,6 @@ const sbahn: TrainVariant = {
 };
 
 const tubeCar: CarType = {
-  lengthM: 17,
   cabs: 'none',
   bogies: [
     [1, -2.7],
@@ -350,7 +349,7 @@ const tubeCar: CarType = {
 
 const tube: TrainVariant = {
   id: 'tube',
-  reference: 'Generic London deep-tube stock: 17 m cars, 2.6 m wide, roof 2.9 m',
+  reference: 'Generic London deep-tube stock: 2.6 m wide, roof 2.9 m, close-coupled cars',
   widthM: 2.6,
   heightM: 2.9,
   floorM: 0.65,
@@ -384,7 +383,6 @@ const tube: TrainVariant = {
 };
 
 const nycCar: CarType = {
-  lengthM: 18,
   cabs: 'none',
   bogies: [
     [1, -2.55],
@@ -415,7 +413,7 @@ const nycCar: CarType = {
 
 const nyc: TrainVariant = {
   id: 'nyc',
-  reference: 'Generic R160-like subway stock: 18 m cars, 3 m wide, roof 3.65 m',
+  reference: 'Generic R46/R68-style subway stock: 75 ft (22.9 m) reference, 3 m wide, roof 3.65 m',
   widthM: 3,
   heightM: 3.65,
   floorM: 1.08,
@@ -425,7 +423,7 @@ const nyc: TrainVariant = {
     waistM: 1.02,
     cantM: 3.26,
     cantInsetM: 0,
-    roofSquareness: 3,
+    roofSquareness: 4,
   },
   nose: {
     lengthM: 0.26,
