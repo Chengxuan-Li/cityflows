@@ -81,6 +81,8 @@ import type { RunwayConfiguration } from './runway-configuration';
 //   before the departures and tows still at their stands, and it does not start (it waits at its
 //   stand or in the air) while it would wait for a queued arrival or an aircraft parked in its way.
 //   A ring of waits that still closes (through those parked in the way) is broken after 60 s.
+//   TASK-330: a queued arrival that cannot reach where it meets a departure or tow before that
+//   aircraft is past does not hold it at its stand: the starter goes before it.
 //   Edges an aircraft will use are still marked with its direction: routes avoid running against
 //   them where they can.
 // - Runways: one aircraft holds each runway it uses and each intersection area its path reaches.
@@ -127,6 +129,10 @@ const ARRIVAL_PAD_S = 5;
 const RETRY_S = 5;
 /** TASK-329: a ring of waits lasting this long is broken. */
 const RING_S = 60;
+/** TASK-330: one landing to the next on a runway end, and the time a starter keeps in hand
+ * against a queued arrival it goes before. */
+const LANDING_GAP_S = 90;
+const HORIZON_S = 120;
 /** Swept bodies are sampled for the order at most this far apart (bodies are 15 m and more
  * long): a wait stops one sample short. */
 const SAMPLE_M = 6;
@@ -1319,6 +1325,60 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           : [],
       ),
     );
+  /** TASK-330: whether a queued arrival cannot be where it meets a departure or tow's legs before
+   * that aircraft, starting now, is past: the arrival lands `LANDING_GAP_S` after each arrival
+   * queued before it for its runway end, flies the final at approach speed and taxis at straight
+   * speed; the starter pushes at push speed, waits for its tug and taxis at turn speed, with
+   * `HORIZON_S` to spare. Such an arrival does not hold the starter at its stand: the starter goes
+   * before it, and the arrival is ordered after it as one at its stand is (`passing`). */
+  function beyondHorizon(craft: Craft, legs: Leg[], arrival: Craft) {
+    const request = arrival.request;
+    if (request?.kind !== 'arrival') return false;
+    let ahead = 0;
+    for (const id of queue) {
+      if (id === arrival.id) break;
+      const other = crafts[id - 1]!;
+      if (
+        other.request?.kind === 'arrival' &&
+        other.runway === arrival.runway &&
+        other.request.end === request.end
+      )
+        ahead++;
+    }
+    const inbound = fixedWing(arrival);
+    const landS = ahead * LANDING_GAP_S + FINAL_M / inbound.approachSpeedMps;
+    const landing = arrival.admission!.landing!.leg;
+    const byLanding = horizonMeets.get(legs) ?? new WeakMap<Leg, number[]>();
+    horizonMeets.set(legs, byLanding);
+    let spare = byLanding.get(landing);
+    if (!spare) {
+      const own = fixedWing(craft);
+      const speed = (leg: Leg) =>
+        leg.mode === 'pushback'
+          ? own.pushbackSpeedMps
+          : leg.mode === 'tow'
+            ? own.towSpeedMps
+            : own.taxiTurnMps;
+      spare = conflicts(
+        craft,
+        legs.map((leg) => ({ leg, fromM: 0 })),
+        arrival,
+      ).map((c) => {
+        let pastS = 0;
+        for (const leg of legs) {
+          const toM = leg === c.leg ? Math.min(leg.endM, c.b2 + craft.lengthM) : leg.endM;
+          pastS += (toM - leg.startM) / speed(leg) + (leg.mode === 'pushback' ? TUG_S : 0);
+          if (leg === c.leg) break;
+        }
+        return c.x1 / inbound.taxiStraightMps - pastS - HORIZON_S;
+      });
+      byLanding.set(landing, spare);
+    }
+    return spare.every((s) => landS + s >= 0);
+  }
+  /** Per starter's legs and arrival's landing leg: for each place they meet, the arrival's taxi
+   * time to it less the starter's time past it and `HORIZON_S`. */
+  const horizonMeets = new WeakMap<Leg[], WeakMap<Leg, number[]>>();
   /** Whether it would still wait for an aircraft not started. */
   const waitsForUnstarted = (craft: Craft, pass: Set<Craft>) =>
     craft.waits.some((w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w));
@@ -2599,6 +2659,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const first = legs[0]!;
     const half = craft.lengthM / 2;
     const pass = passing(craft);
+    const queued = new Set(
+      craft.waits.flatMap((w) => (w.pred.mode === 'queued' && !passed(w) ? [w.pred] : [])),
+    );
+    for (const arrival of queued) if (beyondHorizon(craft, legs, arrival)) pass.add(arrival);
     if (
       first.mode === 'pushback'
         ? waitCap(craft, first, pass) < Infinity
