@@ -352,7 +352,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | TASK-326 | airports | Departure metering and a crossing exit check in the real sim | sim pilot | 325 | Zurich peak against main 152/199 | not merged 2026-11-23 (`9f6332d`; metering 136, exit check alone 150) |
 | [TASK-327](tasks/TASK-327.md) | airports | Runway interlocks at intersections only | sim | 312 | Boston days, no runway conflicts, Zurich and LCY kept | merged 2026-11-23 (`bb78390`, `32dd6f5`) |
 | [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | merged 2026-11-23 (`58e23c2`) |
-| [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | in progress 2026-11-23 (Claude) |
+| [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | merged 2026-11-23 (`be7aef1`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5901,6 +5901,17 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-329 (Claude Code subagent, Opus 5.5 high; merged `be7aef1`): an aircraft that starts (pushback, tow, arrival
+  on approach) goes before departures and tows ranked earlier but still at their stands; nothing starts while it would
+  wait for a queued arrival or an aircraft parked in its way; newly parked aircraft block ordered-but-unstarted ones;
+  a ring breaker (5 s scan, breaks rings older than 60 s at an unstarted aircraft first, never one holding a runway
+  grant). Against main with 327 and 328: Heathrow 05-10 41/68/44 to 103/92/107 (no gridlock), full day 61/57/69 to
+  367/390/215; Zurich 730 565/571/591 to 581/578/604, go-arounds to 0; Boston 809/726/735 to 817/755/752, go-arounds
+  34-38 to 4-16; London City unchanged; runway conflicts 0; existing cities unchanged. Gaps: Heathrow seed 3 locks at
+  17:48 and Zurich seed 2 ends with 17 stuck, both from an aircraft parking across the path of one already ordered (a
+  stand-capacity question: the stand rule checks clearance only for its own type); the contract's synthetic
+  three-aircraft ring test was not delivered (rings dissolve on the fixture); a few new body-overlap samples at one
+  Zurich junction (E190/CRJ9), not traced.
 - TASK-327 (Codex; merged `bb78390`, lead fix-forward `32dd6f5`): runway grants cover the runway in use and only the
   protected intersection areas its route reaches; areas are booked separately and released when the tail clears;
   crossings of unused runways keep their holds but no longer wait for traffic on runways that merely touch them.
