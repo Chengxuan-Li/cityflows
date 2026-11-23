@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   Color,
   DynamicDrawUsage,
+  Group,
   InstancedMesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -15,7 +16,15 @@ import type { CompiledCity } from '../network';
 import { style } from '../render/style';
 import { vehicleClasses } from '../schema/city';
 import { VehiclePoses, type PresentationSnapshot } from '../render/vehicle-pose';
-import { heightAt, heightSlopeAt, roadStation, type cityHeights } from './heights';
+import {
+  heightAt,
+  heightSlopeAt,
+  roadStation,
+  terrainVehicleOffset,
+  type cityHeights,
+} from './heights';
+import { VehicleDetailBatches, vehicleShadowLayer, type VehicleDetailView } from './vehicle-detail';
+import { buildVehicleModel, vehicleModelIndex, vehicleModelNames } from './vehicle-models';
 
 /** TASK-163: head- and tail-lamps painted on each body's front and rear faces, in the unit box
  * (front face at x = 0, rear at x = -1, z across, y up) before the instance's scale. */
@@ -51,16 +60,30 @@ function vehicleMaterial(lights: { value: number }) {
 export class Vehicles3D {
   readonly poses = new VehiclePoses();
   private readonly lights = { value: 0 };
+  private readonly geometry = new BoxGeometry(1, 1, 1).translate(-0.5, 0.5, 0);
+  private readonly material = vehicleMaterial(this.lights);
+  readonly modelGeometries = vehicleModelNames.map((_, i) => buildVehicleModel(i));
   mesh = this.createMesh(1024);
   /** Headlight beams on the road ahead, drawn from the bodies' own instance matrices. */
   readonly beams = this.createBeams();
+  readonly group = new Group();
+  private readonly detail = new VehicleDetailBatches(
+    this.mesh,
+    this.modelGeometries,
+    false,
+    this.lights,
+  );
+  private model = new Uint8Array(1024);
   private readonly transform = new Object3D();
   private readonly color = new Color();
   private colourByClass = false;
 
+  constructor() {
+    this.group.add(this.mesh, this.beams, this.detail.group);
+  }
+
   private createMesh(capacity: number) {
-    const geometry = new BoxGeometry(1, 1, 1).translate(-0.5, 0.5, 0);
-    const mesh = new InstancedMesh(geometry, vehicleMaterial(this.lights), capacity);
+    const mesh = new InstancedMesh(this.geometry, this.material, capacity);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.castShadow = true;
     mesh.count = 0;
@@ -95,7 +118,7 @@ export class Vehicles3D {
   /** 0 turns the lamps off (the Day shader); above 0 they glow with that strength. */
   setLights(level: number) {
     const on = level > 0;
-    const material = this.mesh.material as MeshLambertMaterial;
+    const material = this.material;
     if (on !== (material.defines?.VEHICLE_LIGHTS !== undefined)) {
       material.defines = on ? { VEHICLE_LIGHTS: '' } : {};
       material.needsUpdate = true;
@@ -109,19 +132,28 @@ export class Vehicles3D {
     this.poses.setGeometry(city, durationS);
   }
 
+  clear() {
+    this.poses.snapshot = null;
+    this.mesh.count = this.beams.count = 0;
+    this.detail.clear();
+  }
+
   setSnapshot(snapshot: PresentationSnapshot) {
     this.poses.update(snapshot);
     if (snapshot.count > this.mesh.instanceMatrix.count) {
       const previous = this.mesh;
       this.mesh = this.createMesh(2 ** Math.ceil(Math.log2(snapshot.count)));
-      this.mesh.material.defines = { ...(previous.material as MeshLambertMaterial).defines };
-      previous.parent!.add(this.mesh);
+      this.group.add(this.mesh);
       previous.removeFromParent();
-      previous.geometry.dispose();
-      previous.material.dispose();
       previous.dispose();
       this.beams.instanceMatrix = this.mesh.instanceMatrix;
+      this.model = new Uint8Array(this.mesh.instanceMatrix.count);
     }
+    this.detail.reserve(snapshot.count, (i) => {
+      const model = vehicleModelIndex(snapshot.vclass[i]!, snapshot.id[i]!);
+      this.model[i] = model;
+      return model;
+    });
     this.mesh.count = this.beams.count = snapshot.count;
     this.recolour();
   }
@@ -146,9 +178,18 @@ export class Vehicles3D {
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
-  animate(elapsedS: number, city: CompiledCity, heights: ReturnType<typeof cityHeights>) {
+  animate(
+    elapsedS: number,
+    city: CompiledCity,
+    heights: ReturnType<typeof cityHeights>,
+    view: VehicleDetailView,
+  ) {
     const snapshot = this.poses.snapshot;
     if (!snapshot) return;
+    if (view.active) this.detail.clear();
+    this.detail.group.visible = view.active;
+    this.mesh.layers.set(view.active ? vehicleShadowLayer : 0);
+    const terrain = heights.terrain.grid;
     for (let i = 0; i < snapshot.count; i++) {
       const pose = this.poses.at(i, elapsedS);
       const lane = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : snapshot.lane[i]!;
@@ -167,6 +208,7 @@ export class Vehicles3D {
         z = heightAt(height, s);
         slope = heightSlopeAt(height, s);
       }
+      if (terrain) z += terrainVehicleOffset(city, heights, lane, pose);
       this.transform.position.set(pose.x, z, pose.y);
       this.transform.rotation.set(0, -pose.heading, Math.atan(slope), 'YXZ');
       const dimensions = style.vehicleClasses[vehicleClasses[snapshot.vclass[i]!]!];
@@ -178,16 +220,28 @@ export class Vehicles3D {
       );
       this.transform.updateMatrix();
       this.mesh.setMatrixAt(i, this.transform.matrix);
+      if (view.active)
+        this.detail.append(
+          view,
+          i,
+          this.transform.matrix,
+          this.model[i]!,
+          this.mesh.instanceColor!,
+        );
     }
+    if (view.active) this.detail.flush();
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
   destroy() {
-    this.mesh.geometry.dispose();
-    this.mesh.material.dispose();
+    this.detail.dispose();
+    for (const geometry of this.modelGeometries) geometry.dispose();
+    this.geometry.dispose();
+    this.material.dispose();
     this.mesh.dispose();
     this.beams.geometry.dispose();
     (this.beams.material as MeshBasicMaterial).map?.dispose();
     (this.beams.material as MeshBasicMaterial).dispose();
+    this.beams.dispose();
   }
 }

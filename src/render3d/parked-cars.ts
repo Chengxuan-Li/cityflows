@@ -1,13 +1,28 @@
-import { BoxGeometry, Color, InstancedMesh, MeshLambertMaterial, Object3D } from 'three';
+import {
+  BoxGeometry,
+  Color,
+  Group,
+  InstancedMesh,
+  MeshLambertMaterial,
+  Matrix4,
+  Object3D,
+  type BufferGeometry,
+} from 'three';
 import type { CompiledCity } from '../network';
 import { occupiedSpaces, parkedColour } from '../render/parked-cars';
 import { style } from '../render/style';
 import type { ParkedCarsSnapshot } from '../render/types';
 import { vehicleClasses } from '../schema/city';
 import { heightAt, roadStation, terrainVehicleOffset, type cityHeights } from './heights';
+import { VehicleDetailBatches, type VehicleDetailView } from './vehicle-detail';
+import { vehicleModelIndex } from './vehicle-models';
 
 export class ParkedCars3D {
   readonly mesh: InstancedMesh<BoxGeometry, MeshLambertMaterial>;
+  readonly group = new Group();
+  private readonly detail: VehicleDetailBatches;
+  private readonly matrix = new Matrix4();
+  private detailDirty = true;
   private snapshot: ParkedCarsSnapshot | null = null;
   private spaces: number[] = [];
   private readonly transform = new Object3D();
@@ -18,6 +33,7 @@ export class ParkedCars3D {
   constructor(
     private readonly city: CompiledCity,
     private readonly heights: ReturnType<typeof cityHeights>,
+    modelGeometries: readonly BufferGeometry[],
   ) {
     this.mesh = new InstancedMesh(
       new BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
@@ -28,6 +44,8 @@ export class ParkedCars3D {
     this.mesh.frustumCulled = false;
     // Static parked stock does not enter the moving-car shadow pass.
     this.mesh.receiveShadow = true;
+    this.detail = new VehicleDetailBatches(this.mesh, modelGeometries, true);
+    this.group.add(this.mesh, this.detail.group);
   }
 
   get count() {
@@ -43,7 +61,13 @@ export class ParkedCars3D {
   setSnapshot(snapshot: ParkedCarsSnapshot | null) {
     this.snapshot = snapshot;
     this.spaces = occupiedSpaces(snapshot, this.city.parkingSpaces?.length ?? 0);
+    if (snapshot)
+      this.detail.reserve(this.spaces.length, (i) => this.modelAt(snapshot, this.spaces[i]!));
     this.update();
+  }
+
+  private modelAt(snapshot: ParkedCarsSnapshot, space: number) {
+    return vehicleModelIndex(snapshot.vclass[space]!, snapshot.id[space] || space);
   }
 
   setStyle(zoom: number, byClass: boolean) {
@@ -60,6 +84,7 @@ export class ParkedCars3D {
   }
 
   private update() {
+    this.detailDirty = true;
     this.mesh.count = this.spaces.length;
     if (!this.snapshot) return;
     for (const [instance, index] of this.spaces.entries()) {
@@ -85,5 +110,34 @@ export class ParkedCars3D {
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+  }
+
+  setDetail(view: VehicleDetailView, viewChanged: boolean) {
+    this.mesh.visible = !view.active;
+    this.detail.group.visible = view.active;
+    if (!view.active || (!this.detailDirty && !viewChanged)) return;
+    this.detailDirty = false;
+    this.detail.clear();
+    const snapshot = this.snapshot;
+    if (snapshot)
+      for (let i = 0; i < this.spaces.length; i++) {
+        this.mesh.getMatrixAt(i, this.matrix);
+        this.detail.append(
+          view,
+          i,
+          this.matrix,
+          this.modelAt(snapshot, this.spaces[i]!),
+          this.mesh.instanceColor!,
+        );
+      }
+    this.detail.flush();
+  }
+
+  destroy() {
+    this.group.removeFromParent();
+    this.detail.dispose();
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+    this.mesh.dispose();
   }
 }
