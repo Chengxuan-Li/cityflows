@@ -99,7 +99,7 @@ export function groundAttitude(
   centreM: number,
   lengthM: number,
   reverse: boolean,
-  stand?: { pos: Vec2; heading: number; centreM: number },
+  stop?: { pos: Vec2; heading: number; centreM: number },
 ) {
   const { noseX, mainX } = fixedWingGearStations(lengthM);
   const wheelbase = noseX - mainX;
@@ -135,15 +135,15 @@ export function groundAttitude(
   const after = pointAtDistance(points, stationsM, noseM + direction * 1.5);
   const tangent = Math.atan2(after.y - before.y, after.x - before.x);
   let { x, y } = nose;
-  const alignment = stand ? ease(1 - Math.abs(centreM - stand.centreM) / (2 * wheelbase)) : 0;
-  if (stand && alignment > 0) {
-    // Short lead-ins may end before the trailing main gear has straightened. Settle into
-    // the mapped stand pose, using the same alignment while moving off it in reverse.
-    const end = pointAtDistance(points, stationsM, stand.centreM + direction * noseX);
-    const fromTip = lengthM / 2 - noseX;
-    x += alignment * (stand.pos.x - fromTip * Math.cos(stand.heading) - end.x);
-    y += alignment * (stand.pos.y - fromTip * Math.sin(stand.heading) - end.y);
-    heading += alignment * angle(stand.heading - heading);
+  const alignment = stop ? ease(1 - Math.abs(centreM - stop.centreM) / (2 * wheelbase)) : 0;
+  if (stop && alignment > 0) {
+    // The nose wheel's track lags the path's heading after a turn. Settle into the body's pose
+    // at the stop (`pos` its centre; TASK-320: the parked pose the simulation holds), using the
+    // same alignment while moving off it in reverse.
+    const end = pointAtDistance(points, stationsM, stop.centreM + direction * noseX);
+    x += alignment * (stop.pos.x + noseX * Math.cos(stop.heading) - end.x);
+    y += alignment * (stop.pos.y + noseX * Math.sin(stop.heading) - end.y);
+    heading += alignment * angle(stop.heading - heading);
   }
   const steering = Math.max(-radians(75), Math.min(radians(75), angle(tangent - heading)));
   return {

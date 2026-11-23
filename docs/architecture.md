@@ -1468,7 +1468,10 @@ edges and the runways whose edges meet there; edges their line, cumulative stati
 code as an index into `aircraftCodes` (-1 admits none), runway and stand; runways their edges and
 nodes in order from `ends[0]` with stations, centreline, and each end's node, threshold and
 stations; holds their node, protected runway and `toward` edge; stands their lead-in edges, root
-(network end) and stop node; hangars their centroid and the nearest node a taxi edge reaches;
+(network end) and stop node, and (TASK-320) where apron service roads (`service` roads closed to
+cars, TASK-316's reading) cross the stand's line, as merged bands of distance back from the stop,
+and the paved room ahead of the stop (to the edge of the non-runway airside surfaces or a terminal
+or hangar wall, at most 30 m); hangars their centroid and the nearest node a taxi edge reaches;
 `maxSpanM`, the span limit of the largest stand code. Each road crossing gets the lanes of its
 recorded roads whose drawn line passes within a lane width of it, with a stop `clearance` short of
 it: the larger of half the edge's width and half its code's span, plus 7.5 m; a stop before a
@@ -1904,6 +1907,21 @@ carry no persons and generate no road trips.
   root; a departure then waits 20 s (tug off, engines on) and taxis; a tow continues as a tow (no
   engines) to a stand or a node (`requestTow(id, { stand } | { node } | { hangar })`). A stand
   admits a type only up to its code and only with a way out (a push arc and a turn on from it).
+- **Parked pose** (TASK-320). A leg that ends at a stand's stop (an arrival, a tow, an aircraft
+  placed on its stand) ends on the stand's line: its last half length plus 1 m runs straight on
+  the stand heading, so the parked aircraft stands on that heading with its nose at the stop. The
+  corner before is rounded with the turning radius where the lead-in leaves room for the
+  straight, tighter where it does not (London City's stands turn back 130 degrees 25 m short of
+  their stops). Where the lead-in's last straight is shorter than that or off the stand heading,
+  an alignment segment replaces the leg's end: from the route a turning radius before, to a
+  point a half length, 1 m and a turning radius back from the stop on the stand's line, then on
+  to the stop. A pushback starts from the same pose by the same rule. The stop moves along the
+  stand heading so that the parked body keeps 1 m clear of the apron service roads across the
+  stand's line: the least move, within the paved room ahead or 20 m back, that clears every road
+  there and stands in no taxiway's way; where none does the stop stays (the report of TASK-320
+  lists those stands). The drawn pose settles into the simulation's pose at the stop over the
+  last two wheelbases (no longer into the mapped stand pose), so a parked aircraft is drawn where
+  it stands.
 - **Helicopters** land vertically on a helipad from a stated heading, leave climbing vertically
   then forward, and hover-taxi between helipads. The flight operations give the heading of the
   helicopter runway's end with the most headwind where the airport has one (a runway with no
