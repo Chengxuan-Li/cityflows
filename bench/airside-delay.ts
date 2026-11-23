@@ -118,6 +118,8 @@ fleet.requestDeparture = (...args) => {
   if (result.ok) track(result.id).departureRequestS = timeS;
   return result;
 };
+/** TASK-330: touchdowns by runway end, for landings per hour and the gap between them. */
+const touchdowns: { timeS: number; end: string }[] = [];
 const drainEvents = fleet.drainEvents;
 fleet.drainEvents = () => {
   const events = drainEvents();
@@ -127,6 +129,10 @@ fleet.drainEvents = () => {
       case 'landed':
         lastCompletionS = event.timeS;
         row.touchdownS = event.timeS;
+        touchdowns.push({
+          timeS: event.timeS,
+          end: fleet.snapshot().find((pose) => pose.id === event.id)?.runwayEnd ?? '?',
+        });
         break;
       case 'parked':
         row.parkedS = event.timeS;
@@ -337,6 +343,24 @@ const summary = {
   ]),
   taxiIn: moving(arrivals),
   taxiOut: moving(departures),
+  landings: Object.fromEntries(
+    [...new Set(touchdowns.map((t) => t.end))].sort().map((end) => {
+      const times = touchdowns
+        .filter((t) => t.end === end && t.timeS >= startS && t.timeS < windowEndS)
+        .map((t) => t.timeS);
+      const gaps = times
+        .slice(1)
+        .map((t, i) => t - times[i]!)
+        .sort((a, b) => a - b);
+      return [
+        end,
+        {
+          perHour: round(times.length / ((windowEndS - startS) / 3600)),
+          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
+        },
+      ];
+    }),
+  ),
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));
