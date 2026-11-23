@@ -158,3 +158,36 @@ asks for about 40 in this window.
 3. **Pilot**, the same small windows: Heathrow 05:00–09:00 seed 1 is the target, with about 35–45 an hour on 27L.
    Zurich and Boston must not regress. Report the same table plus the hold-reason breakdown after the change. Then stop
    and report.
+
+## Phase 1d — reserve the taxi route piece by piece (owner, 2026-11-23)
+
+Phase 1c result: none of the six exit variants ((c), (a)+(c), (d), (f), (d)+(f), re-coded exits) brings Heathrow 27L
+near 35–45 landings an hour. The runway and the exits are not the limit. Landed arrivals stand still 1.0–1.7 km past
+the exit, behind arrivals waiting to cross 27L again, tows, and departures queued at runway holds. Opening the southern
+exits gridlocks the central taxiways. The pilot material is in `D:\cityflows-wt\330-pilot`.
+
+Owner: "yes we need piece by piece reservation. only pilot testing needed to see if that is helpful."
+
+**Pilot (option A).** An aircraft reserves its route from where it is to the next safe waiting point only. A safe
+waiting point is any place where its stopped body blocks no runway and no junction another route needs: a runway hold,
+a junction-clear point on a taxiway, a vacate spot, a stand. It extends the reservation as it moves and stops at that
+point if the next stretch is taken. A departure starts when its pushback and first stretch are free, not its whole
+route.
+
+Deadlock prevention is part of the design, not an afterthought:
+
+- Head-on traffic on two-way stretches must be prevented. Reserve to a passing place, or keep the order of admission
+  for those stretches only.
+- Wait cycles must be detected and broken deterministically.
+
+Read TASK-322 (block signalling, not merged: Zurich peak 120 of 199 against 152) and TASK-324 first, and say how this
+differs.
+
+Measure on the Phase 1 windows, against 964d47c:
+
+- Heathrow 05:00–09:00 seed 1;
+- Zurich at 730, 06:00–10:00, seeds 1–3;
+- Boston 06:00–10:00 seed 1.
+
+If it helps, also run it combined with (d)+(f) and with the re-coded exits. Report the Phase 1c table, plus waits
+broken and cycles detected. Pilot only: no full days, no merge.
