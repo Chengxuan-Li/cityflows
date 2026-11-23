@@ -2,8 +2,9 @@ import type { GroundVehiclePose } from '../sim/ground-vehicles';
 import type { AircraftPose } from './types';
 
 // TASK-316: ground vehicles between snapshots for both views, one snapshot behind during
-// playback like the aircraft (`aircraft-pose.ts`), carts included. A tug pushing an aircraft is
-// drawn by the aircraft layers (TASK-314's tug at the nose) and hidden here; one towing is drawn
+// playback like the aircraft (`aircraft-pose.ts`), carts included. A tug coupled to an aircraft
+// ready for pushback or pushing is drawn by the aircraft layers (TASK-314's tug at the nose) and
+// hidden here; one towing is drawn
 // here from its snapshot pose.
 
 const lerpAngle = (a: number, b: number, t: number) =>
@@ -67,5 +68,6 @@ export class GroundVehicleTracks {
 
 /** Whether a vehicle is drawn by this layer: not a tug the aircraft layers draw pushing. */
 export function shownVehicle(pose: GroundVehiclePose, aircraft: ReadonlyMap<number, AircraftPose>) {
-  return pose.attachedTo < 0 || aircraft.get(pose.attachedTo)?.state !== 'pushback';
+  const state = aircraft.get(pose.attachedTo)?.state;
+  return pose.attachedTo < 0 || (state !== 'pushback' && state !== 'ready-for-pushback');
 }

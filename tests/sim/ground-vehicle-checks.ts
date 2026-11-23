@@ -12,7 +12,7 @@ import {
 // TASK-316: the gates' checks on ground vehicles. A vehicle's plan is its body and each baggage
 // cart's. It overlaps an aircraft when it meets the fuselage or the tailplane in plan, or the
 // wing of an aircraft that moves (wings and engines stand above apron vehicles at a stand). A
-// tug pushing an aircraft is part of it.
+// tug coupled to an aircraft is part of it.
 
 const typeById = new Map(aircraftTypes.map((t) => [t.id, t]));
 
@@ -28,7 +28,7 @@ function aircraftBoxes(a: AircraftPoseSnapshot): PlanBox[] {
   const type = typeById.get(a.typeId)!;
   const pose = a.visual ?? a;
   const hull = aircraftHull(type, pose);
-  if (a.state === 'parked') return hull;
+  if (a.state === 'parked' || a.state === 'ready-for-pushback') return hull;
   const wing = {
     x: pose.x + Math.cos(pose.heading) * 0.02 * type.lengthM,
     y: pose.y + Math.sin(pose.heading) * 0.02 * type.lengthM,

@@ -708,6 +708,9 @@ export interface GroundVehicleSource {
 }
 
 const STUCK_S = 600;
+/** TASK-319: an aircraft ready for pushback stands still with its tug coupled. */
+const pushing = (state: string) => state === 'ready-for-pushback' || state === 'pushback';
+const standing = (state: string) => state === 'parked' || state === 'ready-for-pushback';
 
 export function createGroundVehicles(compiled: CompiledCity, source: GroundVehicleSource) {
   const graph = compiled.airside!;
@@ -979,7 +982,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     parkedBoxes = [];
     parkedOwners = [];
     for (const a of aircraft) {
-      if (a.state !== 'parked') continue;
+      if (!standing(a.state)) continue;
       for (const box of aircraftHull(typeById.get(a.typeId)!, a.visual ?? a)) {
         parkedBoxes.push(box);
         parkedOwners.push(a);
@@ -1021,7 +1024,8 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     for (const a of aircraft) {
       const before = lastState.get(a.id);
       lastState.set(a.id, a.state);
-      if (a.state !== 'pushback' || before === 'pushback') continue;
+      // TASK-319: the tug couples when the aircraft is ready for pushback (or pushes at once).
+      if (!pushing(a.state) || (before !== undefined && pushing(before))) continue;
       counts.pushbacks++;
       const tug = tugAt.get(a.id);
       if (tug && tug.phase === 'serving') {
@@ -1206,7 +1210,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     }
     for (const a of aircraft) {
       // Its own aircraft, parked, does not hold a vehicle in or out of its stand.
-      if (a.heightM > 60 || (a.id === own && a.state === 'parked')) continue;
+      if (a.heightM > 60 || (a.id === own && standing(a.state))) continue;
       const type = typeById.get(a.typeId)!;
       const radius = Math.max(type.lengthM, type.spanM) / 2;
       let d = Infinity;
@@ -1713,7 +1717,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     for (const vehicle of [...vehicles]) {
       if (vehicle.phase === 'attached') {
         const pose = byId.get(vehicle.turn!.aircraft);
-        if (!pose || (pose.state !== 'pushback' && pose.state !== 'tow')) {
+        if (!pose || (!pushing(pose.state) && pose.state !== 'tow')) {
           if (pose) detach(vehicle, pose);
           else remove(vehicle);
         }
@@ -1724,7 +1728,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         const pose = byId.get(vehicle.turn!.aircraft);
         if (vehicle.kind === 'tug') {
           // An aircraft that left without its tug (never pushed): the tug goes home.
-          if (!pose || (pose.state !== 'parked' && pose.state !== 'pushback')) leaveTug(vehicle);
+          if (!pose || (pose.state !== 'parked' && !pushing(pose.state))) leaveTug(vehicle);
           continue;
         }
         if ((timeS >= visit.leaveS || !pose || pose.state !== 'parked') && standFree(vehicle)) {

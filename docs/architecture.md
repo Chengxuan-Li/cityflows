@@ -2006,8 +2006,8 @@ carry no persons and generate no road trips.
   tailplane in plan (wings and engines stand above apron vehicles), of other parked hulls and of
   other stands' lead-in corridors; vehicles drive in along their line from the end facing the
   access point and out forward, returning on nested outer lines. The tug backs onto the nose,
-  where TASK-314's tug is drawn during the push (the vehicle is then `attachedTo` the aircraft and
-  hidden), and leaves forward and aside where the push ends. Vehicles read the fleet snapshot once
+  where TASK-314's tug is drawn; from TASK-319's `ready-for-pushback` through the push it is
+  `attachedTo` the aircraft and hidden, and leaves forward and aside where the push ends. Vehicles read the fleet snapshot once
   a second; aircraft never see them (the fleet's hash is the same with or without them). They give
   way to aircraft by entering a zone only when no moving aircraft is within its radius plus 30 m
   or routed through it within the larger of 250 m and 40 s, and only when their way beyond it,
@@ -3273,8 +3273,8 @@ TASK-316: ground vehicles are drawn from `groundVehicles`, interpolated one snap
 the aircraft (`render/ground-vehicles.ts`): in 2D as bodies with a cab, tank or box accent and a
 tractor's carts, under the aircraft (`render/layers/ground-vehicles.ts`); in 3D as one instanced
 mesh per kind and one for carts (seven draw calls) with amber roof beacons as halos
-(`render3d/ground-vehicles.ts`). A tug attached to an aircraft in `pushback` is left to the
-aircraft layers' tug; one towing is drawn from its snapshot pose.
+(`render3d/ground-vehicles.ts`). A tug attached to an aircraft ready for pushback or pushing is
+left to the aircraft layers' tug; one towing is drawn from its snapshot pose.
 
 TASK-301: airfield and aircraft lighting by rule (`render/airfield-lights.ts`, shared by both
 views; ICAO Annex 14 in simplified form). `placeAirfieldLights` places every light once: runway
