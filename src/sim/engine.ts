@@ -276,7 +276,11 @@ function createRun({
   const drainTurnarounds = operations?.drainTurnarounds?.bind(operations);
   const ground =
     fleet && drainTurnarounds
-      ? createGroundVehicles(compiled, { snapshot: () => fleet.snapshot(), drainTurnarounds })
+      ? createGroundVehicles(compiled, {
+          snapshot: () => fleet.snapshot(),
+          movementSpace: () => fleet.movementSpace(),
+          drainTurnarounds,
+        })
       : null;
   const airsideGiveWay = (city: CompiledCity) =>
     fleet && city.airside?.crossings.length

@@ -23,6 +23,8 @@ const dayS = 86_400;
 const standHoldS = 1800;
 const returnLeadS = 1200;
 const maintenanceS = 300;
+/** TASK-316: a tow, and a departure after a tow, are planned this far ahead, so a tug can come. */
+const towNoticeS = 300;
 const longTurnS = 75 * 60;
 const prevailingWind: AirportWind = { fromDeg: 240, speedKt: 8 };
 const isHelicopter = (typeId: string) =>
@@ -97,7 +99,8 @@ export interface FlightBoard {
 /** TASK-316: what the airside ground vehicles read of a turnaround. `on-block`: the aircraft
  * stands at the stand it departs from (no tow follows) and is ready to push at `readyS`; it comes
  * on landing (`arrived`), after its last tow, or for one parked before the start. `off-block`: it
- * leaves for its departure. TASK-319's ready-for-pushback can stand in for `readyS`. */
+ * leaves for its departure. `tow-planned`: the aircraft is towed from its stand at `timeS` (or
+ * as soon after as the way is free). TASK-319's ready-for-pushback can stand in for `readyS`. */
 export type TurnaroundEvent =
   | {
       kind: 'on-block';
@@ -108,7 +111,8 @@ export type TurnaroundEvent =
       readyS: number;
       arrived: boolean;
     }
-  | { kind: 'off-block'; id: number; timeS: number };
+  | { kind: 'off-block'; id: number; timeS: number }
+  | { kind: 'tow-planned'; id: number; stand: number; typeId: string; timeS: number };
 
 export interface FlightOperationsOptions {
   /** Configurations and time-of-day concepts in place of the airport's own table. */
@@ -120,6 +124,8 @@ export interface FlightOperationsOptions {
 interface Turn {
   flight: ScheduledFlight;
   id?: number;
+  /** TASK-316: the planned time of its next tow, announced to the ground vehicles. */
+  towAtS?: number;
   phase:
     'scheduled' | 'holding' | 'arriving' | 'parked' | 'towing' | 'departing' | 'done' | 'diverted';
   stand: number;
@@ -366,8 +372,15 @@ export function createFlightOperations(
   let tows = 0;
   let peakOccupied = 0;
   const turnarounds: TurnaroundEvent[] = [];
+  function planTow(turn: Turn, atS: number) {
+    turn.towAtS = atS;
+    const { typeId } = turn.flight;
+    turnarounds.push({ kind: 'tow-planned', id: turn.id!, stand: turn.stand, typeId, timeS: atS });
+  }
   function onBlock(turn: Turn, timeS: number, arrived: boolean) {
     if (turn.service !== 'done' || turn.stand < 0) return;
+    // After a tow (or parked before the start), the departure is planned with the tow's notice.
+    if (!arrived) turn.readyS = Math.max(turn.readyS, timeS + towNoticeS);
     const readyS = Math.max(turn.readyS, timeS);
     const { typeId } = turn.flight;
     turnarounds.push({
@@ -457,6 +470,7 @@ export function createFlightOperations(
           turn.service = 'away';
           turn.leftStand = regular[0];
           turn.returnS = flight.departureS - returnLeadS;
+          planTow(turn, turn.returnS);
         }
         break;
       }
@@ -493,6 +507,7 @@ export function createFlightOperations(
 
   function serviceStand(turn: Turn, timeS: number) {
     const { flight } = turn;
+    if (turn.towAtS !== undefined && timeS < turn.towAtS) return;
     if (turn.service === 'away' && timeS >= turn.returnS) {
       const first = turn.leftStand === undefined ? [] : [turn.leftStand];
       if (tow(turn, [...first, ...arrivalStands(turn)])) turn.service = 'back';
@@ -544,12 +559,15 @@ export function createFlightOperations(
           flight.departureS,
           event.timeS + aircraftTurnaroundMinutes[flight.typeId]! * 60,
         );
+        if (turn.service === 'out') planTow(turn, event.timeS + towNoticeS);
         onBlock(turn, event.timeS, true);
       } else if (event.kind === 'towed') {
         tows++;
         turn.phase = 'parked';
         if (turn.service === 'back') turn.service = 'done';
         if (turn.service === 'away' && !flight.overnight) turn.returnS = event.timeS + maintenanceS;
+        if (turn.service === 'away')
+          planTow(turn, Math.max(turn.returnS, event.timeS + towNoticeS));
         onBlock(turn, event.timeS, false);
       }
     }

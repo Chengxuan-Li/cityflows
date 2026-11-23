@@ -18,6 +18,7 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
   // TASK-316: with its ground vehicles, which the aircraft never see.
   const ground = createGroundVehicles(result.compiled, {
     snapshot: () => fleet.snapshot(),
+    movementSpace: () => fleet.movementSpace(),
     drainTurnarounds: () => operations.drainTurnarounds(),
   });
   let vehicleOverlaps = 0;
@@ -83,8 +84,9 @@ test.for([1, 2, 3])(
     expect(metrics.meanDelayS).toBeLessThanOrEqual(300);
     expect(metrics.worstDelayS).toBeLessThanOrEqual(1800);
     expect(day.vehicleOverlaps).toBe(0);
-    // TASK-316: London City serves fewer visits than Zurich (report: stand ways left out where
-    // parked aircraft stand askew of their stand or tails overhang the apron road).
+    expect(day.vehicleAircraftOverlaps).toBe(0);
+    // TASK-316: London City serves fewer visits than Zurich (report: one apron road under parked
+    // tails at stands 11, 12 and past 5 to 8, where vehicles hold off one another).
     expect(day.vehicles.served).toBeGreaterThan(0.4 * day.vehicles.visits);
   },
 );

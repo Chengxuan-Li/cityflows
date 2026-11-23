@@ -159,9 +159,6 @@ function corridorsOf(graph: AirsideGraph) {
   return grid;
 }
 
-/** The airside edges whose aircraft corridor holds a point, ascending. */
-export const corridorEdgesAt = (graph: AirsideGraph, p: Vec2) => corridorsOf(graph)(p);
-
 /** The zones of a polyline: its stretches inside aircraft corridors, edges for which `skip` holds
  * left out (a vehicle's own stand). */
 export function corridorZones(

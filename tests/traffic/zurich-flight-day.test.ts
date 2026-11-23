@@ -26,6 +26,7 @@ test(
     // TASK-316: with its ground vehicles, which the aircraft never see.
     const ground = createGroundVehicles(result.compiled, {
       snapshot: () => fleet.snapshot(),
+      movementSpace: () => fleet.movementSpace(),
       drainTurnarounds: () => operations.drainTurnarounds(),
     });
     let vehicleOverlaps = 0;
@@ -72,7 +73,7 @@ test(
     console.info({ vehicleOverlaps, vehicleAircraftOverlaps });
     expect(vehicleOverlaps).toBe(0);
     expect(vehicleAircraftOverlaps).toBe(0);
-    expect(vehicleMetrics.served).toBeGreaterThan(vehicleMetrics.visits / 2);
+    expect(vehicleMetrics.served).toBeGreaterThan(0.85 * vehicleMetrics.visits);
     expect(metrics.completed / metrics.scheduled).toBeGreaterThanOrEqual(0.98);
     expect(overlapCount).toBe(0);
     expect(runwayConflicts).toBe(0);

@@ -26,9 +26,13 @@ export function vehicleBoxes(pose: GroundVehiclePose): PlanBox[] {
 
 function aircraftBoxes(a: AircraftPoseSnapshot): PlanBox[] {
   const type = typeById.get(a.typeId)!;
-  const pose = a.visual ?? a;
+  // A standing aircraft where it is drawn (TASK-314's visual pose: the physical heading at a stand
+  // can differ by tens of degrees); a moving one where it physically is, as TASK-298's aircraft
+  // gates (`aircraft-checks.ts`) take it.
+  const standing = a.state === 'parked' || a.state === 'ready-for-pushback';
+  const pose = standing ? (a.visual ?? a) : a;
   const hull = aircraftHull(type, pose);
-  if (a.state === 'parked' || a.state === 'ready-for-pushback') return hull;
+  if (standing) return hull;
   const wing = {
     x: pose.x + Math.cos(pose.heading) * 0.02 * type.lengthM,
     y: pose.y + Math.sin(pose.heading) * 0.02 * type.lengthM,
