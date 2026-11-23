@@ -343,7 +343,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
-| [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | in progress 2026-11-22 (Claude) |
+| [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | merged 2026-11-23 (`4fa2884`) |
 | TASK-321 | airports | Abstract block-signalling validation (bench only) | bench | 312 | gridlocks per policy, real layouts | merged 2026-11-23 (`6809c54`) |
 | [TASK-322](tasks/TASK-322.md) | airports | Block signalling and dynamic taxi flows in the airside simulation | sim, routing | 321 | no gridlock anywhere, LCY kept, large-airport days | in progress 2026-11-23 (Claude) |
 | [TASK-323](tasks/TASK-323.md) | airports | Dynamic taxi-flow preferences per runway configuration | sim module | 321 | flips with runway direction, fast, small route cost | in progress 2026-11-23 (Codex) |
@@ -5895,6 +5895,15 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-320 (Claude Code subagents, Opus 5.5 high; restarted after an app interruption; merged `4fa2884`): arrival legs
+  end with a straight run on the stand heading (or an alignment segment), the stop shifts along the heading to keep
+  the parked body 1 m clear of apron roads where paving allows, pushback starts from that pose, drawn pose = sim pose
+  (`roadBandsM`, `aheadM` on compiled stands). Heading at stop 3 degrees or more: London City 12 to 0 of 19 (worst 60.6
+  to 0.0), Zurich 3 to 0, Boston 1 to 0, Heathrow 5 to 0. Tails still over the road where no stop clears it: London
+  City 11 to 13 (14 to 18 m), Zurich H11 to H14, nine Heathrow stands (a stand-capacity rule is the follow-up). A stop
+  clamp fixes a Zurich 750 crash at 21:05; Zurich 750 498 to 533 completed, overlaps 1 to 0. London City seeds 1 to 3
+  within gates (mean 17.5 / 16.3 / 20.1 s). TASK-316 re-run on top: Zurich 93% served, 91 of 98 tugs; London City 54%,
+  42 of 99 (stands 11 to 13 and late vehicles): TASK-316 stays parked.
 - TASK-321 (Claude Code subagent, Opus 5.5 high; merged `6809c54`, bench only): the owner's proposal tested on an
   abstract block simulator (`bench/block-signalling.ts`; 150 m blocks, aircraft as points): A today's style, B
   railway-style block clearance (enter a junction only if the block beyond is free; lock the direction of every
