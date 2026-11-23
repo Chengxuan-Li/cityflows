@@ -60,6 +60,7 @@ function vehicleMaterial(lights: { value: number }) {
 export class Vehicles3D {
   readonly poses = new VehiclePoses();
   private readonly lights = { value: 0 };
+  private readonly kerbSide = { value: 1 };
   private readonly geometry = new BoxGeometry(1, 1, 1).translate(-0.5, 0.5, 0);
   private readonly material = vehicleMaterial(this.lights);
   readonly modelGeometries = vehicleModelNames.map((_, i) => buildVehicleModel(i));
@@ -71,6 +72,7 @@ export class Vehicles3D {
     this.mesh,
     this.modelGeometries,
     false,
+    this.kerbSide,
     this.lights,
   );
   private model = new Uint8Array(1024);
@@ -129,6 +131,7 @@ export class Vehicles3D {
   }
 
   setGeometry(city: CompiledCity, durationS?: number) {
+    this.kerbSide.value = city.drivingSide === 'left' ? -1 : 1;
     this.poses.setGeometry(city, durationS);
   }
 

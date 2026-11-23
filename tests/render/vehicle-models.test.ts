@@ -50,6 +50,35 @@ describe('TASK-335 road vehicle models', () => {
       expect([1, 2, 3].map((vclass) => vehicleModelIndex(vclass, id))).toEqual([3, 4, 5]);
   });
 
+  it('gives the sedan a boot, the hatchback a steep short tail and the SUV upright pillars', () => {
+    const rearGlass = (model: number) => {
+      const geometry = buildVehicleModel(model).scale(4.5, 1.5, 1.8);
+      const position = geometry.getAttribute('position');
+      const normal = geometry.getAttribute('normal');
+      for (let i = 0; i < position.count; i += 3) {
+        const ys = [position.getY(i), position.getY(i + 1), position.getY(i + 2)];
+        if (normal.getX(i) < -0.4 && Math.max(...ys) === 1.5 && Math.min(...ys) < 1.4) {
+          const xs = [position.getX(i), position.getX(i + 1), position.getX(i + 2)];
+          geometry.dispose();
+          return {
+            angle: (Math.atan2(-normal.getX(i), Math.abs(normal.getY(i))) * 180) / Math.PI,
+            deck: Math.min(...xs) + 4.5,
+            roofSetback: Math.max(...xs) + 4.5,
+          };
+        }
+      }
+      throw new Error('Missing rear glass face');
+    };
+    const sedan = rearGlass(0);
+    const hatchback = rearGlass(1);
+    const suv = rearGlass(2);
+    expect(sedan.deck).toBeGreaterThan(1.05);
+    expect(hatchback.angle).toBeGreaterThan(57);
+    expect(hatchback.angle).toBeLessThan(63);
+    expect(hatchback.roofSetback).toBeGreaterThan(0.75);
+    expect(suv.angle).toBeGreaterThan(78);
+  });
+
   it('uses models at street depth, boxes farther away and culls off-camera bodies', () => {
     const camera = new PerspectiveCamera(45, 1, 0.2, 5000);
     const view = new VehicleDetailView();

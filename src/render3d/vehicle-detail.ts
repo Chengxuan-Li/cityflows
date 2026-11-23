@@ -83,10 +83,11 @@ export class VehicleDetailBatches {
     base: InstancedMesh<BufferGeometry, MeshLambertMaterial>,
     geometries: readonly BufferGeometry[],
     private readonly centred: boolean,
+    kerbSide: { value: number },
     lights?: { value: number },
   ) {
     this.receiveShadow = base.receiveShadow;
-    this.material = vehicleModelMaterial(lights);
+    this.material = vehicleModelMaterial(kerbSide, lights);
     this.models = [
       ...geometries.map((geometry) => this.makeMesh(geometry, this.material, 0)),
       this.makeMesh(base.geometry, base.material, 0),

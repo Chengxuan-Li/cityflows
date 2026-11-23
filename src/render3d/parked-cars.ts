@@ -44,7 +44,9 @@ export class ParkedCars3D {
     this.mesh.frustumCulled = false;
     // Static parked stock does not enter the moving-car shadow pass.
     this.mesh.receiveShadow = true;
-    this.detail = new VehicleDetailBatches(this.mesh, modelGeometries, true);
+    this.detail = new VehicleDetailBatches(this.mesh, modelGeometries, true, {
+      value: city.drivingSide === 'left' ? -1 : 1,
+    });
     this.group.add(this.mesh, this.detail.group);
   }
 
