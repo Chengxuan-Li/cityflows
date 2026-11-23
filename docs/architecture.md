@@ -3407,8 +3407,8 @@ formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take t
 otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
 metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
 elsewhere), then the route kind (`mainline` the DB locomotive-hauled train, `sbahn` the
-Elizabeth-line-style EMU in a left-hand-traffic city and the ET 423-like S-Bahn elsewhere). Only
-the tram and the S-Bahn are built; the S-Bahn stands in for the others (TASK-333, TASK-334).
+Elizabeth-line-style EMU in a left-hand-traffic city and the ET 423-like S-Bahn elsewhere).
+TASK-334 builds both subway variants. The S-Bahn stands in for TASK-333's variants.
 `render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
 by all its cars and created only for variants a route uses: the body (the profile extruded, both
 cab noses lofted from it, end walls, inset bellows, couplers), the gear (three bogie, two pantograph and two
@@ -3427,6 +3427,12 @@ is drawn near (the model) from 60 px along its length and far (the box) below 48
 car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
 shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
 TASK-127's.
+
+The London tube train draws 17 m cars with an elliptical roof, two single and two double red
+doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train draws 18 m stainless-steel cars with four double doors per side, a fluted skirt,
+a muted upper band and flat ends with storm doors. Both draw their bodies centred in the
+existing poses, leaving gangway space between cars. Neither uses pantographs or roof housings.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning

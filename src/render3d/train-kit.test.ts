@@ -13,12 +13,13 @@ import {
   bodyParts,
   carFlags,
   carState,
+  farGeometry,
   formationOf,
   gearGeometry,
   gearSlots,
   placedX,
 } from './train-kit';
-import { trainVariants, type TrainVariant } from './train-variants';
+import { builtVariant, trainVariants, type TrainVariant } from './train-variants';
 import { Trains3D } from './trains';
 
 const variants = Object.values(trainVariants) as TrainVariant[];
@@ -33,7 +34,13 @@ describe.for(variants)('TASK-332 $id model', (v) => {
     const parts = new Set(body.getAttribute('aPart').array);
     expect([...parts].sort()).toEqual(Object.values(bodyParts));
     const slots = new Set(gear.getAttribute('aSlot').array);
-    const expected = [0, 1, 2, ...(v.pantograph ? [3, 4] : []), 5, 6];
+    const expected = [
+      0,
+      1,
+      2,
+      ...(v.pantograph ? [3, 4] : []),
+      ...(v.roofBox.heightM > 0 ? [5, 6] : []),
+    ];
     expect([...slots].sort()).toEqual(expected);
     expect(gearSlots.count).toBe(7);
     // Every triangle counts, also those a car hides.
@@ -207,8 +214,7 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   );
 });
 
-// TASK-333 and TASK-334 add their variants as records only. These stand-ins, built from the
-// S-Bahn's record, show the builder already draws what they need.
+// These stand-ins, built from the S-Bahn's record, exercise the TASK-333 formations.
 const base = trainVariants.sbahn!;
 const plainCar = base.carTypes.middle!;
 const dlrLike: TrainVariant = {
@@ -261,58 +267,7 @@ const pushPull: TrainVariant = {
     },
   },
 };
-const tubeLike: TrainVariant = {
-  ...base,
-  id: 'tube',
-  widthM: 2.6,
-  heightM: 2.9,
-  floorM: 0.6,
-  // The deep-tube profile: the roof follows the tunnel's circle, the doors cut into it.
-  profile: {
-    bottomM: 0.35,
-    skirtInsetM: 0.05,
-    waistM: 0.9,
-    cantM: 1.7,
-    cantInsetM: 0.05,
-    roofSquareness: 2,
-  },
-  nose: { ...base.nose, lengthM: 0.4, rakeM: 0.05, rakeFromM: 1.2, cornerM: 0.2, couplerM: 0.7 },
-  doorTopM: 2.4,
-  bogie: { ...base.bogie, shoes: true },
-  pantograph: null,
-  bellows: false,
-  jacobs: false,
-  formation: { unitCars: 0, first: 'cab', middle: ['car'], last: 'cab' },
-  carTypes: {
-    cab: {
-      ...plainCar,
-      lengthM: 17,
-      cabs: 'front',
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-    },
-    car: {
-      ...plainCar,
-      lengthM: 17,
-      bogies: [
-        [1, -2.5],
-        [-1, 2.5],
-      ],
-      pantographs: [],
-      doors: [
-        [0, -5.5, 0.9],
-        [0, -2.2, 1.4],
-        [0, 2.2, 1.4],
-        [0, 5.5, 0.9],
-      ],
-    },
-  },
-};
-
-test.for([dlrLike, pushPull, tubeLike])(
+test.for([dlrLike, pushPull])(
   'TASK-332 the builder draws a $id-like record within the budget and at its stated size',
   (v) => {
     const body = bodyGeometry(v),
@@ -328,6 +283,56 @@ test.for([dlrLike, pushPull, tubeLike])(
       // Drawn at the type's own length, centred in the pose, the rest left as gangway space.
       expect(car[0]! * 2).toBeCloseTo(type.lengthM ?? 24.3, 5);
       expect(car[3]!).toBeCloseTo((24.3 - car[0]! * 2) / 2 + 0.35, 5);
+    }
+  },
+);
+
+test.for([
+  ['tube', 17, 2],
+  ['nyc', 18, 4],
+] as const)(
+  'TASK-334 %s keeps its short body centred in a 25 m pose',
+  ([id, length, doubleDoors]) => {
+    const v = builtVariant(id);
+    expect(v.id).toBe(id);
+    const f = formationOf(v);
+    const car = new Float32Array(4),
+      gear = new Float32Array(8);
+    const body = bodyGeometry(v),
+      far = farGeometry(v);
+    expect(far.index!.count / 3).toBe(12);
+    for (let j = 0; j < 3; j++) {
+      carState(f, 3, j, 24.3, false, false, car, 0, gear, 0);
+      const halfM = car[0]!,
+        type = f.types[car[1]!]!,
+        flags = car[2]!,
+        gapM = car[3]!;
+      expect(halfM * 2).toBe(length);
+      expect(gapM).toBeCloseTo((25 - length) / 2, 5);
+      expect(type.doors).toHaveLength(4);
+      expect(type.doors.filter((door) => door[2] > 1.2)).toHaveLength(doubleDoors);
+      for (const geometry of [body, far]) {
+        const detailFlags =
+          geometry === far ? flags & ~(carFlags.cabFront | carFlags.cabRear) : flags;
+        const position = geometry.getAttribute('position'),
+          anchor = geometry.getAttribute('aAnchor'),
+          part = geometry.getAttribute('aPart');
+        const xs = Array.from({ length: position.count }, (_, i) =>
+          part.getX(i) >= bodyParts.frontCoupler
+            ? null
+            : placedX(
+                position.getX(i),
+                anchor.getX(i),
+                part.getX(i),
+                halfM,
+                detailFlags,
+                v.nose.lengthM,
+                gapM,
+              ),
+        ).filter((x) => x !== null);
+        expect(Math.min(...xs)).toBeCloseTo(-length / 2, 5);
+        expect(Math.max(...xs)).toBeCloseTo(length / 2, 5);
+      }
     }
   },
 );

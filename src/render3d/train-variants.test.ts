@@ -82,6 +82,6 @@ test('TASK-332 the variant rule gives each of the seven variants', () => {
     );
   }
   expect(builtVariant('tram').id).toBe('tram');
-  for (const id of ['dlr', 'tube', 'nyc', 'elizabeth', 'intercity', 'sbahn'] as const)
+  for (const id of ['dlr', 'elizabeth', 'intercity', 'sbahn'] as const)
     expect(builtVariant(id).id).toBe('sbahn');
 });
