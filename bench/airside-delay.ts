@@ -19,7 +19,7 @@ import { overlaps } from '../tests/sim/aircraft-checks';
 const args = process.argv.slice(2);
 const flag = (name: string) => {
   const at = args.indexOf(`--${name}`);
-  return at < 0 ? undefined : args.splice(at, name === 'checks' ? 1 : 2)[1] ?? '';
+  return at < 0 ? undefined : (args.splice(at, name === 'checks' ? 1 : 2)[1] ?? '');
 };
 const fromH = Number(flag('from') ?? 0);
 const toH = Number(flag('to') ?? 24);
@@ -187,27 +187,10 @@ for (let step = startS * 10; step < endS * 10; step++) {
       row.departure.startWaitS++;
   }
   const metrics = fleet.metrics();
-  if (process.env.DUMP && metrics.stuck && !peakStuck) {
-    console.info('STUCK at', timeS / 3600);
-    for (const row of (fleet as any).debugState()) console.info(JSON.stringify(row));
-    console.info(poses.map((a) => `${a.registration}:${a.state}:${a.stand}:${Math.round(a.speedMps)}@${Math.round(a.x)},${Math.round(a.y)}`).join(' '));
-  }
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    const found = overlaps(poses);
-    if (process.env.DUMP)
-      for (const pair of found) {
-        const [a, b] = pair.map((r) => poses.find((p) => p.registration === r)!);
-        console.info('PAIR', Math.round(timeS), pair.join(' '), a!.state, a!.stand, b!.state, b!.stand);
-      }
-    if (process.env.DUMP && found.length && overlapCount < 3)
-      for (const pair of found) {
-        console.info('OVERLAP', timeS / 3600, pair.join(' '));
-        for (const row of (fleet as any).debugState())
-          if (pair.includes(row.reg)) console.info(JSON.stringify(row));
-      }
-    overlapCount += found.length;
+    overlapCount += overlaps(poses).length;
     const on = poses.filter((a) => a.onRunway).map((a) => under(a.x, a.y));
     for (let i = 0; i < on.length; i++)
       for (let j = i + 1; j < on.length; j++)
@@ -271,7 +254,9 @@ const departures = board.departures.filter(inWindow).map((movement) => {
 const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / (values.length || 1);
 const round = (value: number) => Math.round(value * 10) / 10;
 function stages<T extends Record<string, unknown>>(rows: T[], keys: (keyof T)[]) {
-  return Object.fromEntries(keys.map((key) => [key, round(mean(rows.map((r) => r[key] as number)))]));
+  return Object.fromEntries(
+    keys.map((key) => [key, round(mean(rows.map((r) => r[key] as number)))]),
+  );
 }
 const done = (state: string) => state === 'arrived' || state === 'departed';
 const delays = [...arrivals, ...departures].filter((m) => done(m.state)).map((m) => m.delayS!);
@@ -279,7 +264,8 @@ const moving = (rows: (Timing & { taxiS: number | null })[]) => {
   const finished = rows.filter((r) => r.taxiS !== null);
   return {
     meanMovingKt: round(
-      (mean(finished.map((r) => r.taxiDistanceM)) / (mean(finished.map((r) => r.taxiMovingS)) || 1)) *
+      (mean(finished.map((r) => r.taxiDistanceM)) /
+        (mean(finished.map((r) => r.taxiMovingS)) || 1)) *
         1.943844,
     ),
     peakKt: round(Math.max(0, ...finished.map((r) => r.peakTaxiMps)) * 1.943844),
@@ -328,5 +314,3 @@ const summary = {
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));
-import { dbgCounts } from '../src/sim/aircraft';
-console.info(dbgCounts);

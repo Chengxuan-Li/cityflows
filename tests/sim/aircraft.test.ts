@@ -168,6 +168,11 @@ test('two aircraft on crossing taxi paths never overlap: one waits short of the 
     if (q) closest = Math.min(closest, Math.hypot(p.x - q.x, p.y - q.y));
   }
   expect(closest).toBeGreaterThan(45);
+  // TASK-312: ordered by admission, both leave their stands before either arrives: the later one
+  // waits short of the junction, not at its stand.
+  const startS = (id: number) => poses.get(id)!.find((p) => p.speedMps > 0.05)!.timeS;
+  const towedS = (id: number) => events.find((e) => e.id === id && e.kind === 'towed')!.timeS;
+  expect(Math.max(startS(a.id), startS(b.id))).toBeLessThan(Math.min(towedS(a.id), towedS(b.id)));
 });
 
 test('a code E aircraft is never routed onto a code C edge or stand', () => {

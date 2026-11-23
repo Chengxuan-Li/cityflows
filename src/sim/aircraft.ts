@@ -297,9 +297,8 @@ interface Wait {
 /** A movement ordered but not started: a departure or tow at its stand, an arrival in the queue. */
 interface Admission {
   legs: Leg[];
-  /** Departures and tows: what follows the legs and the line-up station; arrivals: the landing. */
+  /** Departures and tows: what follows the legs; arrivals: the landing. */
   next: Next[];
-  lineUpU?: number;
   landing?: Landing;
 }
 
@@ -561,9 +560,6 @@ function rounded(raw: Vec2[], radiusM: number) {
   };
   return { path, map };
 }
-
-export const dbgCounts: Record<string, number> = {};
-const dbgc = (k: string) => (dbgCounts[k] = (dbgCounts[k] ?? 0) + 1);
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const random = createRandom(seed).derive('aircraft');
@@ -894,7 +890,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   /** The first leg station in (fromM, toM] where another aircraft's claim begins. */
-  let blocker = '';
   function firstConflict(craft: Craft, leg: Leg, fromM: number, toM: number) {
     let best = Infinity;
     // An aircraft ordered after this one stays clear of its path (TASK-312): its margins do not
@@ -914,11 +909,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         [p.endNode, p.endM],
       ] as const)
         if (node >= 0 && m > fromM && m <= toM && !isRunwayNode(node))
-          if (others.some((o) => o.claimedNodes.includes(node))) {
-            if (m - 0.01 < best)
-              blocker = others.find((o) => o.claimedNodes.includes(node))!.registration + '@n';
-            best = Math.min(best, m - 0.01);
-          }
+          if (others.some((o) => o.claimedNodes.includes(node))) best = Math.min(best, m - 0.01);
       const a = edgeStation(p, Math.max(fromM, p.startM)),
         b = edgeStation(p, Math.min(toM, p.endM));
       const lo = Math.min(a, b),
@@ -928,7 +919,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         for (const c of o.claimed)
           if (c.edge === p.edge && c.lo <= hi && c.hi >= lo) {
             const e = forward ? Math.max(lo, c.lo) : Math.min(hi, c.hi);
-            if (Math.max(fromM, pieceStation(p, e) - 0.01) < best) blocker = o.registration;
             best = Math.min(best, Math.max(fromM, pieceStation(p, e) - 0.01));
           }
       if (best < Infinity && best <= p.endM) return best;
@@ -1281,6 +1271,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   function sweepClear(craft: Craft, path: Body[]) {
     for (const other of crafts) {
       if (other === craft || other.mode === 'done') continue;
+      // One ordered after it stands clear of its path by the order's own test (TASK-312).
+      if (other.waits.some((w) => w.pred === craft && !passed(w))) continue;
       if (other.pushSweep?.some((body) => path.some((p) => bodiesTouch(p, body)))) return false;
       if (other.pose && other.pose.heightM < 20) {
         const body = bodyAt(other, other.pose.position, other.pose.headingRad);
@@ -1802,10 +1794,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     timeS: number,
   ) {
     const runway = graph.runways[craft.runway]!;
-    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)])
-      return (dbgc('app-closed'), false);
-    if (standOccupant[request.stand] !== -1 || pushBlocksStand(craft, request.stand))
-      return (dbgc('app-stand'), false);
+    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)]) return false;
+    if (standOccupant[request.stand] !== -1 || pushBlocksStand(craft, request.stand)) return false;
     if (!craft.admission) {
       for (const option of landings(craft, runway, request.end, request.stand)) {
         const landing = option();
@@ -1817,22 +1807,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         craft.admission = { legs: [landing.leg], next: [], landing };
         break;
       }
-      if (!craft.admission) return (dbgc('app-order'), false);
+      if (!craft.admission) return 'unordered';
     }
     const landing = craft.admission.landing!;
-    if (waitCap(craft, landing.leg) < safeOf(craft, landing.leg)) {
-      const w = craft.waits.filter(
-        (w) => w.leg === landing.leg && !passed(w) && w.atM < safeOf(craft, landing.leg),
-      )[0]!;
-      const p = w.pred;
-      dbgc(
-        `app-wait ${p.mode} ${p.leg?.mode} v${p.speedMps > 0} hold${!!p.leg?.gates.some((g) => !g.granted && Math.abs(g.holdM - p.stationM) < 2)} ${p.request?.kind ?? ''} at${Math.round(w.atM)} safe${Math.round(safeOf(craft, landing.leg))}`.replace(
-          /at\d+ safe\d+/,
-          (m) => (m.length > 0 ? 'x' : m),
-        ),
-      );
-      return false;
-    }
+    if (waitCap(craft, landing.leg) < safeOf(craft, landing.leg)) return false;
     const air = approachAir(craft, landing, timeS);
     const thresholdS = timeS + air.thresholdM / fixedWing(craft).approachSpeedMps;
     const exitS = timeS + air.profile.durationS;
@@ -1844,8 +1822,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const vacateS = exitS + timeTo(taxi, landing.vacateM + craft.lengthM / 2);
     const fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
     const toS = vacateS + ARRIVAL_PAD_S;
-    if (!bookingFits(craft.runway, fromS, toS, craft.id)) return (dbgc('app-book'), false);
-    if (!leavesGap(craft.runway, fromS)) return (dbgc('app-gap'), false);
+    if (!bookingFits(craft.runway, fromS, toS, craft.id) || !leavesGap(craft.runway, fromS))
+      return false;
     craft.mode = 'air';
     craft.air = air;
     craft.bookingFromS = fromS;
@@ -1866,22 +1844,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (next?.kind !== 'taxi') throw new Error('An arrival has no reserved exit');
     const { leg } = next;
     const cap = waitCap(craft, leg);
-    if (cap < safeOf(craft, leg)) return (dbgc('ga-wait'), false);
+    if (cap < safeOf(craft, leg)) return false;
     const want = Math.min(
       leg.path.lengthM,
       leg.gates[0]!.vacateM + craft.lengthM + margin,
       cap + craft.lengthM / 2,
     );
-    blocker = '';
-    if (firstConflict(craft, leg, 0, want) < Infinity) {
-      const b = crafts.find((c) => c.registration === blocker.replace('@n', ''));
-      const st = b
-        ? `${b.mode}-${b.leg?.mode}-v${Math.round(b.speedMps)}-w${b.waits.filter((w) => !passed(w)).length}-${b.leg?.gates.some((g) => !g.granted && Math.abs(g.holdM - b.stationM) < 2) ? 'hold' : ''}-pw${craft.waits.some((w) => w.pred === b && !passed(w))}`
-        : 'none';
-      dbgc(`ga-claim ${st}`);
+    if (firstConflict(craft, leg, 0, want) < Infinity || pushBlocksStand(craft, craft.stand))
       return false;
-    }
-    if (pushBlocksStand(craft, craft.stand)) return (dbgc('ga-push'), false);
     lock(craft, leg, 0, leg.pieces.length);
     craft.leg = leg;
     craft.claimLo = 0;
@@ -2209,13 +2179,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ? waitCap(craft, first) < Infinity
         : waitCap(craft, first) <= half + 1
     )
-      return void ((craft as any).dbg = 'wait');
+      return;
     // The first leg must be claimable from where the aircraft stands.
-    if (firstConflict(craft, first, half, half + craft.lengthM / 2 + margin) < Infinity)
-      return void ((craft as any).dbg = 'claim');
+    if (firstConflict(craft, first, half, half + craft.lengthM / 2 + margin) < Infinity) return;
     if (first.mode === 'pushback') {
       const push = sweep(craft, first);
-      if (!sweepClear(craft, push)) return void ((craft as any).dbg = 'sweep');
+      if (!sweepClear(craft, push)) return;
       craft.pushSweep = push;
     }
     for (const leg of legs) lock(craft, leg, 0, leg.pieces.length);
@@ -2548,10 +2517,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const half = craft.lengthM / 2;
         for (const gate of next.gates)
           if (gate.vacateM < s - half) gate.granted = gate.released = true;
-        if (next.gates.some((g) => !g.granted && g.holdM < s - 0.01)) {
-          dbgc('rr-gate');
-          continue;
-        }
+        if (next.gates.some((g) => !g.granted && g.holdM < s - 0.01)) continue;
         // The new leg is ordered as a newcomer, after every departure admitted so far.
         const rank = craft.rank;
         craft.rank = admitted + 1 + RANK_CLASS;
@@ -2677,7 +2643,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const held = runwaysAt(air.runway).some(
           (r) => runwayOccupant[r] !== -1 && runwayOccupant[r] !== craft.id,
         );
-        if (held) dbgc('ga-held');
         if (held || !commitLanding(craft)) return goAround(craft, timeS);
         for (const r of runwaysAt(air.runway)) {
           runwayOccupant[r] = craft.id;
@@ -2985,8 +2950,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const key = endKey(craft.runway, request.end);
         if (unordered.has(key)) continue;
         craft.retryS = timeS;
-        trySpawnArrival(craft, request, timeS);
-        if (!craft.admission && craft.mode === 'queued') unordered.add(key);
+        if (trySpawnArrival(craft, request, timeS) === 'unordered') unordered.add(key);
       } else if (request?.kind === 'helicopter-arrival') helicopterStep(craft, timeS);
       if (craft.mode !== 'queued') queue.splice(i--, 1);
     }
@@ -3188,88 +3152,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   return {
-    debugState: () =>
-      crafts
-        .filter((c) => c.mode !== 'done')
-        .map((c) => ({
-          reg: c.registration,
-          mode: c.mode,
-          dbg: (c as any).dbg,
-          planStop: Math.round(c.planStop),
-          pause: Math.round(c.pauseUntilS - nowS),
-          v: c.speedMps,
-          legMode: c.leg?.mode,
-          gateWhy: (() => {
-            const g = c.leg?.gates.find((x) => !x.granted);
-            if (!g || c.mode !== 'ground') return null;
-            const half = c.lengthM / 2;
-            const through = Math.min(c.leg!.path.lengthM, g.vacateM + c.lengthM + margin);
-            blocker = '';
-            const fcT =
-              through > c.claimHi ? firstConflict(c, c.leg!, c.claimHi, through) : Infinity;
-            return {
-              near: !(c.stationM + 35 < g.holdM || c.claimHi < g.holdM + half),
-              cap: waitCap(c, c.leg!),
-              vac: g.vacateM,
-              through: fcT === Infinity ? 'ok' : blocker,
-              fits: bookingFits(g.runway, nowS, nowS + g.occupancyS + RUNWAY_BUFFER_S, c.id),
-              occ: g.occupancyS,
-              bookings: crafts
-                .filter((o) => o.mode === 'air' && o.air?.kind === 'approach')
-                .map(
-                  (o) =>
-                    `${graph.runways[o.runway]!.ref}:${Math.round(o.bookingFromS - nowS)}-${Math.round(o.bookingToS - nowS)}`,
-                ),
-            };
-          })(),
-          ranges: c.leg?.runwayRanges
-            .map(([a, b, r]) => `${Math.round(a)}-${Math.round(b)}:${graph.runways[r]!.ref}`)
-            .join(' '),
-          gatesFull: c.leg?.gates
-            .map(
-              (g) =>
-                `${Math.round(g.holdM)}..${Math.round(g.vacateM)}:${graph.runways[g.runway]!.ref}`,
-            )
-            .join(' '),
-          kinds: c.leg?.pieces
-            .map(
-              (p) =>
-                `${Math.round(p.startM)}${graph.edges[p.edge]!.kind[0]}${graph.edges[p.edge]!.ref ?? ''}`,
-            )
-            .join(' '),
-          rw: c.runwayWait && {
-            ...c.runwayWait,
-            occ: [...runwayOccupant].map(
-              (id, r) =>
-                `${graph.runways[r]!.ref}:${crafts[id - 1]?.registration ?? '-'}:${Math.round(runwayClearS[r]! - nowS)}`,
-            ),
-          },
-          next: c.next.map((n) => n.kind),
-          endLen: c.leg ? Math.round(c.leg.path.lengthM) : null,
-          adm: !!c.admission,
-          s: Math.round(c.stationM),
-          end: c.leg ? Math.round(c.leg.endM) : null,
-          claim: [Math.round(c.claimLo), Math.round(c.claimHi)],
-          gate: c.leg?.gates.map((g) => [Math.round(g.holdM), g.granted, g.released]),
-          cap: c.leg ? waitCap(c, c.leg) : null,
-          fc:
-            c.leg && c.mode === 'ground'
-              ? firstConflict(c, c.leg, c.claimHi, c.claimHi + 100)
-              : null,
-          blocker:
-            c.leg && c.mode === 'ground'
-              ? ((blocker = ''), firstConflict(c, c.leg, c.claimHi, c.claimHi + 100), blocker)
-              : null,
-          waits: c.waits.map((w) => ({
-            pred: w.pred.registration,
-            onCurrent: w.leg === c.leg,
-            at: Math.round(w.atM),
-            predM: Math.round(w.predM),
-            predS: Math.round(w.pred.stationM),
-            predOnLeg: w.pred.leg === w.predLeg,
-            passed: passed(w),
-          })),
-        })),
     graph,
     spawnParked,
     spawnHelicopterParked,
