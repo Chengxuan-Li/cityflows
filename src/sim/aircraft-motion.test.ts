@@ -170,7 +170,7 @@ describe('aircraft motion', () => {
   test('pushback faces against travel and towing follows its own speed limit', () => {
     const path = line(50);
     const push = pushbackProfile(path, regional);
-    const tow = towProfile(path, regional);
+    const tow = towProfile(line(200), regional);
     expect(push.sample(push.durationS / 2)).toMatchObject({
       phase: 'pushback',
       headingRad: Math.PI,

@@ -312,7 +312,7 @@ test('a crossing of an unused runway can pass while the intersecting runway is o
     900,
     () => fleet.idle(parked.id) && fleet.idle(arrival.id),
     (step) => {
-      if (step === 200) expect(fleet.requestTow(parked.id, { stand: stands.East! }).ok).toBe(true);
+      if (step === 550) expect(fleet.requestTow(parked.id, { stand: stands.East! }).ok).toBe(true);
     },
   );
   const crossing = poses.get(parked.id)!.find(({ x, y }) => Math.abs(x + 900) < 5 && y < -780)!;
@@ -453,6 +453,7 @@ test('a helicopter lands vertically on its pad and leaves climbing then forward'
   ]);
 });
 
+const TOW_REQUEST_S = 30;
 test('road traffic gives way where a service road crosses the airside; the aircraft never stops', () => {
   const { city, stands } = airportFixture({ road: true });
   const compiled = setup(city);
@@ -480,11 +481,13 @@ test('road traffic gives way where a service road crosses the airside; the aircr
       fleet = f;
       return {
         step(timeS) {
-          if (timeS !== 0) return;
-          const parked = f.spawnParked({ typeId: 'E190', stand: stands.R });
-          if (!parked.ok) throw new Error(parked.reason);
-          aircraft = parked.id;
-          f.requestTow(parked.id, { stand: stands.E1 });
+          if (timeS === 0) {
+            const parked = f.spawnParked({ typeId: 'E190', stand: stands.R });
+            if (!parked.ok) throw new Error(parked.reason);
+            aircraft = parked.id;
+          }
+          // Requested so that the tow reaches the road as the cars do.
+          if (timeS === TOW_REQUEST_S) f.requestTow(aircraft, { stand: stands.E1 });
         },
       };
     },
