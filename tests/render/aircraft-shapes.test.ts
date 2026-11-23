@@ -295,7 +295,8 @@ it('holds the main axle on the runway as the batched nose gear lifts and steers'
   expect(nose.children.filter((part) => part instanceof Mesh)).toHaveLength(1);
   track.pose.visual.gear = 0.5;
   placeAircraft(aircraft, track.pose, 3, mainX, 2);
-  expect(aircraft.gear.scale.y).toBe(0.5);
+  // TASK-331: the gear slides up as it stows, unscaled.
+  expect(aircraft.gear.scale.y).toBe(1);
   expect(aircraft.gear.position.y).toBe(1);
   expect(aircraft.gear.visible).toBe(true);
   track.pose.visual.gear = 0;

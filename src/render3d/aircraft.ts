@@ -34,9 +34,21 @@ import { aircraftLivery, type AircraftLivery } from '../render/aircraft-livery';
 import { AircraftPoseTrack, pushbackDrawbarM } from '../render/aircraft-pose';
 import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
-import { batchAircraftMesh, buildAircraftMesh, type AircraftMesh } from './aircraft-mesh';
+import {
+  batchAircraftMesh,
+  buildAircraftMesh,
+  gearFoldMaterial,
+  gearLayout,
+  type AircraftMesh,
+} from './aircraft-mesh';
 import { placeAircraft } from './aircraft-attitude';
-import { modelInfo, modelLodObject, selectLod, type AircraftModels } from './aircraft-models';
+import {
+  modelGear,
+  modelInfo,
+  modelLodObject,
+  selectLod,
+  type AircraftModels,
+} from './aircraft-models';
 import { beamTexture } from './lights';
 import { pointHalos } from './airfield-lights';
 
@@ -78,6 +90,10 @@ interface Model {
   levels: ({ group: Group; spinners: Object3D[]; discs: Disc[] } | null)[];
   /** 0 near, 1 middle, 2 far. */
   lod: number;
+  /** TASK-331: the main and nose gear batches, which draw the type's shared gear at the real
+   * model's levels and their own procedural gear (`far`) at the far level. */
+  gear: { mesh: Mesh; far: BufferGeometry }[];
+  gearMaterial: MeshLambertMaterial | null;
 }
 
 type Disc = Mesh<CircleGeometry, MeshBasicMaterial>;
@@ -248,6 +264,16 @@ export class Aircraft3D {
     mesh.root.add(far);
     const info = modelInfo(type.id);
     if (info) mesh.lightMounts = info.lights;
+    const gear =
+      info && gearLayout(type)
+        ? [mesh.gear, mesh.noseGear!].map((frame) => {
+            const batch = frame.children.find((c): c is Mesh => c instanceof Mesh)!;
+            return { mesh: batch, far: batch.geometry };
+          })
+        : [];
+    // Both gear batches fold in one material of their own.
+    const gearMaterial = gear.length ? gearFoldMaterial() : null;
+    for (const { mesh: batch } of gear) batch.material = gearMaterial!;
     const { bodyY, radius } = aircraftLayout(type);
     const { noseX, mainX } = fixedWingGearStations(type.lengthM);
     const tug = mesh.noseGear ? pushbackTug(noseX, pushbackDrawbarM(type.lengthM)) : null;
@@ -294,6 +320,8 @@ export class Aircraft3D {
       far,
       levels: [null, null],
       lod: 2,
+      gear,
+      gearMaterial,
     };
   }
 
@@ -313,6 +341,7 @@ export class Aircraft3D {
         model.mesh.root.removeFromParent();
         model.shadow.removeFromParent();
         model.drop.removeFromParent();
+        for (const { mesh, far } of model.gear) mesh.geometry = far;
         model.mesh.root.traverse((object) => {
           if (!(object instanceof Mesh) || object.userData.shared) return;
           object.geometry.dispose();
@@ -350,7 +379,10 @@ export class Aircraft3D {
       const { pose } = track;
       const { heightM, heading, visual } = pose;
       const root = mesh.root;
-      placeAircraft(mesh, pose, this.elevationM, model.mainX, model.gearStowY);
+      // The real models' gear folds; TASK-307's slides up.
+      const folds = model.lod < 2 && model.gear.length > 0;
+      placeAircraft(mesh, pose, this.elevationM, model.mainX, folds ? 0 : model.gearStowY);
+      if (model.gearMaterial) model.gearMaterial.userData.extension.value = folds ? visual.gear : 1;
       // A real helicopter model carries its own skids.
       if (model.lod < 2 && !mesh.noseGear) mesh.gear.visible = false;
       const { x, z: y } = root.position;
@@ -493,6 +525,12 @@ export class Aircraft3D {
     }
     model.lod = lod;
     model.far.visible = lod === 2;
+    if (model.gear.length) {
+      const shared = lod < 2 ? modelGear(loader.get(model.type.id)!, lod as 0 | 1) : null;
+      const [main, nose] = model.gear;
+      main!.mesh.geometry = shared ? shared.main : main!.far;
+      nose!.mesh.geometry = shared ? shared.nose : nose!.far;
+    }
     model.levels.forEach((level, i) => {
       if (level) level.group.visible = i === lod;
     });

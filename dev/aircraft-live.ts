@@ -1,5 +1,7 @@
 import {
   DirectionalLight,
+  DoubleSide,
+  Group,
   HemisphereLight,
   Mesh,
   MeshLambertMaterial,
@@ -24,6 +26,10 @@ import { pixelScale } from '../src/render3d/airfield-lights';
 // the camera's height as a share of that distance (TASK-318).
 // TASK-318: the real models by level of detail as the camera moves; `compare=1` adds a second row
 // of the procedural meshes beside them, `lod=0` holds every real model at its near level.
+// TASK-331: `parts=glass` draws only the near level's parts whose names match (a regex), the
+// rest of the airframe as a faint ghost; `aim` sets the camera target's height and `ahead` moves
+// target and camera forward along the row's aircraft (metres); `gear` (0 stowed to 1 down) and
+// `pitch` (degrees) pose the aircraft as in a retraction.
 
 const states = {
   parked: { enginesRunning: false, speedMps: 0, onRunway: false, heightM: 0 },
@@ -41,6 +47,7 @@ export function showAircraftLive(query: URLSearchParams) {
   const angle = (Number(query.get('angle') ?? 0) * Math.PI) / 180;
   const distance = Number(query.get('distance') ?? 1);
   const rise = Number(query.get('rise') ?? 0.35);
+  const parts = query.get('parts');
   document.querySelector('#fixture')!.textContent = `Aircraft in state ${state}, ${mode}`;
   const canvas = document.querySelector('canvas')!;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -89,8 +96,48 @@ export function showAircraftLive(query: URLSearchParams) {
     stand: null,
     runwayEnd: null,
     route: [],
+    ...(query.has('gear') && {
+      visual: {
+        x: i * slots * spacing,
+        y: 0,
+        heightM: s.heightM,
+        heading: -Math.PI / 2,
+        pitch: (Number(query.get('pitch') ?? 0) * Math.PI) / 180,
+        roll: 0,
+        steering: 0,
+        gear: Number(query.get('gear')),
+      },
+    }),
   }));
-  aircraft.update(poses, 0);
+  if (parts) {
+    const match = new RegExp(parts);
+    const models = new AircraftModels();
+    const ghost = new MeshLambertMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    for (const pose of poses) {
+      const type = aircraftTypes.find((t) => t.id === pose.typeId)!;
+      void models.load(type.id, type.lengthM, 0)?.then((model) => {
+        const group = new Group();
+        for (const part of model.lods[0]!.parts)
+          group.add(
+            new Mesh(
+              part.geometry,
+              match.test(part.name)
+                ? new MeshLambertMaterial({ color: part.color, side: DoubleSide })
+                : ghost,
+            ),
+          );
+        group.position.set(pose.x, pose.heightM, pose.y);
+        group.rotation.y = -pose.heading;
+        scene.add(group);
+      });
+    }
+  } else aircraft.update(poses, 0);
   procedural?.update(
     poses.map((pose) => ({ ...pose, x: pose.x + spacing })),
     0,
@@ -98,7 +145,8 @@ export function showAircraftLive(query: URLSearchParams) {
   const camera = new PerspectiveCamera(35, 1, 1, 20000);
   const controls = new MapControls(camera, canvas);
   const middle = ((types.length * slots - 1) * spacing) / 2;
-  controls.target.set(middle, s.heightM, 0);
+  const ahead = Number(query.get('ahead') ?? 0);
+  controls.target.set(middle, s.heightM + Number(query.get('aim') ?? 0), -ahead);
   // Ahead and to the left of the row, far enough to frame it.
   const reach = ((types.length * slots - 1) * spacing * 0.7 + longest * 1.6) * distance;
   const c = Math.cos(angle),
@@ -106,7 +154,7 @@ export function showAircraftLive(query: URLSearchParams) {
   camera.position.set(
     middle - reach * (0.45 * c - 0.85 * sn),
     s.heightM + rise * reach,
-    -reach * (0.85 * c + 0.45 * sn),
+    -reach * (0.85 * c + 0.45 * sn) - ahead,
   );
   canvas.dataset.aircraft = String(aircraft.count);
   let last = performance.now();

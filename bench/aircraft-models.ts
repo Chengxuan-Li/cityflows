@@ -10,8 +10,8 @@
 // tinted per flight at run time with TASK-315's seeded liveries (`src/render3d/aircraft-models.ts`).
 // Each type is turned to +x forward, +y up, +z starboard, scaled to its catalogue length and span
 // (span by stretching the wings outside the fuselage only) and set on TASK-307's procedural gear
-// height by its fuselage belly; its procedural landing gear is drawn with it at run time, since
-// the Flightradar24 models carry none.
+// height by its fuselage belly; its landing gear is drawn with it at run time (TASK-331's
+// `buildAircraftGear`), since the Flightradar24 models carry none.
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -79,6 +79,39 @@ const sources: Source[] = [
 
 /** Triangle budgets: LOD0 for close views, LOD1 for the middle distance. */
 export const budgets = [15_000, 1_500] as const;
+
+/** TASK-331: cabin windows per airliner: the pane's width and height and the window pitch along
+ * the cabin, metres. Sizes are the published clear-view sizes in inches (737 10 x 14, 777 and
+ * 747-8 10 x 15, 787 10.7 x 18.4, A220 11 x 16 per Airbus, A350 9.5 x 13.5, A320 family and A330
+ * about 9 x 13); pitches the frame pitch, one window per frame (737 and 747 20 in, A320, A330
+ * and A380 21 in, 787 24 in, 777 and A350 25 in). The regional jets' and turboprops' sizes are
+ * approximate (no manufacturer figure at hand) and their pitches the spacing of the sources'
+ * own window decals or glass (E-Jets, CRJ900, ATR, Q400). A double-decker's decks share them. */
+export const cabinWindows: Record<string, { width: number; height: number; pitch: number }> = {
+  A388: { width: 0.25, height: 0.36, pitch: 0.533 },
+  B748: { width: 0.254, height: 0.381, pitch: 0.508 },
+  B77W: { width: 0.254, height: 0.381, pitch: 0.635 },
+  A359: { width: 0.241, height: 0.343, pitch: 0.635 },
+  A333: { width: 0.23, height: 0.33, pitch: 0.533 },
+  B789: { width: 0.272, height: 0.467, pitch: 0.61 },
+  A20N: { width: 0.23, height: 0.33, pitch: 0.533 },
+  B738: { width: 0.254, height: 0.356, pitch: 0.508 },
+  A21N: { width: 0.23, height: 0.33, pitch: 0.533 },
+  BCS3: { width: 0.279, height: 0.406, pitch: 0.508 },
+  E190: { width: 0.27, height: 0.36, pitch: 0.8 },
+  E175: { width: 0.27, height: 0.36, pitch: 0.8 },
+  CRJ9: { width: 0.23, height: 0.3, pitch: 0.8 },
+  AT76: { width: 0.26, height: 0.34, pitch: 0.7 },
+  DH8D: { width: 0.25, height: 0.33, pitch: 0.53 },
+};
+
+/** The x range of the main-deck cabin between the first and last door (TASK-315's doors). */
+export function cabinSpan(type: AircraftType) {
+  const doors = aircraftLayout(type).doors.filter((d) => !d.upper);
+  const front = doors.reduce((a, d) => (d.x > a.x ? d : a));
+  const rear = doors.reduce((a, d) => (d.x < a.x ? d : a));
+  return { from: rear.x - rear.widthM / 2, to: front.x + front.widthM / 2 };
+}
 
 /** Light-source dummies, halos, cabin interiors, wires and probes: not part of the airframe. */
 const skipped =
@@ -494,6 +527,10 @@ function prepare(source: Source, dir: string): Prepared {
     e1 = new Vector3(),
     e2 = new Vector3();
   const keepPosition: number[] = [];
+  // TASK-331: an airliner's cabin windows are placed afresh (`windowPanes`); the source's cabin
+  // glass and black window decals between the doors become skin, which also closes openings
+  // the glass filled.
+  const cabin = cabinWindows[type.id] ? cabinSpan(type) : null;
   const spinTriangles = new Map<
     string,
     { kind: SpinKind; position: number[]; rotated: number[] }
@@ -544,8 +581,19 @@ function prepare(source: Source, dir: string): Prepared {
     const inBody =
       Math.abs(cz) <= s.width * 1.12 + 0.05 && Math.abs(cy - s.y) <= s.height * 1.15 + 0.05;
     const light = !group.color || luminance(group.color) > 0.55;
+    const inCabin = cabin !== null && cx > cabin.from - 0.5 && cx < cabin.to;
     let name: string;
-    if (glassNames.test(names)) name = 'glass';
+    if (
+      inCabin &&
+      (glassNames.test(names) ||
+        (inBody &&
+          group.color !== null &&
+          luminance(group.color) < 0.05 &&
+          Math.abs(cz) > s.width * 0.6 &&
+          Math.abs(cy - s.y) < s.height * 0.8))
+    )
+      name = 'hull';
+    else if (glassNames.test(names)) name = 'glass';
     // A helicopter's skids and steps, below the cabin floor: bare metal.
     else if (helicopter && cy < s.y - s.height * 1.05) name = 'c8c939a';
     else if (
@@ -613,23 +661,20 @@ function prepare(source: Source, dir: string): Prepared {
 
 // ---- window panes -----------------------------------------------------------------------------
 
-/** Door panels (LOD0) and, for a source without cabin glass, window rows as dark panes on the
- * model's skin at TASK-307's row positions clear of TASK-315's doors (LOD1: one band per row
- * and side). */
+/** Door panels (LOD0) and, on an airliner, one row of cabin windows per deck as dark panes on
+ * the model's skin at TASK-307's row heights, at the real size and pitch (`cabinWindows`),
+ * clear of TASK-315's doors (LOD1: one band per row and side). A business jet keeps its
+ * source's glass. */
 function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
-  const { type, profile, position, part } = prepared;
-  // A source with cabin glass of its own (panes, or a band behind holes in the skin) keeps it.
-  const modelled = part.some((p, t) => {
-    const x = (position[t * 9]! + position[t * 9 + 3]! + position[t * 9 + 6]!) / 3;
-    return p === 'glass' && Math.abs(x) < 0.3 * type.lengthM;
-  });
+  const { type, profile } = prepared;
+  const panes = cabinWindows[type.id];
   const helicopter = type.class === 'helicopter';
   const doors: number[] = [];
   if (helicopter) return { glass: [], doors, bands: new Map<string, number[]>() };
   const mesh = surface;
   const raycaster = new Raycaster();
   const L = type.lengthM;
-  const decks = type.class === 'double_decker' ? [1.64, 0.94] : [1.28];
+  const decks = type.class === 'double_decker' ? [1.72, 1.05] : [1.28];
   const out: number[] = [];
   const profileAt = (x: number) => {
     const f = Math.min(40, Math.max(0, (x / L + 0.5) * 40));
@@ -702,7 +747,9 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
   // angles from the crown) as strips cast onto the skin: a colour per facet cannot draw a band
   // narrower than the model's facets. The flight's livery picks the strips it uses.
   const bands = new Map<string, number[]>();
-  const step = lod === 0 ? 0.5 : 2;
+  // TASK-331: an 80th of the length or half a metre at the near level, leaving a widebody's
+  // budget room for its cabin panes.
+  const step = lod === 0 ? Math.max(0.5, L / 80) : 2;
   for (const [name, x0, x1, a0, a1] of liveryStrips) {
     const strip: number[] = [];
     for (const side of [-1, 1]) {
@@ -732,20 +779,55 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
     }
     if (strip.length) bands.set(name, strip);
   }
-  if (modelled) return { glass: [], doors, bands };
+  if (!panes) return { glass: [], doors, bands };
+  const { width, height, pitch } = panes;
+  // The skin under a pane's middle at the row's height, cast across from beside the fuselage:
+  // the skin there, or where an opening of the source's lies there, the curve through the skin
+  // just above and below it.
+  const across = (x: number, y: number, side: number) => {
+    const reach = profileAt(x).width + 1;
+    raycaster.set(new Vector3(x, y, side * reach), new Vector3(0, 0, -side));
+    raycaster.far = reach;
+    const [first] = raycaster.intersectObject(mesh);
+    if (!first?.face || Math.abs(first.point.z) < profileAt(x).width * 0.6) return null;
+    const n = first.face.normal.clone();
+    if (n.z * side < 0) n.negate();
+    return { point: first.point, normal: n };
+  };
+  const paneHit = (x: number, y: number, side: number) => {
+    const s = profileAt(x);
+    const a = across(x, y + height, side),
+      b = across(x, y - height, side);
+    if (!a || !b) return null;
+    const point = a.point.clone().add(b.point).multiplyScalar(0.5);
+    const normal = a.normal.clone().add(b.normal).normalize();
+    const centre = across(x, y, side);
+    const sagitta = (height * height) / (2 * Math.min(s.width, s.height));
+    const out = Math.max(sagitta, centre ? centre.point.clone().sub(point).dot(normal) : 0);
+    // None where the skin turns away towards the nose or crown: a flat pane would sink into it.
+    if (Math.abs(normal.z) < 0.75) return null;
+    return { point: point.addScaledVector(normal, out), normal };
+  };
+  const cabin = cabinSpan(type);
   for (const [deck, angle] of decks.entries()) {
     const upper = type.class === 'double_decker' && deck === 1;
-    const from = (type.id === 'B748' && deck === 1 ? 0.235 : -0.33) * L;
-    const to = 0.37 * L;
-    const count = Math.ceil((to - from) / 0.87);
-    const width = Math.min(0.19, profileAt(0).width * 0.16) * 2;
-    const height = Math.min(0.27, profileAt(0).width * 0.22) * 2;
+    // The 747's upper deck is the hump over the forward fuselage.
+    const from = type.id === 'B748' && upper ? 0.235 * L : cabin.from;
+    const to = cabin.to;
+    // A straight row along the level cabin floor: the deck angle's height on the sections
+    // along the row, their median.
+    const heights: number[] = [];
+    for (let x = from; x <= to; x += 1) {
+      const s = profileAt(x);
+      heights.push(s.y + Math.cos(angle) * s.height);
+    }
+    const rowY = heights.sort((a, b) => a - b)[Math.floor(heights.length / 2)]!;
     for (const side of [-1, 1]) {
       if (lod === 1) {
         // One band per row and side.
         const points: { point: Vector3; normal: Vector3 }[] = [];
         for (let j = 0; j <= 12; j++) {
-          const h = hit(from + ((to - from) * j) / 12, angle, side);
+          const h = paneHit(from + 1 + ((to - from - 2) * j) / 12, rowY, side);
           if (h) points.push(h);
         }
         for (let j = 1; j < points.length; j++) {
@@ -773,35 +855,34 @@ function windowPanes(prepared: Prepared, lod: number, surface: Mesh) {
         }
         continue;
       }
-      for (let j = 0; j < count; j++) {
-        const x = from + ((to - from) * j) / (count - 1);
-        // No pane over a door of the same deck.
+      // One pane per frame from the front door aft, none over a door of the same deck.
+      for (let x = to - pitch; x > from + pitch / 2; x -= pitch) {
         if (
           layout.doors.some(
-            (d) => d.upper === upper && Math.abs(d.x - x) < d.widthM / 2 + width + 0.1,
+            (d) => d.upper === upper && Math.abs(d.x - x) < d.widthM / 2 + width / 2 + 0.12,
           )
         )
           continue;
-        const h = hit(x, angle, side);
+        const h = paneHit(x, rowY, side);
         if (!h) continue;
         const { point, normal } = h;
         const along = new Vector3(1, 0, 0);
         const up = along.clone().cross(normal).normalize().multiplyScalar(side);
-        // An octagon with cut corners, six triangles.
+        // A rounded rectangle (an octagon with cut corners), six triangles, flat and just clear
+        // of the skin.
         const ring = [
-          [-0.5, -0.3],
-          [-0.3, -0.5],
-          [0.3, -0.5],
-          [0.5, -0.3],
-          [0.5, 0.3],
-          [0.3, 0.5],
-          [-0.3, 0.5],
-          [-0.5, 0.3],
+          [-0.5, -0.32],
+          [-0.32, -0.5],
+          [0.32, -0.5],
+          [0.5, -0.32],
+          [0.5, 0.32],
+          [0.32, 0.5],
+          [-0.32, 0.5],
+          [-0.5, 0.32],
         ].map(([u, w]) =>
-          // Flat, clear of the skin's curve under the pane.
           point
             .clone()
-            .addScaledVector(normal, 0.05)
+            .addScaledVector(normal, 0.025)
             .addScaledVector(along, u! * width)
             .addScaledVector(up, w! * height),
         );
@@ -828,7 +909,7 @@ function simplify(position: Float32Array, part: string[], target: number) {
   const welded = mergeVertices(geometry, 1e-4);
   const index = Uint32Array.from(welded.index!.array);
   const tight = Float32Array.from(welded.getAttribute('position').array);
-  let result = index;
+  let result: Uint32Array = index;
   // The outermost vertices (nose, tail, tips) stay put, so the extents keep the catalogue size.
   const extremes = new Uint8Array(tight.length / 3);
   for (const axis of [0, 1, 2]) {
@@ -839,18 +920,23 @@ function simplify(position: Float32Array, part: string[], target: number) {
     }
   }
   if (index.length / 3 > target) {
-    [result] = MeshoptSimplifier.simplifyWithAttributes(
-      index,
-      tight,
-      3,
-      new Float32Array(0),
-      0,
-      [],
-      extremes,
-      target * 3,
-      0.02,
-      ['Prune'],
-    ) as [Uint32Array, number];
+    // TASK-331: the smallest error bound (a share of the model's extent) that reaches the
+    // budget: at 2% an A380's crown sank 0.9 m once its cabin panes took their share.
+    for (const error of [0.01, 0.015, 0.02]) {
+      [result] = MeshoptSimplifier.simplifyWithAttributes(
+        index,
+        tight,
+        3,
+        new Float32Array(0),
+        0,
+        [],
+        extremes,
+        target * 3,
+        error,
+        ['Prune'],
+      ) as [Uint32Array, number];
+      if (result.length / 3 <= target) break;
+    }
     // Where open shells and seams stop the edge collapses short of the budget, the sloppy
     // simplifier (vertex clustering) takes over; it undershoots, so its target is raised until
     // the result comes within 80% of the budget.
@@ -1077,41 +1163,44 @@ function mounts(prepared: Prepared, position: Float32Array) {
 
 // ---- main -------------------------------------------------------------------------------------
 
-const dir = process.argv[2];
-if (!dir) throw new Error('usage: bench/aircraft-models.ts <fr24-3d-models/models>');
-const outDir = 'fixtures/aircraft';
-mkdirSync(outDir, { recursive: true });
-await MeshoptSimplifier.ready;
-const manifest: Record<string, unknown> = {};
-for (const source of sources) {
-  const prepared = prepare(source, dir);
-  const lods = [];
-  let surface = new Float32Array(0);
-  for (const lod of [0, 1]) {
-    const { glb, triangles, sourceTriangles, ...rest } = await exportLod(prepared, lod);
-    if (lod === 0) surface = rest.surface;
-    const file = `${source.type.toLowerCase()}-${lod}.glb`;
-    writeFileSync(join(outDir, file), glb);
-    lods.push({ file, triangles, bytes: glb.byteLength });
-    if (lod === 0)
-      console.log(`${source.type} from ${source.file}: ${sourceTriangles} source triangles`);
+// Run by path only: the tests read `cabinWindows` from this module.
+if (import.meta.main) {
+  const dir = process.argv[2];
+  if (!dir) throw new Error('usage: bench/aircraft-models.ts <fr24-3d-models/models>');
+  const outDir = 'fixtures/aircraft';
+  mkdirSync(outDir, { recursive: true });
+  await MeshoptSimplifier.ready;
+  const manifest: Record<string, unknown> = {};
+  for (const source of sources) {
+    const prepared = prepare(source, dir);
+    const lods = [];
+    let surface: Float32Array = new Float32Array(0);
+    for (const lod of [0, 1]) {
+      const { glb, triangles, sourceTriangles, ...rest } = await exportLod(prepared, lod);
+      if (lod === 0) surface = rest.surface;
+      const file = `${source.type.toLowerCase()}-${lod}.glb`;
+      writeFileSync(join(outDir, file), glb);
+      lods.push({ file, triangles, bytes: glb.byteLength });
+      if (lod === 0)
+        console.log(`${source.type} from ${source.file}: ${sourceTriangles} source triangles`);
+    }
+    manifest[source.type] = {
+      source: source.file,
+      lods,
+      scale: Object.fromEntries(
+        Object.entries(prepared.scale).map(([k, x]) => [k, Math.round(x * 1e4) / 1e4]),
+      ),
+      profile: prepared.profile,
+      lights: mounts(prepared, surface),
+    };
+    console.log(
+      `  LOD0 ${lods[0]!.triangles} tris ${lods[0]!.bytes} B, LOD1 ${lods[1]!.triangles} tris ${lods[1]!.bytes} B`,
+    );
   }
-  manifest[source.type] = {
-    source: source.file,
-    lods,
-    scale: Object.fromEntries(
-      Object.entries(prepared.scale).map(([k, x]) => [k, Math.round(x * 1e4) / 1e4]),
-    ),
-    profile: prepared.profile,
-    lights: mounts(prepared, surface),
-  };
-  console.log(
-    `  LOD0 ${lods[0]!.triangles} tris ${lods[0]!.bytes} B, LOD1 ${lods[1]!.triangles} tris ${lods[1]!.bytes} B`,
+  writeFileSync(join(outDir, 'models.json'), JSON.stringify(manifest, null, 2) + '\n');
+  const total = Object.values(manifest).reduce<number>(
+    (sum, m) => sum + (m as { lods: { bytes: number }[] }).lods.reduce((s, l) => s + l.bytes, 0),
+    0,
   );
+  console.log(`total ${total} B (${statSync(join(outDir, 'models.json')).size} B manifest)`);
 }
-writeFileSync(join(outDir, 'models.json'), JSON.stringify(manifest, null, 2) + '\n');
-const total = Object.values(manifest).reduce<number>(
-  (sum, m) => sum + (m as { lods: { bytes: number }[] }).lods.reduce((s, l) => s + l.bytes, 0),
-  0,
-);
-console.log(`total ${total} B (${statSync(join(outDir, 'models.json')).size} B manifest)`);
