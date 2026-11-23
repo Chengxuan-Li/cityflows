@@ -345,8 +345,14 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-320](tasks/TASK-320.md) | airports | Parked aircraft on their stand's heading and stop | sim parking, render | 312 | heading under 3 degrees, 316 re-run | merged 2026-11-23 (`4fa2884`) |
 | TASK-321 | airports | Abstract block-signalling validation (bench only) | bench | 312 | gridlocks per policy, real layouts | merged 2026-11-23 (`6809c54`) |
-| [TASK-322](tasks/TASK-322.md) | airports | Block signalling and dynamic taxi flows in the airside simulation | sim, routing | 321 | no gridlock anywhere, LCY kept, large-airport days | in progress 2026-11-23 (Claude) |
+| [TASK-322](tasks/TASK-322.md) | airports | Block signalling and dynamic taxi flows in the airside simulation | sim, routing | 321 | no gridlock anywhere, LCY kept, large-airport days | not merged 2026-11-23 (best Zurich peak 120/199 against main 152; variants `f09208a` to `0e63542`) |
 | [TASK-323](tasks/TASK-323.md) | airports | Dynamic taxi-flow preferences per runway configuration | sim module | 321 | flips with runway direction, fast, small route cost | merged 2026-11-23 (`ad9bc75`) |
+| TASK-324 | airports | Conflict-free routing pilot on the Zurich peak (real sim) | sim pilot | 322 | Zurich peak against main | not merged 2026-11-23 (`f51741a`, 97/199) |
+| TASK-325 | airports | Calibrated surface bench: time-window routing and departure metering mocks, clips | bench | 321 | Zurich peak and full days at three airports | branch only 2026-11-23 (`93fd166`, `a378949`, `31449d5`; bench misleads at scale) |
+| TASK-326 | airports | Departure metering and a crossing exit check in the real sim | sim pilot | 325 | Zurich peak against main 152/199 | not merged 2026-11-23 (`9f6332d`; metering 136, exit check alone 150) |
+| [TASK-327](tasks/TASK-327.md) | airports | Runway interlocks at intersections only | sim | 312 | Boston days, no runway conflicts, Zurich and LCY kept | in progress 2026-11-23 (Codex) |
+| [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | in progress 2026-11-23 (Codex) |
+| [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | in progress 2026-11-23 (Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -6441,6 +6447,14 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-23 (owner, after the lead's real-sim clips and wait graphs of Boston, Heathrow and Zurich): the
+  three root causes are legitimate, fix them. "Let's not change runway direction mid day for now, that would be
+  chaotic. Also maximize runway usage. Zurich seldom gets all 3 runways used efficiently." TASK-327 (runway
+  interlocks at intersections only, Boston), TASK-328 (one configuration per operating day at Zurich and
+  Heathrow, re-route departures at holds of closed ends, Zurich's three runways under north), TASK-329 (moving
+  aircraft never wait for aircraft not yet started, Heathrow wait cycles) started in parallel. This replaces the
+  lead's earlier recommendation to pause airport throughput work.
 
 - 2026-11-23 (owner): "yes apply all" time cuts for TASK-322 (peak-window gates, preference logic split to
   TASK-323, port the bench, browser tiers at merge); dead ends must be protected like terminus platforms (one
