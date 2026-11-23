@@ -3412,7 +3412,7 @@ takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn. The S-Bahn stan
 two subway models until TASK-334.
 `render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
 by all its cars and created only for variants a route uses: the body (the profile extruded, both
-cab noses lofted from it, end walls, inset bellows, couplers), the gear (three bogie, two pantograph and two
+cab noses lofted from it, end walls, inset bellows, couplers and optional buffers), the gear (three bogie, two pantograph and two
 roof-housing slots) and the far box. Body vertices carry an anchor (rear end, middle, front end)
 and a part, so the vertex shader draws a car at its own length without stretching its noses and
 hides the parts a car does not show; gear slots move to each car's positions. Windows, doors,
@@ -3430,10 +3430,11 @@ TASK-127's.
 
 TASK-333 adds the DLR's coupled two-section units with shared joint bogies and collector shoes,
 the Elizabeth-line EMU with two pantographs and gangways between its cars, and the DB push-pull
-Intercity with a 19 m locomotive centred in its pose, 24.8 m coach bodies on the 25 m pose pitch,
-and a control car at the opposite end. Its coupler draws across the extra space behind the short
-locomotive. Fixed-length bodies shorten with poses clipped at the extract edge, and pick boxes
-use the drawn lengths. The models use operator colours without logos or names.
+Intercity with a 19 m locomotive, 24.8 m coach bodies on the 25 m pose pitch, and a control car
+at the opposite end. The locomotive sits towards its coach end, so the buffers meet across a
+1 m body gap. A plain Intercity coach end without bellows shows a closed gangway door. Fixed-length
+bodies shorten with poses clipped at the extract edge, and pick boxes follow the drawn bodies.
+The models use operator colours without logos or names.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning

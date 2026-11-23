@@ -32,6 +32,7 @@ import {
   formationOf,
   gearGeometry,
   gearMaterial,
+  gearSlots,
   type FormationOf,
 } from './train-kit';
 import { builtVariant, trainVariantFor, type TrainVariant } from './train-variants';
@@ -260,6 +261,12 @@ export class Trains3D {
         );
         this.rotation.set(0, -car.heading - (turn ? Math.PI : 0), turn ? -pitchRad : pitchRad);
         this.matrix.makeRotationFromEuler(this.rotation).setPosition(car.x, y, car.y);
+        const shift = this.gears[i * 8 + gearSlots.bodyOffset]!;
+        if (shift !== 0) {
+          // Shift along the drawn car's axis, including the track pitch, before staging and picking.
+          const m = this.matrix.elements;
+          this.matrix.setPosition(car.x + shift * m[0]!, y + shift * m[1]!, car.y + shift * m[2]!);
+        }
         this.matrix.toArray(this.matrices, i * 16);
         const variant = meshes.formation.variant;
         this.matrix.scale(this.scale.set(this.cars[i * 4]! * 2, variant.heightM, variant.widthM));

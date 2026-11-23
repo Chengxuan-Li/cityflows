@@ -35,7 +35,8 @@ describe.for(variants)('TASK-332 $id model', (v) => {
 
   test('has every body part and gear slot, within the triangle budget', () => {
     const parts = new Set(body.getAttribute('aPart').array);
-    expect([...parts].sort()).toEqual(Object.values(bodyParts));
+    const count = v.nose.buffers ? 11 : 9;
+    expect([...parts].sort((a, b) => a - b)).toEqual(Object.values(bodyParts).slice(0, count));
     const slots = new Set(gear.getAttribute('aSlot').array);
     const expected = [0, 1, 2, ...(v.pantograph ? [3, 4] : []), 5, 6];
     expect([...slots].sort()).toEqual(expected);
@@ -179,6 +180,14 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   layer.pickMesh.getMatrixAt(0, pickBox);
   expect(new Vector3().setFromMatrixColumn(pickBox, 0).length()).toBeCloseTo(19);
   const lead = trains[0]!.cars[0]!;
+  const heading = new Vector3(Math.cos(lead.heading), 0, Math.sin(lead.heading));
+  const pickCentre = new Vector3().setFromMatrixPosition(pickBox);
+  expect(
+    pickCentre
+      .clone()
+      .sub(new Vector3(lead.x, 0, lead.y))
+      .dot(heading),
+  ).toBeCloseTo(-1.9);
   const camera = new PerspectiveCamera(45, 1, 0.5, 5000);
   for (const [distance, level] of [
     [40, 'near'],
@@ -190,7 +199,10 @@ test('TASK-332 picking returns the right train at both levels, with the head car
     layer.setDetail(camera, pixelScale(camera, 800));
     const counts = layer.counts()[0]!;
     expect(level === 'near' ? counts.near : counts.far, level).toBeGreaterThan(0);
-    const point = new Vector3(lead.x, 2, lead.y).project(camera);
+    const point = pickCentre
+      .clone()
+      .add(new Vector3(0, 2, 0))
+      .project(camera);
     const index = pickVehicle3D(
       layer.pickMesh,
       camera,
@@ -208,10 +220,7 @@ test('TASK-332 picking returns the right train at both levels, with the head car
   expect(flags & carFlags.headFront).toBeTruthy();
   const matrix = far.instanceMatrix;
   const front = new Vector3(matrix.getX(0), 0, matrix.getZ(0)).normalize();
-  expect(front.dot(new Vector3(Math.cos(lead.heading), 0, Math.sin(lead.heading)))).toBeCloseTo(
-    1,
-    3,
-  );
+  expect(front.dot(heading)).toBeCloseTo(1, 3);
 });
 
 // TASK-334 will replace this stand-in with its production record.
@@ -316,24 +325,38 @@ test('TASK-333 the locomotive and control car lead at opposite ends in push-pull
     expect(car[0]! * 2).toBeCloseTo(reversed ? 24.8 : 19);
     expect([...gear.slice(0, 2)].every((pos) => Math.abs(pos) < car[0]!)).toBe(true);
   }
-  // Locomotive and coach couple without bellows: a coupler bridges the gap.
-  carState(f, 8, 0, 24.3, false, false, car, 0, gear, 0);
-  expect(car[2]! & carFlags.coupledRear).toBeTruthy();
-  expect(car[2]! & carFlags.bellowsRear).toBeFalsy();
-  expect(
-    placedX(
-      1,
-      -1,
-      bodyParts.rearCoupler,
-      car[0]!,
-      car[2]!,
-      pushPull.nose.lengthM,
-      car[3]!,
-      pushPull.nose.couplerMaxM,
-    ),
-  ).toBeCloseTo(-12.52);
   carState(f, 8, 2, 24.3, false, false, car, 0, gear, 0);
   expect(car[2]! & (carFlags.bellowsFront | carFlags.bellowsRear)).toBe(12);
+});
+
+test('TASK-333 the locomotive meets the first coach at the buffers in either direction', () => {
+  const v = builtVariant('intercity');
+  const f = formationOf(v);
+  const car = new Float32Array(4),
+    gear = new Float32Array(8);
+  for (const reversed of [false, true]) {
+    carState(f, 8, 0, 24.3, reversed, false, car, 0, gear, 0);
+    const locoRear =
+      placedX(-v.nose.lengthM, -1, bodyParts.rearNose, car[0]!, car[2]!, v.nose.lengthM, car[3]!)! +
+      gear[7]!;
+    const locoBuffers =
+      placedX(-0.5, -1, bodyParts.rearBuffers, car[0]!, car[2]!, v.nose.lengthM, car[3]!)! +
+      gear[7]!;
+    carState(f, 8, 1, 24.3, reversed, false, car, 0, gear, 0);
+    const coachFront = car[0]! - 25;
+    const coachBuffers =
+      placedX(0.5, 1, bodyParts.frontBuffers, car[0]!, car[2]!, v.nose.lengthM, car[3]!)! - 25;
+    expect(locoRear - coachFront).toBeCloseTo(1);
+    expect(locoBuffers).toBeCloseTo(coachBuffers);
+    expect(car[2]! & carFlags.closedGangwayFront).toBeTruthy();
+    expect(car[2]! & carFlags.bellowsRear).toBeTruthy();
+    carState(f, 8, 7, 24.3, reversed, false, car, 0, gear, 0);
+    expect(car[2]! & carFlags.closedGangwayFront).toBeFalsy();
+  }
+  const detached = formationOf({ ...v, formation: { ...v.formation, first: 'coach' } });
+  carState(detached, 1, 0, 24.3, false, false, car, 0, gear, 0);
+  const closed = carFlags.closedGangwayFront | carFlags.closedGangwayRear;
+  expect(car[2]! & closed).toBe(closed);
 });
 
 test('TASK-333 DB bodies shorten with poses clipped at the extract edge', () => {
@@ -343,6 +366,7 @@ test('TASK-333 DB bodies shorten with poses clipped at the extract edge', () => 
   for (const j of [0, 1, 7]) {
     carState(f, 8, j, 12, false, false, car, 0, gear, 0, 24.3);
     expect(car[0]! * 2).toBe(12);
+    expect(gear[7]).toBe(0);
     carState(f, 8, j, 2, false, false, car, 0, gear, 0, 24.3);
     expect(car[0]! * 2).toBe(2);
     expect([...gear.slice(0, gearSlots.count)].every((p) => p === hidden)).toBe(true);

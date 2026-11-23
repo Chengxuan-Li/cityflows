@@ -42,6 +42,10 @@ export interface CarType {
    * extract edge the body is limited to the visible pose length. Full poses are 21.8 m (S-Bahn),
    * 24.3 m (main line) and 8.3 m (tram) with 0.7 m between them. */
   lengthM?: number;
+  /** Move a short car toward its coupled end, leaving this much to the pose joint. */
+  coupledGapM?: number;
+  /** A panelled gangway door on any plain end without bellows. */
+  closedGangway?: boolean;
   /** Driver's cabs: at the car's front, at both ends, or none. The formation turns a unit's last
    * car round, so its front cab faces the unit's rear. A cab is drawn as the variant's nose. */
   cabs: 'none' | 'front' | 'both';
@@ -94,9 +98,8 @@ export interface Nose {
   lamps: { yM: number; zM: number; radiusM: number };
   /** Height of the coupler's middle, drawn where the car is coupled without bellows. */
   couplerM: number;
-  /** Maximum reach from the body, in metres. Defaults to 0.6 m. Short bodies centred in
-   * their poses can need a longer drawbar to meet the next car. */
-  couplerMaxM?: number;
+  /** Side buffers on coupled ends without bellows, at the coupler height. */
+  buffers?: { halfSpacingM: number; reachM: number };
   /** Destination display above the windscreen (blank: no route numbers). */
   display: { bottomM: number; topM: number; halfWidthM: number } | null;
 }
@@ -467,6 +470,7 @@ const intercityLivery: Livery = {
 const intercityCoach: CarType = {
   // Keep a gap for bellows on the simulation's 25 m pitch.
   lengthM: 24.8,
+  closedGangway: true,
   cabs: 'none',
   bogies: [
     [1, -3.45],
@@ -505,7 +509,7 @@ const intercity: TrainVariant = {
     glass: { bottomM: 2.48, topM: 3.48, halfWidthM: 1.04 },
     lamps: { yM: 1.53, zM: 0.88, radiusM: 0.12 },
     couplerM: 0.99,
-    couplerMaxM: 3.05,
+    buffers: { halfSpacingM: 0.875, reachM: 0.5 },
     display: null,
   },
   windows: { sillM: 1.98, headM: 3.17, paneM: 1.94, pillarM: 0.41, endMarginM: 0.65 },
@@ -519,6 +523,7 @@ const intercity: TrainVariant = {
   carTypes: {
     loco: {
       lengthM: 19,
+      coupledGapM: 1.1,
       cabs: 'both',
       bogies: [
         [0, -5.2],
