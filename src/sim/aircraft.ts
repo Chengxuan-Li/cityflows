@@ -1418,6 +1418,35 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** Per starter's legs and arrival's landing leg: for each place they meet, the arrival's taxi
    * time to it less the starter's time past it and `HORIZON_S`. */
   const horizonMeets = new WeakMap<Leg[], WeakMap<Leg, number[]>>();
+  /** TASK-330 (5): whether a tow's legs meet the way off the runway of an arrival on final or of
+   * the next arrival to appear on an end. */
+  function towWaitsForArrival(craft: Craft, legs: Leg[]) {
+    const own = legs.map((leg) => ({ leg, fromM: 0 }));
+    const heads = new Set<number>();
+    for (const other of crafts) {
+      let landingLeg: Leg | undefined;
+      if (other.air?.kind === 'approach' && other.next[0]?.kind === 'taxi')
+        landingLeg = other.next[0].leg;
+      else if (other.mode === 'queued' && other.request?.kind === 'arrival' && other.admission) {
+        const key = endKey(other.runway, other.request.end);
+        if (
+          heads.has(key) ||
+          queue.find((id) => {
+            const q = crafts[id - 1]!;
+            return q.request?.kind === 'arrival' && endKey(q.runway, q.request.end) === key;
+          }) !== other.id
+        )
+          continue;
+        heads.add(key);
+        landingLeg = other.admission.landing?.leg;
+      }
+      if (!landingLeg) continue;
+      const safeM = safeOf(other, landingLeg);
+      if (conflicts(craft, own, other).some((c) => c.otherLeg === landingLeg && c.x1 < safeM))
+        return true;
+    }
+    return false;
+  }
   /** Whether it would still wait for an aircraft not started. */
   const waitsForUnstarted = (craft: Craft, pass: Set<Craft>) =>
     craft.waits.some((w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w));
@@ -2952,6 +2981,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     )
       return;
     if (waitsForUnstarted(craft, pass)) return;
+    // TASK-330 (5): a tow keeps its stand while an arrival on final, or the next to appear, would
+    // meet its way before that arrival's tail is off the runway.
+    if (request.kind === 'tow' && towWaitsForArrival(craft, legs)) return;
     // The first leg must be claimable from where the aircraft stands.
     if (firstConflict(craft, first, half, half + craft.lengthM / 2 + margin) < Infinity) return;
     const push = first.mode === 'pushback' ? sweep(craft, first) : undefined;
