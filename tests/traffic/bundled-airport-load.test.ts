@@ -22,14 +22,14 @@ const pins = [
   },
   {
     id: 'boston-logan',
-    compiled: '3f854d1506b00eeb836b61c3b31b2fb99cc14a093367fe30fc0646a5a82ee709',
+    compiled: '92b6ea0f2297d18b13816ffa831132257f3429a1d61844d0fd86ec2bb0ec649c',
     state: [2936898296, 837548569],
     board: '82500a0afed2baa5e3c2e1dc97fcab675062904cd15ff82297d98d9c062e2ad8',
   },
   {
     id: 'heathrow',
-    compiled: '52a242206bf7b485fdfbe42e26adda7f8a3a5a54c64623a08d0854cfacfa7069',
-    state: [2003868899, 4110133764],
+    compiled: 'ff64f8c0c36b2c1bbea9e3841369c1ce3c420f74f6c9d04494338a73d379229e',
+    state: [2003868899, 3452835962],
     board: '16a8bdd274ab14d4d6aa283a7cfad907ca1fb29dc3c1f1a5e8a73e8c8df56f56',
   },
 ];
