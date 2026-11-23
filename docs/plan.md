@@ -351,7 +351,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | TASK-325 | airports | Calibrated surface bench: time-window routing and departure metering mocks, clips | bench | 321 | Zurich peak and full days at three airports | branch only 2026-11-23 (`93fd166`, `a378949`, `31449d5`; bench misleads at scale) |
 | TASK-326 | airports | Departure metering and a crossing exit check in the real sim | sim pilot | 325 | Zurich peak against main 152/199 | not merged 2026-11-23 (`9f6332d`; metering 136, exit check alone 150) |
 | [TASK-327](tasks/TASK-327.md) | airports | Runway interlocks at intersections only | sim | 312 | Boston days, no runway conflicts, Zurich and LCY kept | in progress 2026-11-23 (Codex) |
-| [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | in progress 2026-11-23 (Codex) |
+| [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | merged 2026-11-23 (`58e23c2`) |
 | [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | in progress 2026-11-23 (Claude) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -5901,6 +5901,14 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-328 (Codex; merged `58e23c2`): one runway configuration per operating day (owner 2026-11-23). Zurich runs north
+  06:00 to the 23:30 curfew (arrivals 14; departures choose 16 or 28 by eligible taxi distance plus 750 m per queued
+  departure); Heathrow keeps one assignment all day; wind can still force a change; a departure at a closed hold keeps
+  its order and re-routes or returns to a stand. Zurich 730 seeds 1-3: 498/543/499 to 543/566/575, go-arounds
+  26/30/22 to 30/22/14, runway 16 take-offs 46-54 to 122-130; Zurich at schedule size 170 of 170; London City
+  unchanged; runway conflicts 0. Existing cities unchanged (Freiburg, Munich four cases, full demand both modes).
+  Gaps: one departure left at a closed hold at the curfew in Zurich seeds 1 and 2; Heathrow still gridlocks (TASK-329).
+  Lead quick check with TASK-327 also in: Zurich 565/571/591, Boston seed 1 809, no gridlocks.
 - TASK-323 (Codex; merged `ad9bc75`): `src/sim/taxi-flow-preferences.ts`, TASK-321's policy C on the compiled airside:
   directions from the configuration's exits, line-ups and stand routes, cached per graph and configuration (about
   0.1 s uncached at Zurich and Heathrow); route length cost 0 to 3.4%; every baseline route keeps a compatible route;
