@@ -28,6 +28,7 @@ import {
   aircraftCode,
   aircraftCodes,
   aircraftTypes,
+  type AircraftClass,
   type AircraftType,
   type FixedWingPerformance,
   type HelicopterPerformance,
@@ -83,6 +84,16 @@ const HOLD_FALLBACK_M = 75;
 /** After a push the nose stands this far past the stand's lead-in root. */
 const PUSH_CLEAR_M = 10;
 const TUG_S = 20;
+/** Boarding complete and tug attached. Give the bridge time to stow before moving off stand. */
+const pushbackPreparationS: Record<AircraftClass, number> = {
+  double_decker: 10,
+  widebody: 8,
+  narrowbody: 6,
+  regional_jet: 6,
+  propeller: 5,
+  private: 5,
+  helicopter: 0,
+};
 const LINEUP_S = 5;
 const FULL_LENGTH_M = 60;
 /** An arrival claims its runway this long before its threshold, or goes around. */
@@ -113,6 +124,7 @@ export const aircraftStates = [
   'rotation',
   'climb',
   'parked',
+  'ready-for-pushback',
   'pushback',
   'tow',
   'hover-taxi',
@@ -134,6 +146,8 @@ export interface AircraftPoseSnapshot {
   heading: number;
   speedMps: number;
   state: AircraftState;
+  /** Start of bridge retraction, in simulation seconds, while ready for pushback. */
+  pushbackReadySinceS?: number;
   enginesRunning: boolean;
   onRunway: boolean;
   airborne: boolean;
@@ -296,6 +310,7 @@ interface Craft {
   pauseUntilS: number;
   request: Request | null;
   requestedS: number;
+  pushbackReadySinceS?: number;
   pendingLegs?: Leg[];
   towing: boolean;
   retryS: number;
@@ -1738,6 +1753,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
 
   /** Starts a parked aircraft's departure or tow once its legs can be locked. */
   function tryStart(craft: Craft, timeS: number) {
+    craft.pushbackReadySinceS ??= timeS;
+    if (timeS - craft.pushbackReadySinceS < pushbackPreparationS[craft.type.class]) return;
     if (timeS - craft.retryS < RETRY_S) return;
     craft.retryS = timeS;
     if (craft.request!.kind === 'departure' && runways.restricted) {
@@ -1797,6 +1814,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (craft.stand >= 0) standOccupant[craft.stand] = -1;
     if (request.kind === 'tow') craft.stand = request.stand;
     craft.request = null;
+    craft.pushbackReadySinceS = undefined;
     craft.pendingLegs = undefined;
     // A departure's tug disconnects and its engines start after the push; a tow's stays on.
     const pauseS = first.mode === 'pushback' && request.kind === 'departure' ? TUG_S : 0;
@@ -2543,7 +2561,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   function stateOf(craft: Craft): AircraftState {
-    if (craft.mode === 'parked') return 'parked';
+    if (craft.mode === 'parked')
+      return craft.pushbackReadySinceS === undefined ? 'parked' : 'ready-for-pushback';
     if (craft.mode === 'waiting') return 'line-up';
     if (craft.mode === 'air') {
       const air = craft.air!;
@@ -2645,7 +2664,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         heading: pose.headingRad,
         speedMps: pose.speedMps,
         state,
-        enginesRunning: state !== 'parked' && !craft.towing,
+        ...(craft.pushbackReadySinceS === undefined
+          ? {}
+          : { pushbackReadySinceS: craft.pushbackReadySinceS }),
+        enginesRunning: craft.mode !== 'parked' && !craft.towing,
         onRunway: onRunway(craft),
         airborne,
         gearDown,

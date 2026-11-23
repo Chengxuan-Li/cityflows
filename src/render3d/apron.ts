@@ -50,8 +50,8 @@ const tunnel = [
 ];
 const CAB_HEIGHT_M = 3.1;
 const DRUM_HEIGHT_M = 3.3;
-/** Box instances per bridge: three tunnels, cab, bellows, two drive legs, the bogie, a link. */
-const BRIDGE_BOXES = 9;
+/** Moving box instances per bridge: three tunnels, cab, bellows, two drive legs, the bogie. */
+const BRIDGE_BOXES = 8;
 const POST_SPACING_M = 15;
 
 /** Glass on each terminal building's facades, from just above the apron to below its roof. */
@@ -166,13 +166,16 @@ export class Apron3D {
     this.bridges = bridges;
     this.drawn = bridges.map(() => null);
     this.states = new JetBridgeStates(bridges);
-    const posts = bridges.flatMap((b) => (b.link ? linkPosts(b.link, b.rotunda) : []));
+    const links = bridges.flatMap(({ link }) =>
+      link ? link.slice(1).map((to, i) => [link[i]!, to] as const) : [],
+    );
+    const posts = links.flatMap(([from, to]) => linkPosts(from, to));
     const box = new BoxGeometry(1, 1, 1);
     const round = new CylinderGeometry(1, 1, 1, 14);
     this.boxes = new InstancedMesh(
       box,
       new MeshLambertMaterial(),
-      bridges.length * BRIDGE_BOXES + masts.length + boards.length,
+      bridges.length * BRIDGE_BOXES + links.length + masts.length + boards.length,
     );
     this.boxes.instanceMatrix.setUsage(DynamicDrawUsage);
     this.rounds = new InstancedMesh(
@@ -222,6 +225,22 @@ export class Apron3D {
       this.paint(this.rounds, r - 1, colors.drive);
     }
     let b = bridges.length * BRIDGE_BOXES;
+    for (const [from, to] of links) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      this.place(
+        this.boxes,
+        b++,
+        from.x + dx / 2,
+        e + bridgeSize.floorM + 1.55,
+        from.y + dy / 2,
+        Math.hypot(dx, dy),
+        3.1,
+        3.0,
+        -Math.atan2(dy, dx),
+      );
+      this.paint(this.boxes, b - 1, colors.link);
+    }
     for (const mast of masts) {
       const top = mast.heightM - 0.4;
       this.place(this.rounds, r++, mast.pos.x, e + top / 2, mast.pos.y, 0.3, top, 0.3, 0);
@@ -295,7 +314,7 @@ export class Apron3D {
   }
 
   /** Bridge parts for a cab pose: tunnels from the rotunda to the cab, the cab and its bellows,
-   * the drive column under the last tunnel, and any fixed link. */
+   * and the drive column under the last tunnel. */
   private placeBridge(i: number, bridge: JetBridge, pose: BridgePose) {
     const e = this.elevationM;
     const base = i * BRIDGE_BOXES;
@@ -380,23 +399,6 @@ export class Apron3D {
     }
     this.place(this.boxes, base + 7, at.x, e + 0.45, at.y, 1.5, 0.9, 3.0, yaw);
     this.paint(this.boxes, base + 7, colors.bellows);
-    if (bridge.link) {
-      const lx = bridge.rotunda.x - bridge.link.x,
-        ly = bridge.rotunda.y - bridge.link.y;
-      const linkLength = Math.hypot(lx, ly);
-      this.place(
-        this.boxes,
-        base + 8,
-        bridge.link.x + lx / 2,
-        low + 1.55,
-        bridge.link.y + ly / 2,
-        linkLength,
-        3.1,
-        3.0,
-        -Math.atan2(ly, lx),
-      );
-    } else this.place(this.boxes, base + 8, 0, 0, 0, 0, 0, 0, 0);
-    this.paint(this.boxes, base + 8, colors.link);
   }
 
   /** The aircraft snapshot at `timeS`: which bridges dock and which retract. */

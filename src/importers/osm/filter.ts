@@ -13,7 +13,11 @@ const classes = {
   service: 'service',
 } satisfies Record<string, RoadClass>;
 
-export function drivableClass({ tag }: OsmWay): RoadClass | undefined {
+export const isJetBridge = (way: OsmWay) => way.tag.aeroway === 'jet_bridge';
+
+export function drivableClass(way: OsmWay): RoadClass | undefined {
+  if (isJetBridge(way)) return undefined;
+  const { tag } = way;
   const highway = tag.highway;
   if (
     !highway ||

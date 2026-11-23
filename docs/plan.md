@@ -336,12 +336,13 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-310](tasks/TASK-310.md) | airports | Load time at airport scale | project, compile, demand, scene build | - | Heathrow first frame under 10 s, identical output | merged 2026-11-22 (`25ee0d5`, aims not met: Heathrow first frame 14 s) |
 | [TASK-311](tasks/TASK-311.md) | airports | 3D render cost at airport scale | render3d, airfield lights | - | Heathrow 3D p95 under 6 ms, no visible change | merged 2026-11-22 (`8f4cde8`, wave E) |
 | [TASK-313](tasks/TASK-313.md) | airports | London City: a taxiway section that reads and behaves as one-way | importer, airside, markings | - | both ways as paved, LCY gates kept | merged 2026-11-22 (`947f9d7`, wave E) |
-| [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | planned (wave F, Claude) |
+| [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | in progress 2026-11-22 (wave F, Claude) |
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
-| [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | in progress 2026-11-22 (wave F, Claude) |
-| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | planned (wave G, Claude) |
-| [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | in progress 2026-11-22 (wave E, Codex) |
-| [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | planned (wave F, Claude) |
+| [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | merged 2026-11-22 (`5eac69c`, `82c33ef`) |
+| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | in progress 2026-11-22 (started early, Claude) |
+| [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
+| [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | in progress 2026-11-22 (Claude) |
+| [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5890,6 +5891,25 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-319 (Codex; merged `fc3ea8d` and `4a252dc`): mapped `aeroway=jet_bridge` ways imported into the airport
+  section and docked to the reachable passenger door (Boston 22 to 111 bridges, Heathrow 1 to 15; London City and
+  Zurich keep TASK-315's rule, 0 and 20); a 5 to 10 s ready-for-pushback hold with the tug attached so a bridge stows
+  before the aircraft moves (London City delays within a few seconds). On the owner's note, a way tagged as a jet
+  bridge is never a walkway: Boston drops 111 walk ways and 313 walk links under its bridges, no walk component
+  splits; Heathrow (bridges mapped as corridors) unchanged.
+- TASK-315 (Claude Code subagent, Opus 5.5 high; merged `5eac69c` and the main merge `82c33ef`): aircraft detail
+  (doors, windscreen, winglets or raked tips, fan faces and cones, fairings, ATR gear pods), ten seeded liveries,
+  jet bridges docking to the posed parked aircraft and retracting at pushback, stand guidance boards, floodlight
+  masts, glazed terminal fronts. Bridge rule refined on the lead's note: only at jet-code contact stands facing a
+  building of at least 8 m (or 3 levels): London City 8 to 0 (as the real airport), Zurich 33 to 20, Heathrow 117 to
+  1, Boston 76 to 22 (their mapped `aeroway=jet_bridge` ways need a schema field: TASK-319). 3D p95 equal or lower
+  (Heathrow 3.1 to 2.3 ms by day).
+- TASK-317 (Codex; merged `1d74dac`; cut short on the owner's time cut, Heathrow from checkpoints): the motion
+  profile capped speed at the tight-turn value on every curve; the curve speed now scales with radius at constant
+  lateral acceleration up to the straight-taxi limit. London City seeds 1 to 3: mean delay 93 / 105 / 100 to 54 / 31 /
+  51 s, departure moving speed 9.1 to 17.2 kt, taxi-out 7.6 to 5.5 min, E190 on a 140 m curve 9.7 to 21.8 kt; zero
+  go-arounds, overlaps, conflicts. At Boston and Heathrow taxiing is a small part of the delay: approach sequencing,
+  departure start grants, surface clearance, departure readiness and stand admission dominate (TASK-312).
 - TASK-314 (Codex; merged `45f6507`): rotation on the main gear, lift-off, gear retraction, banked curved flight,
   flare and de-rotation; on the ground the nose wheel follows the centreline (error under 0.10 m through 90 degrees)
   while the main gear tracks inside; pushback tug at the nose; both views interpolate one snapshot behind. London
@@ -6362,6 +6382,10 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-22 (owner): "Yes, apply all" five time cuts: TASK-317 finished on partial Heathrow data; TASK-312 builds
+  a fast peak-window airside bench first; TASK-316 and TASK-319 started in parallel with TASK-312; lead tiers run in
+  parallel; agents merge the lead line early, run tiers once and bound simulation runs.
 
 - 2026-11-22 (owner): real aircraft models "really matter", with level of detail, realism for the common types.
   The free set that covers them (Flightradar24's glTF, from FlightGear) is GPL-2.0; the owner chose to relicense

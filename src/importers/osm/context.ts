@@ -15,7 +15,7 @@ import type {
 } from '../../schema';
 import { clip, polygonSources } from './buildings';
 import { clipPart, contains, type Bounds } from './clip';
-import { drivableClass } from './filter';
+import { drivableClass, isJetBridge } from './filter';
 import type { OsmData, OsmTags } from './parse';
 import { surfaceLot } from './lots';
 import { polygonCenter } from './places';
@@ -421,6 +421,7 @@ export function importContext(
       ['wood', 'forest', 'scrub', 'park'].includes(f.sub ?? ''),
   );
   for (const way of data.way) {
+    if (isJetBridge(way)) continue;
     const kind = lineClass(way.tag);
     const path =
       kind !== 'city_wall' &&

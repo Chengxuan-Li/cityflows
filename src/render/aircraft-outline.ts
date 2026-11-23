@@ -249,12 +249,19 @@ export const bridgeable = (type: AircraftType) =>
 /** The boarding door (first main-deck door, port side) in local metres: x forward, the sill's
  * height above the ground, and z on the fuselage's port surface (negative). */
 export function boardingDoor(type: AircraftType) {
+  return boardingDoors(type)[0]!;
+}
+
+/** Main-deck passenger doors that a bridge can serve. */
+export function boardingDoors(type: AircraftType) {
   const layout = aircraftLayout(type);
-  const door = layout.doors[0]!;
-  const at = layout.bodyAt(door.x);
-  // Where the sill height meets the elliptical section.
-  const c = Math.min(1, Math.abs(door.sillM + door.heightM / 2 - at.y) / at.height);
-  return { x: door.x, sillM: door.sillM, z: -at.width * Math.sqrt(1 - c * c) };
+  return layout.doors.flatMap((door) => {
+    if (door.upper || door.heightM < 1.2) return [];
+    const at = layout.bodyAt(door.x);
+    // Where the sill height meets the elliptical section.
+    const c = Math.min(1, Math.abs(door.sillM + door.heightM / 2 - at.y) / at.height);
+    return [{ x: door.x, sillM: door.sillM, z: -at.width * Math.sqrt(1 - c * c) }];
+  });
 }
 
 type PolygonPart = 'fuselage' | 'wing' | 'tailplane' | 'fin' | 'engine';
