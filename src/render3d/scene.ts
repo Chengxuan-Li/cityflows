@@ -298,6 +298,7 @@ export class Scene3D {
         geometry.heights,
         this.rail.heights!,
         railTimetable(city.rail),
+        city.drivingSide,
       );
       this.content.add(this.trains.group);
       this.stations = new Stations3D(
@@ -1165,7 +1166,7 @@ export class Scene3D {
     if (aircraft) return aircraft;
     if (this.trains && this.railVisible) {
       const car = pickVehicle3D(
-        this.trains.body,
+        this.trains.pickMesh,
         this.camera,
         x,
         y,
@@ -1328,6 +1329,11 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
+    if (this.trains) {
+      this.trains.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
+      if (import.meta.env.MODE === 'test')
+        this.canvas.dataset.trainLevels = JSON.stringify(this.trains.counts());
+    }
     if (this.aircraft) {
       this.aircraft.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
       const models = JSON.stringify({
