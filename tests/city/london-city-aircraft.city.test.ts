@@ -45,11 +45,23 @@ test(
           parked.add(a.id);
           const stand = airside.stands[airside.index.stand.get(a.stand)!]!;
           const type = aircraftTypes.find(({ id }) => id === a.typeId)!;
+          // TASK-320: drawn where it stands, on the stand heading with its nose on the stand's
+          // line: at the stop, or moved along it to keep its body off the apron road.
           const pose = a.visual!;
-          expect(Math.cos(pose.heading)).toBeCloseTo(Math.cos(stand.heading), 8);
-          expect(Math.sin(pose.heading)).toBeCloseTo(Math.sin(stand.heading), 8);
-          expect(pose.x + (type.lengthM / 2) * Math.cos(pose.heading)).toBeCloseTo(stand.pos.x, 5);
-          expect(pose.y + (type.lengthM / 2) * Math.sin(pose.heading)).toBeCloseTo(stand.pos.y, 5);
+          expect(pose.x).toBeCloseTo(a.x, 5);
+          expect(pose.y).toBeCloseTo(a.y, 5);
+          expect(Math.cos(pose.heading)).toBeCloseTo(Math.cos(stand.heading), 6);
+          expect(Math.sin(pose.heading)).toBeCloseTo(Math.sin(stand.heading), 6);
+          const ux = Math.cos(stand.heading),
+            uy = Math.sin(stand.heading);
+          const dx = pose.x + (type.lengthM / 2) * ux - stand.pos.x,
+            dy = pose.y + (type.lengthM / 2) * uy - stand.pos.y;
+          expect(dx * uy - dy * ux).toBeCloseTo(0, 4);
+          const moved = dx * ux + dy * uy;
+          if (stand.roadBandsM.length) {
+            expect(moved).toBeLessThanOrEqual(stand.aheadM + 1e-6);
+            expect(moved).toBeGreaterThanOrEqual(-20 - 1e-6);
+          } else expect(moved).toBeCloseTo(0, 4);
         }
       }
     }

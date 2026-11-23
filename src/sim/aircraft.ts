@@ -3206,7 +3206,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           craft.stationM,
           craft.lengthM,
           mode === 'pushback',
-          stop && { pos: stop.position, heading: stop.headingRad, centreM: stopM },
+          stop ? { pos: stop.position, heading: stop.headingRad, centreM: stopM } : undefined,
         );
         const taxi =
           craft.mode === 'waiting'

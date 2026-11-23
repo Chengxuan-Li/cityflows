@@ -120,7 +120,7 @@ test('steers with the same body orientation when the nose follows a turn in reve
   expect(pushback.steering).toBeCloseTo(outbound.steering, 8);
 });
 
-test('lines up at a stand with a short lead-in and retraces the pose on pushback', () => {
+test('settles into its stop pose after a short lead-in and retraces it on pushback', () => {
   const path = aircraftPath([
     { x: -60, y: 0 },
     { x: 0, y: 0 },
@@ -128,7 +128,8 @@ test('lines up at a stand with a short lead-in and retraces the pose on pushback
   ]);
   const reverse = aircraftPath(path.points.toReversed());
   const centreM = path.lengthM - aircraft.lengthM / 2;
-  const stand = { pos: { x: 0, y: 21 }, heading: Math.PI / 2, centreM };
+  // TASK-320: the body's centre and heading at the stop, as the simulation parks it.
+  const stand = { pos: { x: 0, y: 21 - aircraft.lengthM / 2 }, heading: Math.PI / 2, centreM };
   const parked = groundAttitude(path, centreM, aircraft.lengthM, false, stand);
   expect(parked.x).toBeCloseTo(0);
   expect(parked.y).toBeCloseTo(21 - aircraft.lengthM / 2);

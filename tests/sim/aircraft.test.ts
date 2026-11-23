@@ -94,8 +94,9 @@ test('an arrival parks on its stand heading clear of the apron road and pushes b
   const off = (a: number) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
   expect(off(parked.heading - stand.heading)).toBeLessThan((3 * Math.PI) / 180);
   // The drawn pose is the simulation's.
-  expect(Math.hypot(parked.visual.x - parked.x, parked.visual.y - parked.y)).toBeLessThan(0.01);
-  expect(off(parked.visual.heading - parked.heading)).toBeLessThan(1e-3);
+  const drawn = parked.visual!;
+  expect(Math.hypot(drawn.x - parked.x, drawn.y - parked.y)).toBeLessThan(0.01);
+  expect(off(drawn.heading - parked.heading)).toBeLessThan(1e-3);
   // The nose on the stand's line, moved ahead of the stop so the tail keeps 1 m off the road.
   const ux = Math.cos(stand.heading),
     uy = Math.sin(stand.heading);
