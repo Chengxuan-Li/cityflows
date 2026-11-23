@@ -24,6 +24,8 @@ const standHoldS = 1800;
 const returnLeadS = 1200;
 const maintenanceS = 300;
 const longTurnS = 75 * 60;
+// A queued departure costs roughly one runway slot (75 s), expressed as taxi metres at 10 m/s.
+const runwayQueueCostM = 750;
 const prevailingWind: AirportWind = { fromDeg: 240, speedKt: 8 };
 const isHelicopter = (typeId: string) =>
   aircraftTypes.find(({ id }) => id === typeId)!.class === 'helicopter';
@@ -111,6 +113,7 @@ interface Turn {
   arrivalStand: string | null;
   arrivedS?: number;
   offBlockS?: number;
+  returned?: boolean;
   departedS?: number;
   divertedS?: number;
   readyS: number;
@@ -120,6 +123,12 @@ interface Turn {
   wasHeld?: boolean;
   leftStand?: number;
   dispatchS: number;
+}
+
+interface EndPair {
+  cost: number;
+  arrival: string;
+  departure: string;
 }
 
 function flightStandKinds(kind: ScheduledFlight['standKind']): StandKind[] {
@@ -215,22 +224,57 @@ export function createFlightOperations(
     fleet.setRunwayConfiguration(next, timeS);
   }
 
-  /** The arrival and departure ends of a configuration that serve a stand at least cost. */
-  const endPairs = new Map<string, { cost: number; arrival: string; departure: string } | null>();
-  function endsFor(stand: number, typeId: string, use = lastOpen) {
-    if (!use) return null;
+  /** The compatible runway ends for this stand and type, ordered by taxi distance. */
+  const endPairs = new Map<string, EndPair[]>();
+  function pairsFor(stand: number, typeId: string, use: RunwayConfiguration) {
     const key = `${use.id}/${typeId}/${stand}`;
-    if (!endPairs.has(key)) {
-      let best: { cost: number; arrival: string; departure: string } | null = null;
-      for (const arrival of use.arrivalEnds)
-        for (const departure of use.departureEnds) {
-          const cost = fleet.standTurnCost(stand, typeId, arrival, departure);
-          if (Number.isFinite(cost) && (!best || cost < best.cost))
-            best = { cost, arrival, departure };
-        }
-      endPairs.set(key, best);
+    const cached = endPairs.get(key);
+    if (cached) return cached;
+    const pairs: EndPair[] = [];
+    for (const arrival of use.arrivalEnds)
+      for (const departure of use.departureEnds) {
+        const cost = fleet.standTurnCost(stand, typeId, arrival, departure);
+        if (Number.isFinite(cost)) pairs.push({ cost, arrival, departure });
+      }
+    pairs.sort((a, b) => a.cost - b.cost);
+    endPairs.set(key, pairs);
+    return pairs;
+  }
+
+  function endsFor(stand: number, typeId: string, use = lastOpen) {
+    return use ? pairsFor(stand, typeId, use)[0] : undefined;
+  }
+
+  function departureQueue() {
+    const queue = new Map<string, number>();
+    for (const { id, runwayEnd, airborne } of fleet.snapshot()) {
+      if (runwayEnd && !airborne && byId.get(id)?.phase === 'departing')
+        queue.set(runwayEnd, (queue.get(runwayEnd) ?? 0) + 1);
     }
-    return endPairs.get(key)!;
+    return queue;
+  }
+
+  function departureFor(
+    stand: number,
+    typeId: string,
+    use: RunwayConfiguration,
+    queue?: Map<string, number>,
+  ) {
+    const pairs = pairsFor(stand, typeId, use);
+    const first = pairs[0];
+    if (!first || !queue) return first?.departure;
+    // Hold the inbound end fixed so its taxi distance cancels from the comparison.
+    let best = first;
+    let bestCost = first.cost + runwayQueueCostM * (queue.get(first.departure) ?? 0);
+    for (const pair of pairs) {
+      if (pair.arrival !== first.arrival) continue;
+      const cost = pair.cost + runwayQueueCostM * (queue.get(pair.departure) ?? 0);
+      if (cost < bestCost) {
+        best = pair;
+        bestCost = cost;
+      }
+    }
+    return best.departure;
   }
   const headingOf = (designator: string | undefined) =>
     ends.find((end) => end.designator === designator)?.headingRad ?? 0;
@@ -512,6 +556,12 @@ export function createFlightOperations(
           flight.departureS,
           event.timeS + aircraftTurnaroundMinutes[flight.typeId]! * 60,
         );
+      } else if (event.kind === 'returned') {
+        turn.phase = 'parked';
+        turn.stand = event.stand;
+        turn.offBlockS = undefined;
+        turn.returned = true;
+        turn.service = 'done';
       } else if (event.kind === 'towed') {
         tows++;
         turn.phase = 'parked';
@@ -531,27 +581,36 @@ export function createFlightOperations(
     // the fleet keeps the stand occupied until the preparation and departure clearance finish.
     const parked = [...active].filter(({ phase }) => phase === 'parked');
     parked.sort((a, b) => a.flight.departureS - b.flight.departureS);
+    let queue: Map<string, number> | undefined;
     for (const turn of parked) {
       if (turn.service === 'away') {
         serviceStand(turn, timeS);
         continue;
       }
       if (timeS < turn.readyS) continue;
-      const runwayEnd =
-        turn.pad >= 0
-          ? null
-          : configuration && endsFor(turn.stand, turn.flight.typeId, configuration);
-      if (turn.pad < 0 && !runwayEnd) continue;
+      let runwayEnd;
+      if (turn.pad < 0) {
+        if (!configuration) continue;
+        if (configuration.departureEnds.length > 1) queue ??= departureQueue();
+        runwayEnd = departureFor(turn.stand, turn.flight.typeId, configuration, queue);
+        if (!runwayEnd) {
+          // A fallback stand may serve the return taxi but have no route for the next departure.
+          if (turn.returned) tow(turn, standsFor(turn.flight.typeId));
+          continue;
+        }
+      }
       const result =
         turn.pad >= 0
           ? fleet.requestHelicopterDeparture(
               turn.id!,
               helicopterHeading(lastOpen?.departureEnds[0]),
             )
-          : fleet.requestDeparture(turn.id!, runwayEnd!.departure);
+          : fleet.requestDeparture(turn.id!, runwayEnd!);
       if (result.ok) {
         turn.phase = 'departing';
+        turn.returned = false;
         if (turn.pad >= 0) pads.delete(turn.pad);
+        if (queue && runwayEnd) queue.set(runwayEnd, (queue.get(runwayEnd) ?? 0) + 1);
       }
     }
     for (const turn of active) {
