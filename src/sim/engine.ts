@@ -41,7 +41,9 @@ import {
   createFlightOperations,
   type FlightBoard,
   type FlightOperationsMetrics,
+  type TurnaroundEvent,
 } from './flight-operations';
+import { createGroundVehicles } from './ground-vehicles';
 import { mouthAt, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
@@ -93,6 +95,7 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
     metrics?(): FlightOperationsMetrics;
     board?(timeS: number): FlightBoard;
     setWind?(wind: AirportWind): void;
+    drainTurnarounds?(): TurnaroundEvent[];
   };
 };
 const detailStates: (VehicleState | null)[] = [
@@ -269,6 +272,12 @@ function createRun({
   // Airports run their own seeded flight day when the city carries an airside graph.
   const fleet = compiled.airside ? createAircraftFleet(compiled.airside, scenario.seed) : null;
   const operations = fleet ? airsideOperations(fleet) : null;
+  // TASK-316: ground vehicles work the turnarounds; the aircraft never see them.
+  const drainTurnarounds = operations?.drainTurnarounds?.bind(operations);
+  const ground =
+    fleet && drainTurnarounds
+      ? createGroundVehicles(compiled, { snapshot: () => fleet.snapshot(), drainTurnarounds })
+      : null;
   const airsideGiveWay = (city: CompiledCity) =>
     fleet && city.airside?.crossings.length
       ? createAirsideGiveWay(city, vehicles, params, fleet.crossingClosed)
@@ -1609,6 +1618,7 @@ function createRun({
       ...(railCrossings && { rail: railCrossings.snapshot() }),
       ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
       ...(fleet && { aircraft: fleet.snapshot(), airfield: fleet.airfield() }),
+      ...(ground?.network && { groundVehicles: ground.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -1950,6 +1960,7 @@ function createRun({
       if (transit) metrics.transit = transit.metrics();
       if (fleet) metrics.aircraft = fleet.metrics();
       if (operations?.metrics) metrics.flights = operations.metrics();
+      if (ground?.network) metrics.groundVehicles = ground.metrics();
       return metrics;
     },
     inspectWalker: (id: number): WalkerDetail | null => {
@@ -1995,6 +2006,7 @@ function createRun({
         railCrossings?.step(timeS);
         operations?.step(timeS);
         fleet?.step(timeS);
+        ground?.step(timeS);
         giveWay?.update();
         persons.step(timeS);
         walkers?.step(timeS);

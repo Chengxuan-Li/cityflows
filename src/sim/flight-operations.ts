@@ -94,6 +94,22 @@ export interface FlightBoard {
   } | null;
 }
 
+/** TASK-316: what the airside ground vehicles read of a turnaround. `on-block`: the aircraft
+ * stands at the stand it departs from (no tow follows) and is ready to push at `readyS`; it comes
+ * on landing (`arrived`), after its last tow, or for one parked before the start. `off-block`: it
+ * leaves for its departure. TASK-319's ready-for-pushback can stand in for `readyS`. */
+export type TurnaroundEvent =
+  | {
+      kind: 'on-block';
+      id: number;
+      stand: number;
+      typeId: string;
+      timeS: number;
+      readyS: number;
+      arrived: boolean;
+    }
+  | { kind: 'off-block'; id: number; timeS: number };
+
 export interface FlightOperationsOptions {
   /** Configurations and time-of-day concepts in place of the airport's own table. */
   runways?: Pick<RunwayConfigurationInput, 'configurations' | 'concepts'>;
@@ -349,6 +365,21 @@ export function createFlightOperations(
   let worstDelayS = 0;
   let tows = 0;
   let peakOccupied = 0;
+  const turnarounds: TurnaroundEvent[] = [];
+  function onBlock(turn: Turn, timeS: number, arrived: boolean) {
+    if (turn.service !== 'done' || turn.stand < 0) return;
+    const readyS = Math.max(turn.readyS, timeS);
+    const { typeId } = turn.flight;
+    turnarounds.push({
+      kind: 'on-block',
+      id: turn.id!,
+      stand: turn.stand,
+      typeId,
+      timeS,
+      readyS,
+      arrived,
+    });
+  }
 
   function standLabel(stand: number, pad: number) {
     const position = stand >= 0 ? graph.stands[stand] : graph.helipads[pad];
@@ -500,6 +531,7 @@ export function createFlightOperations(
         countMovement(event.timeS, flight.arrivalS);
       } else if (event.kind === 'off-block') {
         turn.offBlockS = event.timeS;
+        turnarounds.push({ kind: 'off-block', id: event.id, timeS: event.timeS });
       } else if (event.kind === 'departed') {
         turn.departedS = event.timeS;
         turn.phase = 'done';
@@ -512,11 +544,13 @@ export function createFlightOperations(
           flight.departureS,
           event.timeS + aircraftTurnaroundMinutes[flight.typeId]! * 60,
         );
+        onBlock(turn, event.timeS, true);
       } else if (event.kind === 'towed') {
         tows++;
         turn.phase = 'parked';
         if (turn.service === 'back') turn.service = 'done';
         if (turn.service === 'away' && !flight.overnight) turn.returnS = event.timeS + maintenanceS;
+        onBlock(turn, event.timeS, false);
       }
     }
     if (timeS < nextUpdateS) return;
@@ -618,7 +652,7 @@ export function createFlightOperations(
   for (const turn of turns) {
     if (turn.flight.arrivalS >= startS || turn.flight.departureS < startS) continue;
     active.add(turn);
-    requestArrival(turn, true);
+    if (requestArrival(turn, true)) onBlock(turn, startS, false);
   }
 
   return {
@@ -631,6 +665,8 @@ export function createFlightOperations(
       windChanged = true;
     },
     wind: () => wind,
+    /** TASK-316: turnaround events since the last call. */
+    drainTurnarounds: () => turnarounds.splice(0),
     metrics: () => ({
       scheduled,
       completed,

@@ -399,6 +399,17 @@ export const style = {
   },
   /** TASK-315: jet bridges from above. */
   apron: { bridge: 0xb4bbc3, edge: 0x566474 },
+  /** TASK-316: airside ground vehicles from above, by kind, with a cab or tank accent. */
+  groundVehicle: {
+    tug: { body: 0xe8e4db, accent: 0x46505a },
+    baggage: { body: 0xf2c230, accent: 0x46505a },
+    cart: { body: 0x9aa4ad, accent: 0x5b6670 },
+    fuel: { body: 0xf3f4f5, accent: 0xc8372d },
+    hydrant: { body: 0xf3f4f5, accent: 0x3f6f9a },
+    catering: { body: 0xf3f4f5, accent: 0x2f7d4f },
+    bus: { body: 0x2f6db5, accent: 0xeef2f6 },
+    edge: 0x3a4550,
+  },
   shadow: 0x303d3a,
   deckEdge: 0x6e817b,
   deckEdgeWidthM: 0.35,

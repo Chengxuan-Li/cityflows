@@ -20,6 +20,8 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawAircraft, pickAircraft } from './layers/aircraft';
+import { drawGroundVehicles } from './layers/ground-vehicles';
+import { GroundVehicleTracks, shownVehicle } from './ground-vehicles';
 import { AircraftPoseTrack } from './aircraft-pose';
 import { apronLayout, JetBridgeStates } from './apron';
 import { AirfieldLights2D } from './layers/airfield-lights';
@@ -247,7 +249,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-315: jet bridges, docked by the aircraft snapshot.
   let jetBridges: JetBridgeStates | null = null;
   let aircraftTimeS = 0;
+  // TASK-316: airside ground vehicles, under the aircraft.
+  const groundVehicles = new Graphics();
+  const groundTracks = new GroundVehicleTracks();
+  const redrawGroundVehicles = () => {
+    const byId = new Map(aircraftPoses.map((p) => [p.id, p]));
+    const shown = groundTracks.poses.filter((p) => shownVehicle(p, byId));
+    drawGroundVehicles(groundVehicles, shown, mapBounds);
+    canvas.dataset.groundVehicles = String(shown.length);
+  };
   const redrawAircraft = () => {
+    redrawGroundVehicles();
     drawAircraft(
       aircraft,
       aircraftPoses,
@@ -269,6 +281,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   world.addChild(
     map,
+    groundVehicles,
     aircraft,
     night.container,
     labels.container,
@@ -1220,6 +1233,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         aircraftPoses = [];
       }
       jetBridges?.update(snapshot.aircraft ?? [], snapshot.timeS);
+      groundTracks.update(snapshot.groundVehicles ?? [], snapshot.timeS, playbackSpeed);
       aircraftTimeS = snapshot.timeS;
       redrawAircraft();
       airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
@@ -1250,6 +1264,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       let moved = false;
       for (const track of aircraftTracks.values())
         if (track.sample(elapsedS, playing)) moved = true;
+      if (groundTracks.sample(elapsedS, playing)) moved = true;
       if (moved) {
         redrawAircraft();
         if (airfieldLights.container.visible)
