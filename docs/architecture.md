@@ -1848,10 +1848,24 @@ carry no persons and generate no road trips.
   an edge interval or a node, and an aircraft's stop is its claim's end less the margin. The
   margin is half `maxSpanM` plus 12 m. A parked aircraft, and one standing at a hold, claims only
   its body (and 10 m ahead), so it closes no junction another aircraft's leg crosses.
-- **Direction locks.** A departure or tow starts only when every edge of its legs can be locked
-  in its direction of travel (an edge locked one way by another aircraft is closed the other
-  way). An arrival locks its route at the final approach decision and claims the space it needs
-  to vacate. Locks are released as the tail passes so two aircraft never meet head-on.
+- **Order** (TASK-312, in place of whole-route direction locks and whole-route sweep admission).
+  A movement is ordered when it is admitted: a departure or tow at its request (after TASK-319's
+  ready-for-pushback hold), an arrival when it first tries to appear (its stand free, its landing
+  and exit chosen). Its legs' swept bodies (sampled every 6 m, `SAMPLE_M`) are compared with every
+  other aircraft's remaining legs (from where it is; an approach's taxi leg; an admitted movement's
+  legs). Where bodies would touch, the one earlier in the order passes first: the later stops one
+  sample short of the conflict until the earlier is one sample past it; on a stretch both follow
+  each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
+  and the claims keep them apart from there. The order is the order of admission (tows included:
+  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew. One total
+  order for every conflict means no ring of aircraft can wait on each other. An aircraft waited for
+  ignores the margins (claims, push-sweep check) of those waiting for it, which stand clear of its
+  path. An arrival appears only when every conflict before its tail is off its runway is passed. A
+  stand does not take a type whose parked body would stand in the way of one like it taxiing past
+  on a taxiway or taxilane (Zurich's H11 to H14, 26 to 29 m from taxiway P); routes avoid edges
+  where a parked aircraft stands in the way of the mover (factor 50), and an aircraft whose way an
+  aircraft parks across waits short of it until it leaves its stand. Edges an aircraft will use are
+  still marked with its direction; routes taxiing against such a mark cost 3 times as much.
 - **Runways.** One aircraft holds a runway (and every runway sharing a node with it) at a time.
   A ground leg stops at the mapped runway hold within 300 m before the runway node it enters
   (else 75 m short of it) until granted; it asks when first in line there, and is granted if no
@@ -1859,18 +1873,25 @@ carry no persons and generate no road trips.
   (line-up and take-off to the far end, or the crossing) plus 20 s. A crossing releases the runway
   when its tail passes the next hold beyond (else 75 m past the runway). An arrival appears about
   10 km out (`FINAL_M`) on the extended centreline when its window (30 s before the threshold
-  less 20 s, to its estimated vacating plus 20 s) is free of bookings and holders, books it, and
+  less 5 s, to its estimated vacating plus 5 s: about 90 s from one landing to the next, TASK-312)
+  is free of bookings and holders, books it, and
   takes the runway 30 s before the threshold, going around (straight ahead at approach speed and
   its climb gradient, then queued again) if another aircraft holds it then; it releases the
   runway when its tail passes the first hold of that runway after its exit (else 75 m past it). A
-  departure releases it passing the far end.
+  departure releases it passing the far end. An aircraft that has waited 30 s at a hold for a
+  runway window gets a gap: a new arrival to that runway (or one sharing a node with it) appears
+  only when its window starts the waiting aircraft's occupancy plus twice 20 s after the last
+  window booked (TASK-312: crossings and departures between arrivals).
 - **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
   (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
   roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
   first runway node past touchdown plus the type's landing roll whose turn-off has a route to the
   stand and whose predicted exit is free when the arrival books it. The exit is checked again
   before landing clearance. A reversing loop at the far end permits a backtrack when needed.
-- **Line-up and take-off.** A departure lines up at the first runway node from its end up to the
+- **Line-up and take-off.** (TASK-312) Options in order: full-length entries; backtracks of up to
+  1,000 m along the runway; intersection departures with a quarter of the take-off run to spare;
+  longer backtracks. A way to the line-up that taxis along a runway is taken only when no later
+  option reaches the runway by taxiways. A departure lines up at the first runway node from its end up to the
   threshold (or within 60 m of the end, half the runway at most: a full-length line-up past a
   threshold at the end itself, Zurich 32's entry 11 m in; TASK-302) that a route turns onto in the
   take-off direction (centre half its length or its
@@ -1895,20 +1916,16 @@ carry no persons and generate no road trips.
   (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
   starting day on the runway configuration in use (below). Ground movements can run
   concurrently on separate paths and on shared directed taxiways with following-distance
-  claims. Crossing and converging body sweeps take turns. A pending clearance gains priority
-  after two minutes so recurring traffic cannot starve a conflicting route. Helicopters use
-  separate pad slots and a shorter schedule.
+  claims. Crossing and converging body sweeps take turns in the order above (TASK-312).
+  Helicopters use separate pad slots and a shorter schedule.
 - **Airside clearance.** Gates come from runway intervals and crossing nodes on the actual
   ground trajectory, including intermediate runway taxi and backtracks. A runway clearance
   checks that the path through the runway and its exit can be claimed. Approaches book a runway
   window at appearance and check the runway and swept ground route at the decision point 30 s
   before the threshold. An aircraft unable to secure both goes around. Runway use is sequenced
-  so that this is rare (TASK-300; London City seeds 1 to 3: no go-around): an arrival appears
-  only when no aircraft is locked against its exit route and no other ground route crosses it at
-  the decision point, taking an aircraft standing still to stay and one short of an ungranted
-  runway hold to stop there; a departure or tow starts ahead of an arrival's exit only where it
-  passes the crossing before that arrival's decision with no runway hold before it; at the
-  decision, others' moving routes count from where they will be when the arrival turns off.
+  so that this is rare (TASK-300; TASK-312: by the order above, an arrival appears only when the
+  conflicts before its tail is off the runway are passed, and at the decision it needs its exit
+  claimable through its length and the margin past the vacating point).
   Pushback reserves its
   swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
   push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
@@ -1958,7 +1975,9 @@ carry no persons and generate no road trips.
   airport's runway ends, with the configurations and time-of-day concepts of the airport's own
   `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
   code (London City has none: derived configurations, wind only; Zurich's north, east and south
-  concepts and night closure, TASK-302), field by field, the airport's tailwind limit or 5 kt
+  concepts and night closure, TASK-302; Boston's southwest and northeast flows on the
+  non-crossing parallels and Heathrow's segregated mode, landings 27L and take-offs 27R until
+  15:00 then the other way round, TASK-312), field by field, the airport's tailwind limit or 5 kt
   and the strictest maximum demonstrated crosswind of the types in
   the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
   figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`

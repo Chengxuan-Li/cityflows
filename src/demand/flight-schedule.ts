@@ -133,11 +133,62 @@ export const zurichSchedule = {
   helicopterMovements: 20,
 } satisfies ScheduleProfile;
 
+/** TASK-303 / TASK-312: Boston Logan (KBOS), rounded from Massport's 2023/2024 Environmental
+ * Data Report (table 3-3): some 1,000 movements a day, mostly narrowbodies and regional aircraft,
+ * a few widebodies, business jets and cargo. */
+export const bostonLoganSchedule = {
+  ...largeAirportSchedule,
+  dailyMovements: 1000,
+  hourlyProfile: [2, 2, 2, 2, 3, 4, 5, 6, 6, 5, 4, 4, 4, 4, 4, 5, 6, 6, 6, 5, 4, 4, 3, 2],
+  overnightShare: 0.05,
+  typeMix: [
+    { typeId: 'A20N', weight: 20 },
+    { typeId: 'A21N', weight: 17 },
+    { typeId: 'B738', weight: 18 },
+    { typeId: 'BCS3', weight: 6 },
+    { typeId: 'A333', weight: 3 },
+    { typeId: 'A359', weight: 3 },
+    { typeId: 'E175', weight: 8 },
+    { typeId: 'E190', weight: 4 },
+    { typeId: 'CRJ9', weight: 3 },
+    { typeId: 'SF34', weight: 10 },
+    { typeId: 'C25C', weight: 3 },
+    { typeId: 'PC24', weight: 2 },
+    { typeId: 'GLF6', weight: 1 },
+    { typeId: 'B738', weight: 1, standKind: 'cargo' },
+    { typeId: 'B77W', weight: 1, standKind: 'cargo' },
+  ],
+} satisfies ScheduleProfile;
+
+/** TASK-304 / TASK-312: London Heathrow (EGLL), stated approximations: some 1,300 movements a
+ * day under the night restrictions, a long-haul widebody and double-decker share. */
+export const heathrowSchedule = {
+  ...largeAirportSchedule,
+  dailyMovements: 1300,
+  hourlyProfile: [0, 0, 0, 0, 1, 5, 8, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 6, 3, 0],
+  typeMix: [
+    { typeId: 'A388', weight: 6 },
+    { typeId: 'B748', weight: 2 },
+    { typeId: 'B77W', weight: 13 },
+    { typeId: 'A359', weight: 9 },
+    { typeId: 'A333', weight: 3 },
+    { typeId: 'B789', weight: 11 },
+    { typeId: 'A20N', weight: 27 },
+    { typeId: 'A21N', weight: 13 },
+    { typeId: 'B738', weight: 12 },
+    { typeId: 'BCS3', weight: 2 },
+    { typeId: 'E190', weight: 2 },
+  ],
+  overnightShare: 0.06,
+} satisfies ScheduleProfile;
+
 /** The schedule profiles of airports with their own, by ICAO code; others take the large
  * airport default. */
 export const airportSchedules: Readonly<Record<string, ScheduleProfile>> = {
   EGLC: londonCitySchedule,
   LSZH: zurichSchedule,
+  KBOS: bostonLoganSchedule,
+  EGLL: heathrowSchedule,
 };
 
 function openHours({ hourlyProfile, curfew }: FlightScheduleInput) {
