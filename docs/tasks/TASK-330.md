@@ -104,3 +104,29 @@ extra summary field (p95 or max start wait). Then add it and say so.
 ## Report
 
 Phase 1: a message to the lead with the tables. Phase 2: the commit body.
+
+## Phase 1b — faster ground movement and denser arrivals (owner, 2026-11-23)
+
+Phase 1 result (dfcf85a): keep B, drop C. B cut the mean start wait by 25–46% and added movements. The tail stayed long,
+for two reasons: slow tows at Zurich, and Heathrow landing only about 15 an hour against about 40 scheduled.
+
+Owner: "we need faster tow, potentially faster taxiing, and increased runway usage (shorter spacing between arrivals,
+can sequence multiple in the map, reduce spacing) — with said changes, carry out a small test again for the above
+cases."
+
+On top of B, one at a time:
+
+1. **Faster tows.** Raise `towSpeedMps` in `src/schema/aircraft.ts`. This changes default data values, not the schema
+   shape; the owner described it. Real towbarless tows run at about 15–30 km/h. Keep the turn limits.
+2. **Faster taxiing, if it helps.** First check from the bench's `meanMovingKt` whether aircraft reach their limits now.
+   Raise the limits only if top speed is what binds.
+3. **Denser arrivals.** Today a queued arrival appears only after the one ahead has landed and cleared the shared exit.
+   Change it to time-based spacing on final:
+   - about 2.5–3 NM, or the wake pair if that is longer;
+   - several arrivals on approach and on the map at once;
+   - one aircraft on the runway at a time, and a go-around if the runway is not clear;
+   - the taxi-in ordered no later than landing commitment.
+   Aim for about 35–45 landings an hour on a single arrival runway.
+
+Re-run the Phase 1 windows after each step. Report the Phase 1 table, plus landings per hour per arrival end and the
+median gap between arrivals. Then stop and report again.
