@@ -1,18 +1,23 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  CircleGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
+  LatheGeometry,
   Matrix4,
   Mesh,
   MeshLambertMaterial,
   Object3D,
   Shape,
+  Quaternion,
   SphereGeometry,
+  Vector2,
   Vector3,
   type ShaderMaterial,
 } from 'three';
@@ -485,6 +490,502 @@ function landingGear(
     }
   }
   return { gear, noseGear };
+}
+
+// ---- TASK-331: landing gear after the real aircraft --------------------------------------------
+
+/** A main gear leg pair, port and starboard, or the nose leg. Metres. */
+interface GearLeg {
+  /** The bogie's middle along the length: TASK-307's contact stations. */
+  x: number;
+  /** Between the port and starboard legs' wheel middles; 0 for the nose leg. */
+  track: number;
+  axles: number;
+  wheelsPerAxle: 1 | 2;
+  /** Tyre diameter and width. */
+  tyre: [diameter: number, width: number];
+  /** Between a twin pair's wheel middles. */
+  pair: number;
+  /** Between a bogie's axles. */
+  axleSpacing: number;
+}
+
+type LegSpec = Omit<GearLeg, 'x'> & { at: 'main' | 'body' };
+const twin = (track: number, d: number, w: number, pair: number): LegSpec => ({
+  at: 'main',
+  track,
+  axles: 1,
+  wheelsPerAxle: 2,
+  tyre: [d, w],
+  pair,
+  axleSpacing: 0,
+});
+const bogie = (
+  at: 'main' | 'body',
+  track: number,
+  axles: number,
+  d: number,
+  w: number,
+  pair: number,
+  axleSpacing: number,
+): LegSpec => ({ at, track, axles, wheelsPerAxle: 2, tyre: [d, w], pair, axleSpacing });
+
+/** TASK-331: each type's landing gear: nose wheels and tyre (diameter, width), main legs with
+ * their track, wheels, tyre and spacings, and whether the legs carry doors. Tracks, bogie
+ * layouts and spacings from the manufacturers' airport planning documents (Airbus "Aircraft
+ * Characteristics - Airport and Maintenance Planning", Boeing "Airplane Characteristics for
+ * Airport Planning", Embraer, Bombardier, ATR and De Havilland airport planning manuals); tyre
+ * sizes the published ones (A320neo main 46x17R20, nose 30x8.8R15; A321neo main 49x19R22;
+ * 737-800 main H44.5x16.5-21, nose 27x7.75R15; 777-300ER main 52x21R22, nose 43x17.5R17;
+ * 787-9 main 54x21R23, nose 40x16R16; A330 main 50x20R22, A330 and A350 nose 1050x395R16;
+ * A350 and A380 main 1400x530R23, A380 nose 1270x455R22; 747-8 main 52x21R22, nose 49x17;
+ * ATR 72 main 32x8.8R16, nose 450x190-5; Q400 main 34x10.75-16, nose 22x6.5-10); 777 bogie
+ * 55 in between wheels, 57 in between axles; 747 44 and 58 in. The A220, E-Jets, CRJ900 and
+ * Citation tracks and tyres are approximate (rounded from photos against their spans). Stations
+ * along the length stay TASK-307's (`fixedWingGearStations`, the A380 and 747 body gear at
+ * 0.147 of the length aft of the middle), so the sim's contact points are unchanged.
+ * Retraction (`gearFoldMaterial`): the main legs, with their doors, turn a quarter turn inboard
+ * about their tops into the wheel wells (A320 family, 737, A220, E-Jets, CRJ900, A330, A350,
+ * 777, 787, Citation; the A380's and 747's body gear the same way as their wing gear); the
+ * Q400's fold aft into the nacelles and the ATR's slide up into the side fairings. Every type's
+ * nose leg folds forward into its well (all of these types retract it forward); the nose well
+ * doors close over the last third. */
+const gearTable: Record<
+  string,
+  {
+    nose: [wheels: 1 | 2, diameter: number, width: number];
+    legs: LegSpec[];
+    doors: boolean;
+    /** How the main legs retract: sideways inboard into the wells unless stated. */
+    fold?: 'aft' | 'up';
+  }
+> = {
+  A388: {
+    nose: [2, 1.27, 0.455],
+    legs: [
+      bogie('main', 12.46, 2, 1.4, 0.53, 1.53, 1.8),
+      bogie('body', 5.26, 3, 1.4, 0.53, 1.53, 1.75),
+    ],
+    doors: true,
+  },
+  B748: {
+    nose: [2, 1.24, 0.43],
+    legs: [
+      bogie('main', 11.0, 2, 1.32, 0.53, 1.12, 1.47),
+      bogie('body', 3.84, 2, 1.32, 0.53, 1.12, 1.47),
+    ],
+    doors: true,
+  },
+  B77W: {
+    nose: [2, 1.09, 0.44],
+    legs: [bogie('main', 10.97, 3, 1.32, 0.53, 1.4, 1.45)],
+    doors: true,
+  },
+  A359: {
+    nose: [2, 1.05, 0.395],
+    legs: [bogie('main', 10.6, 2, 1.4, 0.53, 1.4, 2.0)],
+    doors: true,
+  },
+  A333: {
+    nose: [2, 1.05, 0.395],
+    legs: [bogie('main', 10.68, 2, 1.27, 0.51, 1.4, 1.98)],
+    doors: true,
+  },
+  B789: {
+    nose: [2, 1.02, 0.41],
+    legs: [bogie('main', 9.83, 2, 1.37, 0.53, 1.3, 1.47)],
+    doors: true,
+  },
+  A20N: { nose: [2, 0.76, 0.22], legs: [twin(7.59, 1.17, 0.43, 0.93)], doors: true },
+  A21N: { nose: [2, 0.76, 0.22], legs: [twin(7.59, 1.24, 0.48, 0.93)], doors: true },
+  B738: { nose: [2, 0.69, 0.2], legs: [twin(5.72, 1.13, 0.42, 0.86)], doors: true },
+  BCS3: { nose: [2, 0.62, 0.19], legs: [twin(6.7, 1.02, 0.37, 0.75)], doors: true },
+  E190: { nose: [2, 0.61, 0.2], legs: [twin(5.94, 1.06, 0.38, 0.75)], doors: true },
+  E175: { nose: [2, 0.61, 0.2], legs: [twin(5.2, 0.99, 0.33, 0.7)], doors: true },
+  CRJ9: { nose: [2, 0.53, 0.17], legs: [twin(4.04, 0.89, 0.3, 0.62)], doors: true },
+  // Main gear in the fuselage side fairings.
+  AT76: { nose: [2, 0.45, 0.19], legs: [twin(4.1, 0.81, 0.22, 0.52)], doors: false, fold: 'up' },
+  // Main gear in the inner engine nacelles.
+  DH8D: {
+    nose: [2, 0.56, 0.17],
+    legs: [twin(8.79, 0.86, 0.27, 0.58)],
+    doors: true,
+    fold: 'aft',
+  },
+  C25C: {
+    nose: [1, 0.46, 0.15],
+    legs: [{ ...twin(3.3, 0.56, 0.19, 0), axles: 1, wheelsPerAxle: 1 }],
+    doors: false,
+  },
+};
+
+/** A type's gear legs placed at TASK-307's stations, nose leg first; null for a type drawn with
+ * TASK-307's gear at every level (helicopters, types without a real model). */
+export function gearLayout(type: AircraftType): GearLeg[] | null {
+  const spec = gearTable[type.id];
+  if (!spec) return null;
+  const { noseX, mainX } = fixedWingGearStations(type.lengthM);
+  const [wheels, d, w] = spec.nose;
+  return [
+    {
+      x: noseX,
+      track: 0,
+      axles: 1,
+      wheelsPerAxle: wheels,
+      tyre: [d, w],
+      pair: wheels === 2 ? w + d * 0.2 + 0.1 : 0,
+      axleSpacing: 0,
+    },
+    ...spec.legs.map(({ at, ...leg }) => ({
+      ...leg,
+      x: at === 'main' ? mainX : -0.147 * type.lengthM,
+    })),
+  ];
+}
+
+export const gearWheels = (legs: readonly GearLeg[]) =>
+  legs.reduce((sum, leg) => sum + leg.axles * leg.wheelsPerAxle * (leg.track ? 2 : 1), 0);
+
+const gearColors = {
+  strut: 0xc4c9ce,
+  piston: 0xf2f4f6,
+  link: 0x7d868f,
+  tyre: 0x22262a,
+  hub: 0x9aa2aa,
+  door: 0xdfe3e7,
+};
+
+/** A retraction: a turn (axis times angle, radians) about `pivot` and a shift (metres), over
+ * the last `1 - start` of the way from down to stowed; a bogie first tilts by `tilt` (radians,
+ * front up) about its middle, `tiltPivot`, over the first 30%. */
+interface GearFold {
+  pivot: Vector3;
+  turn: Vector3;
+  shift: Vector3;
+  start: number;
+  tiltPivot: Vector3;
+  tilt: number;
+}
+const noFold: GearFold = {
+  pivot: new Vector3(),
+  turn: new Vector3(),
+  shift: new Vector3(),
+  start: 0,
+  tiltPivot: new Vector3(),
+  tilt: 0,
+};
+
+/** TASK-331: the material of an aircraft's landing gear batches. Each vertex folds by its own
+ * retraction (`GearFold`, as vertex attributes) as `extension` goes from 1 (down) to 0
+ * (stowed), turning rigidly about its leg's pivot: no part is scaled. Geometry without the
+ * attributes (TASK-307's gear) does not move. One material per aircraft, one shared program. */
+export function gearFoldMaterial() {
+  const extension = { value: 1 };
+  const material = new MeshLambertMaterial({ vertexColors: true });
+  material.userData.extension = extension;
+  material.customProgramCacheKey = () => 'gear-fold';
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.gearExtension = extension;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        attribute vec3 gearPivot;
+        attribute vec3 gearTurn;
+        attribute vec3 gearShift;
+        attribute vec2 gearMove;
+        attribute vec3 gearTiltPivot;
+        uniform float gearExtension;`,
+      )
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+        float gearT = clamp((1.0 - gearExtension - gearMove.x) / max(1e-4, 1.0 - gearMove.x), 0.0, 1.0);
+        float gearTilt = gearMove.y * clamp((1.0 - gearExtension) / 0.3, 0.0, 1.0);
+        float gearTc = cos(gearTilt), gearTs = sin(gearTilt);
+        objectNormal.xy = vec2(objectNormal.x * gearTc - objectNormal.y * gearTs, objectNormal.x * gearTs + objectNormal.y * gearTc);
+        vec3 gearR = gearTurn * gearT;
+        float gearA = length(gearR);
+        vec3 gearK = gearA > 1e-5 ? gearR / gearA : vec3(1.0, 0.0, 0.0);
+        float gearC = cos(gearA), gearS = sin(gearA);
+        objectNormal = objectNormal * gearC + cross(gearK, objectNormal) * gearS
+          + gearK * dot(gearK, objectNormal) * (1.0 - gearC);`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vec2 gearQ = transformed.xy - gearTiltPivot.xy;
+        transformed.xy = gearTiltPivot.xy + vec2(gearQ.x * gearTc - gearQ.y * gearTs, gearQ.x * gearTs + gearQ.y * gearTc);
+        vec3 gearP = transformed - gearPivot;
+        transformed = gearPivot + gearP * gearC + cross(gearK, gearP) * gearS
+          + gearK * dot(gearK, gearP) * (1.0 - gearC);
+        transformed += gearShift * gearT;`,
+      );
+  };
+  return material;
+}
+
+/** Coloured, non-indexed pieces merged into one geometry. */
+class GearPieces {
+  readonly list: BufferGeometry[] = [];
+  private readonly color = new Color();
+  /** How the pieces added next retract (`gearFoldMaterial`). */
+  fold: GearFold = noFold;
+  add(geometry: BufferGeometry, color: number, matrix?: Matrix4) {
+    const flat = geometry.index ? geometry.toNonIndexed() : geometry;
+    flat.deleteAttribute('uv');
+    if (matrix) flat.applyMatrix4(matrix);
+    this.color.setHex(color);
+    const count = flat.getAttribute('position').count;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) this.color.toArray(colors, i * 3);
+    flat.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    const { pivot, turn, shift, start, tiltPivot, tilt } = this.fold;
+    const repeat = (values: number[]) =>
+      new Float32BufferAttribute(Array.from({ length: count }, () => values).flat(), values.length);
+    flat.setAttribute('gearPivot', repeat([pivot.x, pivot.y, pivot.z]));
+    flat.setAttribute('gearTurn', repeat([turn.x, turn.y, turn.z]));
+    flat.setAttribute('gearShift', repeat([shift.x, shift.y, shift.z]));
+    flat.setAttribute('gearMove', repeat([start, tilt]));
+    flat.setAttribute('gearTiltPivot', repeat([tiltPivot.x, tiltPivot.y, tiltPivot.z]));
+    this.list.push(flat);
+  }
+  /** A round bar from `a` to `b`, open-ended. */
+  bar(a: Vector3, b: Vector3, radius: number, color: number, sides = 8) {
+    const direction = b.clone().sub(a);
+    const matrix = new Matrix4().compose(
+      a.clone().lerp(b, 0.5),
+      new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction.clone().normalize()),
+      new Vector3(1, 1, 1),
+    );
+    this.add(
+      new CylinderGeometry(radius, radius, direction.length(), sides, 1, true),
+      color,
+      matrix,
+    );
+  }
+  /** A box between corners `a` and `b`, square to the axes. */
+  box(a: Vector3, b: Vector3, color: number) {
+    const size = b.clone().sub(a);
+    const centre = a.clone().lerp(b, 0.5);
+    this.add(
+      new BoxGeometry(Math.abs(size.x), Math.abs(size.y), Math.abs(size.z)).translate(
+        centre.x,
+        centre.y,
+        centre.z,
+      ),
+      color,
+    );
+  }
+  merge() {
+    const geometry = mergeGeometries(this.list)!;
+    for (const piece of this.list) piece.dispose();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+}
+
+/** A tyre turned about its axle (along z) with `sides` sides, its lowest point on the ground:
+ * sidewalls, a flat tread with rounded shoulders, and on its outward face (`out`, +-1) a hub
+ * recessed into the rim. */
+function wheel(
+  pieces: GearPieces,
+  x: number,
+  z: number,
+  [d, w]: [number, number],
+  out: number,
+  sides: number,
+) {
+  const r = d / 2;
+  const hub = r * 0.6;
+  const profile = [
+    new Vector2(hub, -w * 0.47),
+    new Vector2(r * 0.92, -w * 0.5),
+    new Vector2(r * 0.995, -w * 0.3),
+    new Vector2(r * 0.995, w * 0.3),
+    new Vector2(r * 0.92, w * 0.5),
+    new Vector2(hub, w * 0.47),
+    // The rim's inner wall, down to the hub.
+    new Vector2(hub, w * 0.2),
+  ];
+  // A vertex at phi = 0 turns to the bottom: the lowest point is exactly on the ground.
+  const tyre = new LatheGeometry(profile, sides).rotateX(Math.PI / 2);
+  if (out < 0) tyre.rotateY(Math.PI);
+  pieces.add(tyre.translate(x, r, z), gearColors.tyre);
+  // The disc meets the rim wall vertex for vertex.
+  const disc = new CircleGeometry(hub, sides, -Math.PI / 2).translate(0, 0, w * 0.2);
+  if (out < 0) disc.rotateY(Math.PI);
+  pieces.add(disc.translate(x, r, z), gearColors.hub);
+}
+
+/** Tyre sides by detail: as many as the near level's budget (`gearBudget`) leaves room for. */
+const tyreSides = [24, 20, 18, 16, 14, 12];
+/** The near level's triangles per type, at most. */
+export const gearBudget = 4000;
+/** Bands of a tyre's turned profile (`wheel`). */
+export const tyreBands = 6;
+
+/** TASK-331: one type's landing gear in the aircraft's frame: the main legs (`main`) and the nose
+ * leg in its steering frame at the nose station (`nose`), each one coloured geometry. `attachY`
+ * gives the airframe's underside above a point (the leg's top). Near: oleo struts with a bright
+ * piston under a thicker cylinder (real proportions: about 0.21 of the main tyre's diameter
+ * across on a twin-wheel leg, 0.3 on a bogie leg, 0.2 of the nose tyre's), torque links, side or
+ * drag braces, axles or bogie beams, tyres with recessed hubs and open gear doors, tyres with as
+ * many sides as `gearBudget` allows; middle: struts and wheel blocks. */
+export function buildAircraftGear(
+  type: AircraftType,
+  attachY: (x: number, z: number) => number,
+  detail: 'near' | 'middle',
+) {
+  const legs = gearLayout(type)!;
+  for (const sides of detail === 'near' ? tyreSides : [0]) {
+    const gear = gearPieces(type, legs, attachY, detail === 'near', sides);
+    const triangles =
+      (gear.main.getAttribute('position').count + gear.nose.getAttribute('position').count) / 3;
+    if (triangles <= gearBudget || sides === tyreSides.at(-1)) return { ...gear, sides, triangles };
+    gear.main.dispose();
+    gear.nose.dispose();
+  }
+  throw new Error(`no gear for ${type.id}`);
+}
+
+function gearPieces(
+  type: AircraftType,
+  legs: GearLeg[],
+  attachY: (x: number, z: number) => number,
+  near: boolean,
+  sides: number,
+) {
+  const spec = gearTable[type.id]!;
+  const main = new GearPieces();
+  const nose = new GearPieces();
+  const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
+  for (const [i, leg] of legs.entries()) {
+    const pieces = i === 0 ? nose : main;
+    const [d, w] = leg.tyre;
+    const r = d / 2;
+    // The nose leg is built about its own station (it steers about it).
+    const x = i === 0 ? 0 : leg.x;
+    // The upper cylinder's radius.
+    const oleo = (d * (i === 0 ? 0.2 : leg.axles > 1 ? 0.3 : 0.21)) / 2;
+    for (const side of leg.track ? [-1, 1] : [0]) {
+      const z = (side * leg.track) / 2;
+      const top = attachY(leg.x, Math.abs(z)) + 0.15;
+      const span = top - r;
+      const length = (leg.axles - 1) * leg.axleSpacing;
+      const quarter = Math.PI / 2;
+      const wheelZ = leg.wheelsPerAxle === 2 ? [-leg.pair / 2, leg.pair / 2] : [0];
+      // A single wheel sits beside its leg, outboard.
+      const offset = leg.wheelsPerAxle === 1 ? (side || 1) * (w / 2 + oleo * 1.4) : 0;
+      // Folding inboard stands each axle's wheels one above the other; the folded leg then
+      // shifts in under the fuselage, its lowest tyre just above the belly a third of the way
+      // in from its station. A leg folding fore or aft rises by a tyre radius into its well.
+      const pivot = v(x, top - 0.15, z);
+      let turn = v(0, 0, quarter),
+        shift = v(0, r + 0.1, 0);
+      if (i > 0 && spec.fold === 'aft') turn = v(0, 0, -quarter);
+      else if (i > 0 && spec.fold === 'up') [turn, shift] = [v(0, 0, 0), v(0, span, 0)];
+      else if (i > 0) {
+        turn = v(side * quarter, 0, 0);
+        const stack = Math.max(...wheelZ.map((wz) => Math.abs(offset + wz))) + w / 2 + 0.1;
+        const foldedZ = z - side * (pivot.y - r);
+        const stowZ = z * 0.3;
+        shift = v(0, attachY(leg.x, Math.abs(stowZ)) + stack - pivot.y, stowZ - foldedZ);
+      }
+      pieces.fold = { ...noFold, pivot, turn, shift };
+      if (!near) {
+        pieces.box(v(x - oleo, r, z - oleo), v(x + oleo, top, z + oleo), gearColors.strut);
+        for (let a = 0; a < leg.axles; a++) {
+          const ax = x + (a - (leg.axles - 1) / 2) * leg.axleSpacing;
+          pieces.box(
+            v(ax - r * 0.92, 0.02, z + offset + wheelZ[0]! - w / 2),
+            v(ax + r * 0.92, d, z + offset + wheelZ.at(-1)! + w / 2),
+            gearColors.tyre,
+          );
+        }
+        continue;
+      }
+      // Oleo: the thicker outer cylinder above, the bright piston below, down to the axle or
+      // beam.
+      const knee = r + span * 0.42;
+      pieces.bar(v(x, knee, z), v(x, top, z), oleo, gearColors.strut, 10);
+      pieces.bar(v(x, r, z), v(x, knee + oleo, z), oleo * 0.64, gearColors.piston, 10);
+      // Torque links: a V ahead of the oleo (behind it on the nose leg) between the cylinder's
+      // foot and the piston's.
+      const ahead = i === 0 ? -1 : 1;
+      const elbow = v(x + ahead * oleo * 2.6, (knee + r) / 2 + oleo * 0.5, z);
+      const link = Math.max(0.03, oleo * 0.32);
+      pieces.bar(v(x + ahead * oleo * 0.8, knee - oleo * 0.3, z), elbow, link, gearColors.link, 4);
+      pieces.bar(elbow, v(x + ahead * oleo * 0.6, r + oleo * 0.9, z), link, gearColors.link, 4);
+      const brace = Math.max(0.04, oleo * 0.5);
+      if (i === 0) {
+        // Drag brace forward to the nose well.
+        pieces.bar(
+          v(x, knee + span * 0.15, z),
+          v(x + span * 0.55, top, z),
+          brace,
+          gearColors.link,
+          8,
+        );
+      } else {
+        // Side brace inboard to the wing or fuselage.
+        const inboard = -Math.sign(side) * span * 0.45;
+        pieces.bar(v(x, knee + span * 0.2, z), v(x, top, z + inboard), brace, gearColors.link, 6);
+      }
+      // Axles across, and a bogie's beam along the length; a bogie tilts, front up, before it
+      // folds.
+      const strut = pieces.fold;
+      if (leg.axles > 1) pieces.fold = { ...strut, tiltPivot: v(x, r, z), tilt: 0.26 };
+      if (leg.axles > 1)
+        pieces.bar(
+          v(x - length / 2 - oleo, r, z),
+          v(x + length / 2 + oleo, r, z),
+          oleo * 0.62,
+          gearColors.link,
+          6,
+        );
+      for (let a = 0; a < leg.axles; a++) {
+        const ax = x + (a - (leg.axles - 1) / 2) * leg.axleSpacing;
+        const ends = wheelZ.map((wz) => z + offset + wz);
+        pieces.bar(
+          v(ax, r, Math.min(z, ...ends) - (leg.wheelsPerAxle === 2 ? w * 0.3 : 0)),
+          v(ax, r, Math.max(z, ...ends) + (leg.wheelsPerAxle === 2 ? w * 0.3 : 0)),
+          oleo * 0.4,
+          gearColors.link,
+          4,
+        );
+        for (const wz of ends) wheel(pieces, ax, wz, leg.tyre, Math.sign(wz - z) || 1, sides);
+      }
+      pieces.fold = strut;
+      if (!spec.doors) continue;
+      if (i === 0) {
+        // Nose doors open either side of the well; they close inward over the last third.
+        for (const s of [-1, 1]) {
+          const dz = s * (leg.pair / 2 + w + 0.12);
+          pieces.fold = {
+            ...noFold,
+            pivot: v(x, top - 0.15, dz),
+            turn: v(s * quarter, 0, 0),
+            start: 0.67,
+          };
+          pieces.box(
+            v(x - d * 0.2, top - 0.15 - Math.min(span * 0.4, d * 0.75), dz - 0.015),
+            v(x + d * 1.4, top, dz + 0.015),
+            gearColors.door,
+          );
+        }
+      } else {
+        // A door on the leg's outboard face, over the upper oleo.
+        const dz = z + Math.sign(side) * (oleo + 0.05);
+        pieces.box(
+          v(x - d * 0.32, top - 0.15 - span * 0.45, dz - 0.015),
+          v(x + d * 0.32, top, dz + 0.015),
+          gearColors.door,
+        );
+      }
+    }
+  }
+  return { main: main.merge(), nose: nose.merge(), wheels: gearWheels(legs) };
 }
 
 function lightMounts(type: AircraftType, layout: Layout): AircraftLightMounts {

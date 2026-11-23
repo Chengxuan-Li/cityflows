@@ -3349,6 +3349,20 @@ procedural mesh, which also stands in while a file loads and for types without a
 real levels use the model's light mounts, the model's own skids on a helicopter, and
 `boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
 
+TASK-331: an airliner's cabin windows are placed by the preparation, not taken from the source:
+the source's cabin glass and black window decals between the first and last door become skin,
+and one row of panes per deck (A380 both decks, 747-8 upper deck on the hump) is cast onto the
+skin at the real size and frame pitch (`cabinWindows`), straight along the cabin and clear of the
+doors (LOD1: one band per row and side); a business jet keeps its source's glass. The landing
+gear of a type with a real model is `buildAircraftGear` (`render3d/aircraft-mesh.ts`): a table
+of real tracks, bogies and tyres (`gearTable`) at TASK-307's stations and ground contact, legs
+reaching the level's own underside (`modelGear` casts up from the ground), near (oleos, links,
+braces, bogies, tyres with hubs, doors, within 4,000 triangles) and middle (struts and wheel
+blocks) versions built once per type and level and drawn in the aircraft's existing gear
+batches (`Aircraft3D` swaps their geometry with the level). That gear retracts by folding in its
+own material (`gearFoldMaterial`: per-vertex pivot and turn, the sim's extension as a uniform);
+TASK-307's gear, at the far level and for types without a model, slides up; nothing is scaled.
+
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
 switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
