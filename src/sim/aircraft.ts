@@ -3591,7 +3591,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
     const request = craft.request!;
     if (!craft.admission) {
-      let planned: { legs: Leg[]; next: Next[]; lineUpU?: number } | null = null;
+      let planned: ReturnType<typeof plan>;
       // TASK-339: those that wait for it to leave from where they stand in its way: its route
       // keeps off them where it can (they cannot give way to it).
       avoiding = crafts.filter(
