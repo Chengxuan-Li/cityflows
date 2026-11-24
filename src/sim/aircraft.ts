@@ -140,7 +140,8 @@ const T330RG = !!(globalThis as { process?: { env: Record<string, string> } }).p
 const T330D2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330D2;
 const T330RI = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330RI;
 const T330D3 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330D3;
-const T330IND = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330IND;
+const T330IND = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330IND;
 const T330R4 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R4;
 const T330R3 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R3;
 const T330R2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R2;
@@ -160,16 +161,28 @@ const HORIZON_S = 120;
 const EXIT_NEAR_M = 200;
 /** TASK-330 Phase 1e step 2: how far a landing aircraft's tail is past a crossing before it goes. */
 const CROSS_BEHIND_M = 60;
-const T330RING = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330RING;
-const T330TOW = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330TOW;
-const T330PAD0 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330PAD0;
-const GAP_WAIT_S = Number((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GW || 30);
-const GAP_BUFFER_S = Number((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GB || 20);
-const T330TOW2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330TOW2;
-const T330BLK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BLK;
-const T330BLK2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BLK2;
-const T330PARK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330PARK;
-const T330EDGE = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330EDGE;
+const T330RING = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330RING;
+const T330TOW = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330TOW;
+const T330PAD0 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330PAD0;
+const GAP_WAIT_S = Number(
+  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GW || 30,
+);
+const GAP_BUFFER_S = Number(
+  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GB || 20,
+);
+const T330TOW2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330TOW2;
+const T330BLK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330BLK;
+const T330BLK2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330BLK2;
+const T330PARK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330PARK;
+const T330EDGE = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
+  .T330EDGE;
 const DBG330 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DBG;
 /** TASK-330: radar spacing on final, threshold to threshold: the minimum, and the wake pairs
  * (ICAO Doc 4444; leader category, then follower's) where longer. */
@@ -757,7 +770,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const areasByRunway = graph.runways.map((r) =>
     intersectionAreas.filter((area) => area.runways.includes(r.idx)),
   );
-  if (DBG330) console.log("AREAS", JSON.stringify(graph.runways.map((r, i) => [i, (r as { name?: string; ref?: string }).name ?? (r as { ref?: string }).ref, areasByRunway[i]!.length])));
+  if (DBG330)
+    console.log(
+      'AREAS',
+      JSON.stringify(
+        graph.runways.map((r, i) => [
+          i,
+          (r as { name?: string; ref?: string }).name ?? (r as { ref?: string }).ref,
+          areasByRunway[i]!.length,
+        ]),
+      ),
+    );
   const runwayOccupant = new Int32Array(graph.runways.length + intersectionAreas.length).fill(-1);
   /** T330IND: the R and D rules only on runways that cross no other runway. */
   const independent = (r: number) => !T330IND || (areasByRunway[r]?.length ?? 0) === 0;
@@ -1607,7 +1630,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         other.speedMps === 0
       )
         atM = other.stationM;
-      if ((inside(other, c.otherLeg, atM) && !(atEdge && other.stationM <= atM + 1e-2)) || !canWaitAt(other, c.otherLeg, atM)) {
+      if (
+        (inside(other, c.otherLeg, atM) && !(atEdge && other.stationM <= atM + 1e-2)) ||
+        !canWaitAt(other, c.otherLeg, atM)
+      ) {
         yieldWhy = `${inside(other, c.otherLeg, atM) ? 'inside' : 'cannotWait'} atM ${atM.toFixed(0)} otherM ${other.stationM?.toFixed?.(0)} sameLeg ${other.leg === c.otherLeg}`;
         return null;
       }
@@ -1701,7 +1727,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           : unstarted(best.other) === unstarted(other) && best.other.rank >= other.rank)
       )
         continue;
-      const waits = yieldWaits(craft, other) ?? (T330RING ? yieldWaits(craft, other, true, true) : null);
+      const waits =
+        yieldWaits(craft, other) ?? (T330RING ? yieldWaits(craft, other, true, true) : null);
       if (waits) best = { craft, other, waits };
     }
     if (best) {
@@ -1714,7 +1741,45 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         for (const [i, c] of ring.entries()) {
           const o = ring[(i + 1) % ring.length]!;
           const ws = c.waits.filter((w) => w.pred === o);
-          console.log('DEADRING', nowS.toFixed(0), c.id, c.mode, (c as { phase?: string }).phase ?? '', 'unstarted', unstarted(c), 'runway', (c as { runway?: number }).runway, 'leg', '', 'm', c.mode === 'ground' ? c.stationM?.toFixed(0) : '', '-> waits for', o.id, JSON.stringify(ws.map((w) => ({ m: w.atM?.toFixed?.(0), pm: w.predM === Infinity ? 'inf' : w.predM?.toFixed?.(0), passed: passed(w), kind: (w as { kind?: string }).kind }))), 'yield', !!yieldWaits(c, o), yieldWhy, 'edge', !!yieldWaits(c, o, true, true), yieldWhy, 'oSpeed', o.speedMps, 'x1s', JSON.stringify(conflicts(c, remaining(c), o).map((k) => [k.x1.toFixed(2), k.otherLeg === o.leg])), 'oM', o.stationM?.toFixed(2));
+          console.log(
+            'DEADRING',
+            nowS.toFixed(0),
+            c.id,
+            c.mode,
+            (c as { phase?: string }).phase ?? '',
+            'unstarted',
+            unstarted(c),
+            'runway',
+            (c as { runway?: number }).runway,
+            'leg',
+            '',
+            'm',
+            c.mode === 'ground' ? c.stationM?.toFixed(0) : '',
+            '-> waits for',
+            o.id,
+            JSON.stringify(
+              ws.map((w) => ({
+                m: w.atM?.toFixed?.(0),
+                pm: w.predM === Infinity ? 'inf' : w.predM?.toFixed?.(0),
+                passed: passed(w),
+                kind: (w as { kind?: string }).kind,
+              })),
+            ),
+            'yield',
+            !!yieldWaits(c, o),
+            yieldWhy,
+            'edge',
+            !!yieldWaits(c, o, true, true),
+            yieldWhy,
+            'oSpeed',
+            o.speedMps,
+            'x1s',
+            JSON.stringify(
+              conflicts(c, remaining(c), o).map((k) => [k.x1.toFixed(2), k.otherLeg === o.leg]),
+            ),
+            'oM',
+            o.stationM?.toFixed(2),
+          );
         }
     }
   }
@@ -1913,9 +1978,43 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const iPark = T330PARK && parksIn(c.leg, c.b2) && !parksIn(c.otherLeg, c.x2);
         const byRank = other.rank < craft.rank && !yields && !first;
         if (T330PARK && DBG330 && [craft.id, other.id].every((i) => i === 41 || i === 19))
-          console.error('PARKCHK', nowS.toFixed(0), craft.id, other.id, 'b', c.b1.toFixed(0), c.b2.toFixed(0), c.leg.endM.toFixed(0), 'x', c.x1.toFixed(0), c.x2.toFixed(0), c.otherLeg.endM.toFixed(0), 'lastKind', graph.edges[c.otherLeg.pieces.at(-1)!.edge]!.kind, graph.edges[c.leg.pieces.at(-1)!.edge]!.kind, 'rest', restLegs.has(c.otherLeg), restLegs.has(c.leg), 'otherParks', otherParks, 'iPark', iPark, 'byRank', byRank, 'follow', c.follow, 'oM', other.stationM?.toFixed(1), 'oV', other.speedMps, 'oMode', other.mode);
+          console.error(
+            'PARKCHK',
+            nowS.toFixed(0),
+            craft.id,
+            other.id,
+            'b',
+            c.b1.toFixed(0),
+            c.b2.toFixed(0),
+            c.leg.endM.toFixed(0),
+            'x',
+            c.x1.toFixed(0),
+            c.x2.toFixed(0),
+            c.otherLeg.endM.toFixed(0),
+            'lastKind',
+            graph.edges[c.otherLeg.pieces.at(-1)!.edge]!.kind,
+            graph.edges[c.leg.pieces.at(-1)!.edge]!.kind,
+            'rest',
+            restLegs.has(c.otherLeg),
+            restLegs.has(c.leg),
+            'otherParks',
+            otherParks,
+            'iPark',
+            iPark,
+            'byRank',
+            byRank,
+            'follow',
+            c.follow,
+            'oM',
+            other.stationM?.toFixed(1),
+            'oV',
+            other.speedMps,
+            'oMode',
+            other.mode,
+          );
         const otherCanWait =
-          !inside(other, c.otherLeg, c.x1 - SAMPLE_M) && canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
+          !inside(other, c.otherLeg, c.x1 - SAMPLE_M) &&
+          canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
         // TASK-339: one whose movement ends with its body in the other's way goes second where it
         // can still stop short. One not started does not start behind one that can no longer.
         if (parker === undefined) parker = parkerOf(craft, own, other, otherSpans, stop);
@@ -2819,9 +2918,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
    * past the far end) and for the wake time behind the last take-off roll. */
   /** T330D3: a runway no arrival end is open on. */
   function departureOnly(runway: number) {
-    return (
-      runways.restricted && !arrivalOpen[endKey(runway, 0)] && !arrivalOpen[endKey(runway, 1)]
-    );
+    return runways.restricted && !arrivalOpen[endKey(runway, 0)] && !arrivalOpen[endKey(runway, 1)];
   }
   function takeoffHeld(craft: Craft, timeS: number) {
     for (const o of crafts)
@@ -2922,7 +3019,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < GAP_WAIT_S) continue;
         // T330R4: a crossing the lander rolls past goes behind it and needs no gap of its own.
         if (lander && wait.at && resource === lander.runway) {
-          const u = nearestOnPolyline(runwayLine(graph.runways[lander.runway]!, lander.end).line, wait.at).along;
+          const u = nearestOnPolyline(
+            runwayLine(graph.runways[lander.runway]!, lander.end).line,
+            wait.at,
+          ).along;
           if (u >= lander.fromU && u + other.type.spanM / 2 + margin < lander.toU) continue;
         }
         const use = wait.uses.find((use) => use.resource === resource);
@@ -2973,7 +3073,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // ordered after it, as a departure at its stand is.
     if (T330R2)
       for (const w of craft.waits)
-        if (w.pred.mode === 'queued' && w.pred.request?.kind === 'arrival' && !passed(w)) pass.add(w.pred);
+        if (w.pred.mode === 'queued' && w.pred.request?.kind === 'arrival' && !passed(w))
+          pass.add(w.pred);
     // TASK-330: an arrival ahead on final to the same runway does not keep it from appearing as
     // long as it will be clear of the way off the runway by this one's landing commitment; it is
     // spaced on final from it instead.
@@ -3022,7 +3123,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }));
     if (T330RI)
       for (const use of booking)
-        if (use.resource !== craft.runway) (use as BookedUse).fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
+        if (use.resource !== craft.runway)
+          (use as BookedUse).fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
     if (!bookingFits(booking, fromS, 0, craft.id)) return why('runwayBooking');
     const lander = T330R4
       ? {
@@ -3058,7 +3160,35 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     craft.air = air;
     craft.arrivalBooking = { fromS, uses: booking };
     if ((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BK)
-      console.error('BOOK', timeS.toFixed(0), craft.id, craft.runway, 'thr+', (thresholdS - timeS).toFixed(0), JSON.stringify(booking.map((u) => [u.resource, +(u.clearS - thresholdS).toFixed(0), +u.clearM.toFixed(0)])), 'airLen', air.path.lengthM.toFixed(0), 'exitS-thr', (exitS - thresholdS).toFixed(0), 'legEnd', landing.leg.endM.toFixed(0), 'clearOnLeg', JSON.stringify(landing.leg.gates[0]!.uses.map((u) => +u.clearM.toFixed(0))), 'half', half.toFixed(0), 'exitV', landing.exitSpeedMps.toFixed(1), 'id', craft.id);
+      console.error(
+        'BOOK',
+        timeS.toFixed(0),
+        craft.id,
+        craft.runway,
+        'thr+',
+        (thresholdS - timeS).toFixed(0),
+        JSON.stringify(
+          booking.map((u) => [
+            u.resource,
+            +(u.clearS - thresholdS).toFixed(0),
+            +u.clearM.toFixed(0),
+          ]),
+        ),
+        'airLen',
+        air.path.lengthM.toFixed(0),
+        'exitS-thr',
+        (exitS - thresholdS).toFixed(0),
+        'legEnd',
+        landing.leg.endM.toFixed(0),
+        'clearOnLeg',
+        JSON.stringify(landing.leg.gates[0]!.uses.map((u) => +u.clearM.toFixed(0))),
+        'half',
+        half.toFixed(0),
+        'exitV',
+        landing.exitSpeedMps.toFixed(1),
+        'id',
+        craft.id,
+      );
     craft.next = [
       { kind: 'taxi', leg: landing.leg, pauseS: 0 },
       { kind: 'park', stand: request.stand },
@@ -3551,7 +3681,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (!block) return false;
     late.startRefused++;
     if (DBG330)
-      console.error('REFUSED', nowS.toFixed(0), craft.id, craft.request?.kind, 'by', block.pred.id, block.pred.stand, 'atLeg', legs.indexOf(block.leg), block.atM.toFixed(0), craft.admission ? 'dropped' : 'new');
+      console.error(
+        'REFUSED',
+        nowS.toFixed(0),
+        craft.id,
+        craft.request?.kind,
+        'by',
+        block.pred.id,
+        block.pred.stand,
+        'atLeg',
+        legs.indexOf(block.leg),
+        block.atM.toFixed(0),
+        craft.admission ? 'dropped' : 'new',
+      );
     return true;
   }
 
@@ -3620,7 +3762,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       // (it would wait in the way until that one leaves); it plans again on a later try.
       if (
         T330BLK2 &&
-        decided.mine.some((w) => w.predM === Infinity && w.pred.mode === 'parked' && !w.pred.admission)
+        decided.mine.some(
+          (w) => w.predM === Infinity && w.pred.mode === 'parked' && !w.pred.admission,
+        )
       ) {
         late.blockedTries++;
         return;
@@ -4022,7 +4166,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     blkWhy = `cuts ${cuts.length} takeoffIdx ${takeoff} s ${s.toFixed(0)} pieces ${target.pieces.length}`;
     const heldPose = held ? poseAt(target, s) : undefined;
     const heldGate = held ? leg.gates.find((gate) => !gate.granted) : undefined;
-    if (runways.departures.size || avoid) for (const k of cuts) if (rerouteFrom(k, false)) return true;
+    if (runways.departures.size || avoid)
+      for (const k of cuts) if (rerouteFrom(k, false)) return true;
     if (held && !avoid) for (const k of cuts) if (rerouteFrom(k, true)) return true;
     return false;
 
@@ -4233,7 +4378,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       late.blockedTries++;
       blockedBefore = w.atM;
       if (reroute(craft, w.pred)) late.blockedReroutes++;
-      else if (DBG330 && late.blockedTries % 10 === 1) console.error('BLKFAIL', nowS.toFixed(0), craft.id, 'blocker', w.pred.id, 'atM', w.atM.toFixed(0), blkWhy.slice(0, 300));
+      else if (DBG330 && late.blockedTries % 10 === 1)
+        console.error(
+          'BLKFAIL',
+          nowS.toFixed(0),
+          craft.id,
+          'blocker',
+          w.pred.id,
+          'atM',
+          w.atM.toFixed(0),
+          blkWhy.slice(0, 300),
+        );
     }
   }
 
@@ -4701,14 +4856,54 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
     }
     {
-      const W = (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330WATCH;
+      const W = (globalThis as { process?: { env: Record<string, string> } }).process?.env
+        .T330WATCH;
       if (W) {
         const [ids, from, to] = W.split(':');
-        if (timeS >= +from! && timeS <= +to! && Math.floor(timeS / 5) > Math.floor((timeS - dtS) / 5))
+        if (
+          timeS >= +from! &&
+          timeS <= +to! &&
+          Math.floor(timeS / 5) > Math.floor((timeS - dtS) / 5)
+        )
           for (const id of ids!.split(',').map(Number)) {
             const c = crafts[id - 1];
             if (!c) continue;
-            console.error('WATCH', timeS.toFixed(0), c.id, c.mode, c.request?.kind ?? '', c.mode === 'ground' ? c.stationM.toFixed(0) + '/' + c.leg!.endM.toFixed(0) + ' legs' + c.next.length : '', 'v', (c.speedMps ?? 0).toFixed(1), 'towing', c.towing, 'waits', JSON.stringify(c.waits.filter((w) => !passed(w)).map((w) => [w.pred.id, w.atM.toFixed(0), w.predM === Infinity ? 'inf' : w.predM.toFixed(0), w.leg === c.leg])), 'gates', c.mode === 'ground' ? JSON.stringify(c.leg!.gates.map((g) => [g.granted ? 'G' : '-', g.released ? 'R' : '-', g.holdM.toFixed(0), g.vacateM.toFixed(0)])) : '');
+            console.error(
+              'WATCH',
+              timeS.toFixed(0),
+              c.id,
+              c.mode,
+              c.request?.kind ?? '',
+              c.mode === 'ground'
+                ? c.stationM.toFixed(0) + '/' + c.leg!.endM.toFixed(0) + ' legs' + c.next.length
+                : '',
+              'v',
+              (c.speedMps ?? 0).toFixed(1),
+              'towing',
+              c.towing,
+              'waits',
+              JSON.stringify(
+                c.waits
+                  .filter((w) => !passed(w))
+                  .map((w) => [
+                    w.pred.id,
+                    w.atM.toFixed(0),
+                    w.predM === Infinity ? 'inf' : w.predM.toFixed(0),
+                    w.leg === c.leg,
+                  ]),
+              ),
+              'gates',
+              c.mode === 'ground'
+                ? JSON.stringify(
+                    c.leg!.gates.map((g) => [
+                      g.granted ? 'G' : '-',
+                      g.released ? 'R' : '-',
+                      g.holdM.toFixed(0),
+                      g.vacateM.toFixed(0),
+                    ]),
+                  )
+                : '',
+            );
           }
       }
     }
@@ -4739,9 +4934,21 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               'v',
               (c.speedMps ?? 0).toFixed(1),
               'waits',
-              JSON.stringify(c.waits.filter((w) => w.pred.mode !== 'done' && !passed(w)).map((w) => [w.pred.id, w.pred.mode, w.atM.toFixed(0)])),
+              JSON.stringify(
+                c.waits
+                  .filter((w) => w.pred.mode !== 'done' && !passed(w))
+                  .map((w) => [w.pred.id, w.pred.mode, w.atM.toFixed(0)]),
+              ),
               'gates',
-              c.mode === 'ground' ? JSON.stringify(c.leg!.gates.map((g) => [g.granted ? 'G' : '-', g.released ? 'R' : '-', (g as { holdM?: number }).holdM?.toFixed?.(0)])) : '',
+              c.mode === 'ground'
+                ? JSON.stringify(
+                    c.leg!.gates.map((g) => [
+                      g.granted ? 'G' : '-',
+                      g.released ? 'R' : '-',
+                      (g as { holdM?: number }).holdM?.toFixed?.(0),
+                    ]),
+                  )
+                : '',
               'why',
               dbg.why.get(c) ?? '',
             );
@@ -4783,7 +4990,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       } else if (craft.mode === 'waiting') {
         if (
           timeS >= craft.pauseUntilS &&
-          !(dOn(craft.runway) && (!T330D3 || departureOnly(craft.runway)) && takeoffHeld(craft, timeS))
+          !(
+            dOn(craft.runway) &&
+            (!T330D3 || departureOnly(craft.runway)) &&
+            takeoffHeld(craft, timeS)
+          )
         ) {
           if (T330D) lastTakeoff[craft.runway] = { craft, startS: timeS };
           craft.mode = 'air';
@@ -4811,7 +5022,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       ) {
         parkedBlockS += dtS;
         if (DBG330 && Math.floor(timeS / 60) > Math.floor((timeS - dtS) / 60))
-          console.error('PBLOCK', timeS.toFixed(0), craft.id, craft.stationM.toFixed(0), 'by', JSON.stringify(craft.waits.filter((w) => w.predM === Infinity && w.leg === craft.leg && !passed(w)).map((w) => [w.pred.id, w.pred.stand, w.pred.request?.kind ?? '-'])), craft.next.map((n) => n.kind).join(','));
+          console.error(
+            'PBLOCK',
+            timeS.toFixed(0),
+            craft.id,
+            craft.stationM.toFixed(0),
+            'by',
+            JSON.stringify(
+              craft.waits
+                .filter((w) => w.predM === Infinity && w.leg === craft.leg && !passed(w))
+                .map((w) => [w.pred.id, w.pred.stand, w.pred.request?.kind ?? '-']),
+            ),
+            craft.next.map((n) => n.kind).join(','),
+          );
       }
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;

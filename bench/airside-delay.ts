@@ -310,7 +310,8 @@ for (let step = startS * 10; step < endS * 10; step++) {
                 const [lu, roll] = a.state === 'line-up' ? [a, b] : [b, a];
                 if (lu.state === 'line-up' && rolling(roll)) {
                   const behind =
-                    (roll.x - lu.x) * Math.cos(roll.heading) + (roll.y - lu.y) * Math.sin(roll.heading);
+                    (roll.x - lu.x) * Math.cos(roll.heading) +
+                    (roll.y - lu.y) * Math.sin(roll.heading);
                   if (behind >= 0) runwayExempt++;
                 }
               }
