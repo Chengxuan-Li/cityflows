@@ -191,3 +191,52 @@ Measure on the Phase 1 windows, against 964d47c:
 
 If it helps, also run it combined with (d)+(f) and with the re-coded exits. Report the Phase 1c table, plus waits
 broken and cycles detected. Pilot only: no full days, no merge.
+
+## Phase 1e — landing flow on one runway (owner, 2026-11-23)
+
+Lead diagnosis (47e6398c, `T330P=300`, Heathrow 05:00–09:00 seed 1; tools and clip in `D:\cityflows-wt\330-pilot\V5`
+and `lead-evidence/video3/heathrow-27L-gaps.mp4`):
+
+- 27L lands every 222 s (median), against 55 s of actual runway occupancy. There is never more than one arrival on final.
+- The next arrival is released only after the leader has landed: 43 of 58 releases come 60–130 s after the leader's
+  touchdown, and then it flies the 140 s final. Held time between releases breaks down as:
+  - spacing 28%;
+  - `leaderExit` 24%: it predicts 116 s on the runway, because it assumes the whole exit leg at turn speed;
+  - previous arrival on the exit route 19%;
+  - departures or tows on the exit route 16%;
+  - gap kept for a crossing 6%;
+  - another queued arrival 4%.
+- Even with clear ground, gaps cannot drop below 146 s, about 24 an hour.
+
+Owner: "let's have the next aircraft hold the runway with a higher priority than the crossing aircraft … whenever
+the landing aircraft has crossed a certain position, the previous parts of the runway would be open to the taxiway
+crossing … crossing in parallel … while the runway is still on hold by the next landing aircraft, but the landing
+craft hasn't been too close … a reservation period for the runway … and another guardian to prevent taxiway
+interlocking: if the taxiway has a really long queue, relieve the queue as a one-off effort and block the runway for
+further landings … another independent fix."
+
+Pilot, one step at a time on top of 47e6398c, keeping each only if it helps:
+
+1. **Release on spacing, decide at commitment.** An arrival appears when spacing on final allows; the stand rules stay
+   as they are. From then on it holds a reservation of the runway. Its exit and first stretch off the runway are ordered
+   at landing commitment, not at release. At commitment, landing traffic goes before ground traffic that has not yet
+   reached the hold before that conflict.
+   - Estimate runway occupancy from the exit speed profile, not turn speed over the whole leg.
+   - A landed aircraft whose way on is taken holds on the taxiway clear of the runway, never on it.
+   - If the runway will not be clear, it goes around. Go-arounds stay rare.
+2. **Crossings under the reservation.** A crossing at a point is granted:
+   - behind a landing aircraft, once its roll has passed that point and its tail is clear; or
+   - ahead of the next reserved arrival, if the crossing is off the runway before that arrival is near: its commitment
+     time minus a margin.
+   Crossings at different points whose bodies and paths do not meet run in parallel. Allow a limited number per gap.
+3. **Queue guard (independent).** When the queue waiting to cross a runway grows long, hold the next arrival's release
+   once so the queue drains. Try 4 aircraft, or 3 minutes for the first in line. It must be deterministic, and the
+   gap it opens must be counted.
+
+Measure on the Phase 1 windows against 47e6398c (P300):
+- 27L landings per hour, median gap, gap floor and the hold breakdown (`330-pilot/V5/gaps.cjs` on a diag build);
+- completed, crossing waits (mean, max), peak crossing queue, go-arounds;
+- `peakStuck5`, `endStuck5`, `gridlockH`, overlaps and runway conflicts.
+
+Zurich and Boston must not regress. Pilot only: no full days, no merge. For the best variant, render the captioned clip
+the same way as the lead's.
