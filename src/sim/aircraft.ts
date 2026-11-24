@@ -163,6 +163,10 @@ const EXIT_NEAR_M = 200;
 const CROSS_BEHIND_M = 60;
 const T330RING = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330RING;
 const T330TOW = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330TOW;
+const T330PAD0 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330PAD0;
+const GAP_WAIT_S = Number((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GW || 30);
+const GAP_BUFFER_S = Number((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GB || 20);
+const T330TOW2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330TOW2;
 const DBG330 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DBG;
 /** TASK-330: radar spacing on final, threshold to threshold: the minimum, and the wake pairs
  * (ICAO Doc 4444; leader category, then follower's) where longer. */
@@ -759,6 +763,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const rOn = (r: number) => T330R && independent(r);
   const dOn = (r: number) => T330D && independent(r);
   const leadS = (r: number) => (rOn(r) ? CLEAR_BEFORE_S : DECISION_S);
+  /** T330PAD0: no pad on either side of an R landing window (5 s margin, not 15 s). */
+  const padS = (r: number) => (T330PAD0 && rOn(r) ? 0 : ARRIVAL_PAD_S);
   const runwayClearS = new Float64Array(runwayOccupant.length);
   const standOccupant = new Int32Array(graph.stands.length).fill(-1);
   const standBound = new Int32Array(graph.stands.length).fill(-1);
@@ -1540,7 +1546,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         other.request?.kind === 'arrival' &&
         other.admission &&
         // T330TOW: not for one already ordered to wait for this tow; it is not released before it.
-        !(T330TOW && other.waits.some((w) => w.pred === craft && !passed(w)))
+        !(T330TOW && other.waits.some((w) => w.pred === craft && !passed(w))) &&
+        // T330TOW2: nor for one that cannot appear while this tow stands (it cannot give way to it).
+        !(T330TOW2 && !yieldWaits(other, craft))
       ) {
         const key = endKey(other.runway, other.request.end);
         if (
@@ -1570,7 +1578,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const found: [Craft, Wait[]][] = [];
     for (const other of pass) {
       const waits = yieldWaits(craft, other);
-      if (!waits) return null;
+      if (!waits) {
+        yieldBlocker = `${other.id}:${dbgKind(other)}:${yieldWhy}`;
+        return null;
+      }
       found.push([other, waits]);
     }
     return found;
@@ -1578,6 +1589,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** The waits by which `other` gives way to `craft` where their remaining movements meet; null
    * if it can no longer stop short of one. */
   let yieldWhy = '';
+  let yieldBlocker = '';
   function yieldWaits(craft: Craft, other: Craft, anyGrant = true, atEdge = false) {
     const waits: Wait[] = [];
     for (const c of conflicts(craft, remaining(craft), other)) {
@@ -2757,7 +2769,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       let needS = 0;
       for (const other of crafts) {
         const wait = other.runwayWait;
-        if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < RUNWAY_GAP_WAIT_S) continue;
+        if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < GAP_WAIT_S) continue;
         // T330R4: a crossing the lander rolls past goes behind it and needs no gap of its own.
         if (lander && wait.at && resource === lander.runway) {
           const u = nearestOnPolyline(runwayLine(graph.runways[lander.runway]!, lander.end).line, wait.at).along;
@@ -2765,7 +2777,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         }
         const use = wait.uses.find((use) => use.resource === resource);
         if (use)
-          needS = Math.max(needS, use.clearS - wait.checkedAtS + 2 * (T330R3 ? 5 : RUNWAY_BUFFER_S));
+          needS = Math.max(needS, use.clearS - wait.checkedAtS + 2 * (T330R3 ? 5 : GAP_BUFFER_S));
       }
       if (!needS) continue;
       let lastS = runwayOccupant[resource] === -1 ? nowS : Math.max(nowS, runwayClearS[resource]!);
@@ -2842,7 +2854,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       startSpeedMps: landing.exitSpeedMps,
       stopStationM: landing.leg.endM,
     });
-    const fromS = thresholdS - leadS(craft.runway) - ARRIVAL_PAD_S;
+    const fromS = thresholdS - leadS(craft.runway) - padS(craft.runway);
     const half = craft.lengthM / 2;
     const offsetM = air.path.lengthM - half;
     const uses = landing.leg.gates[0]!.uses.map((use) => ({
@@ -2853,7 +2865,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const booking = uses.map((use) => ({
       ...use,
       clearS:
-        ARRIVAL_PAD_S +
+        padS(craft.runway) +
         (use.clearM <= air.path.lengthM
           ? timeS + timeTo(air.profile, use.clearM)
           : exitS + timeTo(taxi, use.clearM - offsetM)),
@@ -2872,7 +2884,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       : undefined;
     if (!leavesGap(booking, fromS, lander)) return why('gapForDeparture');
     const given = yieldsTo(craft, pass);
-    if (!given) return why('yieldsNull');
+    if (!given) return why('yieldsNull:' + yieldBlocker.split(':').slice(1, 3).join(':'));
     // TASK-330 Phase 1e: ground aircraft about to enter its way off the runway (within
     // EXIT_NEAR_M of where they would meet it, before its tail is off) wait for it from now; those
     // further off are ordered as they come near.
@@ -2895,6 +2907,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     craft.mode = 'air';
     craft.air = air;
     craft.arrivalBooking = { fromS, uses: booking };
+    if ((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BK)
+      console.error('BOOK', timeS.toFixed(0), craft.id, craft.runway, 'thr+', (thresholdS - timeS).toFixed(0), JSON.stringify(booking.map((u) => [u.resource, +(u.clearS - thresholdS).toFixed(0), +u.clearM.toFixed(0)])), 'airLen', air.path.lengthM.toFixed(0), 'exitS-thr', (exitS - thresholdS).toFixed(0), 'legEnd', landing.leg.endM.toFixed(0), 'clearOnLeg', JSON.stringify(landing.leg.gates[0]!.uses.map((u) => +u.clearM.toFixed(0))), 'half', half.toFixed(0), 'exitV', landing.exitSpeedMps.toFixed(1), 'id', craft.id);
     craft.next = [
       { kind: 'taxi', leg: landing.leg, pauseS: 0 },
       { kind: 'park', stand: request.stand },
@@ -2912,7 +2926,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     for (const other of crafts) {
       if (other === craft || other.air?.kind !== 'approach' || other.runway !== craft.runway)
         continue;
-      const otherS = other.arrivalBooking!.fromS + leadS(other.runway) + ARRIVAL_PAD_S;
+      const otherS = other.arrivalBooking!.fromS + leadS(other.runway) + padS(other.runway);
       const [leader, follower] = otherS <= thresholdS ? [other, craft] : [craft, other];
       const nm = wakeSpacingNm[wakeOf(leader.type)]?.[wakeOf(follower.type)] ?? 0;
       const gapS = Math.max(FINAL_SPACING_M, nm * NM) / fixedWing(follower).approachSpeedMps;

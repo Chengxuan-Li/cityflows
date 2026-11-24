@@ -176,6 +176,9 @@ let overlapCount = 0;
 let runwayConflicts = 0;
 let runwayShared = 0;
 let runwayCrossersApart = 0;
+// Owner 2026-11-24: crossings behind a lander, crossings together and a line-up behind a rolling
+// departure are by design; the rest of runwayConflicts is counted here.
+let runwayExempt = 0;
 const spans = new Map(aircraftTypes.map((t) => [t.id, t.spanM]));
 const rcKinds = new Map<string, number>();
 let peakStuck = 0;
@@ -299,7 +302,18 @@ for (let step = startS * 10; step < endS * 10; step++) {
                 note(
                   `both crossing: ${apartPoints ? 'different points, paths apart' : 'same or meeting'}`,
                 );
-              } else note(`both moving: ${a.state}/${b.state}`);
+                runwayExempt++;
+              } else {
+                note(`both moving: ${a.state}/${b.state}`);
+                const rolling = (p: typeof a) =>
+                  p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
+                const [lu, roll] = a.state === 'line-up' ? [a, b] : [b, a];
+                if (lu.state === 'line-up' && rolling(roll)) {
+                  const behind =
+                    (roll.x - lu.x) * Math.cos(roll.heading) + (roll.y - lu.y) * Math.sin(roll.heading);
+                  if (behind >= 0) runwayExempt++;
+                }
+              }
               continue;
             }
             const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
@@ -307,6 +321,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
               (mover.x - crosser.x) * Math.cos(mover.heading) +
               (mover.y - crosser.y) * Math.sin(mover.heading);
             if (back >= 150) apart++;
+            if (back >= 150 && mover.state === 'landing-roll') runwayExempt++;
             note(
               `${back >= 150 ? 'behind>=150' : back >= 0 ? 'behind<150' : 'ahead'} of ${mover.state}`,
             );
@@ -411,7 +426,13 @@ const summary = {
   endStuck5: stuck5,
   endQueued: fleet.metrics().queuedArrivals,
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
-  ...(checks && { overlapCount, runwayConflicts, runwayShared, runwayCrossersApart }),
+  ...(checks && {
+    overlapCount,
+    runwayConflicts,
+    runwayShared,
+    runwayCrossersApart,
+    runwayConflictsReal: runwayConflicts - runwayExempt,
+  }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
   arrivalStages: stages(arrivals, [
