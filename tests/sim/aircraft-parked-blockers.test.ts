@@ -46,3 +46,36 @@ test('a tow that would park across a departure’s way goes second, though order
   expect(fleet.metrics()).toMatchObject({ departed: 1, towed: 1, stuck: 0 });
   expect(fleet.parkedBlockS()).toBe(0);
 });
+
+test('a departure does not push back while an arrival taxis to a stand across its way', () => {
+  const { fleet, stands } = fleetOf();
+  // The arrival to K, parked there, stands in the way of the B777 from E1 to 27. The B777, asking
+  // to leave while the arrival taxis in, waits at its stand (not on the taxiway) until K's
+  // aircraft has left again.
+  const heavy = fleet.spawnParked({ typeId: 'B77W', stand: stands.E1 });
+  if (!heavy.ok) throw new Error('parked');
+  const arrival = fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.K! });
+  if (!arrival.ok) throw new Error(arrival.reason);
+  let asked = false;
+  let parkedS = Infinity;
+  let heavyTaxiStill = 0;
+  let longest = 0;
+  run(fleet, 2400, (timeS) => {
+    if (!asked && fleet.statusOf(arrival.id) === 'taxi') {
+      asked = true;
+      expect(fleet.requestDeparture(heavy.id, '27').ok).toBe(true);
+    }
+    if (parkedS === Infinity && fleet.idle(arrival.id)) parkedS = timeS;
+    if (timeS === Math.round(parkedS) + 120)
+      expect(fleet.requestDeparture(arrival.id, '27').ok).toBe(true);
+    const status = fleet.statusOf(heavy.id);
+    const pose = fleet.snapshot().find((p) => p.id === heavy.id);
+    heavyTaxiStill = status === 'taxi' && pose && pose.speedMps < 0.05 ? heavyTaxiStill + 0.1 : 0;
+    longest = Math.max(longest, heavyTaxiStill);
+  });
+  expect(asked).toBe(true);
+  expect(parkedS).toBeLessThan(Infinity);
+  expect(fleet.metrics()).toMatchObject({ landed: 1, departed: 2, stuck: 0 });
+  expect(longest).toBeLessThan(30);
+  expect(fleet.parkedBlockS()).toBe(0);
+});

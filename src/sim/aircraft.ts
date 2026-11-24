@@ -2000,6 +2000,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     parkKept: 0,
     parkRefused: 0,
     startRefused: 0,
+    startHeld: 0,
     avoidPlans: 0,
     deadlocks: 0,
     ringKeys: new Set<string>(),
@@ -3539,6 +3540,44 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return Infinity;
   }
 
+  /** TASK-339: whether a departure or tow not started would wait, beyond its pushback, for an
+   * aircraft parked or at rest across its way with no movement planned (it would stand in the
+   * way until that one leaves). A wait on its pushback keeps it at its stand anyway. */
+  function refuseBehindParked(craft: Craft, waits: Wait[], legs: Leg[]) {
+    const block = waits.find(
+      (w) =>
+        w.predM === Infinity &&
+        w.pred.mode === 'parked' &&
+        !w.pred.admission &&
+        !w.pred.request &&
+        !(w.leg === legs[0] && legs[0].mode === 'pushback') &&
+        !passed(w),
+    );
+    if (!block) return false;
+    late.startRefused++;
+    if (DBG330)
+      console.error('REFUSED', nowS.toFixed(0), craft.id, craft.request?.kind, 'by', block.pred.id, block.pred.stand, 'atLeg', legs.indexOf(block.leg), block.atM.toFixed(0), craft.admission ? 'dropped' : 'new');
+    return true;
+  }
+
+  /** TASK-339: whether an aircraft moving on the ground (and not ordered after `craft`) is to come
+   * to rest with its body across `craft`'s legs beyond its pushback. */
+  function parkingAcross(craft: Craft, legs: Leg[]) {
+    const spans = legs.flatMap((leg, i) =>
+      i === 0 && leg.mode === 'pushback' ? [] : [{ leg, fromM: 0 }],
+    );
+    for (const other of crafts) {
+      if (other === craft || other.mode !== 'ground') continue;
+      const stop = stopLeg(other);
+      if (!stop || other.waits.some((w) => w.pred === craft && !passed(w))) continue;
+      if (bodyConflict(craft, spans, stopBody(other, stop))) {
+        late.startHeld++;
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Orders a parked aircraft's departure or tow at its request, and starts it once nothing
    * ordered before it is still to pass where it pushes or first moves. */
   function tryStart(craft: Craft, timeS: number) {
@@ -3580,22 +3619,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       );
       if (!decided) return;
       // TASK-339: not while its way passes an aircraft parked or at rest across it with no
-      // movement planned (it would wait in the way until that one leaves); it plans again on a
-      // later try. A wait on its pushback keeps it at its stand anyway: it keeps its place.
-      const parkedBlock = decided.mine.find(
-        (w) =>
-          w.predM === Infinity &&
-          w.pred.mode === 'parked' &&
-          !w.pred.admission &&
-          !w.pred.request &&
-          !(w.leg === legs[0] && legs[0].mode === 'pushback'),
-      );
-      if (parkedBlock) {
-        late.startRefused++;
-        if (DBG330)
-          console.error('REFUSED', nowS.toFixed(0), craft.id, request.kind, 'by', parkedBlock.pred.id, parkedBlock.pred.stand, 'atLeg', legs.indexOf(parkedBlock.leg), parkedBlock.atM.toFixed(0));
-        return;
-      }
+      // movement planned; it plans again on a later try.
+      if (refuseBehindParked(craft, decided.mine, legs)) return;
       // T330BLK2: not while its way passes an aircraft parked across it with no movement planned
       // (it would wait in the way until that one leaves); it plans again on a later try.
       if (
@@ -3636,6 +3661,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return planned;
     }
     const { legs } = craft.admission;
+    // TASK-339: nor once ordered, when an aircraft has since parked or come to rest across its
+    // way: its movement is dropped and planned again on a later try.
+    if (refuseBehindParked(craft, craft.waits, legs)) {
+      dropAdmission(craft);
+      return;
+    }
+    // Nor while one still moving is to come to rest across its way: it waits at its stand.
+    if (parkingAcross(craft, legs)) return;
     const first = legs[0]!;
     const half = craft.lengthM / 2;
     const pass = passing(craft);
