@@ -33,6 +33,7 @@ import {
 import {
   aircraftCode,
   aircraftCodes,
+  codeSpanLimitM,
   aircraftTypes,
   type AircraftClass,
   type AircraftType,
@@ -144,6 +145,8 @@ const ORDER_HORIZON_M = Number(
  * against a queued arrival it goes before. */
 const LANDING_GAP_S = 90;
 const HORIZON_S = 120;
+/** TASK-330 Phase 1e: how near its way off a ground aircraft is ordered at an arrival's release. */
+const EXIT_NEAR_M = 200;
 /** TASK-330 Phase 1e step 2: how far a landing aircraft's tail is past a crossing before it goes. */
 const CROSS_BEHIND_M = 60;
 const DBG330 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DBG;
@@ -1105,6 +1108,36 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** Holding positions on a leg: a gate before every runway its pieces reach from a taxiway,
    * at the mapped hold within 300 m before it, else `HOLD_FALLBACK_M` short of the runway node;
    * released past the next hold beyond (or the fallback distance past the runway node). */
+  /** TASK-330: per code, an aircraft of the widest type of that code (built once). */
+  const widestByCode = new Map<number, Craft | null>();
+  function widestOfCode(code: number) {
+    if (!widestByCode.has(code)) {
+      const type = aircraftTypes
+        .filter((t) => t.class !== 'helicopter' && t.spanM <= codeSpanLimitM[aircraftCodes[code]!])
+        .sort((a, b) => b.spanM - a.spanM || b.lengthM - a.lengthM)[0];
+      const made = type ? newCraft(type.id) : null;
+      widestByCode.set(code, typeof made === 'string' ? null : made);
+    }
+    return widestByCode.get(code)!;
+  }
+  /** TASK-330: a stop short of a runway moved back, 2 m at a time (at most 150 m), until the
+   * body standing there is clear of the widest type the runway takes rolling on its centreline:
+   * a mapped holding position too close for a large type is not waited at. */
+  function clearHold(craft: Craft, leg: Leg, runway: number, holdM: number) {
+    const r = graph.runways[runway]!;
+    const roller = widestOfCode(r.maxCode);
+    if (!roller) return holdM;
+    const heading = r.ends[0]!.heading;
+    let m = holdM;
+    for (let back = 0; back <= 150 && m > craft.lengthM / 2; back += 2, m -= 2) {
+      const pose = poseAt(leg, m);
+      const body = bodyAt(craft, pose.position, pose.headingRad);
+      const near = nearestOnPolyline(r.line, pose.position);
+      if (!bodiesTouch(body, bodyAt(roller, near.point, heading))) return m;
+    }
+    return holdM;
+  }
+
   function addGates(craft: Craft, leg: Leg, departureRunway: number, arrivalRunway = -1) {
     const half = craft.lengthM / 2;
     const { pieces } = leg;
@@ -1117,7 +1150,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ({ endM, endNode }) =>
           endM > leaveM && endM <= leaveM + 300 && holdAt.get(endNode)?.runway === runway,
       );
-      const holdM = Math.max(half, (before?.endM ?? entryM - HOLD_FALLBACK_M) - half);
+      const holdM = clearHold(
+        craft,
+        leg,
+        runway,
+        Math.max(half, (before?.endM ?? entryM - HOLD_FALLBACK_M) - half),
+      );
       const vacateM =
         leaveM >= leg.endM && runway === departureRunway
           ? Infinity
@@ -1502,7 +1540,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
   /** The waits by which `other` gives way to `craft` where their remaining movements meet; null
    * if it can no longer stop short of one. */
-  function yieldWaits(craft: Craft, other: Craft) {
+  function yieldWaits(craft: Craft, other: Craft, anyGrant = true) {
     const waits: Wait[] = [];
     for (const c of conflicts(craft, remaining(craft), other)) {
       const atM = c.x1 - SAMPLE_M;
@@ -1515,7 +1553,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       )
         return null;
       // One holding a runway grant does not stop short of it for another.
-      if (other.mode === 'ground' && other.leg!.gates.some((g) => g.granted && !g.released))
+      // (TASK-330 Phase 1e, at landing commitment: only a grant covering the stop, which
+      // canWaitAt has checked.)
+      if (
+        anyGrant &&
+        other.mode === 'ground' &&
+        other.leg!.gates.some((g) => g.granted && !g.released)
+      )
         return null;
       const predM = c.follow ? c.b1 + craft.lengthM : c.b2 + SAMPLE_M;
       waits.push({ leg: c.otherLeg, atM, pred: craft, predLeg: c.leg, predM });
@@ -2654,7 +2698,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // not appear while an aircraft stands in its way off that could not give way there.
     void ahead;
     for (const o of crafts) {
-      if (o === craft || o.mode !== 'ground' || o.speedMps > 0.5) continue;
+      if (o === craft || o.mode !== 'ground') continue;
+      // A landed aircraft moving off by its exit is judged at commitment; one standing is not.
+      const landed = o.leg!.gates[0]?.holdM === -Infinity && o.runway === craft.runway;
+      if (landed && o.speedMps > 0.5) continue;
       if (o.waits.some((w) => w.pred === craft && !passed(w))) continue;
       const meets = conflicts(craft, [{ leg, fromM: 0 }], o).some((c) => c.b1 - SAMPLE_M < safeM);
       if (meets && !yieldWaits(craft, o)) return why('exitOccupied:' + dbgKind(o));
@@ -2691,6 +2738,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (!leavesGap(booking, fromS)) return why('gapForDeparture');
     const given = yieldsTo(craft, pass);
     if (!given) return why('yieldsNull');
+    // TASK-330 Phase 1e: ground aircraft about to enter its way off the runway (within
+    // EXIT_NEAR_M of where they would meet it, before its tail is off) wait for it from now; those
+    // further off are ordered as they come near.
+    for (const o of crafts) {
+      if (o === craft || o.mode !== 'ground') continue;
+      if (o.waits.some((w) => w.pred === craft && !passed(w))) continue;
+      const near = conflicts(craft, [{ leg, fromM: 0 }], o).filter(
+        (c) => c.b1 - SAMPLE_M < safeM && along(remaining(o), c.otherLeg, c.x1) <= EXIT_NEAR_M,
+      );
+      if (!near.length) continue;
+      const waits = yieldWaits(craft, o);
+      if (waits) given.push([o, waits]);
+    }
     dbg.exits.set(
       landing.leg.pieces[0]!.edge + '@' + landing.exitU.toFixed(0),
       (dbg.exits.get(landing.leg.pieces[0]!.edge + '@' + landing.exitU.toFixed(0)) ?? 0) + 1,
@@ -2730,6 +2790,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
    * `pastM` on its own leg (Infinity: not before it stops), by its exit speed profile. */
   function leaderPastS(leader: Craft, leg: Leg, pastM: number) {
     if (pastM > leg.endM - leader.lengthM / 2 || waitCap(leader, leg) < pastM) return Infinity;
+    // Nor one standing (it is likely to stand on), unless already past.
+    if (leader.mode === 'ground' && leader.stationM < pastM && leader.speedMps < 0.5)
+      return Infinity;
     // Nor while a runway hold before that point is not granted (it may stop there for long).
     if (leg.gates.some((g) => g.holdM > -Infinity && g.holdM < pastM && !g.granted))
       return Infinity;
@@ -2766,6 +2829,34 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const pastM = leg.gates[0]!.vacateM + craft.lengthM + margin;
     const yielding = new Map<Craft, Wait[]>();
     const leaving = new Set<Craft>();
+    // A wait set at admission whose conflict, by now, lies beyond the safe point (the other has
+    // gone on) is set again where the conflict now begins.
+    const ownSpans = [{ leg, fromM: 0 }];
+    for (const p of new Set(
+      craft.waits
+        .filter(
+          (w) =>
+            w.leg === leg &&
+            w.atM < safeM &&
+            !passed(w) &&
+            w.pred.mode === 'ground' &&
+            w.predM < Infinity,
+        )
+        .map((w) => w.pred),
+    )) {
+      const now = conflicts(craft, ownSpans, p);
+      if (!now.length || now.some((c) => c.b1 - SAMPLE_M < safeM)) continue;
+      craft.waits = craft.waits.filter((w) => w.pred !== p);
+      for (const c of now)
+        craft.waits.push({
+          leg: c.leg,
+          atM: c.b1 - SAMPLE_M,
+          pred: p,
+          predLeg: c.otherLeg,
+          predM: c.follow ? c.x1 + p.lengthM : c.x2 + SAMPLE_M,
+        });
+      dbg.ga.set('commit:refreshed', (dbg.ga.get('commit:refreshed') ?? 0) + 1);
+    }
     for (const w of craft.waits) {
       if (w.leg !== leg || w.atM >= safeM || passed(w)) continue;
       const p = w.pred;
@@ -2785,7 +2876,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         leaving.add(p);
         continue;
       }
-      const waits = p.mode === 'ground' ? yieldWaits(craft, p) : null;
+      const waits = p.mode === 'ground' ? yieldWaits(craft, p, false) : null;
       if (!waits) {
         dbg.ga.set('commit:' + dbgKind(p), (dbg.ga.get('commit:' + dbgKind(p)) ?? 0) + 1);
         return false;
@@ -2834,6 +2925,29 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (leaderPastS(o, own, pastM + o.lengthM / 2) <= exitS) leaving.add(o);
     }
     const ignore = new Set([...yielding.keys(), ...leaving]);
+    // Ground aircraft whose claims reach into that stretch give way if they can still stop.
+    for (
+      let tries = 0;
+      tries < 4 && firstConflict(craft, leg, 0, want, ignore) < Infinity;
+      tries++
+    ) {
+      const blockers = crafts.filter(
+        (o) =>
+          o !== craft &&
+          !ignore.has(o) &&
+          o.mode === 'ground' &&
+          o.claimed.some((k) => leg.pieces.some((q) => q.edge === k.edge && q.startM <= want)),
+      );
+      let moved = false;
+      for (const o of blockers) {
+        const waits = yieldWaits(craft, o);
+        if (!waits?.length) continue;
+        yielding.set(o, waits);
+        ignore.add(o);
+        moved = true;
+      }
+      if (!moved) break;
+    }
     if (firstConflict(craft, leg, 0, want, ignore) < Infinity) {
       dbg.ga.set('commit:claim', (dbg.ga.get('commit:claim') ?? 0) + 1);
       return false;

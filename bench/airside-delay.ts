@@ -8,6 +8,7 @@ import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircr
 import { createFlightOperations } from '../src/sim/flight-operations';
 import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
 import { nearestOnPolyline } from '../src/geo/polyline';
+import { aircraftTypes } from '../src/schema/aircraft';
 
 // TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
 // second, with each movement's time split by the state it spends it in.
@@ -174,6 +175,8 @@ const checkRunwayConflicts = runwayConflictCheck(graph);
 let overlapCount = 0;
 let runwayConflicts = 0;
 let runwayShared = 0;
+let runwayCrossersApart = 0;
+const spans = new Map(aircraftTypes.map((t) => [t.id, t.spanM]));
 const rcKinds = new Map<string, number>();
 let peakStuck = 0;
 let peakActive = 0;
@@ -281,7 +284,22 @@ for (let step = startS * 10; step < endS * 10; step++) {
               if (process.env.RCDBG) rcKinds.set(k, (rcKinds.get(k) ?? 0) + 1);
             };
             if (crossing(a) === crossing(b)) {
-              note(`both ${crossing(a) ? 'crossing' : 'moving'}: ${a.state}/${b.state}`);
+              if (crossing(a)) {
+                // Two crossings: apart if their points along the runway are more than half their
+                // spans plus 15 m apart and both run across it (over 30 degrees off its line).
+                const r = graph.runways[rw[i]!]!;
+                const ua = nearestOnPolyline(r.line, a).along;
+                const ub = nearestOnPolyline(r.line, b).along;
+                const span = (p: typeof a) => spans.get(p.typeId) ?? 40;
+                const across = (p: typeof a) =>
+                  Math.abs(Math.sin(p.heading - r.ends[0]!.heading)) > Math.sin(Math.PI / 6);
+                const apartPoints =
+                  Math.abs(ua - ub) > (span(a) + span(b)) / 2 + 15 && across(a) && across(b);
+                if (apartPoints) runwayCrossersApart++;
+                note(
+                  `both crossing: ${apartPoints ? 'different points, paths apart' : 'same or meeting'}`,
+                );
+              } else note(`both moving: ${a.state}/${b.state}`);
               continue;
             }
             const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
@@ -393,7 +411,7 @@ const summary = {
   endStuck5: stuck5,
   endQueued: fleet.metrics().queuedArrivals,
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
-  ...(checks && { overlapCount, runwayConflicts, runwayShared }),
+  ...(checks && { overlapCount, runwayConflicts, runwayShared, runwayCrossersApart }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
   arrivalStages: stages(arrivals, [
