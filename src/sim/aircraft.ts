@@ -144,7 +144,6 @@ const T330IND = !!(globalThis as { process?: { env: Record<string, string> } }).
 const T330R4 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R4;
 const T330R3 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R3;
 const T330R2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R2;
-const bookLeadS = () => (T330R ? CLEAR_BEFORE_S : DECISION_S);
 const RETRY_S = 5;
 /** TASK-329: a ring of waits lasting this long is broken. */
 const RING_S = 60;
@@ -168,8 +167,6 @@ const GAP_WAIT_S = Number((globalThis as { process?: { env: Record<string, strin
 const GAP_BUFFER_S = Number((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GB || 20);
 const T330TOW2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330TOW2;
 const T330BLK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BLK;
-/** T330BLK: a taxiing departure stopped this long behind an aircraft parked across its way re-routes. */
-const BLOCKED_S = 60;
 const T330BLK2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BLK2;
 const T330PARK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330PARK;
 const T330EDGE = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330EDGE;
@@ -203,8 +200,6 @@ const STRAIGHT_RAD = (0.5 * Math.PI) / 180;
  * the stand's line its stop may move to keep it. */
 const ROAD_CLEAR_M = 1;
 const STOP_BACK_M = 20;
-/** An aircraft waiting this long at a hold gets a gap between arrivals. */
-const RUNWAY_GAP_WAIT_S = 30;
 const STUCK_S = 900;
 // T330D (TASK-330 pilot, not for merge): departures line up behind a rolling departure and take
 // off once it is past the runway end and the wake time behind it has run (T330DSEP: seconds
@@ -1719,7 +1714,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         for (const [i, c] of ring.entries()) {
           const o = ring[(i + 1) % ring.length]!;
           const ws = c.waits.filter((w) => w.pred === o);
-          console.log('DEADRING', nowS.toFixed(0), c.id, c.mode, (c as { phase?: string }).phase ?? '', 'unstarted', unstarted(c), 'runway', (c as { runway?: number }).runway, 'leg', c.mode === 'ground' ? c.leg?.kind ?? '' : '', 'm', c.mode === 'ground' ? c.stationM?.toFixed(0) : '', '-> waits for', o.id, JSON.stringify(ws.map((w) => ({ m: w.atM?.toFixed?.(0), pm: w.predM === Infinity ? 'inf' : w.predM?.toFixed?.(0), passed: passed(w), kind: (w as { kind?: string }).kind }))), 'yield', !!yieldWaits(c, o), yieldWhy, 'edge', !!yieldWaits(c, o, true, true), yieldWhy, 'oSpeed', o.speedMps, 'x1s', JSON.stringify(conflicts(c, remaining(c), o).map((k) => [k.x1.toFixed(2), k.otherLeg === o.leg])), 'oM', o.stationM?.toFixed(2));
+          console.log('DEADRING', nowS.toFixed(0), c.id, c.mode, (c as { phase?: string }).phase ?? '', 'unstarted', unstarted(c), 'runway', (c as { runway?: number }).runway, 'leg', '', 'm', c.mode === 'ground' ? c.stationM?.toFixed(0) : '', '-> waits for', o.id, JSON.stringify(ws.map((w) => ({ m: w.atM?.toFixed?.(0), pm: w.predM === Infinity ? 'inf' : w.predM?.toFixed?.(0), passed: passed(w), kind: (w as { kind?: string }).kind }))), 'yield', !!yieldWaits(c, o), yieldWhy, 'edge', !!yieldWaits(c, o, true, true), yieldWhy, 'oSpeed', o.speedMps, 'x1s', JSON.stringify(conflicts(c, remaining(c), o).map((k) => [k.x1.toFixed(2), k.otherLeg === o.leg])), 'oM', o.stationM?.toFixed(2));
         }
     }
   }
@@ -3027,7 +3022,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }));
     if (T330RI)
       for (const use of booking)
-        if (use.resource !== craft.runway) use.fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
+        if (use.resource !== craft.runway) (use as BookedUse).fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
     if (!bookingFits(booking, fromS, 0, craft.id)) return why('runwayBooking');
     const lander = T330R4
       ? {
@@ -4740,7 +4735,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               'rwy',
               (c as { runway?: number }).runway,
               'm',
-              c.mode === 'ground' ? c.stationM.toFixed(0) + '/' + c.leg!.lengthM?.toFixed?.(0) : '',
+              c.mode === 'ground' ? c.stationM.toFixed(0) + '/' + c.leg!.endM.toFixed(0) : '',
               'v',
               (c.speedMps ?? 0).toFixed(1),
               'waits',
