@@ -831,6 +831,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     `${c.towing ? 'tow' : c.next.some((n) => n.kind === 'takeoff') || c.request?.kind === 'departure' || c.admission?.next.some((n) => n.kind === 'takeoff') ? 'departure' : c.request?.kind === 'tow' ? 'tow' : c.mode === 'queued' || (c.stand >= 0 && (c.mode === 'air' || c.next.some((n) => n.kind === 'park'))) ? 'arrival' : 'other'}/${c.mode}/${c.mode === 'queued' ? '' : stateOf(c)}${c.mode === 'ground' ? (c.speedMps < 0.05 ? ':still' : ':moving') : ''}`;
   let admitted = 0;
   let ringS = -Infinity;
+  /** TASK-339: seconds aircraft have stood in a wait on a parked aircraft with no admission. */
+  let parkedBlockS = 0;
   let lastRing = { key: '', sinceS: 0 };
   const endKey = (runway: number, end: number) => runway * 2 + end;
   const arrivalOpen = new Uint8Array(graph.runways.length * 2);
@@ -1869,20 +1871,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     along(own, c.leg, c.b1) <= ORDER_HORIZON_M ||
     along(theirs, c.otherLeg, c.x1) <= ORDER_HORIZON_M;
 
-  function order(craft: Craft, own: Span[]) {
+  function order(craft: Craft, own: Span[], stop?: Leg | null) {
     const mine: Wait[] = [];
     const theirs: { owner: Craft; wait: Wait }[] = [];
     for (const other of crafts) {
       if (other === craft || other.mode === 'done') continue;
       const otherSpans = remaining(other);
-      // An aircraft parked in the way (at a stand or, TASK-329, a helipad): wait short of it until
-      // it has left.
-      if (
-        other.mode === 'parked' &&
-        !other.admission &&
-        other.pose &&
-        (other.stand >= 0 || other.helipad >= 0)
-      ) {
+      // An aircraft parked in the way (at a stand, TASK-329 a helipad, TASK-339 a tow's rest
+      // point): wait short of it until it has left.
+      if (other.mode === 'parked' && !other.admission && other.pose) {
         const at = parkedConflict(craft, own, other);
         if (!at) continue;
         if (!canWaitAt(craft, at.leg, at.m - SAMPLE_M)) return null;
@@ -1901,6 +1898,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       );
       // A re-routed aircraft, moving, goes before those not started.
       const first = craft.mode === 'ground' && unstarted(other);
+      let parker: Craft | null | undefined;
       for (const c of conflicts(craft, own, other)) {
         if (!nearEnough(own, c, otherSpans)) {
           late.deferred++;
@@ -1923,11 +1921,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           console.error('PARKCHK', nowS.toFixed(0), craft.id, other.id, 'b', c.b1.toFixed(0), c.b2.toFixed(0), c.leg.endM.toFixed(0), 'x', c.x1.toFixed(0), c.x2.toFixed(0), c.otherLeg.endM.toFixed(0), 'lastKind', graph.edges[c.otherLeg.pieces.at(-1)!.edge]!.kind, graph.edges[c.leg.pieces.at(-1)!.edge]!.kind, 'rest', restLegs.has(c.otherLeg), restLegs.has(c.leg), 'otherParks', otherParks, 'iPark', iPark, 'byRank', byRank, 'follow', c.follow, 'oM', other.stationM?.toFixed(1), 'oV', other.speedMps, 'oMode', other.mode);
         const otherCanWait =
           !inside(other, c.otherLeg, c.x1 - SAMPLE_M) && canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
-        const goesSecond = otherParks
-          ? !otherCanWait && byRank
-          : iPark
-            ? canWaitAt(craft, c.leg, c.b1 - SAMPLE_M) || byRank
-            : byRank;
+        // TASK-339: one whose movement ends with its body in the other's way goes second where it
+        // can still stop short. One not started does not start behind one that can no longer.
+        if (parker === undefined) parker = parkerOf(craft, own, other, otherSpans, stop);
+        if (parker === other && !otherCanWait && unstarted(craft)) {
+          late.parkRefused++;
+          return null;
+        }
+        const goesSecond =
+          parker === other
+            ? !otherCanWait && byRank
+            : parker === craft
+              ? canWaitAt(craft, c.leg, c.b1 - SAMPLE_M) || byRank
+              : otherParks
+                ? !otherCanWait && byRank
+                : iPark
+                  ? canWaitAt(craft, c.leg, c.b1 - SAMPLE_M) || byRank
+                  : byRank;
+        if (parker && goesSecond === byRank) late.parkKept++;
+        else if (parker) late.parkRuled++;
         if (goesSecond) {
           const atM = c.b1 - SAMPLE_M;
           if (!canWaitAt(craft, c.leg, atM)) return null;
@@ -1984,6 +1996,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     ringsBroken: 0,
     blockedReroutes: 0,
     blockedTries: 0,
+    parkRuled: 0,
+    parkKept: 0,
+    parkRefused: 0,
+    startRefused: 0,
+    avoidPlans: 0,
     deadlocks: 0,
     ringKeys: new Set<string>(),
     deadKeys: new Set<string>(),
@@ -2046,7 +2063,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const own = remaining(craft);
       for (const other of crafts) {
         if (other === craft || other.mode === 'done') continue;
-        if (other.mode === 'parked' && other.pose && (other.stand >= 0 || other.helipad >= 0)) {
+        if (other.mode === 'parked' && other.pose) {
           // An aircraft parked in the way, now within the horizon: wait short of it until it has
           // left (with a request or not).
           const at = craft.waits.some((w) => w.pred === other && w.predM === Infinity && !passed(w))
@@ -2104,6 +2121,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const a = craftFirst();
         const b = otherFirst();
         let choice: 'craft' | 'other' | null = ordered;
+        // TASK-339: as the pair is first ordered, one whose movement ends with its body in the
+        // other's way goes second where it can still stop short (and that closes no ring).
+        const parker = ordered ? null : parkerOf(craft, own, other, theirs);
+        if (parker === other && a && !waitsOn(craft, other)) choice = 'craft';
+        else if (parker === craft && b && !waitsOn(other, craft)) choice = 'other';
+        if (parker) late[choice ? 'parkRuled' : 'parkKept']++;
         if (!choice) {
           if (!a && !b) continue;
           if (!a) choice = 'other';
@@ -2143,10 +2166,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
 
   /** The first own station whose swept body touches a parked aircraft's body. */
   function parkedConflict(craft: Craft, own: Span[], other: Craft) {
-    const body = bodyAt(other, other.pose!.position, other.pose!.headingRad);
+    return bodyConflict(craft, own, bodyAt(other, other.pose!.position, other.pose!.headingRad));
+  }
+  /** The first own station whose swept body touches `body`. */
+  function bodyConflict(craft: Craft, own: Span[], body: Body) {
     for (const { leg, fromM } of own) {
       const box = sweepBox.get(leg) ?? (sweptLeg(craft, leg), sweepBox.get(leg)!);
-      const reach = Math.max(other.lengthM, other.type.spanM) + cellM;
+      const reach = Math.max(body.length, body.span) + cellM;
       if (
         body.x < box.minX - reach ||
         body.x > box.maxX + reach ||
@@ -2162,6 +2188,59 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (first < Infinity) return { leg, m: first };
     }
     return null;
+  }
+
+  /** TASK-339: the leg at whose end an aircraft's movement ends parked (a stand, or a tow's rest
+   * point), or null: it leaves by a runway, or has no movement on the ground planned. */
+  function stopLeg(craft: Craft): Leg | null {
+    if (craft.mode === 'parked') {
+      const a = craft.admission;
+      return a && (a.next[0]?.kind === 'park' || a.next[0]?.kind === 'rest')
+        ? a.legs.at(-1)!
+        : null;
+    }
+    if (craft.mode !== 'ground') return null;
+    let leg = craft.leg!;
+    for (const n of craft.next) {
+      if (n.kind === 'taxi') leg = n.leg;
+      else return n.kind === 'park' || n.kind === 'rest' || n.kind === 'return' ? leg : null;
+    }
+    return null;
+  }
+  /** Its body where it comes to rest at the end of `leg` (as `park` places it). */
+  const stopBodies = new WeakMap<Leg, Body>();
+  function stopBody(craft: Craft, leg: Leg) {
+    let body = stopBodies.get(leg);
+    if (!body) {
+      const pose = poseAt(leg, Math.max(0, leg.endM));
+      body = bodyAt(craft, pose.position, pose.headingRad);
+      stopBodies.set(leg, body);
+    }
+    return body;
+  }
+  /** Aircraft not yet on the ground at their airport: landing ordering stays as it is. */
+  const landingSide = (craft: Craft) =>
+    craft.mode === 'queued' || craft.mode === 'air' || craft.mode === 'waiting';
+  /** TASK-339: of two aircraft whose remaining movements meet, the one whose movement ends parked
+   * or at rest with its body in the other's remaining way (and not the other way round): it goes
+   * second, as once there it would stay until it moves again. Not for an arrival not yet on the
+   * ground, nor for one parked in the way of an aircraft not yet started (that one does not start
+   * while it stands there). `stop`: `craft`'s stop leg where it is not yet admitted. */
+  function parkerOf(
+    craft: Craft,
+    own: Span[],
+    other: Craft,
+    theirs: Span[],
+    stop?: Leg | null,
+  ): Craft | null {
+    if (landingSide(craft) || landingSide(other) || !theirs.length) return null;
+    const mine = stop === undefined ? stopLeg(craft) : stop;
+    const their = stopLeg(other);
+    if (!mine && !their) return null;
+    const iBlock =
+      !!mine && !unstarted(other) && !!bodyConflict(other, theirs, stopBody(craft, mine));
+    const theyBlock = !!their && !!bodyConflict(craft, own, stopBody(other, their));
+    return iBlock === theyBlock ? null : iBlock ? craft : other;
   }
 
   function commitOrder(craft: Craft, decided: NonNullable<ReturnType<typeof order>>) {
@@ -2356,7 +2435,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ? PREF_FACTOR
         : 1
       : (flowFactor?.[arc] ?? 1);
-    const blocked = parkedInTheWay(craft, edge) ? PARKED_FACTOR : 1;
+    const blocked =
+      parkedInTheWay(craft, edge) || (avoiding.length > 0 && avoidedOn(craft, edge))
+        ? PARKED_FACTOR
+        : 1;
     return edgeLocks[edge]!.some((l) => l.id !== craft.id && l.dir === -dir)
       ? 3 * flow * blocked
       : flow * blocked;
@@ -2384,13 +2466,43 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       else parkedNear.set(edge.idx, [craft]);
     }
   }
+  /** TASK-339: aircraft standing still in the way of a parked one's next movement, waiting for it
+   * to leave; while it plans, its route keeps off their bodies as off parked ones. */
+  let avoiding: Craft[] = [];
+  const avoidHits = new Map<number, boolean>();
+  function avoidedOn(craft: Craft, edgeIdx: number) {
+    let hit = avoidHits.get(edgeIdx);
+    if (hit !== undefined) return hit;
+    const edge = graph.edges[edgeIdx]!;
+    hit = false;
+    for (const other of avoiding) {
+      const body = bodyAt(other, other.pose!.position, other.pose!.headingRad);
+      const reach = Math.max(other.lengthM, other.type.spanM) / 2 + graph.maxSpanM / 2 + 10;
+      const box = edgeBoxes[edgeIdx]!;
+      if (
+        body.x < box.minX - reach ||
+        body.x > box.maxX + reach ||
+        body.y < box.minY - reach ||
+        body.y > box.maxY + reach
+      )
+        continue;
+      for (let m = 0; m <= edge.lengthM && !hit; m += 4) {
+        const at = pointAtDistance(edge.line, edge.cumulative, m);
+        const heading = headingAtDistance(edge.line, edge.cumulative, m);
+        hit = bodiesTouch(body, bodyAt(craft, at, heading), 0);
+      }
+      if (hit) break;
+    }
+    avoidHits.set(edgeIdx, hit);
+    return hit;
+  }
   function parkedInTheWay(craft: Craft, edgeIdx: number) {
     const list = parkedNear.get(edgeIdx);
     if (!list) return false;
     const edge = graph.edges[edgeIdx]!;
     for (let i = list.length - 1; i >= 0; i--) {
       const other = list[i]!;
-      if (other.mode !== 'parked' || other.stand < 0) {
+      if (other.mode !== 'parked') {
         list.splice(i, 1);
         continue;
       }
@@ -3262,7 +3374,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
     unlockAll(craft);
     claimBody(craft);
-    if (stand < 0) return;
+    // TASK-339: a tow at its rest point (no stand) is in the way as one at a stand is.
+    if (stand < 0 && craft.type.performance.kind !== 'fixedWing') return;
     noteParked(craft);
     // Those whose way it now stands in wait until it leaves again: moving, or ordered and not
     // started (TASK-329: they do not start while it is there).
@@ -3440,6 +3553,61 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const request = craft.request!;
     if (!craft.admission) {
       let planned: { legs: Leg[]; next: Next[]; lineUpU?: number } | null = null;
+      // TASK-339: those that wait for it to leave from where they stand in its way: its route
+      // keeps off them where it can (they cannot give way to it).
+      avoiding = crafts.filter(
+        (o) =>
+          o.mode === 'ground' &&
+          o.speedMps === 0 &&
+          o.waits.some((w) => w.pred === craft && w.predM === Infinity && !passed(w)),
+      );
+      if (avoiding.length) late.avoidPlans++;
+      try {
+        planned = plan();
+      } finally {
+        avoiding = [];
+        avoidHits.clear();
+      }
+      if (!planned) return;
+      const { legs } = planned;
+      for (const leg of legs.slice(0, -1)) addGates(craft, leg, -1);
+      craft.rank = ++admitted;
+      const stop = planned.next[0]!.kind === 'takeoff' ? null : legs.at(-1)!;
+      const decided = order(
+        craft,
+        legs.map((leg) => ({ leg, fromM: 0 })),
+        stop,
+      );
+      if (!decided) return;
+      // TASK-339: not while its way passes an aircraft parked or at rest across it with no
+      // movement planned (it would wait in the way until that one leaves); it plans again on a
+      // later try.
+      if (
+        decided.mine.some(
+          (w) =>
+            w.predM === Infinity &&
+            w.pred.mode === 'parked' &&
+            !w.pred.admission &&
+            !w.pred.request,
+        )
+      ) {
+        late.startRefused++;
+        return;
+      }
+      // T330BLK2: not while its way passes an aircraft parked across it with no movement planned
+      // (it would wait in the way until that one leaves); it plans again on a later try.
+      if (
+        T330BLK2 &&
+        decided.mine.some((w) => w.predM === Infinity && w.pred.mode === 'parked' && !w.pred.admission)
+      ) {
+        late.blockedTries++;
+        return;
+      }
+      commitOrder(craft, decided);
+      craft.admission = { legs, next: planned.next };
+    }
+    function plan(): { legs: Leg[]; next: Next[]; lineUpU?: number } | null {
+      let planned: { legs: Leg[]; next: Next[]; lineUpU?: number } | null = null;
       if (request.kind === 'departure') {
         const runway = graph.runways[craft.runway]!;
         const departure = departurePlan(craft, runway, request.end);
@@ -3463,26 +3631,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           if (request.stand < 0) restLegs.add(legs.legs.at(-1)!);
         }
       }
-      if (!planned) return;
-      const { legs } = planned;
-      for (const leg of legs.slice(0, -1)) addGates(craft, leg, -1);
-      craft.rank = ++admitted;
-      const decided = order(
-        craft,
-        legs.map((leg) => ({ leg, fromM: 0 })),
-      );
-      if (!decided) return;
-      // T330BLK2: not while its way passes an aircraft parked across it with no movement planned
-      // (it would wait in the way until that one leaves); it plans again on a later try.
-      if (
-        T330BLK2 &&
-        decided.mine.some((w) => w.predM === Infinity && w.pred.mode === 'parked' && !w.pred.admission)
-      ) {
-        late.blockedTries++;
-        return;
-      }
-      commitOrder(craft, decided);
-      craft.admission = { legs, next: planned.next };
+      return planned;
     }
     const { legs } = craft.admission;
     const first = legs[0]!;
@@ -4007,6 +4156,33 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         return true;
       }
       return false;
+    }
+  }
+
+  /** TASK-339: a taxiing departure ordered to wait for an aircraft parked or at rest across its way
+   * with no movement planned re-routes around it while a turn short of it is still ahead. */
+  function rerouteParked() {
+    for (const craft of crafts) {
+      if (craft.mode !== 'ground') continue;
+      const takeoff = craft.next.findIndex((n) => n.kind === 'takeoff');
+      if (takeoff < 0) continue;
+      const before = craft.next[takeoff - 1];
+      const target = takeoff === 0 ? craft.leg! : before?.kind === 'taxi' ? before.leg : null;
+      if (!target) continue;
+      const w = craft.waits.find(
+        (w) =>
+          w.predM === Infinity &&
+          w.leg === target &&
+          w.pred.mode === 'parked' &&
+          !w.pred.admission &&
+          !w.pred.request &&
+          !passed(w),
+      );
+      if (!w || (target === craft.leg && w.atM - craft.stationM < 20)) continue;
+      late.blockedTries++;
+      blockedBefore = w.atM;
+      if (reroute(craft, w.pred)) late.blockedReroutes++;
+      blockedBefore = Infinity;
     }
   }
 
@@ -4587,10 +4763,28 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       } else if (craft.mode === 'air') stepAir(craft, timeS);
       if (craft.mode === 'ground') stepGround(craft, timeS);
     }
+    // TASK-339: time spent standing in a wait on an aircraft parked or at rest with no movement
+    // admitted.
+    for (const craft of crafts)
+      if (
+        craft.mode === 'ground' &&
+        craft.speedMps === 0 &&
+        craft.waits.some(
+          (w) =>
+            w.predM === Infinity &&
+            w.leg === craft.leg &&
+            w.pred.mode === 'parked' &&
+            !w.pred.admission &&
+            craft.stationM >= w.atM - 1 &&
+            !passed(w),
+        )
+      )
+        parkedBlockS += dtS;
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;
       if (ORDER_HORIZON_M < Infinity) extendOrder();
       if (T330BLK) rerouteBlocked();
+      else rerouteParked();
       breakRings();
       if (
         Math.floor(timeS / 3600) > Math.floor((timeS - RETRY_S) / 3600) &&
@@ -4850,6 +5044,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     },
     typeOf: (id: number) => crafts[id - 1]?.type,
     runwayOccupant: (runway: number) => runwayOccupant[runway]!,
+    /** TASK-339: seconds aircraft have stood waiting on a parked aircraft with no admission. */
+    parkedBlockS: () => parkedBlockS,
     hash(word: (hash: number, value: number) => number, hash: number) {
       hash = word(hash, crafts.length);
       for (const craft of crafts) {

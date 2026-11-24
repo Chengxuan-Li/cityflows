@@ -428,6 +428,7 @@ const summary = {
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
   ...(checks && {
     overlapCount,
+    parkedBlockS: Math.round(fleet.parkedBlockS()),
     runwayConflicts,
     runwayShared,
     runwayCrossersApart,
