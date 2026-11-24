@@ -686,6 +686,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const edgeLocks: { id: number; dir: number }[][] = graph.edges.map(() => []);
   const crossingClosed = new Uint8Array(graph.crossings.length);
   const edgeBoxes = graph.edges.map((edge) => boxOf(edge.line));
+  const runwayBoxes = graph.runways.map((runway) => boxOf(runway.line));
+  /** Per edge, found when first needed: its stretches (edge stations) on a runway's pavement,
+   * within half the runway's width of its line and between its ends. */
+  const pavementOf: ([number, number, number][] | undefined)[] = [];
   const holdAt = new Map(graph.holds.map((h) => [h.node, h]));
   const glideRad = ((steepApproachDeg[graph.icao ?? ''] ?? GLIDE_DEG) * Math.PI) / 180;
   /** TASK-301: the glide slope the airfield's PAPI units are set to. */
@@ -926,6 +930,43 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return stand && (atEnd ? segment.endNode : segment.startNode) === stand.stop ? stand : null;
   }
 
+  /** TASK-338: where a taxiway or lead-in edge runs on a runway's pavement (sampled every 2 m). */
+  function pavement(edgeIdx: number) {
+    const cached = pavementOf[edgeIdx];
+    if (cached) return cached;
+    const found: [number, number, number][] = [];
+    const edge = graph.edges[edgeIdx]!;
+    const box = edgeBoxes[edgeIdx]!;
+    if (edge.kind !== 'runway')
+      for (const runway of graph.runways) {
+        const reachM = runway.widthM / 2;
+        const near = runwayBoxes[runway.idx]!;
+        if (
+          box.minX > near.maxX + reachM ||
+          box.maxX < near.minX - reachM ||
+          box.minY > near.maxY + reachM ||
+          box.maxY < near.minY - reachM
+        )
+          continue;
+        let from = -1;
+        let last = 0;
+        for (let m = 0; ; m = Math.min(edge.lengthM, m + 2)) {
+          const at = nearestOnPolyline(runway.line, pointAtDistance(edge.line, edge.cumulative, m));
+          const on = at.away <= reachM && at.along > 0 && at.along < runway.lengthM;
+          if (on && from < 0) from = m;
+          if (!on && from >= 0) {
+            found.push([from, last, runway.idx]);
+            from = -1;
+          }
+          last = m;
+          if (m >= edge.lengthM) break;
+        }
+        if (from >= 0) found.push([from, edge.lengthM, runway.idx]);
+      }
+    pavementOf[edgeIdx] = found;
+    return found;
+  }
+
   function buildLeg(craft: Craft, mode: Leg['mode'], segments: Segment[]): Leg {
     const raw: Vec2[] = [];
     const bounds: [number, number][] = [];
@@ -973,10 +1014,26 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     );
     const pieces: Piece[] = [];
     const runwayRanges: Leg['runwayRanges'] = [];
+    const onPavement: Leg['runwayRanges'] = [];
     segments.forEach((segment, i) => {
       const [a, b] = line.bounds[i]!;
       const startM = map(a),
         endM = map(b);
+      if (segment.runway < 0 && segment.edge >= 0) {
+        const lo = Math.min(segment.fromE, segment.toE);
+        const hi = Math.max(segment.fromE, segment.toE);
+        const raw = (e: number) =>
+          a +
+          ((b - a) * Math.abs(e - segment.fromE)) / (Math.abs(segment.toE - segment.fromE) || 1);
+        for (const [p, q, runway] of pavement(segment.edge)) {
+          const from = Math.max(p, lo);
+          const to = Math.min(q, hi);
+          if (to <= from) continue;
+          const x = map(raw(from));
+          const y = map(raw(to));
+          onPavement.push([Math.min(x, y), Math.max(x, y), runway]);
+        }
+      }
       if (segment.runway >= 0) {
         const last = runwayRanges.at(-1);
         if (last && last[2] === segment.runway && last[1] >= startM - 1e-6) last[1] = endM;
@@ -1004,6 +1061,20 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           locked: false,
         });
     });
+    // TASK-338: a taxiway stretch on a runway's pavement is on that runway (its gate holds it),
+    // where it lies more than HOLD_FALLBACK_M from the ranges the leg has by its runway pieces
+    // and nodes. Such a stretch is an OSM taxiway drawn along the runway, or one through a node
+    // beside a runway node but not joined to it (Heathrow N1/N2E at the 27L end). Nearer ones are
+    // covered by the gate there; a rapid exit drawn tangent to the centreline is left alone.
+    const ranges = runwayRanges.slice();
+    for (const r of onPavement)
+      if (
+        !ranges.some(
+          ([from, to, runway]) =>
+            runway === r[2] && from - HOLD_FALLBACK_M <= r[1] && to + HOLD_FALLBACK_M >= r[0],
+        )
+      )
+        runwayRanges.push(r);
     let crossings: Leg['crossings'] | undefined;
     return {
       mode,

@@ -351,9 +351,11 @@ test.each([
     expect(departure.some(({ state }) => state === 'holding')).toBe(waits);
     const grant = departure.find(({ state }) => state === 'line-up')!;
     const arrivalAtGrant = landing.find(({ timeS }) => timeS === grant.timeS)!;
+    // TASK-338: the exit connector at x = 300 runs along 36/18's pavement up to the parallel
+    // taxiway at y = 200, so the arrival holds 36/18 until it is off it (before: past y = 70).
     if (waits) {
       expect(arrivalAtGrant.y).toBeGreaterThan(70);
-      expect(arrivalAtGrant.y).toBeLessThan(100);
+      expect(arrivalAtGrant.onRunway).toBe(false);
     } else expect(arrivalAtGrant.onRunway).toBe(true);
   },
 );
