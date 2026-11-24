@@ -3581,17 +3581,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!decided) return;
       // TASK-339: not while its way passes an aircraft parked or at rest across it with no
       // movement planned (it would wait in the way until that one leaves); it plans again on a
-      // later try.
-      if (
-        decided.mine.some(
-          (w) =>
-            w.predM === Infinity &&
-            w.pred.mode === 'parked' &&
-            !w.pred.admission &&
-            !w.pred.request,
-        )
-      ) {
+      // later try. A wait on its pushback keeps it at its stand anyway: it keeps its place.
+      const parkedBlock = decided.mine.find(
+        (w) =>
+          w.predM === Infinity &&
+          w.pred.mode === 'parked' &&
+          !w.pred.admission &&
+          !w.pred.request &&
+          !(w.leg === legs[0] && legs[0].mode === 'pushback'),
+      );
+      if (parkedBlock) {
         late.startRefused++;
+        if (DBG330)
+          console.error('REFUSED', nowS.toFixed(0), craft.id, request.kind, 'by', parkedBlock.pred.id, parkedBlock.pred.stand, 'atLeg', legs.indexOf(parkedBlock.leg), parkedBlock.atM.toFixed(0));
         return;
       }
       // T330BLK2: not while its way passes an aircraft parked across it with no movement planned
@@ -4778,8 +4780,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             craft.stationM >= w.atM - 1 &&
             !passed(w),
         )
-      )
+      ) {
         parkedBlockS += dtS;
+        if (DBG330 && Math.floor(timeS / 60) > Math.floor((timeS - dtS) / 60))
+          console.error('PBLOCK', timeS.toFixed(0), craft.id, craft.stationM.toFixed(0), 'by', JSON.stringify(craft.waits.filter((w) => w.predM === Infinity && w.leg === craft.leg && !passed(w)).map((w) => [w.pred.id, w.pred.stand, w.pred.request?.kind ?? '-'])), craft.next.map((n) => n.kind).join(','));
+      }
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;
       if (ORDER_HORIZON_M < Infinity) extendOrder();
