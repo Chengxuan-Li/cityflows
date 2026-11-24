@@ -359,7 +359,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-334](tasks/TASK-334.md) | render | Generic tube and New York subway trains | render3d train variants | 332 | Piccadilly and Philadelphia variants, real car length | merged 2026-11-23 (`c9932be`, one visual round: close-coupled, 75 ft New York car) |
 | [TASK-335](tasks/TASK-335.md) | render | Generic road vehicle models | render3d vehicles, parked cars | - | extents per class, stable choice, shadow cost, render budget | merged 2026-11-23 (`9f2a7d0`, one visual round; sim and 2D hashes identical, 3D p95 within noise) |
 | [TASK-336](tasks/TASK-336.md) | render | Night halo shader compiles in every city | `render3d/lights.ts` | 335 | no shader error at night, halos unchanged | done 2026-11-23 (lead) |
-| [TASK-337](tasks/TASK-337.md) | sim | Aircraft wait at runway holds clear of rolling widebodies | `sim/aircraft.ts` | 330 pilot | no hold overlap at Zurich seed 2, airports not worse, cities identical | in progress 2026-11-23 (Codex) |
+| [TASK-337](tasks/TASK-337.md) | sim | Aircraft wait at runway holds clear of rolling widebodies | `sim/aircraft.ts` | 330 pilot | no hold overlap at Zurich seed 2, airports not worse, cities identical | merged 2026-11-24 (`92bb5ea`; Zurich mixed per seed, total +10, overlaps 4 to 1; Heathrow identical) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5908,6 +5908,15 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-337 (Codex; merged `92bb5ea`): an aircraft stopping short of a runway steps back along its route, 2 m at a
+  time and at most 150 m, until its body is clear of the widest fixed-wing type the runway takes rolling on its
+  centreline (rule from the TASK-330 pilot `1b57f5a8`, ported alone). Zurich 730 full days, seeds 1-3: completed
+  581/578/604 to 577/597/599 (total +10), go-arounds 0/0/0 to 2/3/0, seed 2's 24:00 gridlock gone, overlaps 2/2/0 to
+  0/1/0 (the remaining one is an unrelated taxiway pair); Boston and London City identical; Heathrow seed 1 full day
+  identical (lead run: 367 completed, 0 go-arounds, taxi-out 34.0 min). The contract's per-seed "not worse" gate missed
+  by 4-5 movements on seeds 1 and 3; the lead merged on the total and the removed overlaps (owner: "you may move the
+  fixes"). A grant-timing variant gridlocked all three Zurich seeds and was dropped. Existing cities unchanged; lead
+  tiers green (check 2,113, city 280, traffic light 5, e2e light 63, places 11, airports, Freiburg 1710089250).
 - TASK-329 (Claude Code subagent, Opus 5.5 high; merged `be7aef1`): an aircraft that starts (pushback, tow, arrival
   on approach) goes before departures and tows ranked earlier but still at their stands; nothing starts while it would
   wait for a queued arrival or an aircraft parked in its way; newly parked aircraft block ordered-but-unstarted ones;
@@ -6482,6 +6491,14 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-24 (owner): "you may move the fixes": the TASK-330 pilot's hold-clearance rule goes to main alone as
+  TASK-337 (merged). On 2026-11-23 the owner gave the TASK-330 Phase 1e landing-flow verdict:
+  - the next arrival holds the runway with priority over crossings;
+  - crossings open behind the lander and run in parallel;
+  - a queue guard limits waiting to cross.
+  The owner then said "Yes, fix them" (go-arounds and Zurich overlaps) and "build it and test with lightweight tests"
+  (the later-exit fallback). The fallback was not kept: a ring lock at Heathrow. The pilot state is `1b57f5a8` on
+  `task/330-landing-flow`, not for merge.
 - 2026-11-23 (owner): "realistic train models and car models without loss of performance": one tram, one light-rail
   (DLR), an Elizabeth-line EMU, a DB locomotive with coaches, an S-Bahn EMU, and (follow-up) "1 generic tube style
   train and 1 generic nyc subway train"; cars "fine with a few generic models"; aircraft windows show two rows close
