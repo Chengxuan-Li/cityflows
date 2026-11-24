@@ -34,6 +34,7 @@ import {
   aircraftCode,
   aircraftCodes,
   aircraftTypes,
+  codeSpanLimitM,
   type AircraftClass,
   type AircraftType,
   type FixedWingPerformance,
@@ -436,7 +437,7 @@ const bodyParts = [
   [-0.43, 0.06, 1 / 6],
 ] as const;
 
-function bodyAt(craft: Craft, position: Vec2, heading: number): Body {
+function bodyAt(craft: Pick<Craft, 'lengthM' | 'type'>, position: Vec2, heading: number): Body {
   return {
     ...position,
     c: Math.cos(heading),
@@ -1019,6 +1020,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     };
   }
 
+  const widestByCode = aircraftCodes.map((code) => {
+    const type = aircraftTypes
+      .filter((t) => t.performance.kind === 'fixedWing' && t.spanM < codeSpanLimitM[code])
+      .sort((a, b) => b.spanM - a.spanM || b.lengthM - a.lengthM)[0];
+    return type && { type, lengthM: type.lengthM };
+  });
+
+  /** Step back along the leg when the mapped stop is inside a rolling aircraft's wingspan. */
+  function clearHold(craft: Craft, leg: Leg, runway: AirsideRunwayC, holdM: number) {
+    const roller = widestByCode[runway.maxCode];
+    if (!roller) return holdM;
+    for (let back = 0; back <= 150 && holdM - back > craft.lengthM / 2; back += 2) {
+      const station = holdM - back;
+      const pose = poseAt(leg, station);
+      const body = bodyAt(craft, pose.position, pose.headingRad);
+      const near = nearestOnPolyline(runway.line, pose.position);
+      if (!bodiesTouch(body, bodyAt(roller, near.point, runway.ends[0]!.heading))) return station;
+    }
+    return holdM;
+  }
+
   /** Holding positions on a leg: a gate before every runway its pieces reach from a taxiway,
    * at the mapped hold within 300 m before it, else `HOLD_FALLBACK_M` short of the runway node;
    * released past the next hold beyond (or the fallback distance past the runway node). */
@@ -1034,7 +1056,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ({ endM, endNode }) =>
           endM > leaveM && endM <= leaveM + 300 && holdAt.get(endNode)?.runway === runway,
       );
-      const holdM = Math.max(half, (before?.endM ?? entryM - HOLD_FALLBACK_M) - half);
+      const holdM = clearHold(
+        craft,
+        leg,
+        graph.runways[runway]!,
+        Math.max(half, (before?.endM ?? entryM - HOLD_FALLBACK_M) - half),
+      );
       const vacateM =
         leaveM >= leg.endM && runway === departureRunway
           ? Infinity
