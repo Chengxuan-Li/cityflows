@@ -7,6 +7,7 @@ import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-sch
 import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircraft';
 import { createFlightOperations } from '../src/sim/flight-operations';
 import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
+import { nearestOnPolyline } from '../src/geo/polyline';
 
 // TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
 // second, with each movement's time split by the state it spends it in.
@@ -172,6 +173,8 @@ function sample(timing: Timing, pose: AircraftPoseSnapshot) {
 const checkRunwayConflicts = runwayConflictCheck(graph);
 let overlapCount = 0;
 let runwayConflicts = 0;
+let runwayShared = 0;
+const rcKinds = new Map<string, number>();
 let peakStuck = 0;
 let peakActive = 0;
 
@@ -220,8 +223,80 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    overlapCount += overlaps(poses).length;
-    runwayConflicts += checkRunwayConflicts(poses);
+    {
+      const found = overlaps(poses);
+      overlapCount += found.length;
+      if (found.length && process.env.OVDBG)
+        for (const pair of found) {
+          const [a, b] = pair.map((r: string) => poses.find((p) => p.registration === r)!);
+          console.error(
+            'OVERLAP',
+            (timeS / 3600).toFixed(3),
+            JSON.stringify(
+              [a, b].map(
+                (p) =>
+                  p && [
+                    p.id,
+                    p.typeId,
+                    p.state,
+                    Math.round(p.x),
+                    Math.round(p.y),
+                    p.speedMps.toFixed(1),
+                    p.stand,
+                    p.runwayEnd,
+                  ],
+              ),
+            ),
+          );
+        }
+    }
+    {
+      const found = checkRunwayConflicts(poses);
+      if (found) {
+        // TASK-330 Phase 1e: of the pairs on one runway, a crossing aircraft (taxi or tow) at
+        // least 150 m behind a landing roll or take-off moving away (the owner's crossing behind
+        // a lander); RCDBG classifies the rest.
+        const on = poses.filter((p) => p.onRunway);
+        const runwayOf = (p: (typeof on)[number]) => {
+          let best = -1;
+          let away = Infinity;
+          for (const r of graph.runways) {
+            const near = nearestOnPolyline(r.line, p);
+            if (near.away <= r.widthM / 2 + 5 && near.away < away) {
+              away = near.away;
+              best = r.idx;
+            }
+          }
+          return best;
+        };
+        const rw = on.map(runwayOf);
+        let apart = 0;
+        for (let i = 0; i < on.length; i++)
+          for (let j = i + 1; j < on.length; j++) {
+            if (rw[i]! < 0 || rw[i] !== rw[j]) continue;
+            const a = on[i]!,
+              b = on[j]!;
+            const crossing = (p: typeof a) => p.state === 'taxi' || p.state === 'tow';
+            const note = (k: string) => {
+              if (process.env.RCDBG) rcKinds.set(k, (rcKinds.get(k) ?? 0) + 1);
+            };
+            if (crossing(a) === crossing(b)) {
+              note(`both ${crossing(a) ? 'crossing' : 'moving'}: ${a.state}/${b.state}`);
+              continue;
+            }
+            const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
+            const back =
+              (mover.x - crosser.x) * Math.cos(mover.heading) +
+              (mover.y - crosser.y) * Math.sin(mover.heading);
+            if (back >= 150) apart++;
+            note(
+              `${back >= 150 ? 'behind>=150' : back >= 0 ? 'behind<150' : 'ahead'} of ${mover.state}`,
+            );
+          }
+        runwayConflicts += found;
+        runwayShared += Math.min(found, apart);
+      }
+    }
   }
   if (timeS % 3600 === 0 && timeS > startS)
     console.info(
@@ -318,7 +393,7 @@ const summary = {
   endStuck5: stuck5,
   endQueued: fleet.metrics().queuedArrivals,
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
-  ...(checks && { overlapCount, runwayConflicts }),
+  ...(checks && { overlapCount, runwayConflicts, runwayShared }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
   arrivalStages: stages(arrivals, [
@@ -364,3 +439,4 @@ const summary = {
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));
+if (process.env.RCDBG) console.info('RCKINDS', JSON.stringify(Object.fromEntries(rcKinds)));
