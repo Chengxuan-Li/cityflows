@@ -70,12 +70,13 @@ import { mapPalettes, style, type MapPalette } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import { NightLayer, tinted } from './layers/night';
 import {
-  defaultLighting,
+  defaultVisual,
   lightKey,
   platformLights,
   sceneLight,
-  type LightingSettings,
+  type VisualSettings,
 } from './lighting';
+import type { LonLat } from '../geo/projection';
 import type {
   AircraftPose,
   Pick,
@@ -197,7 +198,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
-  setLighting(settings: LightingSettings, timeS: number): void;
+  setLighting(settings: VisualSettings, timeS: number, origin?: LonLat): void;
   setMapPalette(palette: MapPalette): void;
 } {
   const app = new Application();
@@ -234,9 +235,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-301: airfield and aircraft lights, with the evening's other glows.
   const airfieldLights = new AirfieldLights2D(night.textures.glow);
   night.container.addChild(airfieldLights.container);
-  let lighting = defaultLighting;
+  let lighting = defaultVisual;
   let lightMinute = 0;
-  let light = sceneLight(defaultLighting, 0);
+  let lightOrigin: LonLat | undefined;
+  let light = sceneLight(defaultVisual, 0);
   let drawnLight = '';
   // TASK-298: aircraft over the map, under the evening tint.
   const aircraft = new Graphics();
@@ -1382,13 +1384,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       updateLabels();
     },
-    setLighting(settings, timeS) {
+    setLighting(settings, timeS, origin) {
       // Following the clock, the light moves once a simulated minute.
       const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
-      if (settings === lighting && minute === lightMinute) return;
+      if (settings === lighting && minute === lightMinute && origin === lightOrigin) return;
       lighting = settings;
       lightMinute = minute;
-      light = sceneLight(settings, minute * 60);
+      lightOrigin = origin;
+      light = sceneLight(settings, minute * 60, undefined, origin);
       applyLight();
     },
     setDisconnected(lanes) {

@@ -4,7 +4,7 @@ import { buildCity } from '../../fixtures/build-city';
 import { compile } from '../../network';
 import { cityGrades } from '../grades';
 import type { PresentationSnapshot } from '../vehicle-pose';
-import { sceneLight } from '../lighting';
+import { defaultVisual, sceneLight } from '../lighting';
 import { NightLayer, tinted } from './night';
 import { deckCover } from './shadows';
 import { createVehicleLayer, Vehicles } from './vehicles';
@@ -30,8 +30,7 @@ it('tints the map by the ambient light and leaves Day untouched', () => {
   stubCanvas();
   try {
     const night = new NightLayer();
-    const light = (mode: 'day' | 'evening') =>
-      sceneLight({ mode, exposure: 1, season: 'equinox' }, 0);
+    const light = (mode: 'day' | 'evening') => sceneLight({ ...defaultVisual, mode }, 0);
     night.setLight(light('evening'), { streetLights: true, signals: true, rail: true });
     expect(night.mapTint).not.toBe(0xffffff);
     night.setLight(light('day'), { streetLights: true, signals: true, rail: true });
