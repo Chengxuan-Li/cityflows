@@ -2278,6 +2278,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return iBlock === theyBlock ? null : iBlock ? craft : other;
   }
 
+  /** TASK-340: a landing aircraft's wait on its way off the runway (short of where its tail is
+   * off) for one that is to stop at a runway hold not yet granted, with its body there in that
+   * way, lasts until that one's tail is past its hold (passing the conflict alone, it could stop
+   * there and stand in the landing aircraft's way). */
+  function holdClear(owner: Craft, w: Wait) {
+    if (w.predM === Infinity || w.leg.gates[0]?.holdM !== -Infinity) return;
+    if (w.atM >= safeOf(owner, w.leg)) return;
+    const pred = w.pred;
+    for (const g of w.predLeg.gates) {
+      if (g.granted || g.holdM === -Infinity || g.holdM + pred.lengthM / 2 <= w.predM) continue;
+      if (pred.mode === 'ground' && pred.leg === w.predLeg && pred.stationM > g.holdM) continue;
+      const pose = poseAt(w.predLeg, g.holdM);
+      const at = bodyConflict(
+        owner,
+        [{ leg: w.leg, fromM: 0 }],
+        bodyAt(pred, pose.position, pose.headingRad),
+      );
+      if (at && at.m < safeOf(owner, w.leg))
+        w.predM = Math.max(w.predM, g.holdM + pred.lengthM / 2 + SAMPLE_M);
+    }
+  }
   /** `check` (TASK-340): a wait between two moving aircraft (or one moving and an arrival in the
    * air) that would close a ring of waits first opens the chain behind it where a member can
    * still give way. The progressive order checks its own waits, and ring breaking needs none. */
@@ -2294,8 +2315,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         if (waitsOn(pred, owner)) openChain(pred, owner);
       }
     }
+    for (const w of decided.mine) holdClear(craft, w);
     craft.waits.push(...decided.mine);
     for (const { owner, wait } of decided.theirs) {
+      holdClear(owner, wait);
       owner.waits.push(wait);
       // A moving aircraft gives up what it claimed beyond its new stop.
       if (owner.mode === 'ground' && owner.leg === wait.leg) {
@@ -3063,6 +3086,16 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // to come to rest with its body across its way in (it would park in its way after it
     // appears, and could give way to it no more).
     if (restersAcross(craft, [leg]).some((o) => o.mode === 'ground')) return false;
+    // Nor while it is to park with its body across the way of one moving on the ground that has
+    // not yet passed there (TASK-339: that one would wait there until it leaves again).
+    const stopped = stopBody(craft, leg);
+    for (const o of crafts)
+      if (
+        o.mode === 'ground' &&
+        !o.waits.some((w) => w.pred === craft && w.predM === Infinity) &&
+        bodyConflict(o, remaining(o), stopped)
+      )
+        return false;
     for (const [other] of given) {
       if (other.mode !== 'ground') continue;
       if (bodyConflict(other, remaining(other), stopBody(craft, leg))) return false;
