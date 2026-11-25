@@ -2102,7 +2102,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               ? [c.b1 - SAMPLE_M, c.x2 + SAMPLE_M]
               : [c.x1 - SAMPLE_M, c.b2 + SAMPLE_M];
           if (ws.some((w) => covers(w, atM, predM, c.follow))) return true;
-          if (!chainOf(from, to, (u, p) => u === from && p === to)) return true;
+          // A wait further on along the waiter's way does not cover a crossing conflict before it
+          // (once that wait is passed, the waiter may already be in it): that one is ordered now,
+          // in the pair's direction, while the waiter can still stop short. (On a stretch they
+          // follow each other on, the leader's progress moves the conflict's start.)
+          const before = !c.follow && !ws.some((w) => w.atM <= atM + 1);
+          if (!before && !chainOf(from, to, (u, p) => u === from && p === to)) return true;
           return parkerOf(to, remaining(to), from, remaining(from)) === to;
         };
         const open = near.filter(
