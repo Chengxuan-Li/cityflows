@@ -4,6 +4,8 @@ import { nearestOnPolyline } from '../../src/geo/polyline';
 import { compile } from '../../src/network';
 import { createAircraftFleet } from '../../src/sim/aircraft';
 import { createFlightOperations } from '../../src/sim/flight-operations';
+import { createGroundVehicles } from '../../src/sim/ground-vehicles';
+import { groundOverlaps } from '../sim/ground-vehicle-checks';
 import { overlaps } from '../sim/aircraft-checks';
 import { limit } from '../timeouts';
 
@@ -21,6 +23,14 @@ test(
     const graph = result.compiled.airside;
     const fleet = createAircraftFleet(graph, 1);
     const operations = createFlightOperations(fleet, 1, 0);
+    // TASK-316: with its ground vehicles, which the aircraft never see.
+    const ground = createGroundVehicles(result.compiled, {
+      snapshot: () => fleet.snapshot(),
+      movementSpace: () => fleet.movementSpace(),
+      drainTurnarounds: () => operations.drainTurnarounds(),
+    });
+    let vehicleOverlaps = 0;
+    let vehicleAircraftOverlaps = 0;
     const interlocked = graph.runways.map((a) =>
       graph.runways.map((b) => a.idx === b.idx || a.nodes.some((n) => b.nodes.includes(n))),
     );
@@ -40,8 +50,12 @@ test(
     for (let step = 0; step < 864_000; step++) {
       operations.step(step / 10);
       fleet.step(step / 10);
+      ground.step(step / 10);
       if (step % 10 !== 0) continue;
       const aircraft = fleet.snapshot();
+      const vehicles = groundOverlaps(ground.snapshot(), aircraft);
+      vehicleOverlaps += vehicles.withVehicles.length;
+      vehicleAircraftOverlaps += vehicles.withAircraft.length;
       overlapCount += overlaps(aircraft).length;
       const on = aircraft.filter((a) => a.onRunway).map((a) => under(a.x, a.y));
       for (let i = 0; i < on.length; i++)
@@ -57,7 +71,12 @@ test(
     operations.step(86_400);
     const metrics = operations.metrics();
     const transitions = fleet.runwayTransitions();
-    console.info({ metrics, aircraft: fleet.metrics(), transitions, crossingUse });
+    const vehicleMetrics = ground.metrics();
+    console.info({ metrics, aircraft: fleet.metrics(), transitions, crossingUse, vehicleMetrics });
+    console.info({ vehicleOverlaps, vehicleAircraftOverlaps });
+    expect(vehicleOverlaps).toBe(0);
+    expect(vehicleAircraftOverlaps).toBe(0);
+    expect(vehicleMetrics.served).toBeGreaterThan(0.85 * vehicleMetrics.visits);
     expect(metrics.completed / metrics.scheduled).toBeGreaterThanOrEqual(0.98);
     expect(overlapCount).toBe(0);
     expect(runwayConflicts).toBe(0);

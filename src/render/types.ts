@@ -5,6 +5,7 @@ import type { EditOverlay } from './layers/edit-overlay';
 import type { Vec2 } from '../geo/vec2';
 import type { TrainPose } from '../network/trains';
 import type { AircraftVisualPose } from '../sim/aircraft-motion';
+import type { GroundVehiclePose } from '../sim/ground-vehicles';
 
 export interface RoadDifference {
   id: string;
@@ -31,6 +32,8 @@ export interface VehicleSnapshot {
   signals?: SignalStates;
   aircraft?: AircraftPose[];
   airfield?: AirfieldState;
+  /** TASK-316: airside ground vehicles (`sim/ground-vehicles.ts`). */
+  groundVehicles?: GroundVehiclePose[];
 }
 
 /** TASK-301: the airfield's light state as the sim gives it (`sim/aircraft.ts`), by compiled

@@ -79,6 +79,7 @@ import { buildRail, pickRail3D } from './rail';
 import { buildCatenary } from './catenary';
 import { Trains3D } from './trains';
 import { Aircraft3D } from './aircraft';
+import { GroundVehicles3D } from './ground-vehicles';
 import { AircraftModels } from './aircraft-models';
 import { AirfieldLights3D, pixelScale } from './airfield-lights';
 import { Apron3D } from './apron';
@@ -147,6 +148,8 @@ export class Scene3D {
   private overheadVisible = true;
   private trains: Trains3D | undefined;
   private aircraft: Aircraft3D | undefined;
+  /** TASK-316: airside ground vehicles. */
+  private groundVehicles: GroundVehicles3D | undefined;
   /** TASK-318: real aircraft models, kept across cities once loaded. */
   private readonly aircraftModels = new AircraftModels();
   /** TASK-301: airfield lights, the aircraft the camera follows, and the aircraft animation's
@@ -353,6 +356,8 @@ export class Scene3D {
       ? new Aircraft3D(airfieldM, this.aircraftModels, this.invalidate)
       : undefined;
     if (this.aircraft) this.content.add(this.aircraft.group);
+    this.groundVehicles = city.airside ? new GroundVehicles3D(airfieldM) : undefined;
+    if (this.groundVehicles) this.content.add(this.groundVehicles.group);
     this.apron =
       city.airside && source.airport
         ? new Apron3D(source.airport, city.airside, renderedSource.context, airfieldM, (x, y) =>
@@ -865,6 +870,7 @@ export class Scene3D {
     this.trains?.setLights(railLights);
     this.levelCrossings?.setNight(railLights);
     this.aircraft?.setLight(airfieldLights);
+    this.groundVehicles?.setLight(airfieldLights);
     this.apron?.setLight(airfieldLights);
     this.airfieldLights?.setLight(airfieldLights);
     if (this.airfieldLights)
@@ -921,6 +927,12 @@ export class Scene3D {
     this.vehicles.setSnapshot(snapshot);
     this.aircraft?.update(snapshot.aircraft ?? [], snapshot.timeS, playbackSpeed);
     this.canvas.dataset.aircraft = String(this.aircraft?.count ?? 0);
+    this.groundVehicles?.update(
+      snapshot.groundVehicles ?? [],
+      snapshot.aircraft ?? [],
+      snapshot.timeS,
+      playbackSpeed,
+    );
     if (this.apron) {
       this.apron.update(snapshot.aircraft ?? [], snapshot.timeS);
       this.canvas.dataset.apron = JSON.stringify(this.apron.counts());
@@ -1361,6 +1373,13 @@ export class Scene3D {
     aircraft.setPixelScale(scale);
     this.airfieldLights?.setPixelScale(scale);
     aircraft.animate(elapsedS, dtS, playing);
+    const ground = this.groundVehicles;
+    if (ground) {
+      ground.setPixelScale(scale);
+      if (ground.animate(elapsedS, dtS, playing)) this.invalidate();
+      if (import.meta.env.MODE === 'test')
+        this.canvas.dataset.groundVehicles = JSON.stringify(ground.report());
+    }
     if (this.followed === null) return;
     const at = aircraft.positionOf(this.followed);
     if (!at) {

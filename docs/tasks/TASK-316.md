@@ -1,6 +1,6 @@
 # TASK-316 — Airside ground vehicles
 
-Status: planned 2026-11-22 (airports wave G; starts after TASK-312). Proposed owner: Claude Code subagent (Opus 5.5,
+Status: in progress 2026-11-22 (started early in parallel with TASK-312, owner's time cut). Proposed owner: Claude Code subagent (Opus 5.5,
 high). Branch `task/316-ground-vehicles`, worktree `D:\cityflows-wt\316`, ports 5516 / 5616.
 
 ## Goal
@@ -10,6 +10,14 @@ tugs (the tug that pushes, replacing the implied one), baggage tractors with car
 catering trucks, passenger buses to remote stands, follow-me cars where useful. They drive on airside service roads
 and apron lanes (mapped or derived by rule), give way to aircraft, park at stand equipment areas, and follow each
 turnaround's timeline; no landside trips, no persons.
+
+## Parallel work
+
+TASK-312 (airside throughput, Claude) runs at the same time and rewrites much of `src/sim/aircraft.ts` and
+`src/sim/flight-operations.ts`. Put the vehicles in their own module that reads turnaround events and aircraft
+state through a narrow, additive hook (a turnaround timeline the operations already know: on-block, boarding,
+ready for pushback from TASK-319, off-block), and have aircraft see vehicles only as obstacles they never yield to.
+The lead merges this after TASK-312 and resolves the hook.
 
 ## Scope
 

@@ -3795,8 +3795,62 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     };
   }
 
+  /** TASK-316 (read only): the space aircraft movements on the ground may sweep, as bodies
+   * (fuselage, wing and tailplane rectangles of `bodyParts`): each parked aircraft's planned
+   * pushback from its stand (TASK-299's stand envelope for its type), a push under way, an
+   * arrival's lead-in into the stand it is bound for, and each aircraft moving on the ground over
+   * its next `aheadM` (bodies in order, `aheadM` their distance ahead). Ground vehicles keep out
+   * of it; the fleet itself does not use it. */
+  const boundSweeps = new Map<string, Body[]>();
+  function movementSpace(aheadM = 150) {
+    const spaces: {
+      id: number;
+      kind: 'push' | 'bound' | 'moving';
+      bodies: Body[];
+      aheadM?: number[];
+    }[] = [];
+    for (const craft of crafts) {
+      if (craft.mode === 'done' || craft.mode === 'queued') continue;
+      if (craft.mode === 'parked' && craft.stand >= 0) {
+        const push = standEnvelopes.get(standKey(craft.type.id, craft.stand))?.push;
+        if (push?.length) spaces.push({ id: craft.id, kind: 'push', bodies: push });
+        continue;
+      }
+      if (craft.pushSweep) spaces.push({ id: craft.id, kind: 'push', bodies: craft.pushSweep });
+      if (
+        craft.stand >= 0 &&
+        standBound[craft.stand] === craft.id &&
+        craft.type.performance.kind === 'fixedWing'
+      ) {
+        const key = `${craft.id}/${craft.stand}`;
+        let bodies = boundSweeps.get(key);
+        if (!bodies)
+          boundSweeps.set(key, (bodies = sweep(craft, standLeg(craft, craft.stand), 0, 3)));
+        spaces.push({ id: craft.id, kind: 'bound', bodies });
+      }
+      if (craft.mode === 'ground' && craft.leg) {
+        const { points, stationsM } = craft.leg.path;
+        const from = craft.stationM;
+        const to = Math.min(craft.leg.endM, from + aheadM);
+        const count = Math.max(1, Math.ceil((to - from) / 3));
+        const bodies: Body[] = [];
+        const ahead: number[] = [];
+        for (let i = 0; i <= count; i++) {
+          const m = from + (i / count) * (to - from);
+          const heading =
+            headingAtDistance(points, stationsM, m) + (craft.leg.mode === 'pushback' ? Math.PI : 0);
+          bodies.push(bodyAt(craft, pointAtDistance(points, stationsM, m), heading));
+          ahead.push(m - from);
+        }
+        spaces.push({ id: craft.id, kind: 'moving', bodies, aheadM: ahead });
+      }
+    }
+    return spaces;
+  }
+
   return {
     graph,
+    movementSpace,
     spawnParked,
     spawnHelicopterParked,
     requestArrival,

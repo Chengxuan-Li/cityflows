@@ -2041,6 +2041,53 @@ carry no persons and generate no road trips.
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
   can at its comfortable deceleration, else clears. Aircraft never stop for road vehicles.
+- **Airside ground vehicles** (TASK-316, `network/airside-service.ts`, `sim/ground-vehicles.ts`).
+  The service network is read from the compiled city alone: the lanes of mapped `service` roads
+  closed to cars (`access=no` or `private`) within 150 m of the taxi network and outside every
+  runway strip (half the runway width plus 45 m), joined by their compiled movements and by a turn
+  at each end of a two-way road; its largest strongly connected part is kept. A zone is a stretch
+  of a vehicle's way within an airside edge's aircraft corridor (half the span its code admits,
+  capped at the largest stand's, plus 4 m). Each stand's access point is the lane point nearest
+  its aircraft's middle and at most 25 m ahead of its nose; bases (where vehicles join and leave
+  the simulation) are the lane points nearest each group of stands and each hangar. The flight
+  operations emit `drainTurnarounds()`: `on-block` (stand, type, ready-to-push time, whether it
+  landed) when an aircraft stands where it departs from with no tow to come, `tow-planned`
+  (stand, type, time) and `off-block`. A tow back is planned when the tow away is (at least 5
+  minutes ahead), and a departure after a tow is ready no sooner than 5 minutes after it, so a tug
+  can come; a tow away as the aircraft parks and the first departures of a run keep the fleet's
+  timing and go without a vehicle tug (`metrics.unannounced`).
+  `turnaroundVisits` gives the set and timeline: baggage trains (two on widebodies, one to three
+  carts), a hydrant dispenser at contact stands for narrow- and widebodies or a fuel truck,
+  catering for jets, apron buses off and on at remote stands, and a tug for each push from a
+  dead-end stop or tow; service vehicles leave 5 minutes before the ready time, the tug comes 4
+  minutes before the push or tow. Positions lie on lines parallel to the parked aircraft as the
+  fleet draws it (catering, aft and forward baggage, fuel outwards on the starboard side, the bus
+  to port), clear of its fuselage and tailplane in plan (wings and engines stand above apron
+  vehicles) and of other parked hulls; vehicles drive in along their line from the end facing the
+  access point and out forward, returning on nested outer lines, and reach the line ends from the
+  lane round the aircraft (the shortest way over a ring of corners outside all positions, clear of
+  every parked hull); ways out join the lane where it is 6 m clear of the hull. The tug backs onto the nose,
+  where TASK-314's tug is drawn; from TASK-319's `ready-for-pushback` through the push it is
+  `attachedTo` the aircraft and hidden; it stays on through a tow and leaves forward and aside
+  where a push ends, or round the aircraft to the new stand's lane after a tow (as from a push). Vehicles read the fleet snapshot
+  once a second; aircraft never see them (the fleet's hash is the same with or without them).
+  `fleet.movementSpace()` (read only, additive) gives the space aircraft movements may sweep, as
+  TASK-299's bodies: each parked aircraft's planned pushback (its stand envelope), a push under way,
+  an arrival's lead-in into its bound stand, and each moving aircraft's next 150 m. Vehicles hold
+  clear of that space (but their own aircraft's, which their timeline keeps them out of) and leave
+  a position it covers: a parked aircraft's push from 5 minutes before it is ready or due to be
+  towed, the rest at once. They give way to aircraft by entering a zone only when no moving aircraft is within its radius plus 30 m
+  or routed through it within the larger of 250 m and 40 s, and only when their way beyond it,
+  the junctions in it and its merges are clear; to each other by following on lanes, one at a time
+  through each junction (from 6 m before it), merging only into a clear lane, one mover per stand
+  (released after 20 s held up), holding short of standing vehicles and parked hulls (past a
+  hull that reaches over the way they edge 1 to 4 m to the far side where that clears every
+  parked hull, else detour round its end), and a last guard that refuses any step onto
+  another body. Two vehicles that still hold each other off for 15 s, or one held up within 45 m
+  of its base, leave the simulation (`metrics.withdrawn`); as the last resort, so does one in the
+  next 3 s (at least 15 m) of an aircraft's movement, under a parked hull or on another vehicle
+  after a step (`metrics.cleared`). `metrics.droppedBy` counts dropped visits by cause. Snapshot `groundVehicles` (poses,
+  carts, `attachedTo`, stand); `metrics.groundVehicles`. Not in the state hash.
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
 adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
@@ -3301,6 +3348,13 @@ within the map's node extent) and its meshes in 3D (heights above the first runw
 gear by the snapshot, a plain pitch by state; the far plane reaches 15 km where an airport
 exists). Both pick an aircraft; the inspector shows its registration, type, status, stand,
 runway, speed, height and route by taxiway names.
+
+TASK-316: ground vehicles are drawn from `groundVehicles`, interpolated one snapshot behind like
+the aircraft (`render/ground-vehicles.ts`): in 2D as bodies with a cab, tank or box accent and a
+tractor's carts, under the aircraft (`render/layers/ground-vehicles.ts`); in 3D as one instanced
+mesh per kind and one for carts (seven draw calls) with amber roof beacons as halos
+(`render3d/ground-vehicles.ts`). A tug attached to an aircraft ready for pushback or pushing is
+left to the aircraft layers' tug; one towing is drawn from its snapshot pose.
 
 TASK-301: airfield and aircraft lighting by rule (`render/airfield-lights.ts`, shared by both
 views; ICAO Annex 14 in simplified form). `placeAirfieldLights` places every light once: runway
