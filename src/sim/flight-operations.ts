@@ -421,10 +421,11 @@ export function createFlightOperations(
     const { typeId } = turn.flight;
     turnarounds.push({ kind: 'tow-planned', id: turn.id!, stand: turn.stand, typeId, timeS: atS });
   }
-  function onBlock(turn: Turn, timeS: number, arrived: boolean) {
+  function onBlock(turn: Turn, timeS: number, arrived: boolean, towed = false) {
     if (turn.service !== 'done' || turn.stand < 0) return;
-    // After a tow (or parked before the start), the departure is planned with the tow's notice.
-    if (!arrived) turn.readyS = Math.max(turn.readyS, timeS + towNoticeS);
+    // After a tow, the departure is planned with the tow's notice (one parked before the start
+    // keeps its time: the first pushes of a run may go without a vehicle tug).
+    if (towed) turn.readyS = Math.max(turn.readyS, timeS + towNoticeS);
     const readyS = Math.max(turn.readyS, timeS);
     const { typeId } = turn.flight;
     turnarounds.push({
@@ -603,7 +604,6 @@ export function createFlightOperations(
           flight.departureS,
           event.timeS + aircraftTurnaroundMinutes[flight.typeId]! * 60,
         );
-        if (turn.service === 'out') planTow(turn, event.timeS + towNoticeS);
         onBlock(turn, event.timeS, true);
       } else if (event.kind === 'returned') {
         turn.phase = 'parked';
@@ -619,7 +619,7 @@ export function createFlightOperations(
         if (turn.service === 'away' && !flight.overnight) turn.returnS = event.timeS + maintenanceS;
         if (turn.service === 'away')
           planTow(turn, Math.max(turn.returnS, event.timeS + towNoticeS));
-        onBlock(turn, event.timeS, false);
+        onBlock(turn, event.timeS, false, true);
       }
     }
     if (timeS < nextUpdateS) return;

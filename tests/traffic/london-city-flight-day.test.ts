@@ -85,9 +85,9 @@ test.for([1, 2, 3])(
     expect(metrics.worstDelayS).toBeLessThanOrEqual(1800);
     expect(day.vehicleOverlaps).toBe(0);
     expect(day.vehicleAircraftOverlaps).toBe(0);
-    // TASK-316: London City serves fewer visits than Zurich (report: one apron road under parked
-    // tails at stands 11, 12 and past 5 to 8, where vehicles hold off one another).
-    expect(day.vehicles.served).toBeGreaterThan(0.4 * day.vehicles.visits);
+    // TASK-316: London City serves fewer visits than Zurich (seeds 1 to 3: 64 to 68%; one apron
+    // road under parked tails at stands 11 and 12, where vehicles hold off one another).
+    expect(day.vehicles.served).toBeGreaterThan(0.55 * day.vehicles.visits);
   },
 );
 

@@ -6,7 +6,9 @@ import { openProject } from '../src/project/open';
 import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-schedule';
 import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircraft';
 import { createFlightOperations } from '../src/sim/flight-operations';
+import { createGroundVehicles } from '../src/sim/ground-vehicles';
 import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
+import { groundOverlaps } from '../tests/sim/ground-vehicle-checks';
 
 // TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
 // second, with each movement's time split by the state it spends it in.
@@ -18,10 +20,12 @@ import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
 // airport's schedule size. --checks: count body overlaps and runway conflicts each second.
 // --roads (TASK-320): compile the whole city as the app does (road crossings, and the apron roads
 // that parked aircraft keep clear of) in place of the airside alone.
+// --vehicles (TASK-316): with the airside ground vehicles (implies --roads); with --checks, also
+// count vehicle overlaps with aircraft and with one another each second.
 const args = process.argv.slice(2);
 const flag = (name: string) => {
   const at = args.indexOf(`--${name}`);
-  const bare = name === 'checks' || name === 'roads';
+  const bare = name === 'checks' || name === 'roads' || name === 'vehicles';
   return at < 0 ? undefined : (args.splice(at, bare ? 1 : 2)[1] ?? '');
 };
 const fromH = Number(flag('from') ?? 0);
@@ -29,7 +33,8 @@ const toH = Number(flag('to') ?? 24);
 const drainH = Number(flag('drain') ?? (toH >= 24 ? 0 : 1));
 const daily = flag('daily');
 const checks = flag('checks') !== undefined;
-const roads = flag('roads') !== undefined;
+const withVehicles = flag('vehicles') !== undefined;
+const roads = withVehicles || flag('roads') !== undefined;
 const [projectPath, seedArg, output] = args;
 if (!projectPath || !seedArg || !output) throw new Error('Expected project path, seed and output');
 const seed = Number(seedArg);
@@ -174,13 +179,29 @@ let peakActive = 0;
 
 const wall0 = performance.now();
 const operations = createFlightOperations(fleet, seed, startS);
+const ground =
+  withVehicles && whole
+    ? createGroundVehicles(whole.compiled, {
+        snapshot: () => fleet.snapshot(),
+        movementSpace: () => fleet.movementSpace(),
+        drainTurnarounds: () => operations.drainTurnarounds(),
+      })
+    : null;
+let vehicleAircraftOverlaps = 0;
+let vehicleOverlaps = 0;
 console.info({ airport: graph.icao, seed, fromH, toH, endH: endS / 3600, ...operations.metrics() });
 for (let step = startS * 10; step < endS * 10; step++) {
   timeS = step / 10;
   operations.step(timeS);
   fleet.step(timeS);
+  ground?.step(timeS);
   if (step % 10) continue;
   const poses = fleet.snapshot();
+  if (ground && checks) {
+    const found = groundOverlaps(ground.snapshot(), poses);
+    vehicleAircraftOverlaps += found.withAircraft.length;
+    vehicleOverlaps += found.withVehicles.length;
+  }
   const seen = new Set<number>();
   for (const pose of poses) {
     seen.add(pose.id);
@@ -317,6 +338,10 @@ const summary = {
   endQueued: fleet.metrics().queuedArrivals,
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
   ...(checks && { overlapCount, runwayConflicts, runwayConflictsReal }),
+  ...(ground && {
+    groundVehicles: ground.metrics(),
+    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps }),
+  }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
   arrivalStages: stages(arrivals, [

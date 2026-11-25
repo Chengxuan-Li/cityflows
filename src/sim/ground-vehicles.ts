@@ -764,6 +764,9 @@ export interface GroundVehicleMetrics {
   pushbacks: number;
   /** Pushbacks whose tug was not at the nose when the push started. */
   tugsMissing: number;
+  /** Of those, pushes no tug was planned for: a tow away as the aircraft parks (no notice), a
+   * departure back at its stand, a stand no tug reaches. */
+  unannounced: number;
   /** Vehicles that stood still for 10 minutes away from their position. */
   stuck: number;
   /** Vehicles taken out of the simulation: held off by another for 15 s with no rule to order
@@ -786,6 +789,8 @@ export interface GroundVehicleSource {
 const STUCK_S = 600;
 /** A departure's tug disconnects and the engines start over 20 s (the fleet's pause). */
 const TUG_CLEAR_S = 15;
+/** How far a vehicle edges over to pass a hull that reaches over its way (`squeezePast`). */
+const SQUEEZE_M = [1, 2, 3, 4];
 /** TASK-319: an aircraft ready for pushback stands still with its tug coupled. */
 const pushing = (state: string) => state === 'ready-for-pushback' || state === 'pushback';
 const standing = (state: string) => state === 'parked' || state === 'ready-for-pushback';
@@ -820,6 +825,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     yields: 0,
     pushbacks: 0,
     tugsMissing: 0,
+    unannounced: 0,
     withdrawn: 0,
     cleared: 0,
     droppedBy: {} as Record<string, number>,
@@ -1145,7 +1151,11 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       if (tug && tug.phase === 'serving') {
         tug.phase = 'attached';
         tug.v = 0;
-      } else counts.tugsMissing++;
+      } else {
+        counts.tugsMissing++;
+        const turn = turns.get(a.id);
+        if (!turn || turn.gone || !turn.visits.some((v) => v.slot === 'tug')) counts.unannounced++;
+      }
     }
     for (const id of lastState.keys()) if (!byId.has(id)) lastState.delete(id);
     for (const [id, turn] of turns)
@@ -1763,6 +1773,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     const fromS = Math.max(vehicle.s + 0.5, blockedS - vehicle.lengthM - 6);
     const toS = lastS + reach + 8;
     if (toS >= path.lengthM - 1) return false;
+    if (squeezePast(vehicle, hull, blockedS, lastS, fromS, toS, margin)) return true;
     const f = { x: Math.cos(pose.heading), y: Math.sin(pose.heading) };
     const frame: Frame = { c: { x: pose.x, y: pose.y }, f, r: { x: -f.y, y: f.x } };
     const mid = pointAtDistance(path.points, path.cumulative, (blockedS + lastS) / 2);
@@ -1797,6 +1808,66 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     vehicle.detours++;
     vehicle.lookS = 0;
     return true;
+  }
+
+  /** A hull that reaches a little over the way (a tailplane over a service road, an aircraft
+   * parked across it at an angle): edge over to the side away from it, by the least of
+   * `SQUEEZE_M` that clears it, and back, where that keeps clear of every parked hull. */
+  function squeezePast(
+    vehicle: Vehicle,
+    hull: PlanBox[],
+    blockedS: number,
+    lastS: number,
+    fromS: number,
+    toS: number,
+    margin: number,
+  ) {
+    const path = vehicle.path;
+    const inS = blockedS - vehicle.lengthM / 2 - 1;
+    if (inS - fromS < 6) return false;
+    const outS = lastS + vehicle.lengthM / 2 + 1;
+    const mid = pointAtDistance(path.points, path.cumulative, (blockedS + lastS) / 2);
+    const h = headingAtDistance(path.points, path.cumulative, (blockedS + lastS) / 2);
+    const left = { x: -Math.sin(h), y: Math.cos(h) };
+    const centre = hull[0]!;
+    const side = (centre.x - mid.x) * left.x + (centre.y - mid.y) * left.y > 0 ? -1 : 1;
+    for (const shift of SQUEEZE_M) {
+      const points: Vec2[] = [];
+      for (let s = fromS; ; s = Math.min(toS, s + 1)) {
+        const k = s < inS ? (s - fromS) / (inS - fromS) : s > outS ? (toS - s) / (toS - outS) : 1;
+        const p = pointAtDistance(path.points, path.cumulative, s);
+        const a = headingAtDistance(path.points, path.cumulative, Math.min(s, path.lengthM - 1e-3));
+        const offset = side * shift * Math.min(1, Math.max(0, k));
+        points.push({ x: p.x - Math.sin(a) * offset, y: p.y + Math.cos(a) * offset });
+        if (s >= toS) break;
+      }
+      // The whole body clears the hull over the stretch it passes it.
+      const clear = points.every(
+        (p, i) => fromS + i < inS || hull.every((box) => boxDistance(p, box) >= margin),
+      );
+      if (!clear) continue;
+      let ok = true;
+      for (let i = 1; ok && i < points.length; i++)
+        for (const box of parkedBoxes)
+          if (segmentNearBox(points[i - 1]!, points[i]!, box, margin - 0.2)) {
+            ok = false;
+            break;
+          }
+      if (!ok) continue;
+      const builder = new PathBuilder();
+      const from = Math.max(0, vehicle.s - vehicle.lengthM / 2 - vehicle.carts * 4 - 5);
+      builder.addSlice(path, from, fromS);
+      addOwn(builder, points, -1);
+      builder.addSlice(path, toS, path.lengthM);
+      const next = builder.build();
+      vehicle.s -= from;
+      vehicle.committedS -= from;
+      vehicle.path = next;
+      vehicle.detours++;
+      vehicle.lookS = 0;
+      return true;
+    }
+    return false;
   }
 
   function place(vehicle: Vehicle) {
@@ -1886,12 +1957,26 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     const access = towedTo === undefined ? null : network!.stands[towedTo];
     if (towedTo !== undefined && access) {
       const merge = mergePoint(access);
-      const path = outbound(
-        [start, { x: start.x + g.x * 6, y: start.y + g.y * 6 }, merge.pos],
-        merge,
-        towedTo,
-        false,
-      );
+      // Round the aircraft as a pushback's tug leaves it (the lane may lie past the tail).
+      const tugVisit = {
+        slot: 'tug',
+        kind: 'tug',
+        arriveS: 0,
+        leaveS: Infinity,
+        carts: 0,
+      } as const;
+      const way = standWays(
+        type,
+        visual,
+        [tugVisit],
+        access.pos,
+        merge.pos,
+        parkedHulls(pose.id),
+      ).get('tug');
+      const points = way
+        ? [start, ...way.entry.slice(way.lead).reverse(), ...way.approachOut(merge.pos), merge.pos]
+        : [start, { x: start.x + g.x * 6, y: start.y + g.y * 6 }, merge.pos];
+      const path = outbound(points, merge, towedTo, false);
       if (path) {
         vehicle.path = path;
         vehicle.detours = 0;
