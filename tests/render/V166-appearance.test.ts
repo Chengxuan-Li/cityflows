@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { defaultLighting, sceneLight, type LightingSettings } from '../../src/render/lighting';
+import { defaultVisual, sceneLight, type VisualSettings } from '../../src/render/lighting';
 import { mapPalettes, mixColor, placeColors, style } from '../../src/render/style';
 import type { PlaceKind } from '../../src/schema';
 import { buildContext } from '../../src/render3d/context';
@@ -14,11 +14,7 @@ import {
   type AppearanceSettings,
 } from '../../src/ui/appearance-store';
 
-const lit = (mode: LightingSettings['mode']): LightingSettings => ({
-  mode,
-  exposure: 1,
-  season: 'equinox',
-});
+const lit = (mode: VisualSettings['mode']): VisualSettings => ({ ...defaultVisual, mode });
 const settings = (appearance: AppearanceSettings['appearance'], matchLighting = false) => ({
   appearance,
   matchLighting,
@@ -54,7 +50,7 @@ describe('V166 appearance setting', () => {
 
   test('System follows the OS; Light and Dark ignore it', () => {
     for (const systemDark of [false, true]) {
-      const day = (a: AppearanceSettings) => resolveAppearance(a, systemDark, defaultLighting, 0);
+      const day = (a: AppearanceSettings) => resolveAppearance(a, systemDark, defaultVisual, 0);
       expect(day(settings('system')).dark).toBe(systemDark);
       expect(day(settings('light')).dark).toBe(false);
       expect(day(settings('dark')).dark).toBe(true);
@@ -157,10 +153,10 @@ describe('V166 dark map palette', () => {
   });
 
   test('daylight in dark keeps the Day light and swaps only the canvas', () => {
-    const day = sceneLight(defaultLighting, 0);
-    const dark = sceneLight(defaultLighting, 0, mapPalettes.dark.background);
+    const day = sceneLight(defaultVisual, 0);
+    const dark = sceneLight(defaultVisual, 0, mapPalettes.dark.background);
     expect(dark).toEqual({ ...day, background: mapPalettes.dark.background });
-    expect(sceneLight(defaultLighting, 0, style.background)).toEqual(day);
+    expect(sceneLight(defaultVisual, 0, style.background)).toEqual(day);
   });
 
   test('3D buildings and ground take the dark colours, a step lighter than the canvas', () => {

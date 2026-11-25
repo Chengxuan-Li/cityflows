@@ -54,6 +54,8 @@ const text: [string, string[]][] = [
   ['--on-accent', ['--accent-fill', '--accent-fill-pressed']],
   ['--accent-text', ['--inspector', '--sidebar', '--pressed over --toolbar']],
   ['--warning-text', ['--warning-fill']],
+  ['--quality-experimental', ['--sidebar', '--window']],
+  ['--quality-offline', ['--sidebar', '--window']],
   ['--danger-text', ['--danger-fill']],
   ['--usage-up', ['--sidebar']],
   ['--usage-down', ['--sidebar']],

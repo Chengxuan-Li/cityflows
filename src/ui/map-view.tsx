@@ -19,7 +19,7 @@ import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
-import { useLighting } from './lighting-store';
+import { useVisual } from './lighting-store';
 import { resolveAppearance, useAppearance } from './appearance-store';
 import { selectionAnchor } from './selection-anchor';
 
@@ -679,8 +679,9 @@ export function MapView() {
             resolveAppearance(
               appearance.settings,
               appearance.systemDark,
-              useLighting.getState().lighting,
+              useVisual.getState().visual,
               preview.project.scenarios[0]!.startS,
+              preview.project.city.geo?.origin,
             ).darkMap
               ? mapPalettes.dark
               : mapPalettes.light,
@@ -729,13 +730,15 @@ export function MapView() {
           drawnLayers = layers;
         }
         // TASK-166: the map's dark variant in the chosen dark appearance.
-        const { lighting } = useLighting.getState();
+        const lighting = useVisual.getState().visual;
+        const origin = session.project.city.geo?.origin;
         const appearance = useAppearance.getState();
         const palette = resolveAppearance(
           appearance.settings,
           appearance.systemDark,
           lighting,
           getState().run?.timeS,
+          origin,
         ).darkMap
           ? mapPalettes.dark
           : mapPalettes.light;
@@ -883,9 +886,9 @@ export function MapView() {
             getState().run?.stale ? null : session.loadedCompiled,
           );
         }
-        // TASK-163: view-only lighting, from its own per-viewer store.
-        if (active3D) three!.setLighting(lighting, getState().run?.timeS ?? 0, layers.shadows);
-        else view.setLighting(lighting, getState().run?.timeS ?? 0);
+        // TASK-163, TASK-340: view-only lighting and quality, from their own per-viewer store.
+        if (active3D) three!.setVisual(lighting, getState().run?.timeS ?? 0, origin);
+        else view.setLighting(lighting, getState().run?.timeS ?? 0, origin);
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;

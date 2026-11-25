@@ -368,7 +368,59 @@ export const style = {
     // TASK-163: lit windows stay distinct further out than the daytime panes.
     litWindowFadeM: [700, 1600] as const,
   },
-  vegetation: { canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a], trunk: 0x9c8f7a },
+  vegetation: {
+    canopy: [0xb6d8a6, 0xc1deb2, 0xaad19a],
+    trunk: 0x9c8f7a,
+    /** TASK-340: bare winter broadleaves in the Map colours. */
+    twigs: [0xc9c0b3, 0xbdb4a6, 0xd2cabd],
+    palmTrunk: 0xa8987a,
+  },
+  /** TASK-340: Natural leaf colours per tree kit and season, three tones each; Vivid and Muted
+   * derive from them. Winter broadleaves are bare: their twigs. */
+  foliage: {
+    round: {
+      spring: [0x8fbf5a, 0x9ccc66, 0x7fb04d],
+      summer: [0x5e8c3a, 0x6b9a45, 0x4f7d32],
+      autumn: [0xc98a2e, 0xb5652a, 0xd6a53c],
+      winter: [0x8a7f72, 0x7d7468, 0x968b7c],
+    },
+    spreading: {
+      spring: [0x9bc463, 0x88b957, 0xa8cc70],
+      summer: [0x5a8a3c, 0x66964a, 0x4e7a34],
+      autumn: [0xd9a03a, 0xc4402e, 0xe0b34a],
+      winter: [0x8c8274, 0x7f766a, 0x998e80],
+    },
+    columnar: {
+      spring: [0xa3c96a, 0x95bf5e, 0xb0d27a],
+      summer: [0x648f3e, 0x5a8538, 0x709a48],
+      autumn: [0xe0c040, 0xd4ae38, 0xc99a30],
+      winter: [0x908676, 0x857b6d, 0x9b9081],
+    },
+    palm: {
+      spring: [0x7a9c44, 0x6a8f3a, 0x86a64e],
+      summer: [0x6a8f3a, 0x7a9c44, 0x5e8232],
+      autumn: [0x7a9040, 0x6c8638, 0x889a4a],
+      winter: [0x6f8a3e, 0x7d9646, 0x627e36],
+    },
+    cone: {
+      spring: [0x46744c, 0x4f7f53, 0x3f6b45],
+      summer: [0x3f6b45, 0x46744c, 0x37603e],
+      autumn: [0x3d6743, 0x44704a, 0x365e3d],
+      winter: [0x37603f, 0x3d6644, 0x31573a],
+    },
+    cypress: {
+      spring: [0x44683f, 0x4c7146, 0x3c5e3a],
+      summer: [0x3c5e3a, 0x44683f, 0x355433],
+      autumn: [0x3b5c39, 0x42653e, 0x345232],
+      winter: [0x355434, 0x3c5c3a, 0x2f4c2f],
+    },
+    umbrella: {
+      spring: [0x587d47, 0x628750, 0x4f7440],
+      summer: [0x4f7440, 0x587d47, 0x46693a],
+      autumn: [0x4d7140, 0x557a46, 0x45673a],
+      winter: [0x476a3c, 0x4f7242, 0x405f36],
+    },
+  },
   /** TASK-135: tram track forms, apart from the railway palette in `rail-geometry.ts`. */
   tram: {
     // TASK-220: paved is grey stone (was 0xc4b9a8, a warm sand), apart from asphalt and ballast.

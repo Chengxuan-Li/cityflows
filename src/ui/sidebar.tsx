@@ -2,6 +2,7 @@ import { DisclosureGroup } from './controls';
 import { groupDiagnostics } from './diagnostics';
 import { Diagnostics } from './inspector/diagnostics';
 import { Layers } from './layers';
+import { VisualQuality } from './visual-quality';
 import { ComparePanel } from './panels/compare';
 import { DemandPanel } from './panels/demand';
 import { MetricsPanel } from './panels/metrics';
@@ -124,6 +125,9 @@ export function Sidebar() {
         disabled={!run}
       >
         <Layers />
+      </DisclosureGroup>
+      <DisclosureGroup title="Visual quality" defaultOpen={false}>
+        <VisualQuality />
       </DisclosureGroup>
       <DisclosureGroup
         title="Chart"

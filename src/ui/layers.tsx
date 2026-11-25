@@ -5,7 +5,6 @@ import { placeTrees } from '../render/vegetation';
 import { treeContext } from '../render/street';
 import type { LayerVisibility } from '../render/types';
 import { useAppStore } from './store';
-import { LightingControls } from './lighting';
 import { AppearanceControls } from './appearance';
 
 const labels: [keyof LayerVisibility, string][] = [
@@ -94,7 +93,6 @@ export function Layers() {
           </select>
         </label>
       )}
-      <LightingControls />
       <AppearanceControls />
       {labels
         .filter(
@@ -108,7 +106,9 @@ export function Layers() {
             (key !== 'streetTrees' || hasStreetTrees) &&
             (key !== 'terrain' || hasTerrain) &&
             (key !== 'pedestrians' || hasWalkers) &&
-            (key !== 'curbs' || view3d),
+            (key !== 'curbs' || view3d) &&
+            // TASK-340: 3D sun shadows sit in Visual quality; here Shadows is the 2D grade shading.
+            (key !== 'shadows' || !view3d),
         )
         .map(([key, label]) => (
           <label key={key}>

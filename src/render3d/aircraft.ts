@@ -197,6 +197,9 @@ export class Aircraft3D {
   private playing = false;
   private clockS = 0;
   private on = 0;
+  /** TASK-340: aircraft as shadow casters, and their drop lines. */
+  private casting = false;
+  private dropLines = true;
   private readonly modelMaterial = new MeshLambertMaterial({
     vertexColors: true,
     side: DoubleSide,
@@ -303,6 +306,7 @@ export class Aircraft3D {
     drop.material.userData.lit = true;
     drop.frustumCulled = false;
     this.group.add(mesh.root, shadow, drop);
+    if (this.casting) castShadows(mesh.root, true);
     return {
       mesh,
       type,
@@ -393,7 +397,8 @@ export class Aircraft3D {
       const matrix = root.matrix;
       // Shadow and drop line, off the ground: darker the lower it flies.
       const airborne = heightM > 1.5;
-      model.shadow.visible = model.drop.visible = airborne;
+      model.shadow.visible = airborne;
+      model.drop.visible = airborne && this.dropLines;
       if (airborne) {
         model.shadow.position.set(x, this.elevationM + 0.15, y);
         model.shadow.rotation.set(0, -heading, 0);
@@ -473,6 +478,16 @@ export class Aircraft3D {
     (this.beams.material as MeshBasicMaterial).opacity = 0.45 * on;
   }
 
+  /** TASK-340: whether the models cast sun shadows, and whether airborne aircraft show a line
+   * down to their shadow. */
+  setQuality(casting: boolean, dropLines: boolean) {
+    if (casting !== this.casting)
+      for (const model of this.models.values()) castShadows(model.mesh.root, casting);
+    if (dropLines !== this.dropLines) this.renderedAgeS = NaN;
+    this.casting = casting;
+    this.dropLines = dropLines;
+  }
+
   setPixelScale(scale: number) {
     this.halos.material.uniforms.pixelScale!.value = scale;
     this.outline.uniforms.pixelScale!.value = scale;
@@ -521,6 +536,7 @@ export class Aircraft3D {
         this.outline,
       );
       model.mesh.root.add(level.group);
+      if (this.casting) castShadows(level.group, true);
       model.levels[lod] = { ...level, discs: spinnerDiscs(level.spinners) };
     }
     model.lod = lod;
@@ -606,4 +622,10 @@ export class Aircraft3D {
     }
     return best;
   }
+}
+
+function castShadows(root: Object3D, cast: boolean) {
+  root.traverse((object) => {
+    if (object instanceof Mesh) object.castShadow = cast;
+  });
 }
