@@ -9,6 +9,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import {
   ACCESS_AFTER_M,
+  ACCESS_BEFORE_M,
   corridorZones,
   routeLength,
   serviceNetwork,
@@ -462,6 +463,7 @@ export function standWays(
     const half = width(slot) / 2;
     const [from, to] = range(slot);
     let way: StandWay;
+    let candidates: StandWay[] = [];
     if (slot === 'tug') {
       const tugLength = groundVehicleSizes.tug.lengthM;
       const centre = (from + to) / 2;
@@ -488,16 +490,10 @@ export function standWays(
         approach: tugIn,
         approachOut: tugOut,
       };
+      candidates = [way];
     } else {
       const y = slot === 'bus' ? busLateral : lateral.get(slot)!;
-      const k = nest(slot);
-      const outer = slot === 'bus' ? portOuter : starboardOuter + k * 3;
-      const farK = far - side * k * 3;
-      const nearK = nearOut + side * k * 3;
-      const out = (p: Vec2) =>
-        Math.abs(across(p)) > band && local(p) * side < Math.abs(nearK)
-          ? [at(frame, nearK, across(p))]
-          : [];
+      const k0 = nest(slot);
       const vehicleLength = slot.startsWith('baggage')
         ? groundVehicleSizes.baggage.lengthM
         : groundVehicleSizes[kindOf(slot)].lengthM;
@@ -517,23 +513,50 @@ export function standWays(
         widthM: width(slot),
       };
       const start = at(frame, near, y);
-      const back = at(frame, nearK, outer);
       const inWay = (p: Vec2) => around(p, start, half + 0.8) ?? approach(p);
-      const outWay = (p: Vec2) => around(back, p, half + 0.3) ?? out(p);
-      way = {
-        entry: [entry, ...inWay(entry), start, spot],
-        reverseFrom: Infinity,
-        exit: [spot, at(frame, farK, y), at(frame, farK, outer), back, ...outWay(merge), merge],
-        spot,
-        footprint,
-        lead: 1 + inWay(entry).length,
-        tail: 1 + outWay(merge).length,
-        approach: inWay,
-        approachOut: outWay,
-      };
+      const entryWay = [entry, ...inWay(entry), start, spot];
+      // TASK-350: where the nested way out meets a parked hull (a neighbour's nose), a tighter
+      // nest, then a way out round the hulls from just past the position.
+      for (let k = k0; k >= 0; k--) {
+        const outer = slot === 'bus' ? portOuter : starboardOuter + k * 3;
+        const farK = far - side * k * 3;
+        const nearK = nearOut + side * k * 3;
+        const out = (p: Vec2) =>
+          Math.abs(across(p)) > band && local(p) * side < Math.abs(nearK)
+            ? [at(frame, nearK, across(p))]
+            : [];
+        const back = at(frame, nearK, outer);
+        const outWay = (p: Vec2) => around(back, p, half + 0.3) ?? out(p);
+        candidates.push({
+          entry: entryWay,
+          reverseFrom: Infinity,
+          exit: [spot, at(frame, farK, y), at(frame, farK, outer), back, ...outWay(merge), merge],
+          spot,
+          footprint,
+          lead: 1 + inWay(entry).length,
+          tail: 1 + outWay(merge).length,
+          approach: inWay,
+          approachOut: outWay,
+        });
+      }
+      const past = at(frame, far, y);
+      const roundOut = (p: Vec2) => around(past, p, half + 0.3);
+      const exitRound = roundOut(merge);
+      if (exitRound)
+        candidates.push({
+          entry: entryWay,
+          reverseFrom: Infinity,
+          exit: [spot, past, ...exitRound, merge],
+          spot,
+          footprint,
+          lead: 1 + inWay(entry).length,
+          tail: 1 + exitRound.length,
+          approach: inWay,
+          approachOut: (p) => roundOut(p) ?? [],
+        });
     }
     const own = [...hull, ...others];
-    const ok =
+    const fits = (way: StandWay) =>
       clear(way.entry, half + 0.8, own) &&
       clear(way.exit, half + 0.3, own) &&
       !others.some((b) => boxesOverlap(b, way.footprint)) &&
@@ -545,6 +568,9 @@ export function standWays(
           clear(other.entry.slice(0, -1), 1.5, [way.footprint]) &&
           clear(other.exit.slice(1), 1.5, [way.footprint]),
       );
+    const found = candidates.find(fits);
+    const ok = found !== undefined;
+    way = found ?? candidates[0]!;
     if (!ok) continue;
     ways.set(slot, way);
     accepted.push(way);
@@ -715,6 +741,8 @@ interface Turn {
   visits: (ServiceVisit & { state: 'planned' | 'sent' | 'done' | 'dropped'; arrivedS?: number })[];
   ways: Map<ServiceSlot, StandWay> | null;
   merge?: ServicePoint;
+  /** Where its vehicles leave the lane (TASK-350: before a hull over the stand's own point). */
+  access?: ServicePoint;
   gone: boolean;
 }
 
@@ -787,6 +815,12 @@ export interface GroundVehicleSource {
 }
 
 const STUCK_S = 600;
+/** TASK-350: a vehicle drives through a parked aircraft's due push space (holding short of it
+ * only from this long before the push), as through a zone: pushes start slowly, and one that
+ * starts on it sends it off (`clearOut`). */
+const CROSS_BEFORE_S = 60;
+/** TASK-350: two vehicles holding each other off give way by rule after this long. */
+const GIVE_WAY_S = 3;
 /** A departure's tug disconnects and the engines start over 20 s (the fleet's pause). */
 const TUG_CLEAR_S = 15;
 /** How far a vehicle edges over to pass a hull that reaches over its way (`squeezePast`). */
@@ -809,7 +843,14 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
   const readyOf = new Map<number, number>();
   const towOf = new Map<number, number>();
   /** The movement space as plan boxes, by aircraft: whether it is due, and its near part. */
-  let space: { aircraft: number; box: PlanBox; due: boolean; imminent: boolean }[] = [];
+  let space: {
+    aircraft: number;
+    box: PlanBox;
+    due: boolean;
+    imminent: boolean;
+    /** Not a parked aircraft's push still a minute or more off (`CROSS_BEFORE_S`). */
+    soon: boolean;
+  }[] = [];
   let nextReadS = -Infinity;
   let nextId = 1;
   let ownKey = -1e6;
@@ -1016,7 +1057,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
   }
 
   function inbound(turn: Turn, way: StandWay, depot: ServicePoint) {
-    const access = network!.stands[turn.stand]!;
+    const access = turn.access ?? network!.stands[turn.stand]!;
     const plan = planWay(depot, access);
     if (!plan) return null;
     const builder = new PathBuilder();
@@ -1087,8 +1128,11 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         const turn = turns.get(event.id);
         if (turn) turn.gone = true;
         readyOf.delete(event.id);
+        towOf.delete(event.id);
         continue;
       }
+      // TASK-350: a tow done (on block at its new stand) is no longer due.
+      if (event.kind === 'on-block') towOf.delete(event.id);
       const type = typeById.get(event.typeId)!;
       if (event.kind === 'tow-planned') {
         // A tow: the tug comes as for a pushback, couples and stays on to the new stand.
@@ -1144,6 +1188,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     for (const a of aircraft) {
       const before = lastState.get(a.id);
       lastState.set(a.id, a.state);
+      if (a.state === 'tow') towOf.delete(a.id);
       // TASK-319: the tug couples when the aircraft is ready for pushback (or pushes at once).
       if (!pushing(a.state) || (before !== undefined && pushing(before))) continue;
       counts.pushbacks++;
@@ -1229,9 +1274,11 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     for (const { id, kind, bodies, aheadM } of source.movementSpace()) {
       const pose = byId.get(id);
       let due = kind !== 'push' || (pose !== undefined && !standing(pose.state));
+      let soon = due;
       if (!due && pose) {
         const ready = Math.min(readyOf.get(id) ?? Infinity, towOf.get(id) ?? Infinity);
         due = pose.state === 'ready-for-pushback' || ready <= timeS + CLEAR_BEFORE_READY_S;
+        soon = pose.state === 'ready-for-pushback' || ready <= timeS + CROSS_BEFORE_S;
       }
       if (!due) continue;
       const near = Math.max(15, 3 * (pose?.speedMps ?? 0));
@@ -1239,7 +1286,8 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         const imminent =
           (kind === 'moving' && (aheadM?.[i] ?? 0) <= near) ||
           (kind === 'push' && pose !== undefined && !standing(pose.state));
-        for (const part of bodyBoxes3(body)) boxes.push({ aircraft: id, box: part, due, imminent });
+        for (const part of bodyBoxes3(body))
+          boxes.push({ aircraft: id, box: part, due, imminent, soon });
       });
     }
     return boxes;
@@ -1300,11 +1348,26 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
             if (hull.every((box) => boxDistance(pos, box) > 6)) break;
           }
           turn.merge = merge;
+          // TASK-350: an access point under the hull (a tail over the lane) moves back along
+          // the lane to where the lane is clear of it.
+          let entry = access;
+          for (
+            let at = access.positionM;
+            at >= Math.max(ACCESS_BEFORE_M, access.positionM - 45);
+            at -= 3
+          ) {
+            const pos = pointAtDistance(lane.polyline, lane.cumulative, at);
+            if (hull.every((box) => boxDistance(pos, box) > 6)) {
+              entry = at === access.positionM ? access : { lane: access.lane, positionM: at, pos };
+              break;
+            }
+          }
+          turn.access = entry;
           turn.ways = standWays(
             turn.type,
             pose.visual ?? pose,
             turn.visits,
-            access.pos,
+            entry.pos,
             merge.pos,
             parkedHulls(turn.aircraft),
           );
@@ -1315,7 +1378,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
           drop('no-room');
           continue;
         }
-        const path = inbound(turn, way, depot);
+        const path = inbound(turn, way, nearestDepot(turn.access!.pos));
         if (path && !startClear(path, visit.kind, visit.carts)) continue;
         if (!path) {
           visit.state = 'dropped';
@@ -1619,18 +1682,25 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
   function lookAhead(vehicle: Vehicle, look: number): number | 'detour' {
     let limit = Infinity;
     vehicle.lookReason = '';
+    // TASK-350: its own aircraft's hull too where the way runs on the lanes (a tail over the
+    // apron road before the stand's access point).
     const own = vehicle.turn && vehicle.phase !== 'out' ? vehicle.turn.aircraft : -1;
     const nearby: number[] = [];
     for (let k = 0; k < parkedBoxes.length; k++) {
       const box = parkedBoxes[k]!;
-      if (parkedOwners[k]!.id === own) continue;
       if (Math.hypot(box.x - vehicle.pos.x, box.y - vehicle.pos.y) < look + box.lengthM / 2 + 10)
         nearby.push(k);
     }
+    const onLanes = (s: number) =>
+      (vehicle.path.elements.find((e) => s >= e.fromS && s <= e.toS)?.key ?? -2e6) > -1e5;
     for (let d = 1; nearby.length && d <= look; d += 1) {
       const box = boxAt(vehicle, d, 0.5);
       if (!box) break;
-      const k = nearby.find((k) => boxesOverlap(box, parkedBoxes[k]!));
+      const k = nearby.find(
+        (k) =>
+          (parkedOwners[k]!.id !== own || onLanes(vehicle.s + d)) &&
+          boxesOverlap(box, parkedBoxes[k]!),
+      );
       if (k === undefined) continue;
       if (detour(vehicle, vehicle.s + d + vehicle.lengthM / 2, parkedOwners[k]!)) return 'detour';
       if (d - 1.5 < limit) vehicle.lookReason = 'hull';
@@ -1645,6 +1715,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     const swept = space.filter(
       (b) =>
         b.aircraft !== ownAircraft &&
+        b.soon &&
         Math.abs(b.box.x - vehicle.pos.x) < reach &&
         Math.abs(b.box.y - vehicle.pos.y) < reach &&
         !boxesOverlap(here0, b.box),
@@ -1689,6 +1760,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         if (!mine) break;
         const hit = boxes.find(({ boxes }) => boxes.some((box) => boxesOverlap(mine, box)));
         if (hit) {
+          if (hit.o.phase === 'serving' && rerouteTug(vehicle)) return 'detour';
           vehicle.blockedBy = hit.o.id;
           if (d - 1.5 < limit) vehicle.lookReason = 'vehicle';
           limit = Math.min(limit, d - 1.5);
@@ -1697,6 +1769,44 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       }
     }
     return limit;
+  }
+
+  /** TASK-350: a tug on its way round its aircraft that meets a vehicle at a neighbour's
+   * position takes a new way from where it is to the nose, round the parked hulls and every
+   * vehicle standing still. */
+  function rerouteTug(vehicle: Vehicle) {
+    const turn = vehicle.turn;
+    const path = vehicle.path;
+    if (vehicle.kind !== 'tug' || vehicle.phase !== 'in' || !turn || vehicle.detours >= 4)
+      return false;
+    if ((elementOf(vehicle)?.key ?? 0) > -1e5) return false;
+    if (path.reverse && vehicle.s >= path.reverse[0] - 1) return false;
+    const pose = byId.get(turn.aircraft);
+    if (!pose || pose.state !== 'parked') return false;
+    const still = vehicles
+      .filter((o) => o !== vehicle && (o.phase === 'serving' || o.v < 0.1))
+      .flatMap((o) => bodyBoxes(o));
+    const merge = turn.merge ?? bestMerge(turn.stand);
+    const tugVisit = { slot: 'tug', kind: 'tug', arriveS: 0, leaveS: Infinity, carts: 0 } as const;
+    const way = standWays(turn.type, pose.visual ?? pose, [tugVisit], vehicle.pos, merge.pos, [
+      ...parkedHulls(turn.aircraft),
+      ...still,
+    ]).get('tug');
+    if (!way) return false;
+    const builder = new PathBuilder();
+    addOwn(builder, way.entry.slice(0, way.reverseFrom + 1), turn.stand);
+    const reverseS = builder.lengthM;
+    builder.add(way.entry.slice(way.reverseFrom), ownKey--, 0, FINAL_MPS);
+    builder.reverse = [reverseS, builder.lengthM];
+    builder.finalM = 12;
+    builder.holds.push({ kind: 'stand', stand: turn.stand, atS: 0, untilS: builder.lengthM });
+    const next = builder.build();
+    vehicle.path = next;
+    vehicle.s = 0;
+    vehicle.detours++;
+    vehicle.lookS = 0;
+    vehicle.committedS = next.zones.find((z) => z.fromM <= 0.5)?.toM ?? -1;
+    return true;
   }
 
   function finish(vehicle: Vehicle, dtS: number, stopS: number) {
@@ -1712,6 +1822,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     // The last guard: no step that brings its body onto another vehicle's or a parked hull.
     if (advance > 0 && touches(vehicle, advance)) {
       vehicle.reason = 'guard';
+      vehicle.blockedBy = guardBy?.id ?? -1;
       advance = 0;
       vehicle.v = 0;
     }
@@ -1734,7 +1845,22 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     }
   }
 
+  let guardBy: Vehicle | null = null;
+  /** Whether `other`, standing still, is held off by `vehicle` (directly or through others). */
+  function holdsBack(other: Vehicle, vehicle: Vehicle) {
+    let b: Vehicle | undefined = other;
+    for (let i = 0; b && i < 4; i++) {
+      if (b.stoppedS <= 0 || b.phase === 'serving') return false;
+      if (b.blockedBy === vehicle.id) return true;
+      const next: number = b.blockedBy;
+      b = next >= 0 ? vehicles.find((o) => o.id === next) : undefined;
+    }
+    return false;
+  }
+  const urgency = (v: Vehicle) => (v.phase !== 'in' ? 0 : v.kind === 'tug' ? 2 : 1);
+
   function touches(vehicle: Vehicle, advance: number) {
+    guardBy = null;
     const next = boxAt(vehicle, advance, 0.05);
     const now = boxAt(vehicle, 0, 0);
     if (!next || !now) return false;
@@ -1743,7 +1869,10 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       if (Math.abs(o.pos.x - vehicle.pos.x) > 40 || Math.abs(o.pos.y - vehicle.pos.y) > 40)
         continue;
       for (const box of bodyBoxes(o))
-        if (boxesOverlap(next, box) && !boxesOverlap(now, box)) return true;
+        if (boxesOverlap(next, box) && !boxesOverlap(now, box)) {
+          guardBy = o;
+          return true;
+        }
     }
     for (const box of parkedBoxes) {
       if (Math.abs(box.x - vehicle.pos.x) > 60 || Math.abs(box.y - vehicle.pos.y) > 60) continue;
@@ -2066,6 +2195,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     }
     const occupied = occupancy();
     for (const vehicle of [...vehicles]) {
+      if (!vehicles.includes(vehicle)) continue;
       if (vehicle.phase === 'attached') {
         const pose = byId.get(vehicle.turn!.aircraft);
         if (!pose || (!pushing(pose.state) && pose.state !== 'tow')) {
@@ -2100,20 +2230,35 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         vehicle.path.lengthM - vehicle.s < 45 &&
         vehicle.stoppedS > 0 &&
         timeS - vehicle.stoppedS > 3;
-      // Two vehicles that hold each other off where no rule orders them (a crowded junction,
-      // a way across a lane) wait 15 s; then the one held drives off out of the simulation.
-      const deadlocked =
-        (vehicle.reason === 'guard' || vehicle.reason === 'vehicle') &&
-        vehicle.stoppedS > 0 &&
-        timeS - vehicle.stoppedS > 15;
-      if (deadlocked) {
+      // A vehicle held off by another where no rule orders them (a crowded junction, a way
+      // across a lane). TASK-350: two that hold each other off give way by rule after 3 s: the
+      // one with the less urgent task (a tug's, then any visit's, then a way home), then the
+      // later one, drives off out of the simulation. One held by a vehicle that is moving or
+      // waits for something else waits for it (90 s at most); one held by a vehicle at its
+      // position or by a hull waits 15 s, as before.
+      const held =
+        (vehicle.reason === 'guard' || vehicle.reason === 'vehicle') && vehicle.stoppedS > 0;
+      const waited = timeS - vehicle.stoppedS;
+      const blocker =
+        held && vehicle.blockedBy >= 0
+          ? vehicles.find((o) => o.id === vehicle.blockedBy)
+          : undefined;
+      let gone: Vehicle | null = null;
+      if (held && blocker && waited > GIVE_WAY_S && holdsBack(blocker, vehicle))
+        gone =
+          urgency(vehicle) < urgency(blocker) ||
+          (urgency(vehicle) === urgency(blocker) && vehicle.id > blocker.id)
+            ? vehicle
+            : blocker;
+      else if (held && waited > (blocker && blocker.phase !== 'serving' ? 90 : 15)) gone = vehicle;
+      if (gone) {
         counts.withdrawn++;
-        if (vehicle.visit && vehicle.phase === 'in') {
-          vehicle.visit.state = 'dropped';
+        if (gone.visit && gone.phase === 'in') {
+          gone.visit.state = 'dropped';
           drop('held-off');
         }
-        remove(vehicle);
-        continue;
+        remove(gone);
+        if (gone === vehicle) continue;
       }
       if (atBase || vehicle.s >= vehicle.path.lengthM - 1e-6) {
         if (vehicle.phase === 'in') arrive(vehicle);
