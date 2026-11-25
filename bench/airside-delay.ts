@@ -163,9 +163,12 @@ function sample(timing: Timing, pose: AircraftPoseSnapshot) {
   }
 }
 
-const checkRunwayConflicts = runwayConflictCheck(graph);
+const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
+// TASK-345: without the pairs the owner approved as sharing a runway by design.
+const checkRunwayConflictsReal = runwayConflictCheck(graph);
 let overlapCount = 0;
 let runwayConflicts = 0;
+let runwayConflictsReal = 0;
 let peakStuck = 0;
 let peakActive = 0;
 
@@ -216,6 +219,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
   if (checks) {
     overlapCount += overlaps(poses).length;
     runwayConflicts += checkRunwayConflicts(poses);
+    runwayConflictsReal += checkRunwayConflictsReal(poses);
   }
   if (timeS % 3600 === 0 && timeS > startS)
     console.info(
@@ -312,7 +316,7 @@ const summary = {
   endStuck5: stuck5,
   endQueued: fleet.metrics().queuedArrivals,
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
-  ...(checks && { overlapCount, runwayConflicts }),
+  ...(checks && { overlapCount, runwayConflicts, runwayConflictsReal }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
   arrivalStages: stages(arrivals, [
