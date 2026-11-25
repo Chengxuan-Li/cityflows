@@ -4,6 +4,7 @@ import { syntheticAirport } from '../../src/fixtures/synthetic-airport';
 import { compile } from '../../src/network';
 import { createAircraftFleet } from '../../src/sim/aircraft';
 import { createFlightOperations } from '../../src/sim/flight-operations';
+import { airportFixture } from './airside-fixture';
 
 function setup() {
   const result = compile(syntheticAirport());
@@ -48,6 +49,27 @@ function advance(fleet: ReturnType<typeof setup>, schedule: ScheduledFlight[], e
 }
 
 describe('flight operations on the synthetic airport', () => {
+  test('splits nearby stands between eligible departure ends as their queues grow', () => {
+    const { city } = airportFixture();
+    const result = compile(city);
+    if (!result.ok || !result.compiled.airside) throw new Error('Inline airport must compile');
+    const fleet = createAircraftFleet(result.compiled.airside, 1);
+    const startS = 3600;
+    const flights = ['a', 'b'].map((id) => turn({ id, departureS: startS }));
+    const operations = createFlightOperations(fleet, 1, startS, flights, {
+      wind: { fromDeg: 0, speedKt: 0 },
+      runways: {
+        configurations: [{ id: 'split', arrivalEnds: ['27'], departureEnds: ['27', '09'] }],
+      },
+    });
+    operations.step(startS);
+    const departureEnds = fleet
+      .snapshot()
+      .filter(({ state }) => state === 'parked' || state === 'ready-for-pushback')
+      .map(({ runwayEnd }) => runwayEnd);
+    expect(departureEnds).toEqual(['27', '09']);
+  });
+
   test('builds the same eligible schedule for the same seed and a different schedule for another', () => {
     const board = (seed: number) => createFlightOperations(setup(), seed, 0).board(0);
     const day = board(1);

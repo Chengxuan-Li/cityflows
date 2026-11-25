@@ -101,27 +101,62 @@ describe('runway configurations', () => {
     expect(chooseRunwayConfiguration(input, 0, { fromDeg: 0, speedKt: 8 })).toBeNull();
   });
 
-  it("follows Zurich's concepts through the day and leaves them in a strong westerly", () => {
+  it("keeps Zurich's north concept from opening to curfew and leaves it in a strong westerly", () => {
     // Runway bearings 137, 317, 095, 275, 155 and 335 degrees, as CityFlows headings.
     const bearings = { '14': 137, '32': 317, '10': 95, '28': 275, '16': 155, '34': 335 };
-    const chooser = createRunwayChooser({
+    const input = {
       ends: Object.entries(bearings).map(([designator, deg]) => ({
         designator,
         headingRad: ((deg - 90) * Math.PI) / 180,
       })),
       ...airportRunwayConcepts.LSZH,
       crosswindLimitsKt: { C25C: 25 },
-    });
+    };
+    const chooser = createRunwayChooser(input);
     const prevailing = { fromDeg: 240, speedKt: 8 };
     expect(
-      [2, 6.5, 12, 22, 23.75].map((h) => chooser.choose(h * hourS, prevailing)?.id ?? null),
-    ).toEqual([null, 'south', 'north', 'east', null]);
+      runwayConfigurationChanges(input, [{ timeS: 0, wind: prevailing }]).map(
+        ({ timeS, configuration }) => [timeS / hourS, configuration?.id ?? null],
+      ),
+    ).toEqual([
+      [0, null],
+      [6, 'north'],
+      [23.5, null],
+    ]);
     expect(chooser.choose(12 * hourS, prevailing)).toMatchObject({
       arrivalEnds: ['14'],
       departureEnds: ['16', '28'],
     });
     // 270 at 15 kt is 10 kt of tailwind on 14: the east concept takes over by day.
     expect(chooser.choose(12 * hourS, { fromDeg: 270, speedKt: 15 })?.id).toBe('east');
+  });
+
+  it('keeps Heathrow on the same segregated pair until the wind requires a change', () => {
+    const input = {
+      ends: [
+        { designator: '09L', headingRad: 0 },
+        { designator: '09R', headingRad: 0 },
+        { designator: '27L', headingRad: Math.PI },
+        { designator: '27R', headingRad: Math.PI },
+      ],
+      ...airportRunwayConcepts.EGLL,
+    };
+    expect(
+      runwayConfigurationChanges(input, [{ timeS: 0, wind: west }]).map(
+        ({ timeS, configuration }) => [timeS, configuration?.id],
+      ),
+    ).toEqual([[0, '27L arrivals']]);
+    expect(chooseRunwayConfiguration(input, 16 * hourS, east)).toMatchObject({
+      arrivalEnds: ['09L'],
+      departureEnds: ['09R'],
+    });
+    expect(
+      chooseRunwayConfiguration(
+        { ...input, concepts: [{ startS: 0, endS: 24 * hourS, configurationId: '27R arrivals' }] },
+        16 * hourS,
+        west,
+      )?.id,
+    ).toBe('27R arrivals');
   });
 
   it('reports wind components and whether a configuration keeps its limits', () => {

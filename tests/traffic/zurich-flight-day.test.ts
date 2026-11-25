@@ -14,7 +14,7 @@ import { limit } from '../timeouts';
 // (TASK-298's interlock: one aircraft holds a runway and every runway sharing its nodes).
 
 test(
-  'Zurich operates its flight day through its concepts with crossing runways interlocked',
+  'Zurich operates its flight day under north with crossing runways interlocked',
   { timeout: limit(900_000) },
   async () => {
     const project = await openBundled('zurich-airport');
@@ -46,6 +46,7 @@ test(
     let crossingUse = 0;
     let peakStuck = 0;
     const helicopters = new Set<string>();
+    const departures = new Set<string>();
     for (let step = 0; step < 864_000; step++) {
       operations.step(step / 10);
       fleet.step(step / 10);
@@ -61,8 +62,10 @@ test(
         for (let j = i + 1; j < on.length; j++)
           if (on[i]!.some((p) => on[j]!.some((q) => interlocked[p]![q]))) runwayConflicts++;
       crossingUse += on.filter((r) => r.length > 1).length;
-      for (const a of aircraft)
+      for (const a of aircraft) {
         if (a.typeId === 'EC45' || a.typeId === 'A139') helicopters.add(a.registration);
+        if (a.state === 'takeoff-roll' && a.runwayEnd) departures.add(a.runwayEnd);
+      }
       peakStuck = Math.max(peakStuck, fleet.metrics().stuck);
     }
     operations.step(86_400);
@@ -81,8 +84,11 @@ test(
     // The crossing is used (an aircraft on both runways at the intersection) and helicopters fly.
     expect(crossingUse).toBeGreaterThan(0);
     expect(helicopters.size).toBeGreaterThan(0);
-    // The concepts in their order: south at 06:00, north at 07:00, east at 21:00, closed at 23:30.
-    expect(transitions.map(({ toId }) => toId)).toEqual(['south', 'north', 'east', null]);
+    expect(departures).toEqual(new Set(['16', '28']));
+    expect(transitions.map(({ startS, toId }) => [startS, toId])).toEqual([
+      [6 * 3600, 'north'],
+      [23.5 * 3600, null],
+    ]);
     for (const { startS, openS } of transitions) expect(openS).toBeGreaterThanOrEqual(startS);
   },
 );

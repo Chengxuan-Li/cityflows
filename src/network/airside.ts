@@ -1,4 +1,10 @@
-import { cumulativeLengths, nearestOnPolyline } from '../geo/polyline';
+import {
+  boxOf,
+  cumulativeLengths,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointInPolygon,
+} from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import { aircraftCodes, codeSpanLimitM, type AircraftCode } from '../schema/aircraft';
 import type { AirsideEdgeKind, Airport, RunwayOperations, StandKind } from '../schema/airport';
@@ -84,6 +90,11 @@ export interface AirsideStandC {
   root: number;
   stop: number;
   maxCode: number;
+  /** TASK-320: where apron service roads cross the stand's line, as merged [from, to] distances
+   * back from the stop along it (negative: ahead of it), and the paved room ahead of the stop
+   * (to the edge of the airside surfaces or a terminal or hangar wall, at most 30 m). */
+  roadBandsM: [number, number][];
+  aheadM: number;
 }
 
 export interface AirsideCrossingC {
@@ -113,6 +124,44 @@ export interface AirsideGraph {
   /** TASK-305: the airport's own runway configuration table, where it has one. */
   runwayOperations?: RunwayOperations;
   index: { node: Map<string, number>; edge: Map<string, number>; stand: Map<string, number> };
+}
+
+/** The overlap of two protected runway strips at a shared node. Each band bounds the
+ * projection on its axis, relative to the node. */
+export interface RunwayIntersectionArea {
+  idx: number;
+  runways: [number, number];
+  pos: Vec2;
+  bands: { axis: Vec2; min: number; max: number }[];
+}
+
+export function runwayIntersectionAreas(graph: AirsideGraph, marginM: number) {
+  const areas: RunwayIntersectionArea[] = [];
+  const stations = graph.runways.map((runway) => cumulativeLengths(runway.line));
+  for (const node of graph.nodes) {
+    if (node.runways.length < 2) continue;
+    const strips = node.runways.map((idx) => {
+      const runway = graph.runways[idx]!;
+      const station = runway.stationsM[runway.nodes.indexOf(node.idx)]!;
+      const heading = headingAtDistance(runway.line, stations[idx]!, station);
+      const x = Math.cos(heading);
+      const y = Math.sin(heading);
+      const width = runway.widthM / 2 + marginM;
+      return [
+        { axis: { x: -y, y: x }, min: -width, max: width },
+        { axis: { x, y }, min: -station - marginM, max: runway.lengthM - station + marginM },
+      ];
+    });
+    for (let i = 0; i < strips.length; i++)
+      for (let j = i + 1; j < strips.length; j++)
+        areas.push({
+          idx: graph.runways.length + areas.length,
+          runways: [node.runways[i]!, node.runways[j]!],
+          pos: node.pos,
+          bands: [...strips[i]!, ...strips[j]!],
+        });
+  }
+  return areas;
 }
 
 const codeIndex = (code: AircraftCode | null) => (code ? aircraftCodes.indexOf(code) : -1);
@@ -228,6 +277,67 @@ export function compileAirside(
     runway: hold.runway ? runwayIndex.get(hold.runway)! : -1,
     toward: hold.toward ? edgeIndex.get(hold.toward)! : -1,
   }));
+  // TASK-320: apron service roads (TASK-316's reading: `service` roads closed to cars) and the
+  // paved airside surfaces with the walls on them, for where a parked aircraft may stand.
+  const serviceLanes = compiled.roads
+    .filter((road) => road.roadClass === 'service' && ['no', 'private'].includes(road.access[0]!))
+    .flatMap((road) => road.lanes.map((lane) => compiled.lanes[lane]!));
+  const rings = (list: { rings: Vec2[][] }[]) =>
+    list.map(({ rings }) => ({ rings, box: boxOf(rings[0]!) }));
+  const paved = rings(airport.surfaces.filter((s) => s.kind !== 'runway' && s.kind !== 'helipad'));
+  const walls = rings([...Object.values(airport.terminals), ...airport.hangars]);
+  const inside = (p: Vec2, area: { rings: Vec2[][]; box: ReturnType<typeof boxOf> }) =>
+    p.x >= area.box.minX &&
+    p.x <= area.box.maxX &&
+    p.y >= area.box.minY &&
+    p.y <= area.box.maxY &&
+    pointInPolygon(p, area.rings[0]!) &&
+    !area.rings.slice(1).some((hole) => pointInPolygon(p, hole));
+  const STAND_LINE_BACK_M = 100,
+    STAND_LINE_AHEAD_M = 30;
+  function roadBands(pos: Vec2, heading: number): [number, number][] {
+    const ux = Math.cos(heading),
+      uy = Math.sin(heading);
+    const bands: [number, number][] = [];
+    for (const lane of serviceLanes) {
+      const line = lane.polyline;
+      for (let i = 1; i < line.length; i++) {
+        const a = line[i - 1]!,
+          b = line[i]!;
+        const ex = b.x - a.x,
+          ey = b.y - a.y;
+        const den = ux * ey - uy * ex;
+        if (Math.abs(den) < 1e-9) continue;
+        const wx = a.x - pos.x,
+          wy = a.y - pos.y;
+        // pos - d u = a + k (b - a): d back from the stop, k along the lane's segment.
+        const d = (ex * wy - ey * wx) / den;
+        const k = (uy * wx - ux * wy) / den;
+        if (k < 0 || k > 1 || d < -STAND_LINE_AHEAD_M || d > STAND_LINE_BACK_M) continue;
+        // The lane's width along the stand line, a shallow crossing counted at most three widths.
+        const sin = Math.abs(den) / Math.hypot(ex, ey);
+        const half = Math.min(lane.widthM / 2 / sin, 1.5 * lane.widthM);
+        bands.push([d - half, d + half]);
+      }
+    }
+    bands.sort((p, q) => p[0] - q[0]);
+    const merged: [number, number][] = [];
+    for (const band of bands)
+      if (merged.length && band[0] <= merged.at(-1)![1])
+        merged.at(-1)![1] = Math.max(merged.at(-1)![1], band[1]);
+      else merged.push([...band]);
+    return merged;
+  }
+  function roomAhead(pos: Vec2, heading: number) {
+    const ux = Math.cos(heading),
+      uy = Math.sin(heading);
+    let m = 0;
+    for (; m <= STAND_LINE_AHEAD_M; m += 0.5) {
+      const p = { x: pos.x + m * ux, y: pos.y + m * uy };
+      if (!paved.some((area) => inside(p, area)) || walls.some((area) => inside(p, area))) break;
+    }
+    return Math.max(0, Math.min(STAND_LINE_AHEAD_M, m - 0.5));
+  }
   const stands: AirsideStandC[] = standIds.map((id, idx) => {
     const stand = airport.stands[id]!;
     const leadIn = stand.leadIn.map((e) => edgeIndex.get(e)!);
@@ -256,6 +366,8 @@ export function compileAirside(
       root,
       stop,
       maxCode: codeIndex(stand.maxCode),
+      roadBandsM: roadBands(stand.pos, stand.heading),
+      aheadM: roomAhead(stand.pos, stand.heading),
     };
   });
   const taxiNodes = nodes.filter((n) =>

@@ -13,7 +13,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
-  Matrix4,
   Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -49,17 +48,20 @@ import { signalMountM, signalRotationY } from './signals';
 import { buildBeacons } from './markings';
 import { buildingMaterial, groundMaterial, setBuildingLights } from './context';
 import {
-  defaultLighting,
+  defaultVisual,
+  foliageSeason,
   lampColors,
   lightKey,
+  mixWeights,
   platformLights,
   sceneLight,
-  type LightingSettings,
+  type VisualSettings,
 } from '../render/lighting';
+import type { LonLat } from '../geo/projection';
 import { buildHalos, buildPools, type LightPoint } from './lights';
 import { tramStopSize } from '../render/tram-stops';
-import { buildVegetation, surfaceTexture } from './vegetation';
-import type { placeTrees } from '../render/vegetation';
+import { buildVegetation, surfaceTexture, type TreeLook } from './vegetation';
+import type { placeTrees, Tree } from '../render/vegetation';
 import { placeDetails, type placeStreet } from '../render/street';
 import { buildStreet } from './street';
 import { Vehicles3D } from './vehicles';
@@ -67,7 +69,7 @@ import { buildWalkSignals, Walkers3D } from './walkers';
 import { clipGround, groundMesh } from './terrain';
 import { lotGeometry } from './stalls';
 import { stripGeometry } from './strips';
-import { terrainVehicleOffset } from './heights';
+import { VehicleDetailView, vehicleShadowLayer } from './vehicle-detail';
 import { buildTerrainGround } from './context';
 import { Parking3D } from './parking';
 import { ParkedCars3D } from './parked-cars';
@@ -105,15 +107,20 @@ export class Scene3D {
   private readonly sun = new DirectionalLight(0xffffff, 0.95);
   // TASK-162: more sky, less sun: lighter, softer shadows for the flat Sonoma look.
   private readonly sky = new HemisphereLight(0xffffff, 0xd9dad6, 2);
-  /** TASK-163: view-only lighting; the Day preset reproduces the lights above exactly. */
-  private lighting: LightingSettings = defaultLighting;
+  /** TASK-163, TASK-341: view-only lighting and quality; the Day preset reproduces the lights
+   * above exactly, and the defaults (Balanced) the look before TASK-341. */
+  private visual: VisualSettings = defaultVisual;
   private lightMinute = 0;
-  private light = sceneLight(defaultLighting, 0);
+  private lightOrigin: LonLat | undefined;
+  private light = sceneLight(defaultVisual, 0);
+  /** The settings the built scene follows: trees, casters, shadow map and pixel ratio. */
+  private treeLook = '';
+  private trees: { trees: readonly Tree[]; groundAt: (p: Vec2) => number } | undefined;
+  private furniture: Mesh[] = [];
   /** TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance. */
   private palette = mapPalettes.light;
   private builtPalette = mapPalettes.light;
   private lightKey = '';
-  private shadowsLayer = true;
   private streetLightsVisible = true;
   private night:
     | {
@@ -204,7 +211,7 @@ export class Scene3D {
   private basemap: Basemap3D | undefined;
   private tilesEnabled = defaultLayers.basemap;
   private lastRenderMs = performance.now();
-  private readonly vehicleMatrix = new Matrix4();
+  private readonly vehicleDetail = new VehicleDetailView();
   private shadowView = '';
   private compilePending = false;
   private readonly restoreContext = () => {
@@ -225,8 +232,7 @@ export class Scene3D {
       this.sun,
       this.sun.target,
       this.content,
-      this.vehicles.mesh,
-      this.vehicles.beams,
+      this.vehicles.group,
       this.walkers.mesh,
       this.selection,
       this.labels.group,
@@ -237,6 +243,7 @@ export class Scene3D {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.00008;
     this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.camera.layers.enable(vehicleShadowLayer);
     this.controls = new MapControls(this.camera, canvas);
     this.controls.addEventListener('change', this.invalidate);
     this.controls.minPolarAngle = (5 * Math.PI) / 180;
@@ -278,8 +285,7 @@ export class Scene3D {
     this.shadowView = '';
     this.disposeContent();
     if (this.city !== city) {
-      this.vehicles.poses.snapshot = null;
-      this.vehicles.mesh.count = this.vehicles.beams.count = 0;
+      this.vehicles.clear();
       this.walkers.mesh.count = 0;
       this.parkedSnapshot = null;
     }
@@ -303,6 +309,7 @@ export class Scene3D {
         geometry.heights,
         this.rail.heights!,
         railTimetable(city.rail),
+        city.drivingSide,
       );
       this.content.add(this.trains.group);
       this.stations = new Stations3D(
@@ -373,11 +380,11 @@ export class Scene3D {
     this.parking.group.visible = this.parkingVisible;
     this.parking.setCounts(this.parkingCounts);
     this.content.add(this.parking.group);
-    this.parkedCars = new ParkedCars3D(city, geometry.heights);
-    this.parkedCars.mesh.visible = this.parkedVisible;
+    this.parkedCars = new ParkedCars3D(city, geometry.heights, this.vehicles.modelGeometries);
+    this.parkedCars.group.visible = this.parkedVisible;
     this.parkedCars.setStyle(this.getView().zoom, this.colourByClass);
     this.parkedCars.setSnapshot(this.parkedSnapshot);
-    this.content.add(this.parkedCars.mesh);
+    this.content.add(this.parkedCars.group);
     this.updateParkedDataset();
     if (this.source?.geo !== source.geo || this.renderedTerrain !== this.terrainEnabled) {
       this.basemap?.destroy();
@@ -420,8 +427,7 @@ export class Scene3D {
         }),
       );
       caster.castShadow = true;
-      caster.layers.set(1);
-      this.sun.shadow.camera.layers.enable(1);
+      caster.layers.set(vehicleShadowLayer);
       this.content.add(caster);
     }
     const asphalt = add(geometry.surfaces, style.asphalt, !terrain.grid);
@@ -444,8 +450,9 @@ export class Scene3D {
     this.treeCounts = placed.counts;
     this.canvas.dataset.treeCounts = JSON.stringify(placed.counts);
     this.canvas.dataset.treeCap = String(placed.capped);
-    this.vegetation = buildVegetation(placed.trees, (p) => terrain.groundAt(p.x, p.y));
-    this.content.add(this.vegetation.group);
+    this.trees = { trees: placed.trees, groundAt: (p) => terrain.groundAt(p.x, p.y) };
+    this.treeLook = '';
+    this.buildTrees();
     const streetStart = performance.now();
     const furniture = details.street;
     this.streetCounts = furniture.counts;
@@ -650,23 +657,111 @@ export class Scene3D {
     this.camera.position.y += groundHeight - this.controls.target.y;
     this.controls.target.y = groundHeight;
     this.canvas.dataset.meshes = String(this.content.children.length + 1);
+    this.furniture = [];
+    for (const group of [this.street.group, this.walkSignals.group])
+      group.traverse((object) => {
+        if (object instanceof Mesh && object.castShadow) this.furniture.push(object);
+      });
+    this.furniture.push(poles, arms, boxes);
+    this.applyCasters();
     this.lightKey = '';
     this.applyLight();
     this.compilePending = true;
   }
 
-  /** TASK-163: the view's lighting preset and exposure, and the Shadows layer. View-only: it
-   * never reaches the simulation, the project or their hashes. */
-  setLighting(settings: LightingSettings, timeS: number, shadows: boolean) {
+  /** TASK-341: the trees in the settings' look, rebuilt only when it changes. */
+  private buildTrees() {
+    if (!this.trees) return;
+    const v = this.visual;
+    const look: TreeLook = {
+      weights: mixWeights(v, this.lightOrigin),
+      season: foliageSeason(v, this.lightOrigin),
+      colour: v.foliageColour,
+      variation: v.colourVariation,
+      castShadow: v.casters.trees,
+    };
+    const key = JSON.stringify({ ...look, castShadow: undefined });
+    if (key === this.treeLook) return;
+    this.treeLook = key;
+    this.invalidate();
+    this.shadowView = '';
+    const visible = this.vegetation && {
+      natural: this.vegetation.natural.visible,
+      street: this.vegetation.street.visible,
+    };
+    if (this.vegetation) {
+      this.vegetation.group.traverse((object) => {
+        if (object instanceof InstancedMesh) {
+          object.geometry.dispose();
+          (object.material as MeshLambertMaterial).dispose();
+          object.dispose();
+        }
+      });
+      this.vegetation.group.removeFromParent();
+    }
+    this.vegetation = buildVegetation(this.trees.trees, this.trees.groundAt, look);
+    if (visible) {
+      this.vegetation.natural.visible = visible.natural;
+      this.vegetation.street.visible = visible.street;
+    }
+    this.content.add(this.vegetation.group);
+    this.canvas.dataset.treeKits = JSON.stringify(this.vegetation.counts);
+  }
+
+  /** TASK-341: each caster class on or off in the sun's shadow. */
+  private applyCasters() {
+    const c = this.visual.casters;
+    if (this.buildings) this.buildings.castShadow = c.buildings;
+    this.vehicles.mesh.castShadow = c.vehicles;
+    this.walkers.mesh.castShadow = c.people;
+    for (const mesh of this.furniture) mesh.castShadow = c.furniture;
+    this.vegetation?.setCastShadow(c.trees);
+    this.aircraft?.setQuality(c.aircraft, this.visual.dropLines);
+  }
+
+  /** TASK-163, TASK-341: the view's lighting and quality settings at the project's `origin`.
+   * View-only: they never reach the simulation, the project or their hashes. */
+  setVisual(settings: VisualSettings, timeS: number, origin?: LonLat) {
     // Following the clock, the light moves once a simulated minute.
     const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
-    if (settings === this.lighting && minute === this.lightMinute && shadows === this.shadowsLayer)
+    if (settings === this.visual && minute === this.lightMinute && origin === this.lightOrigin)
       return;
-    this.lighting = settings;
+    const previous = this.visual;
+    this.visual = settings;
     this.lightMinute = minute;
-    this.shadowsLayer = shadows;
-    this.light = sceneLight(settings, minute * 60, this.palette.background);
+    this.lightOrigin = origin;
+    this.light = sceneLight(settings, minute * 60, this.palette.background, origin);
+    if (settings !== previous) this.applyQuality(previous);
+    this.buildTrees();
     this.applyLight();
+  }
+
+  private applyQuality(previous: VisualSettings) {
+    const v = this.visual;
+    this.invalidate();
+    this.shadowView = '';
+    const size = v.shadowResolution;
+    if (this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    // PCF with a wider sampling disk: three removed PCFSoftShadowMap (r187).
+    this.sun.shadow.radius = v.shadowSoft ? 3 : 1;
+    if (v.renderScale !== previous.renderScale) {
+      this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio) * v.renderScale);
+      this.resize();
+    }
+    this.applyCasters();
+    this.canvas.dataset.quality = JSON.stringify({
+      shadowRange: v.shadowRange,
+      shadowResolution: size,
+      shadowSoft: v.shadowSoft,
+      casters: v.casters,
+      renderScale: v.renderScale,
+      pixelRatio: this.renderer.getPixelRatio(),
+      dropLines: v.dropLines,
+    });
   }
 
   /** TASK-166: the map's ground and buildings for the appearance. */
@@ -676,7 +771,12 @@ export class Scene3D {
     this.canvas.dataset.mapPalette = palette === mapPalettes.dark ? 'dark' : 'light';
     this.labels.setColours(palette.label);
     this.invalidate();
-    this.light = sceneLight(this.lighting, this.lightMinute * 60, palette.background);
+    this.light = sceneLight(
+      this.visual,
+      this.lightMinute * 60,
+      palette.background,
+      this.lightOrigin,
+    );
     if (this.city && this.source && this.builtPalette !== palette) this.recolour();
     this.applyLight();
   }
@@ -739,7 +839,7 @@ export class Scene3D {
 
   private applyLight() {
     const light = this.light;
-    const key = `${lightKey(light)},${this.shadowsLayer},${this.streetLightsVisible},${this.railVisible}`;
+    const key = `${lightKey(light)},${this.visual.shadows},${this.streetLightsVisible},${this.railVisible}`;
     if (key === this.lightKey) return;
     this.lightKey = key;
     this.invalidate();
@@ -749,7 +849,7 @@ export class Scene3D {
     this.sky.intensity = light.skyIntensity;
     this.sun.color.setHex(light.sunColor);
     this.sun.intensity = light.sunIntensity;
-    this.sun.castShadow = light.shadows && this.shadowsLayer && light.sunIntensity > 0;
+    this.sun.castShadow = light.shadows && this.visual.shadows && light.sunIntensity > 0;
     this.renderer.setClearColor(light.background);
     // Unlit surfaces (rail paint, wires, sign faces, pedestrians) take the light a flat surface
     // receives, so they darken with the rest of the scene instead of glowing.
@@ -763,30 +863,32 @@ export class Scene3D {
           m.color.setRGB(base.r * r, base.g * g, base.b * b);
         }
     });
-    const on = light.artificial;
-    this.vehicles.setLights(on);
-    this.trains?.setLights(on);
-    this.levelCrossings?.setNight(on);
-    this.aircraft?.setLight(on);
-    this.groundVehicles?.setLight(on);
-    this.apron?.setLight(on);
-    this.airfieldLights?.setLight(on);
+    // TASK-341: each source at its own level.
+    const on = light.artificial,
+      { lamps, railLights, airfieldLights } = light;
+    this.vehicles.setLights(light.vehicleLights);
+    this.trains?.setLights(railLights);
+    this.levelCrossings?.setNight(railLights);
+    this.aircraft?.setLight(airfieldLights);
+    this.groundVehicles?.setLight(airfieldLights);
+    this.apron?.setLight(airfieldLights);
+    this.airfieldLights?.setLight(airfieldLights);
     if (this.airfieldLights)
       this.canvas.dataset.airfieldLights = JSON.stringify(this.airfieldLights.counts());
-    if (this.street) (this.street.heads.material as MeshLambertMaterial).emissiveIntensity = on;
-    if (this.buildings) setBuildingLights(this.buildings.material, light.windows, on);
+    if (this.street) (this.street.heads.material as MeshLambertMaterial).emissiveIntensity = lamps;
+    if (this.buildings) setBuildingLights(this.buildings.material, light.windows, light.windowGlow);
     if (this.night) {
       const { lampPools, lampHalos, platformPools, signalHalos } = this.night;
-      lampPools.visible = lampHalos.visible = on > 0 && this.streetLightsVisible;
-      platformPools.visible = on > 0 && this.railVisible;
-      signalHalos.visible = on > 0;
-      (lampPools.material as MeshBasicMaterial).opacity = 0.42 * on;
-      (platformPools.material as MeshBasicMaterial).opacity = 0.32 * on;
-      (lampHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.9 * on;
-      (signalHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.8 * on;
+      lampPools.visible = lampHalos.visible = lamps > 0 && this.streetLightsVisible;
+      platformPools.visible = railLights > 0 && this.railVisible;
+      signalHalos.visible = railLights > 0;
+      (lampPools.material as MeshBasicMaterial).opacity = Math.min(1, 0.42 * lamps);
+      (platformPools.material as MeshBasicMaterial).opacity = Math.min(1, 0.32 * railLights);
+      (lampHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.9 * lamps;
+      (signalHalos.material as ShaderMaterial).uniforms.intensity!.value = 0.8 * railLights;
     }
     this.canvas.dataset.lighting = JSON.stringify({
-      mode: this.lighting.mode,
+      mode: this.visual.mode,
       artificial: Number(on.toFixed(3)),
       windows: Number(light.windows.toFixed(3)),
       shadows: this.sun.castShadow,
@@ -811,7 +913,7 @@ export class Scene3D {
   setParkedCarsVisible(visible: boolean) {
     if (visible === this.parkedVisible) return;
     this.parkedVisible = visible;
-    if (this.parkedCars) this.parkedCars.mesh.visible = visible;
+    if (this.parkedCars) this.parkedCars.group.visible = visible;
     this.updateParkedDataset();
     this.invalidate();
   }
@@ -1180,7 +1282,7 @@ export class Scene3D {
     if (aircraft) return aircraft;
     if (this.trains && this.railVisible) {
       const car = pickVehicle3D(
-        this.trains.body,
+        this.trains.pickMesh,
         this.camera,
         x,
         y,
@@ -1350,6 +1452,11 @@ export class Scene3D {
       this.geometry?.crossings.getAttribute('position').count ?? 0,
     );
     if (!this.demand.consume(renderContinuously())) return;
+    if (this.trains) {
+      this.trains.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
+      if (import.meta.env.MODE === 'test')
+        this.canvas.dataset.trainLevels = JSON.stringify(this.trains.counts());
+    }
     if (this.aircraft) {
       this.aircraft.setDetail(this.camera, pixelScale(this.camera, this.canvas.clientHeight));
       const models = JSON.stringify({
@@ -1359,22 +1466,14 @@ export class Scene3D {
       if (this.canvas.dataset.aircraftModels !== models)
         this.canvas.dataset.aircraftModels = models;
     }
-    this.parking?.update(this.getView().zoom, this.selectedParking);
-    this.parkedCars?.setStyle(this.getView().zoom, this.colourByClass);
+    const zoom =
+      this.canvas.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360) * distance);
+    const vehicleViewChanged = this.vehicleDetail.update(this.camera, zoom, distance);
+    this.parking?.update(zoom, this.selectedParking);
+    this.parkedCars?.setStyle(zoom, this.colourByClass);
+    this.parkedCars?.setDetail(this.vehicleDetail, vehicleViewChanged);
     if (this.city && this.geometry)
-      this.vehicles.animate(elapsedS, this.city, this.geometry.heights);
-    if (this.city && this.geometry?.heights.terrain.grid && this.vehicles.poses.snapshot) {
-      const heights = this.geometry.heights,
-        snapshot = this.vehicles.poses.snapshot;
-      for (let i = 0; i < snapshot.count; i++) {
-        this.vehicles.mesh.getMatrixAt(i, this.vehicleMatrix);
-        const e = this.vehicleMatrix.elements,
-          p = { x: e[12]!, y: e[14]! },
-          lane = (snapshot.poseLane?.[i] ?? -1) >= 0 ? snapshot.poseLane![i]! : snapshot.lane[i]!;
-        e[13]! += terrainVehicleOffset(this.city, heights, lane, p);
-        this.vehicles.mesh.setMatrixAt(i, this.vehicleMatrix);
-      }
-    }
+      this.vehicles.animate(elapsedS, this.city, this.geometry.heights, this.vehicleDetail);
     const index =
       this.selectedId === null
         ? -1
@@ -1396,8 +1495,10 @@ export class Scene3D {
         this.selection.matrixAutoUpdate = false;
       }
     }
-    // Fit the 2048 shadow map to the camera's ground target, rather than the whole city.
-    const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * 0.9);
+    // Fit the shadow map to the camera's ground target, rather than the whole city; TASK-341's
+    // shading range widens it to 2 or 4 times the camera's distance.
+    const range = { near: 0.9, medium: 2, far: 4 }[this.visual.shadowRange];
+    const extent = Math.max(40, this.camera.position.distanceTo(this.controls.target) * range);
     // A world-space texel offset keeps broad roofs free of self-shadow stripes.
     this.sun.shadow.normalBias = Math.max(0.05, (2 * extent) / this.sun.shadow.mapSize.x);
     const target = this.controls.target;
@@ -1541,6 +1642,8 @@ export class Scene3D {
       (this.surroundings?.geometry === opaque ? transparent : opaque).dispose();
     }
     this.terrainGround = undefined;
+    this.parkedCars?.destroy();
+    this.parkedCars = undefined;
     this.content.traverse((object) => {
       if (object instanceof Mesh) {
         object.geometry.dispose();

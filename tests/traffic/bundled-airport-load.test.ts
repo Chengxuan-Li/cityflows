@@ -6,31 +6,34 @@ import { compile } from '../../src/network';
 import { createEngine } from '../../src/sim/engine';
 import { limit } from '../timeouts';
 
-// TASK-310: reference outputs from 06e2dab with the held-out archives installed.
+// TASK-310: reference outputs from 06e2dab with the held-out archives installed. TASK-312 re-pins
+// the startup states and boards (stand rule, order, Boston and Heathrow schedules and runway tables).
+// TASK-320 re-pins the compiled graphs (stands' road bands and room ahead; the rest unchanged) and
+// the startup states and boards where parked poses change (London City, Zurich, Heathrow).
 const pins = [
   {
     id: 'london-city-airport',
-    compiled: '300d4ee41d2480bf169ae29a3ba1768fb1e1963d243795b6c8d182505885dafc',
-    state: [3067669136, 334463102],
-    board: 'ddc47628f289d0be781c7673d06c76c591321888e06a397965bf4dad53317ace',
+    compiled: '5147d31fd2188e92690e4500dedeb34675e249f70a0c3313949ab799373218c2',
+    state: [3987169813, 886009363],
+    board: 'b1c98cc15570f53d5c02f8cf2828b09879337d4d04325b68fcb4eebfe15f180c',
   },
   {
     id: 'zurich-airport',
-    compiled: '0842d13fbc4288095f0198b9eb316ac754d6d469fef5a9e012ef37e47731d8e0',
-    state: [62496529, 2841216063],
-    board: '9272e4fd978df31378c44a424aa9f623f2142a1880c317909fad4213c2601943',
+    compiled: '5b079ccbc54a73687cc3999cb2e38a9dd1e13c5fb2ab547bcfe6a70d126a890b',
+    state: [2699325225, 3382430523],
+    board: 'f0b7bc5b71b5e04b1cad6b1849863054b40c4b809fc960a0d72f7b80f1204ffe',
   },
   {
     id: 'boston-logan',
-    compiled: '3f854d1506b00eeb836b61c3b31b2fb99cc14a093367fe30fc0646a5a82ee709',
-    state: [2936898296, 837548569],
-    board: '82500a0afed2baa5e3c2e1dc97fcab675062904cd15ff82297d98d9c062e2ad8',
+    compiled: '7fc43beb08028dfce7bd50c989b8c7051dd3031c2af238390ac28f0a04d3bece',
+    state: [3509028583, 2047946547],
+    board: 'fd7da6fa26993fa5da7501a6aab4159f8acf350f63799f2d24aeeb1644d461fb',
   },
   {
     id: 'heathrow',
-    compiled: '52a242206bf7b485fdfbe42e26adda7f8a3a5a54c64623a08d0854cfacfa7069',
-    state: [2003868899, 4110133764],
-    board: '16a8bdd274ab14d4d6aa283a7cfad907ca1fb29dc3c1f1a5e8a73e8c8df56f56',
+    compiled: '34ed206e2ac48dc75881b5563343e59abe223bafa4814a7b8eaa0a0ee674a9b5',
+    state: [3284891146, 37696474],
+    board: '03695df6916ac1950720e1a2469fa7e69dbc0c6561f3acc516b76313114cd26f',
   },
 ];
 

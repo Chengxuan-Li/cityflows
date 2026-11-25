@@ -1,6 +1,6 @@
 # TASK-312 — Airside throughput at scale and realistic taxi speeds
 
-Status: planned 2026-11-22 (airports wave F; starts after TASK-310, 311 and 302). Proposed owner: Claude Code subagent
+Status: delivered with gaps 2026-11-22 (report in the commit body; Zurich, Boston and Heathrow still miss 98%) (airports wave F; based on the lead line with TASK-310, 311, 302, 313, 314, 315 and TASK-317's taxi-speed fix). Proposed owner: Claude Code subagent
 (Opus 5.5, high). Branch `task/312-airside-scale`, worktree `D:\cityflows-wt\312`, ports 5512 / 5612.
 
 ## Goal
@@ -19,6 +19,16 @@ source of delay)").
   planning ahead of arrival, runway sequencing with mixed or segregated modes.
 - Bring Boston and Heathrow into the New city panel once they pass, taking their bundling and the good rules from the
   parked branches (`dacf5ae`: the apron rule; `c0b4b2f`: the population and curb fixes), not their clearance changes.
+
+## Method (owner's time cut, 2026-11-22)
+
+1. First build a fast bench: airside only (no road traffic, no rendering), headless, a peak window (for example
+   06:00 to 10:00 sim time) per airport, printing completed, diverted, queued and the delay attribution TASK-317
+   defined (`bench/airside-delay.ts` is a start). Iterate on it; a run should take minutes, not an hour.
+2. Use the attribution to pick fixes: TASK-317 and TASK-302 found the waits are approach sequencing, departure start
+   grants and surface clearance (whole-route locks), departure readiness waiting for inbound aircraft, and stand
+   admission; taxiing itself is under 1% at the large airports, and taxi speed is already fixed.
+3. Run full days only for the final gate numbers.
 
 ## Scope
 

@@ -39,6 +39,8 @@ export function pickVehicle3D(
 ): number | null {
   mesh.computeBoundingSphere();
   const raycaster = new Raycaster();
+  // The road vehicle's pick volume is also its shadow caster at street zoom.
+  raycaster.layers.mask = mesh.layers.mask;
   const cast = (x: number, y: number) => {
     raycaster.setFromCamera(new Vector2((2 * x) / width - 1, 1 - (2 * y) / height), camera);
     return raycaster.intersectObject(mesh)[0]?.instanceId;

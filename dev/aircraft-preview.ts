@@ -7,7 +7,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { buildAircraftOutline, type AircraftOutlinePart } from '../src/render/aircraft-outline';
-import { defaultLighting, sceneLight, type SceneLight } from '../src/render/lighting';
+import { defaultVisual, sceneLight, type SceneLight } from '../src/render/lighting';
 import { buildAircraftMesh } from '../src/render3d/aircraft-mesh';
 import { aircraftTypes } from '../src/schema/aircraft';
 
@@ -204,7 +204,7 @@ export function showAircraftPreview(query: URLSearchParams) {
     canvas2d.hidden = is3d;
     canvas3d.hidden = !is3d;
     spin.disabled = gear.disabled = !is3d;
-    const light = sceneLight({ ...defaultLighting, mode }, 0);
+    const light = sceneLight({ ...defaultVisual, mode }, 0);
     scroll.dataset.lighting = mode;
     scroll.style.setProperty(
       '--aircraft-ground',

@@ -1468,7 +1468,10 @@ edges and the runways whose edges meet there; edges their line, cumulative stati
 code as an index into `aircraftCodes` (-1 admits none), runway and stand; runways their edges and
 nodes in order from `ends[0]` with stations, centreline, and each end's node, threshold and
 stations; holds their node, protected runway and `toward` edge; stands their lead-in edges, root
-(network end) and stop node; hangars their centroid and the nearest node a taxi edge reaches;
+(network end) and stop node, and (TASK-320) where apron service roads (`service` roads closed to
+cars, TASK-316's reading) cross the stand's line, as merged bands of distance back from the stop,
+and the paved room ahead of the stop (to the edge of the non-runway airside surfaces or a terminal
+or hangar wall, at most 30 m); hangars their centroid and the nearest node a taxi edge reaches;
 `maxSpanM`, the span limit of the largest stand code. Each road crossing gets the lanes of its
 recorded roads whose drawn line passes within a lane width of it, with a stop `clearance` short of
 it: the larger of half the edge's width and half its code's span, plus 7.5 m; a stop before a
@@ -1848,29 +1851,58 @@ carry no persons and generate no road trips.
   an edge interval or a node, and an aircraft's stop is its claim's end less the margin. The
   margin is half `maxSpanM` plus 12 m. A parked aircraft, and one standing at a hold, claims only
   its body (and 10 m ahead), so it closes no junction another aircraft's leg crosses.
-- **Direction locks.** A departure or tow starts only when every edge of its legs can be locked
-  in its direction of travel (an edge locked one way by another aircraft is closed the other
-  way). An arrival locks its route at the final approach decision and claims the space it needs
-  to vacate. Locks are released as the tail passes so two aircraft never meet head-on.
-- **Runways.** One aircraft holds a runway (and every runway sharing a node with it) at a time.
-  A ground leg stops at the mapped runway hold within 300 m before the runway node it enters
-  (else 75 m short of it) until granted; it asks when first in line there, and is granted if no
-  aircraft holds the runway and no arrival's booking falls before its estimated clear time
-  (line-up and take-off to the far end, or the crossing) plus 20 s. A crossing releases the runway
-  when its tail passes the next hold beyond (else 75 m past the runway). An arrival appears about
-  10 km out (`FINAL_M`) on the extended centreline when its window (30 s before the threshold
-  less 20 s, to its estimated vacating plus 20 s) is free of bookings and holders, books it, and
-  takes the runway 30 s before the threshold, going around (straight ahead at approach speed and
-  its climb gradient, then queued again) if another aircraft holds it then; it releases the
-  runway when its tail passes the first hold of that runway after its exit (else 75 m past it). A
-  departure releases it passing the far end.
+- **Order** (TASK-312, in place of whole-route direction locks and whole-route sweep admission).
+  A movement is ordered when it is admitted: a departure or tow at its request (after TASK-319's
+  ready-for-pushback hold), an arrival when it first tries to appear (its stand free, its landing
+  and exit chosen). Its legs' swept bodies (sampled every 6 m, `SAMPLE_M`) are compared with every
+  other aircraft's remaining legs (from where it is; an approach's taxi leg; an admitted movement's
+  legs). Where bodies would touch, the one earlier in the order passes first: the later stops one
+  sample short of the conflict until the earlier is one sample past it; on a stretch both follow
+  each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
+  and the claims keep them apart from there. The order is the order of admission (tows included:
+  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew.
+  TASK-329: an aircraft that has started (left its stand, appeared on approach) never waits for one
+  that has not. Starting, it goes before the departures and tows ordered before it that are still
+  at their stands (they wait for it instead, unless their parked body is in its way); it does not
+  start while it would still wait for a queued arrival or an aircraft parked in its way (it waits at
+  its stand or in the air). Started aircraft are thus in the order they started and
+  the others follow in the order of admission. Rings of waits can still close through aircraft
+  parked in the way (a stand's or a helipad's); one that lasts 60 s is broken where an aircraft can
+  give way (one not started first, else the latest admitted; a started one only to another that
+  has started). An aircraft waited for
+  ignores the margins (claims, push-sweep check) of those waiting for it, which stand clear of its
+  path. An arrival appears only when every conflict before its tail is off its runway is passed. A
+  stand does not take a type whose parked body would stand in the way of one like it taxiing past
+  on a taxiway or taxilane (Zurich's H11 to H14, 26 to 29 m from taxiway P); routes avoid edges
+  where a parked aircraft stands in the way of the mover (factor 50), and an aircraft whose way an
+  aircraft parks across waits short of it until it leaves its stand. Edges an aircraft will use are
+  still marked with its direction; routes taxiing against such a mark cost 3 times as much.
+- **Runways.** A grant covers the runway a movement uses and each intersection area its path
+  reaches (TASK-327). An intersection area is the overlap of two runway strips at their shared
+  node, widened by the aircraft protection margin. The aircraft releases each area when its tail
+  clears it. A ground leg stops at the mapped hold within 300 m before the runway node it enters
+  (else 75 m short of it) until granted. It asks when first in line and gets the grant when each
+  resource is free and the estimated clear time plus 20 s fits before its next booking. A crossing
+  releases the runway when its tail passes the next hold beyond (else 75 m past the runway). An
+  arrival appears about 10 km out (`FINAL_M`) on the extended centreline when its windows are free
+  of bookings and holders. It books each resource from 35 s before the threshold to 5 s after
+  estimated clearance, then takes them 30 s before the threshold. If a holder remains, it goes
+  around straight ahead at approach speed and its climb gradient, then queues again. It releases
+  its runway when its tail passes the first hold beyond its exit (else 75 m past it). A departure
+  releases its runway passing the far end. A ground aircraft that has waited 30 s for a runway
+  window gets a gap on the resources it needs. A new arrival that needs one of those resources
+  appears only when its window starts the waiting aircraft's occupancy plus twice 20 s after the
+  last window on that resource (TASK-312).
 - **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
   (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
   roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
   first runway node past touchdown plus the type's landing roll whose turn-off has a route to the
   stand and whose predicted exit is free when the arrival books it. The exit is checked again
   before landing clearance. A reversing loop at the far end permits a backtrack when needed.
-- **Line-up and take-off.** A departure lines up at the first runway node from its end up to the
+- **Line-up and take-off.** (TASK-312) Options in order: full-length entries; backtracks of up to
+  1,000 m along the runway; intersection departures with a quarter of the take-off run to spare;
+  longer backtracks. A way to the line-up that taxis along a runway is taken only when no later
+  option reaches the runway by taxiways. A departure lines up at the first runway node from its end up to the
   threshold (or within 60 m of the end, half the runway at most: a full-length line-up past a
   threshold at the end itself, Zurich 32's entry 11 m in; TASK-302) that a route turns onto in the
   take-off direction (centre half its length or its
@@ -1883,6 +1915,21 @@ carry no persons and generate no road trips.
   root; a departure then waits 20 s (tug off, engines on) and taxis; a tow continues as a tow (no
   engines) to a stand or a node (`requestTow(id, { stand } | { node } | { hangar })`). A stand
   admits a type only up to its code and only with a way out (a push arc and a turn on from it).
+- **Parked pose** (TASK-320). A leg that ends at a stand's stop (an arrival, a tow, an aircraft
+  placed on its stand) ends on the stand's line: its last half length plus 1 m runs straight on
+  the stand heading, so the parked aircraft stands on that heading with its nose at the stop. The
+  corner before is rounded with the turning radius where the lead-in leaves room for the
+  straight, tighter where it does not (London City's stands turn back 130 degrees 25 m short of
+  their stops). Where the lead-in's last straight is shorter than that or off the stand heading,
+  an alignment segment replaces the leg's end: from the route a turning radius before, to a
+  point a half length, 1 m and a turning radius back from the stop on the stand's line, then on
+  to the stop. A pushback starts from the same pose by the same rule. The stop moves along the
+  stand heading so that the parked body keeps 1 m clear of the apron service roads across the
+  stand's line: the least move, within the paved room ahead or 20 m back, that clears every road
+  there and stands in no taxiway's way; where none does the stop stays (the report of TASK-320
+  lists those stands). The drawn pose settles into the simulation's pose at the stop over the
+  last two wheelbases (no longer into the mapped stand pose), so a parked aircraft is drawn where
+  it stands.
 - **Helicopters** land vertically on a helipad from a stated heading, leave climbing vertically
   then forward, and hover-taxi between helipads. The flight operations give the heading of the
   helicopter runway's end with the most headwind where the airport has one (a runway with no
@@ -1895,20 +1942,16 @@ carry no persons and generate no road trips.
   (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
   starting day on the runway configuration in use (below). Ground movements can run
   concurrently on separate paths and on shared directed taxiways with following-distance
-  claims. Crossing and converging body sweeps take turns. A pending clearance gains priority
-  after two minutes so recurring traffic cannot starve a conflicting route. Helicopters use
-  separate pad slots and a shorter schedule.
+  claims. Crossing and converging body sweeps take turns in the order above (TASK-312).
+  Helicopters use separate pad slots and a shorter schedule.
 - **Airside clearance.** Gates come from runway intervals and crossing nodes on the actual
   ground trajectory, including intermediate runway taxi and backtracks. A runway clearance
   checks that the path through the runway and its exit can be claimed. Approaches book a runway
   window at appearance and check the runway and swept ground route at the decision point 30 s
   before the threshold. An aircraft unable to secure both goes around. Runway use is sequenced
-  so that this is rare (TASK-300; London City seeds 1 to 3: no go-around): an arrival appears
-  only when no aircraft is locked against its exit route and no other ground route crosses it at
-  the decision point, taking an aircraft standing still to stay and one short of an ungranted
-  runway hold to stop there; a departure or tow starts ahead of an arrival's exit only where it
-  passes the crossing before that arrival's decision with no runway hold before it; at the
-  decision, others' moving routes count from where they will be when the arrival turns off.
+  so that this is rare (TASK-300; TASK-312: by the order above, an arrival appears only when the
+  conflicts before its tail is off the runway are passed, and at the decision it needs its exit
+  claimable through its length and the margin past the vacating point).
   Pushback reserves its
   swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
   push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
@@ -1957,9 +2000,12 @@ carry no persons and generate no road trips.
 - **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
   airport's runway ends, with the configurations and time-of-day concepts of the airport's own
   `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
-  code (London City has none: derived configurations, wind only; Zurich's north, east and south
-  concepts and night closure, TASK-302), field by field, the airport's tailwind limit or 5 kt
-  and the strictest maximum demonstrated crosswind of the types in
+  code, field by field. London City derives configurations by wind alone. Boston uses its
+  southwest and northeast flows on non-crossing parallels. Under TASK-328, Zurich lands on 14
+  and departs on 16 and 28 from 06:00 to the 23:30 night closure, with east and south as wind
+  alternatives. Heathrow keeps landings on 27L and take-offs on 27R all day in westerly wind, with
+  09L arrivals and 09R departures in easterly wind. The chooser applies the airport's tailwind
+  limit or 5 kt and the strictest maximum demonstrated crosswind of the types in
   the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
   figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
   (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
@@ -1969,12 +2015,15 @@ carry no persons and generate no road trips.
   departure is granted its line-up there; ends kept in the same role stay open); approaches
   already on final land, aircraft lined up, rolling, climbing out or going around from a closed
   end and runway grants for it complete. Queued arrivals and departures not yet started take the
-  first new end that reaches their stand; a taxiing departure bound for a closed end is re-routed
-  (tried each second): its leg is kept up to the first node far enough ahead to brake and turn
-  (and at least half its last edge ahead), continued by a route to the new end's line-up (a
-  runway backtrack where the taxiways leave no other way), with passed runway gates kept as
-  passed, its new edges locked and its swept path clear; a departure holding a runway grant keeps
-  its route. The new ends open when no aircraft uses a closed end any more. Each change records its
+  first new end that reaches their stand. Departures from a stand with multiple eligible ends
+  weigh the taxi distance against the departures queued for each end. A taxiing departure bound
+  for a closed end is re-routed (tried each second). While moving, it keeps its leg up to the
+  first node far enough ahead to brake and turn (and at least half its last edge ahead), then
+  continues toward the new line-up. Passed runway gates stay passed and new edges are locked
+  after checking the swept path. At a closed hold, the new leg must preserve the stopped pose
+  and any required clearance. The aircraft keeps its admission order and taxis back to a
+  compatible stand if it cannot reach an open end. A departure holding a runway grant keeps its route.
+  The new ends open when no aircraft uses a closed end any more. Each change records its
   start, opening and the departures re-routed (`fleet.runwayTransitions()`, `metrics().aircraft
   .reconfigurations` and `.rerouted`). Stands are chosen for the configuration in use; with
   several ends, each turn takes the arrival and departure end pair that serves its stand at least
@@ -1982,6 +2031,12 @@ carry no persons and generate no road trips.
   departure threshold: the other direction costs three times its length in routing (the factor of
   an edge locked the other way), so taxiing against the flow is avoided where an alternative
   exists. Mapped one-way taxiways keep their direction.
+- **Taxi-flow preferences** (TASK-323). `sim/taxi-flow-preferences.ts` derives a direction for
+  each taxi edge from the open runway ends. It iteratively routes between stand roots, arrival
+  exits and departure line-ups, charging up to three times the distance against assigned flows.
+  It keeps majority directions where the resulting routes agree and leaves shared access and
+  unused edges neutral. The resulting threefold routing cost is a soft preference. Results are
+  cached per compiled graph and set of ends in each role for TASK-322's block clearance.
 - **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
@@ -3275,6 +3330,16 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-335 draws six generic road vehicle models in 3D. Cars hash their vehicle IDs to a sedan,
+hatchback or SUV. Vans, trucks and buses use one model each. Parking uses the same geometry and
+hash, falling back to the space index for anonymous occupancy. The models fit the existing class
+dimensions and retain the presentation colour. One instanced batch per visible model draws the
+body and four wheels, with dark glass and TASK-163 lamps painted in the shader. Models are used at
+6 px/m of camera depth at street zoom. The existing boxes draw farther away and parked cars still
+become dots below the detail zoom. The moving boxes remain the pick and selection volumes, carry
+the existing headlight beam transforms, and alone cast vehicle shadows. Parked stock stays unlit
+and casts no shadow.
+
 TASK-298: aircraft are drawn from the snapshot with TASK-307's outlines in 2D (over the map,
 under the evening tint; one off the ground casts a shadow displaced by its height; drawn only
 within the map's node extent) and its meshes in 3D (heights above the first runway's middle,
@@ -3336,6 +3401,20 @@ procedural mesh, which also stands in while a file loads and for types without a
 real levels use the model's light mounts, the model's own skids on a helicopter, and
 `boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
 
+TASK-331: an airliner's cabin windows are placed by the preparation, not taken from the source:
+the source's cabin glass and black window decals between the first and last door become skin,
+and one row of panes per deck (A380 both decks, 747-8 upper deck on the hump) is cast onto the
+skin at the real size and frame pitch (`cabinWindows`), straight along the cabin and clear of the
+doors (LOD1: one band per row and side); a business jet keeps its source's glass. The landing
+gear of a type with a real model is `buildAircraftGear` (`render3d/aircraft-mesh.ts`): a table
+of real tracks, bogies and tyres (`gearTable`) at TASK-307's stations and ground contact, legs
+reaching the level's own underside (`modelGear` casts up from the ground), near (oleos, links,
+braces, bogies, tyres with hubs, doors, within 4,000 triangles) and middle (struts and wheel
+blocks) versions built once per type and level and drawn in the aircraft's existing gear
+batches (`Aircraft3D` swaps their geometry with the level). That gear retracts by folding in its
+own material (`gearFoldMaterial`: per-vertex pivot and turn, the sim's extension as a uniform);
+TASK-307's gear, at the far level and for types without a model, slides up; nothing is scaled.
+
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
 switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
@@ -3385,6 +3464,49 @@ with identical picking, occlusion and Rail-layer visibility. Both scenes use aut
 The inspector reads that same authoritative snapshot, identifies synthetic tram service,
 names its direction, served stops, next stop and stopped/running status. It does not replace
 a held controller pose with a raw timetable sample.
+
+TASK-332 draws 3D trains as models (drawing only: the sim, timetable and car poses are
+unchanged; 2D keeps TASK-127's bodies). `render3d/train-variants.ts` holds one record per kind of
+rolling stock (profile, width, height, floor, nose, windows, doors, bogie and pantograph designs,
+car types with their bogie, pantograph, roof-housing and door positions and livery, and the
+formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take the low-floor tram;
+otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
+metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
+elsewhere). TASK-333 draws the remaining routes in left-hand-traffic cities as Elizabeth-line
+EMUs, including through-running `mainline` routes. In right-hand-traffic cities, `mainline`
+takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn.
+`render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
+by all its cars and created only for variants a route uses: the body (the profile extruded, both
+cab noses lofted from it, end walls, inset bellows, couplers and optional buffers), the gear (three bogie, two pantograph and two
+roof-housing slots) and the far box. Body vertices carry an anchor (rear end, middle, front end)
+and a part, so the vertex shader draws a car at its own length without stretching its noses and
+hides the parts a car does not show; gear slots move to each car's positions. Windows, doors,
+livery bands, windscreens, lamps and destination displays are painted by the body shader in the
+car's metres, with TASK-163's night glow (cabins, head lamps at the train's front, tail lamps at
+its rear, the lead cab's display). Formations count from the route's forward end, so a make-up
+keeps its order when a terminal train reverses; a unit's last car is turned round, so its cab
+faces out, and a car's front faces the direction of travel or away from it accordingly. Cars
+coupled without bellows show a coupler reaching the middle of the sim's gap (limited to 0.6 m by
+default), and a coupled cab reaches up to 0.2 m into the gap. Each car
+is drawn near (the model) from 60 px along its length and far (the box) below 48 px, chosen per
+car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
+shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
+TASK-127's.
+
+TASK-333 adds the DLR's coupled two-section units with shared joint bogies and collector shoes,
+the Elizabeth-line EMU with two pantographs and gangways between its cars, and the DB push-pull
+Intercity with a 19 m locomotive, 24.8 m coach bodies on the 25 m pose pitch, and a control car
+at the opposite end. The locomotive sits towards its coach end, so the buffers meet across a
+1 m body gap. A plain Intercity coach end without bellows shows a closed gangway door. Fixed-length
+bodies shorten with poses clipped at the extract edge, and pick boxes follow the drawn bodies.
+The models use operator colours without logos or names.
+
+The London tube train draws 2.6 m wide cars with an elliptical roof, two single and two double
+red doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train uses the 75 ft (22.9 m) R46/R68 as a reference, with four double doors per side,
+a fluted stainless-steel skirt, a muted upper band and flat ends with storm doors. Both fill
+the existing car spans (21.8 m at a 22.5 m pitch), leaving the pose's 0.7 m between bodies for
+the couplers and dark gangway or storm doors. Door spacing and window pitch are fixed in metres.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
