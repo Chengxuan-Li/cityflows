@@ -13,18 +13,22 @@ import {
 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { aircraftLivery, type AircraftLivery } from '../../src/render/aircraft-livery';
-import { boardingDoor } from '../../src/render/aircraft-outline';
+import { boardingDoor, modelSection } from '../../src/render/aircraft-outline';
 import type { AircraftPose } from '../../src/render/types';
 import { Aircraft3D } from '../../src/render3d/aircraft';
+import { gearBudget, gearLayout, tyreBands } from '../../src/render3d/aircraft-mesh';
 import {
   AircraftModels,
   lodPixels,
   modelBody,
+  modelGear,
   modelInfo,
   selectLod,
   type AircraftModel,
 } from '../../src/render3d/aircraft-models';
 import { aircraftTypes } from '../../src/schema/aircraft';
+import { fixedWingGearStations } from '../../src/sim/aircraft-motion';
+import { cabinSpan, cabinWindows } from '../../bench/aircraft-models';
 
 // TASK-318: the real aircraft models, read from the committed files as the browser fetches them.
 
@@ -265,4 +269,138 @@ it('draws a mapped type by level as the camera moves and keeps the rest procedur
   aircraft.update([], 1);
   expect(body.getAttribute('position').count).toBeGreaterThan(0);
   expect(aircraft.count).toBe(0);
+});
+
+// TASK-331: one row of cabin windows per deck at the real size, and the real landing gear.
+
+describe('cabin windows', () => {
+  const airliners = aircraftTypes.filter((type) => cabinWindows[type.id]);
+
+  it.each(airliners)('$name has one row of real-size panes per deck and side', async (type) => {
+    const model = await load(type.id);
+    const glass = model.lods[0]!.parts.find((p) => p.name === 'glass')!.geometry;
+    const position = glass.getAttribute('position');
+    const index = glass.index!;
+    // Panes: the glass's connected pieces.
+    const parent = Array.from({ length: position.count }, (_, i) => i);
+    const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
+    for (let t = 0; t < index.count; t += 3)
+      for (const k of [1, 2]) parent[find(index.getX(t + k))] = find(index.getX(t));
+    const boxes = new Map<number, Box3>();
+    for (let i = 0; i < position.count; i++) {
+      const root = find(i);
+      const box = boxes.get(root) ?? new Box3();
+      boxes.set(root, box.expandByPoint(new Vector3().fromBufferAttribute(position, i)));
+    }
+    const { from, to } = cabinSpan(type);
+    const { width, height } = cabinWindows[type.id]!;
+    const decks = type.class === 'double_decker' ? 2 : 1;
+    for (const side of [-1, 1]) {
+      const panes = [...boxes.values()].filter((box) => {
+        const c = box.getCenter(new Vector3());
+        return c.z * side > 0 && c.x > from && c.x < to;
+      });
+      // Rows: the panes' heights above the fuselage's middle, split at gaps over 15 cm.
+      const heights = panes
+        .map((box) => {
+          const c = box.getCenter(new Vector3());
+          return c.y - modelSection(type, c.x)!.y;
+        })
+        .sort((a, b) => a - b);
+      const rows = heights.filter((h, i) => i === 0 || h - heights[i - 1]! > 0.15).length;
+      expect(rows).toBe(decks);
+      expect(panes.length).toBeGreaterThan(type.lengthM * 0.6);
+      for (const box of panes) {
+        const size = box.getSize(new Vector3());
+        expect(Math.abs(size.x - width) / width).toBeLessThan(0.1);
+        expect(Math.abs(Math.hypot(size.y, size.z) - height) / height).toBeLessThan(0.1);
+      }
+    }
+  });
+});
+
+describe('landing gear', () => {
+  const geared = mapped.filter((type) => gearLayout(type));
+  const wheelCounts: Record<string, number> = {
+    A388: 22,
+    B748: 18,
+    B77W: 14,
+    A359: 10,
+    A333: 10,
+    B789: 10,
+    A20N: 6,
+    A21N: 6,
+    B738: 6,
+    BCS3: 6,
+    E190: 6,
+    E175: 6,
+    CRJ9: 6,
+    AT76: 6,
+    DH8D: 6,
+    C25C: 3,
+  };
+  const tyre = new Color(0x22262a);
+
+  it('covers every fixed-wing real model', () => {
+    expect(geared.map((t) => t.id).sort()).toEqual(Object.keys(wheelCounts).sort());
+  });
+
+  it.each(geared)('$name stands on its stated wheels at the old contact stations', async (type) => {
+    const model = await load(type.id);
+    const gear = modelGear(model, 0);
+    const { noseX, mainX } = fixedWingGearStations(type.lengthM);
+    const stations = [
+      noseX,
+      mainX,
+      ...(type.class === 'double_decker' ? [-0.147 * type.lengthM] : []),
+    ];
+    expect(gear.triangles).toBeLessThanOrEqual(gearBudget);
+    let tyreVertices = 0;
+    const contact = new Map<number, number[]>();
+    for (const [geometry, dx] of [
+      [gear.main, 0],
+      [gear.nose, noseX],
+    ] as const) {
+      const p = geometry.getAttribute('position');
+      const c = geometry.getAttribute('color');
+      for (let i = 0; i < p.count; i++) {
+        if (Math.abs(c.getX(i) - tyre.r) > 1e-3 || Math.abs(c.getZ(i) - tyre.b) > 1e-3) continue;
+        tyreVertices++;
+        const y = p.getY(i);
+        expect(y).toBeGreaterThan(-0.02);
+        if (y > 0.02) continue;
+        // Each touching point belongs to the nearest station.
+        const x = p.getX(i) + dx;
+        const station = stations.reduce((a, s) => (Math.abs(s - x) < Math.abs(a - x) ? s : a));
+        contact.set(station, [...(contact.get(station) ?? []), x]);
+      }
+    }
+    // A tyre: its sides by its profile's bands, two triangles each, three vertices apiece.
+    expect(tyreVertices / (gear.sides * tyreBands * 6)).toBe(wheelCounts[type.id]);
+    expect(gear.wheels).toBe(wheelCounts[type.id]);
+    for (const station of stations) {
+      const xs = contact.get(station)!;
+      expect(Math.abs(xs.reduce((a, b) => a + b) / xs.length - station)).toBeLessThan(0.02);
+    }
+  });
+});
+
+it('folds the gear inboard, forward or as the type does, without scaling', async () => {
+  for (const id of ['A20N', 'B77W', 'DH8D', 'AT76']) {
+    const type = aircraftTypes.find((t) => t.id === id)!;
+    const gear = modelGear(await load(id), 0);
+    const pivot = gear.main.getAttribute('gearPivot');
+    const turn = gear.main.getAttribute('gearTurn');
+    const shift = gear.main.getAttribute('gearShift');
+    for (let i = 0; i < pivot.count; i += 97) {
+      // Main legs: a quarter turn inboard about x, aft about z (Q400) or a slide up (ATR).
+      if (id === 'DH8D') expect(turn.getZ(i)).toBeCloseTo(-Math.PI / 2);
+      else if (id === 'AT76') expect(shift.getY(i)).toBeGreaterThan(0.5);
+      else expect(turn.getX(i) * Math.sign(pivot.getZ(i))).toBeCloseTo(Math.PI / 2);
+    }
+    const nose = gear.nose.getAttribute('gearTurn');
+    const legs = Array.from({ length: nose.count }, (_, i) => nose.getZ(i)).filter((z) => z);
+    expect(legs.every((z) => Math.abs(z - Math.PI / 2) < 1e-6)).toBe(true);
+    expect(type.id).toBe(id);
+  }
 });

@@ -20,6 +20,8 @@ import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
 import { drawAircraft, pickAircraft } from './layers/aircraft';
+import { drawGroundVehicles } from './layers/ground-vehicles';
+import { GroundVehicleTracks, shownVehicle } from './ground-vehicles';
 import { AircraftPoseTrack } from './aircraft-pose';
 import { apronLayout, JetBridgeStates } from './apron';
 import { AirfieldLights2D } from './layers/airfield-lights';
@@ -70,12 +72,13 @@ import { mapPalettes, style, type MapPalette } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import { NightLayer, tinted } from './layers/night';
 import {
-  defaultLighting,
+  defaultVisual,
   lightKey,
   platformLights,
   sceneLight,
-  type LightingSettings,
+  type VisualSettings,
 } from './lighting';
+import type { LonLat } from '../geo/projection';
 import type {
   AircraftPose,
   Pick,
@@ -197,7 +200,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
-  setLighting(settings: LightingSettings, timeS: number): void;
+  setLighting(settings: VisualSettings, timeS: number, origin?: LonLat): void;
   setMapPalette(palette: MapPalette): void;
 } {
   const app = new Application();
@@ -234,9 +237,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-301: airfield and aircraft lights, with the evening's other glows.
   const airfieldLights = new AirfieldLights2D(night.textures.glow);
   night.container.addChild(airfieldLights.container);
-  let lighting = defaultLighting;
+  let lighting = defaultVisual;
   let lightMinute = 0;
-  let light = sceneLight(defaultLighting, 0);
+  let lightOrigin: LonLat | undefined;
+  let light = sceneLight(defaultVisual, 0);
   let drawnLight = '';
   // TASK-298: aircraft over the map, under the evening tint.
   const aircraft = new Graphics();
@@ -247,7 +251,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-315: jet bridges, docked by the aircraft snapshot.
   let jetBridges: JetBridgeStates | null = null;
   let aircraftTimeS = 0;
+  // TASK-316: airside ground vehicles, under the aircraft.
+  const groundVehicles = new Graphics();
+  const groundTracks = new GroundVehicleTracks();
+  const redrawGroundVehicles = () => {
+    const byId = new Map(aircraftPoses.map((p) => [p.id, p]));
+    const shown = groundTracks.poses.filter((p) => shownVehicle(p, byId));
+    drawGroundVehicles(groundVehicles, shown, mapBounds);
+    canvas.dataset.groundVehicles = String(shown.length);
+  };
   const redrawAircraft = () => {
+    redrawGroundVehicles();
     drawAircraft(
       aircraft,
       aircraftPoses,
@@ -269,6 +283,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   world.addChild(
     map,
+    groundVehicles,
     aircraft,
     night.container,
     labels.container,
@@ -1220,6 +1235,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         aircraftPoses = [];
       }
       jetBridges?.update(snapshot.aircraft ?? [], snapshot.timeS);
+      groundTracks.update(snapshot.groundVehicles ?? [], snapshot.timeS, playbackSpeed);
       aircraftTimeS = snapshot.timeS;
       redrawAircraft();
       airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
@@ -1250,6 +1266,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       let moved = false;
       for (const track of aircraftTracks.values())
         if (track.sample(elapsedS, playing)) moved = true;
+      if (groundTracks.sample(elapsedS, playing)) moved = true;
       if (moved) {
         redrawAircraft();
         if (airfieldLights.container.visible)
@@ -1382,13 +1399,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       updateLabels();
     },
-    setLighting(settings, timeS) {
+    setLighting(settings, timeS, origin) {
       // Following the clock, the light moves once a simulated minute.
       const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
-      if (settings === lighting && minute === lightMinute) return;
+      if (settings === lighting && minute === lightMinute && origin === lightOrigin) return;
       lighting = settings;
       lightMinute = minute;
-      light = sceneLight(settings, minute * 60);
+      lightOrigin = origin;
+      light = sceneLight(settings, minute * 60, undefined, origin);
       applyLight();
     },
     setDisconnected(lanes) {

@@ -129,19 +129,22 @@ test('@smoke V98 Munich switches views, keeps playback and camera centre, and se
     const snapshot = await window.cityflows!.snapshot!();
     return { id: snapshot.id[0]!, x: snapshot.x[0]!, y: snapshot.y[0]! };
   });
-  await page.evaluate(
-    (target) => window.cityflows!.setView3D!({ x: target.x, y: target.y }, 3, 55),
-    target,
-  );
-  await page.waitForTimeout(250);
-  const point = await page.evaluate(
-    (target) => window.cityflows!.vehicleToScreen!(target.id)!,
-    target,
-  );
-  await map3D.click({ position: { x: point.x + 4, y: point.y } });
-  await expect(
-    page.getByRole('heading', { name: `Vehicle ${target.id}`, exact: true }),
-  ).toBeVisible();
+  for (const zoom of [2, 10]) {
+    await page.evaluate(
+      ({ target, zoom }) => window.cityflows!.setView3D!({ x: target.x, y: target.y }, zoom, 55),
+      { target, zoom },
+    );
+    await page.waitForTimeout(250);
+    const point = await page.evaluate(
+      (target) => window.cityflows!.vehicleToScreen!(target.id)!,
+      target,
+    );
+    await map3D.click({ position: { x: point.x + 4, y: point.y } });
+    await expect(
+      page.getByRole('heading', { name: `Vehicle ${target.id}`, exact: true }),
+    ).toBeVisible();
+    await button(page, 'Close inspector').click();
+  }
   // Pan through MapControls and hand the resulting ground target back to 2D.
   await buildings.uncheck();
   const box = (await map3D.boundingBox())!;

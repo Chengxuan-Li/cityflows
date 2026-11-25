@@ -6,9 +6,9 @@ import { openProject } from '../src/project/open';
 import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-schedule';
 import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircraft';
 import { createFlightOperations } from '../src/sim/flight-operations';
+import { createGroundVehicles } from '../src/sim/ground-vehicles';
 import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
-import { nearestOnPolyline } from '../src/geo/polyline';
-import { aircraftTypes } from '../src/schema/aircraft';
+import { groundOverlaps } from '../tests/sim/ground-vehicle-checks';
 
 // TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
 // second, with each movement's time split by the state it spends it in.
@@ -20,10 +20,12 @@ import { aircraftTypes } from '../src/schema/aircraft';
 // airport's schedule size. --checks: count body overlaps and runway conflicts each second.
 // --roads (TASK-320): compile the whole city as the app does (road crossings, and the apron roads
 // that parked aircraft keep clear of) in place of the airside alone.
+// --vehicles (TASK-316): with the airside ground vehicles (implies --roads); with --checks, also
+// count vehicle overlaps with aircraft and with one another each second.
 const args = process.argv.slice(2);
 const flag = (name: string) => {
   const at = args.indexOf(`--${name}`);
-  const bare = name === 'checks' || name === 'roads';
+  const bare = name === 'checks' || name === 'roads' || name === 'vehicles';
   return at < 0 ? undefined : (args.splice(at, bare ? 1 : 2)[1] ?? '');
 };
 const fromH = Number(flag('from') ?? 0);
@@ -31,7 +33,8 @@ const toH = Number(flag('to') ?? 24);
 const drainH = Number(flag('drain') ?? (toH >= 24 ? 0 : 1));
 const daily = flag('daily');
 const checks = flag('checks') !== undefined;
-const roads = flag('roads') !== undefined;
+const withVehicles = flag('vehicles') !== undefined;
+const roads = withVehicles || flag('roads') !== undefined;
 const [projectPath, seedArg, output] = args;
 if (!projectPath || !seedArg || !output) throw new Error('Expected project path, seed and output');
 const seed = Number(seedArg);
@@ -171,28 +174,40 @@ function sample(timing: Timing, pose: AircraftPoseSnapshot) {
   }
 }
 
-// Raw count: every pair on one runway (TASK-345 exempt: false); the exemptions are counted below.
 const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
+// TASK-345: without the pairs the owner approved as sharing a runway by design.
+const checkRunwayConflictsReal = runwayConflictCheck(graph);
 let overlapCount = 0;
 let runwayConflicts = 0;
-let runwayShared = 0;
-let runwayCrossersApart = 0;
-// Owner 2026-11-24: crossings behind a lander, crossings together and a line-up behind a rolling
-// departure are by design; the rest of runwayConflicts is counted here.
-let runwayExempt = 0;
-const spans = new Map(aircraftTypes.map((t) => [t.id, t.spanM]));
+let runwayConflictsReal = 0;
 let peakStuck = 0;
 let peakActive = 0;
 
 const wall0 = performance.now();
 const operations = createFlightOperations(fleet, seed, startS);
+const ground =
+  withVehicles && whole
+    ? createGroundVehicles(whole.compiled, {
+        snapshot: () => fleet.snapshot(),
+        movementSpace: () => fleet.movementSpace(),
+        drainTurnarounds: () => operations.drainTurnarounds(),
+      })
+    : null;
+let vehicleAircraftOverlaps = 0;
+let vehicleOverlaps = 0;
 console.info({ airport: graph.icao, seed, fromH, toH, endH: endS / 3600, ...operations.metrics() });
 for (let step = startS * 10; step < endS * 10; step++) {
   timeS = step / 10;
   operations.step(timeS);
   fleet.step(timeS);
+  ground?.step(timeS);
   if (step % 10) continue;
   const poses = fleet.snapshot();
+  if (ground && checks) {
+    const found = groundOverlaps(ground.snapshot(), poses);
+    vehicleAircraftOverlaps += found.withAircraft.length;
+    vehicleOverlaps += found.withVehicles.length;
+  }
   const seen = new Set<number>();
   for (const pose of poses) {
     seen.add(pose.id);
@@ -230,71 +245,8 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
     overlapCount += overlaps(poses).length;
-    {
-      const found = checkRunwayConflicts(poses);
-      if (found) {
-        // TASK-330 Phase 1e: of the pairs on one runway, a crossing aircraft (taxi or tow) at
-        // least 150 m behind a landing roll or take-off moving away (the owner's crossing behind
-        // a lander).
-        const on = poses.filter((p) => p.onRunway);
-        const runwayOf = (p: (typeof on)[number]) => {
-          let best = -1;
-          let away = Infinity;
-          for (const r of graph.runways) {
-            const near = nearestOnPolyline(r.line, p);
-            if (near.away <= r.widthM / 2 + 5 && near.away < away) {
-              away = near.away;
-              best = r.idx;
-            }
-          }
-          return best;
-        };
-        const rw = on.map(runwayOf);
-        let apart = 0;
-        for (let i = 0; i < on.length; i++)
-          for (let j = i + 1; j < on.length; j++) {
-            if (rw[i]! < 0 || rw[i] !== rw[j]) continue;
-            const a = on[i]!,
-              b = on[j]!;
-            const crossing = (p: typeof a) => p.state === 'taxi' || p.state === 'tow';
-            if (crossing(a) === crossing(b)) {
-              if (crossing(a)) {
-                // Two crossings: apart if their points along the runway are more than half their
-                // spans plus 15 m apart and both run across it (over 30 degrees off its line).
-                const r = graph.runways[rw[i]!]!;
-                const ua = nearestOnPolyline(r.line, a).along;
-                const ub = nearestOnPolyline(r.line, b).along;
-                const span = (p: typeof a) => spans.get(p.typeId) ?? 40;
-                const across = (p: typeof a) =>
-                  Math.abs(Math.sin(p.heading - r.ends[0]!.heading)) > Math.sin(Math.PI / 6);
-                const apartPoints =
-                  Math.abs(ua - ub) > (span(a) + span(b)) / 2 + 15 && across(a) && across(b);
-                if (apartPoints) runwayCrossersApart++;
-                runwayExempt++;
-              } else {
-                const rolling = (p: typeof a) =>
-                  p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
-                const [lu, roll] = a.state === 'line-up' ? [a, b] : [b, a];
-                if (lu.state === 'line-up' && rolling(roll)) {
-                  const behind =
-                    (roll.x - lu.x) * Math.cos(roll.heading) +
-                    (roll.y - lu.y) * Math.sin(roll.heading);
-                  if (behind >= 0) runwayExempt++;
-                }
-              }
-              continue;
-            }
-            const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
-            const back =
-              (mover.x - crosser.x) * Math.cos(mover.heading) +
-              (mover.y - crosser.y) * Math.sin(mover.heading);
-            if (back >= 150) apart++;
-            if (back >= 150 && mover.state === 'landing-roll') runwayExempt++;
-          }
-        runwayConflicts += found;
-        runwayShared += Math.min(found, apart);
-      }
-    }
+    runwayConflicts += checkRunwayConflicts(poses);
+    runwayConflictsReal += checkRunwayConflictsReal(poses);
   }
   if (timeS % 3600 === 0 && timeS > startS) {
     // TASK-330 / TASK-339: the order's counters, for the log.
@@ -398,9 +350,11 @@ const summary = {
     overlapCount,
     parkedBlockS: Math.round(fleet.parkedBlockS()),
     runwayConflicts,
-    runwayShared,
-    runwayCrossersApart,
-    runwayConflictsReal: runwayConflicts - runwayExempt,
+    runwayConflictsReal,
+  }),
+  ...(ground && {
+    groundVehicles: ground.metrics(),
+    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps }),
   }),
   day: operations.metrics(),
   fleet: fleet.metrics(),

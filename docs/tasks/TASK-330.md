@@ -1,0 +1,242 @@
+# TASK-330 — Departures push back without waiting for distant traffic
+
+Status: in progress 2026-11-23. The owner said "aircrafts do not push back from gate, maybe our time window rule is too
+strict?", then approved the plan with "yes but try out on lightweight tests first to validate efficacy".
+Proposed owner: Claude subagent (Opus 5.5, high). Branch `task/330-start-rule`, worktree `D:\cityflows-wt\330`, ports
+5530 / 5630. Base: main 771235f.
+
+## Finding (lead, 2026-11-23, real sim, main 771235f, seed 1, full day)
+
+Departures wait at their stands far longer than at real airports. The bench reports this as `departureStages.startWaitS`
+(mean, s); per-movement values are in the output's `departures[].startWaitS`.
+
+| Airport | Mean start wait, 6ede796 (327+328) | Now, 771235f (+329) | Surface wait, before → now |
+|---|---|---|---|
+| Boston | 1,053 s | 1,291 s | 484 → 173 s |
+| Zurich 730 | 2,260 s | 2,582 s | 666 → 155 s |
+| Heathrow | 3,634 s | 6,657 s | 743 → 294 s |
+
+At its worst, Heathrow has 84 aircraft at stands at once waiting for a start grant. The longest waits are 5–6 h.
+TASK-329 moved the waiting from taxiways to stands. Some of that is intended, but not this much. The peak windows show
+it too. On 6ede796, Zurich 730 from 06:00 to 10:00 has a mean start wait of 620–1,120 s and a p95 of 2,000–3,200 s.
+
+Main has no time-window routing; TASK-325's routing mock is bench-only. Four things keep departures at their stands. All
+are in `src/sim/aircraft.ts`:
+
+1. **Whole-route admission.** A departure starts only if `order()` can order its entire route to the runway.
+2. **Waiting for unstarted aircraft (TASK-329, `waitsForUnstarted`).** A departure does not start while it would wait
+   for a queued arrival or a parked aircraft. A queued arrival counts however far out it is. At Heathrow about 80
+   arrivals are holding, and almost every departure route meets one of them.
+3. **No aging.** A starter goes before every departure still at its stand (`passing`), however long that departure has
+   waited. TASK-329 tried a 5-minute guard and dropped it because Boston fell from 817 to 658 completed. Its report gave
+   Boston's longest start wait as 6,376 s, against 4,122 s with TASK-327 alone.
+4. **A feedback loop.** Held departures keep their stands, so arrivals get no stand and hold in the air. Rule 2 then
+   makes those holding arrivals block more departures.
+
+## Goal
+
+Departures start within minutes when their way out is clear, as at a real airport. No new deadlocks, overlaps or runway
+conflicts. Try the two smaller changes first:
+
+- **B — arrival horizon.** A departure, before it starts, waits only for queued arrivals that matter now: an arrival
+  that has committed to land, or one that will reach the conflict point within about the time the departure needs to
+  get there, plus a margin. An arrival far out does not block a pushback. When it comes, it is ordered as it is today
+  when an arrival starts.
+- **C — no overtaking after a long wait.** Once a departure has waited at its stand for N minutes with a request (try
+  10; 15 if 10 costs throughput), a later starter whose route conflicts with it does not go before it. It waits for that
+  departure, or does not start. Be deterministic: count elapsed sim time, and break ties by rank.
+
+Keep what TASK-312, 327, 328 and 329 fixed: dead ends, pushback against arrivals, runway crossings, intersections, the
+re-route at a hold, moving aircraft never waiting for unstarted ones, and London City's clean day.
+
+Only if B and C together clearly fall short: consider **A**, which clears only the pushback area and the first stretch
+to a safe waiting point, and reserves the rest as the aircraft goes. Do not build A without reporting to the lead first.
+
+## Phase 1 — lightweight pilot (stop and report after it)
+
+The pilot answers whether the change works before any full day or full gates run. Each run takes a few minutes. Use
+`bench/airside-delay.ts --checks` on these windows:
+
+- Zurich at 730: 06:00–10:00, seeds 1–3 (`--from 6 --to 10 --daily 730`);
+- Heathrow: 05:00–09:00, seed 1;
+- Boston: 06:00–10:00, seed 1.
+
+Run them in parallel where the machine allows. `D:\cityflows-wt\lead-evidence\quick-airports.sh` shows the command
+form. Measure the base (771235f), then **B**, **C** and **B + C**. Give one table per airport with:
+
+- completed / scheduled;
+- mean, p95 and max of `departures[].startWaitS`;
+- mean surface wait;
+- `peakStuck5`, `endStuck5`, `endQueued`, go-arounds and `gridlockH`;
+- overlaps and runway conflicts (both must stay 0).
+
+Add the synthetic tests (see Gates) in this phase. They are the lightweight check of each rule.
+
+Then **stop and report to the lead**: the tables, which variant you would keep, and why. If neither B nor C lowers the
+start waits at Heathrow and Zurich without losing completed movements, say so. Do not stack more rules. Commit the
+pilot state on your branch first, so it can be inspected.
+
+## Phase 2 — full verification (only after the lead says go)
+
+- Full days, seeds 1–3: Heathrow (1,300), Zurich at 730, Boston (1,000), London City (schedule). Use the same table
+  plus taxi times. Targets:
+  - mean start wait under about 600 s, and a p95 well under 30 min where the runways have the capacity;
+  - completed movements not below base;
+  - no new gridlocks;
+  - overlaps and runway conflicts 0.
+- Airports batch merge rule (existing cities unchanged, hashes in `docs/plan.md`).
+- `bundled-airport-load`: re-pin only if a startup state changes, and say why.
+- `npm run check`, `test:city`, `test:traffic:light`, `test:e2e:light`.
+
+## Scope
+
+`src/sim/aircraft.ts`: the start grant (`waitsForUnstarted`, `passing`, `yieldsTo`, the start path) and the
+request-time bookkeeping C needs. Tests go in `tests/sim/`. No schema change. Leave `bench/` alone, unless you need an
+extra summary field (p95 or max start wait). Then add it and say so.
+
+## Gates (tests)
+
+- Synthetic: a departure at its stand whose route meets a queued arrival still far out starts, and it is clear of
+  the arrival when the arrival lands.
+- Synthetic: a departure waiting longer than N is not overtaken by a later starter with a conflicting route.
+- The TASK-329 tests and `tests/sim/aircraft-checks.ts` still pass (no body overlap, no runway conflict).
+
+## Report
+
+Phase 1: a message to the lead with the tables. Phase 2: the commit body.
+
+## Phase 1b — faster ground movement and denser arrivals (owner, 2026-11-23)
+
+Phase 1 result (dfcf85a): keep B, drop C. B cut the mean start wait by 25–46% and added movements. The tail stayed long,
+for two reasons: slow tows at Zurich, and Heathrow landing only about 15 an hour against about 40 scheduled.
+
+Owner: "we need faster tow, potentially faster taxiing, and increased runway usage (shorter spacing between arrivals,
+can sequence multiple in the map, reduce spacing) — with said changes, carry out a small test again for the above
+cases."
+
+On top of B, one at a time:
+
+1. **Faster tows.** Raise `towSpeedMps` in `src/schema/aircraft.ts`. This changes default data values, not the schema
+   shape; the owner described it. Real towbarless tows run at about 15–30 km/h. Keep the turn limits.
+2. **Faster taxiing, if it helps.** First check from the bench's `meanMovingKt` whether aircraft reach their limits now.
+   Raise the limits only if top speed is what binds.
+3. **Denser arrivals.** Today a queued arrival appears only after the one ahead has landed and cleared the shared exit.
+   Change it to time-based spacing on final:
+   - about 2.5–3 NM, or the wake pair if that is longer;
+   - several arrivals on approach and on the map at once;
+   - one aircraft on the runway at a time, and a go-around if the runway is not clear;
+   - the taxi-in ordered no later than landing commitment.
+   Aim for about 35–45 landings an hour on a single arrival runway.
+
+Re-run the Phase 1 windows after each step. Report the Phase 1 table, plus landings per hour per arrival end and the
+median gap between arrivals. Then stop and report again.
+
+## Phase 1c — Heathrow landing rate (owner, 2026-11-23)
+
+Phase 1b result (964d47c): faster tows and spacing on final are kept; faster taxiing is dropped. Zurich now lands
+16–19 an hour and Boston 22, close to what these windows schedule. Heathrow 27L stays at 14 an hour. Owner: "14 landings
+per hour is still off normal values." Real Heathrow lands about 40–45 an hour on its arrival runway, and the schedule
+asks for about 40 in this window.
+
+1. **Diagnose first.** For every arrival on 27L in the Heathrow 05:00–09:00 window, record what held its release and
+   for how long:
+   - spacing on final;
+   - runway occupancy;
+   - an exit-order wait, and on which aircraft;
+   - stand availability;
+   - anything else.
+   Report the breakdown before you change anything.
+2. **Fix what binds, as real operations do.** Landing traffic has priority over ground traffic that has not yet
+   reached the crossing or the merge point. A landed aircraft vacates and, if its way on is not free, holds on the
+   taxiway clear of the runway; it never stops on the runway.
+   Candidate rules:
+   - order the arrival's exit and first stretch at landing commitment, ahead of ground aircraft that have not reached
+     the hold before that conflict;
+   - let it hold just clear of the runway after vacating;
+   - pick a free exit.
+   Keep runway conflicts at 0, add no new deadlocks, and keep go-arounds rare.
+3. **Pilot**, the same small windows: Heathrow 05:00–09:00 seed 1 is the target, with about 35–45 an hour on 27L.
+   Zurich and Boston must not regress. Report the same table plus the hold-reason breakdown after the change. Then stop
+   and report.
+
+## Phase 1d — reserve the taxi route piece by piece (owner, 2026-11-23)
+
+Phase 1c result: none of the six exit variants ((c), (a)+(c), (d), (f), (d)+(f), re-coded exits) brings Heathrow 27L
+near 35–45 landings an hour. The runway and the exits are not the limit. Landed arrivals stand still 1.0–1.7 km past
+the exit, behind arrivals waiting to cross 27L again, tows, and departures queued at runway holds. Opening the southern
+exits gridlocks the central taxiways. The pilot material is in `D:\cityflows-wt\330-pilot`.
+
+Owner: "yes we need piece by piece reservation. only pilot testing needed to see if that is helpful."
+
+**Pilot (option A).** An aircraft reserves its route from where it is to the next safe waiting point only. A safe
+waiting point is any place where its stopped body blocks no runway and no junction another route needs: a runway hold,
+a junction-clear point on a taxiway, a vacate spot, a stand. It extends the reservation as it moves and stops at that
+point if the next stretch is taken. A departure starts when its pushback and first stretch are free, not its whole
+route.
+
+Deadlock prevention is part of the design, not an afterthought:
+
+- Head-on traffic on two-way stretches must be prevented. Reserve to a passing place, or keep the order of admission
+  for those stretches only.
+- Wait cycles must be detected and broken deterministically.
+
+Read TASK-322 (block signalling, not merged: Zurich peak 120 of 199 against 152) and TASK-324 first, and say how this
+differs.
+
+Measure on the Phase 1 windows, against 964d47c:
+
+- Heathrow 05:00–09:00 seed 1;
+- Zurich at 730, 06:00–10:00, seeds 1–3;
+- Boston 06:00–10:00 seed 1.
+
+If it helps, also run it combined with (d)+(f) and with the re-coded exits. Report the Phase 1c table, plus waits
+broken and cycles detected. Pilot only: no full days, no merge.
+
+## Phase 1e — landing flow on one runway (owner, 2026-11-23)
+
+Lead diagnosis (47e6398c, `T330P=300`, Heathrow 05:00–09:00 seed 1; tools and clip in `D:\cityflows-wt\330-pilot\V5`
+and `lead-evidence/video3/heathrow-27L-gaps.mp4`):
+
+- 27L lands every 222 s (median), against 55 s of actual runway occupancy. There is never more than one arrival on final.
+- The next arrival is released only after the leader has landed: 43 of 58 releases come 60–130 s after the leader's
+  touchdown, and then it flies the 140 s final. Held time between releases breaks down as:
+  - spacing 28%;
+  - `leaderExit` 24%: it predicts 116 s on the runway, because it assumes the whole exit leg at turn speed;
+  - previous arrival on the exit route 19%;
+  - departures or tows on the exit route 16%;
+  - gap kept for a crossing 6%;
+  - another queued arrival 4%.
+- Even with clear ground, gaps cannot drop below 146 s, about 24 an hour.
+
+Owner: "let's have the next aircraft hold the runway with a higher priority than the crossing aircraft … whenever
+the landing aircraft has crossed a certain position, the previous parts of the runway would be open to the taxiway
+crossing … crossing in parallel … while the runway is still on hold by the next landing aircraft, but the landing
+craft hasn't been too close … a reservation period for the runway … and another guardian to prevent taxiway
+interlocking: if the taxiway has a really long queue, relieve the queue as a one-off effort and block the runway for
+further landings … another independent fix."
+
+Pilot, one step at a time on top of 47e6398c, keeping each only if it helps:
+
+1. **Release on spacing, decide at commitment.** An arrival appears when spacing on final allows; the stand rules stay
+   as they are. From then on it holds a reservation of the runway. Its exit and first stretch off the runway are ordered
+   at landing commitment, not at release. At commitment, landing traffic goes before ground traffic that has not yet
+   reached the hold before that conflict.
+   - Estimate runway occupancy from the exit speed profile, not turn speed over the whole leg.
+   - A landed aircraft whose way on is taken holds on the taxiway clear of the runway, never on it.
+   - If the runway will not be clear, it goes around. Go-arounds stay rare.
+2. **Crossings under the reservation.** A crossing at a point is granted:
+   - behind a landing aircraft, once its roll has passed that point and its tail is clear; or
+   - ahead of the next reserved arrival, if the crossing is off the runway before that arrival is near: its commitment
+     time minus a margin.
+   Crossings at different points whose bodies and paths do not meet run in parallel. Allow a limited number per gap.
+3. **Queue guard (independent).** When the queue waiting to cross a runway grows long, hold the next arrival's release
+   once so the queue drains. Try 4 aircraft, or 3 minutes for the first in line. It must be deterministic, and the
+   gap it opens must be counted.
+
+Measure on the Phase 1 windows against 47e6398c (P300):
+- 27L landings per hour, median gap, gap floor and the hold breakdown (`330-pilot/V5/gaps.cjs` on a diag build);
+- completed, crossing waits (mean, max), peak crossing queue, go-arounds;
+- `peakStuck5`, `endStuck5`, `gridlockH`, overlaps and runway conflicts.
+
+Zurich and Boston must not regress. Pilot only: no full days, no merge. For the best variant, render the captioned clip
+the same way as the lead's.

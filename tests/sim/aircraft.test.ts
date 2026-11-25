@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { syntheticAirport, syntheticAirportBacktrack } from '../../src/fixtures/synthetic-airport';
 import { routeAirside, arcEdge, createAirsideRouteFinder } from '../../src/routing/airside';
-import { aircraftCodes } from '../../src/schema/aircraft';
+import { aircraftCodes, aircraftTypes } from '../../src/schema/aircraft';
 import {
   createAircraftFleet,
   type AircraftFleet,
@@ -256,6 +256,63 @@ test('a departure pushes back, taxis, holds for a landing, lines up and climbs o
   expect(fleet.metrics()).toMatchObject({ departed: 1, landed: 1, stuck: 0 });
 });
 
+test.each([
+  { code: 'E', roller: 'B77W', departureAt: 1400 },
+  { code: 'C', roller: 'E175', departureAt: 1670 },
+] as const)(
+  'a crossing hold clears a rolling aircraft on a code $code runway',
+  ({ code, roller, departureAt }) => {
+    const holdX = -900;
+    const holdY = 25;
+    const target = 'an:9000';
+    const crossingType = aircraftTypes.find(({ id }) => id === 'E175')!;
+    const { fleet, stands, graph } = fleetOf(undefined, (city) => {
+      const airport = city.airport!;
+      airport.runways['rw:1']!.maxCode = code;
+      const hold = Object.values(airport.holdingPositions).find(
+        ({ node }) => airport.nodes[node]!.pos.x === holdX,
+      )!;
+      const holdNode = airport.nodes[hold.node]!;
+      holdNode.pos.y = holdY;
+      const toward = airport.edges[hold.toward!]!;
+      for (const edge of Object.values(airport.edges)) {
+        if (edge.from === hold.node) edge.line[0] = holdNode.pos;
+        if (edge.to === hold.node) edge.line[edge.line.length - 1] = holdNode.pos;
+      }
+      const stop = { x: holdX, y: -200 };
+      airport.nodes[target] = { ...holdNode, id: target, pos: stop };
+      airport.edges['ae:9000'] = {
+        ...toward,
+        id: 'ae:9000',
+        to: target,
+        line: [toward.line[0]!, stop],
+      };
+    });
+    const departure = fleet.spawnParked({ typeId: roller, stand: stands.L1 });
+    const crossing = fleet.spawnParked({ typeId: crossingType.id, stand: stands.C1 });
+    if (!departure.ok) throw new Error(departure.reason);
+    if (!crossing.ok) throw new Error(crossing.reason);
+    expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(true);
+    const { poses } = run(
+      fleet,
+      900,
+      () => fleet.metrics().departed === 1 && fleet.metrics().towed === 1,
+      (step) => {
+        if (step === departureAt) expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
+      },
+    );
+    const pass = poses.get(departure.id)!.find((p) => p.state === 'takeoff-roll' && p.x >= holdX)!;
+    const waiting = poses.get(crossing.id)!.find((p) => p.timeS === pass.timeS)!;
+    expect(waiting.speedMps).toBe(0);
+    expect(waiting.x).toBeCloseTo(holdX);
+    expect(overlaps([pass, waiting])).toEqual([]);
+    const mappedStopY = holdY + crossingType.lengthM / 2;
+    if (code === 'E') expect(waiting.y).toBeGreaterThan(mappedStopY);
+    else expect(waiting.y).toBeCloseTo(mappedStopY);
+    expect(fleet.metrics()).toMatchObject({ departed: 1, towed: 1, stuck: 0 });
+  },
+);
+
 test('with no taxiway to the 27 end a departure backtracks and turns round on the runway', () => {
   const { fleet, stands } = fleetOf({ backtrack: true });
   const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
@@ -298,9 +355,11 @@ test.each([
     expect(departure.some(({ state }) => state === 'holding')).toBe(waits);
     const grant = departure.find(({ state }) => state === 'line-up')!;
     const arrivalAtGrant = landing.find(({ timeS }) => timeS === grant.timeS)!;
+    // TASK-338: the exit connector at x = 300 runs along 36/18's pavement up to the parallel
+    // taxiway at y = 200, so the arrival holds 36/18 until it is off it (before: past y = 70).
     if (waits) {
       expect(arrivalAtGrant.y).toBeGreaterThan(70);
-      expect(arrivalAtGrant.y).toBeLessThan(100);
+      expect(arrivalAtGrant.onRunway).toBe(false);
     } else expect(arrivalAtGrant.onRunway).toBe(true);
   },
 );

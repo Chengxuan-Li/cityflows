@@ -339,7 +339,7 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-312](tasks/TASK-312.md) | airports | Airside throughput at scale and realistic taxi speeds | sim, routing, ops, bundling | 310, 311, 302 | 98% at ZRH, BOS, LHR; taxi speeds vs real | merged 2026-11-22 with gaps (`29128cb`; large airports short of 98%) |
 | [TASK-314](tasks/TASK-314.md) | airports | Aircraft motion realism: rotation, flare, gear steering, smooth turns | render pose, motion | 311 | pose timelines, nose gear on centreline | merged 2026-11-22 (`45f6507`, wave F) |
 | [TASK-315](tasks/TASK-315.md) | airports | Aircraft model realism, jet bridges and apron furniture in 3D | render3d | 311 | part lists, bridges at gates, render budget | merged 2026-11-22 (`5eac69c`, `82c33ef`) |
-| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | parked 2026-11-23 (v1 `ebcabee`, variant `0003a59`; waits for TASK-320) |
+| [TASK-316](tasks/TASK-316.md) | airports | Airside ground vehicles | sim, render | 312 | turnaround vehicles, no overlaps | merged 2026-11-25 (`f4ec8bf5`; London City and Zurich aircraft identical to main, 0 vehicle overlaps, visits served London City 64-73%, Zurich 95%; tiers green) |
 | [TASK-317](tasks/TASK-317.md) | airports | Taxi speeds against the real world, and where airside delay comes from | sim motion, figures | - | delay attribution, speeds vs real | merged 2026-11-22 (`1d74dac`) |
 | [TASK-318](tasks/TASK-318.md) | airports | Real aircraft models with level of detail | render3d, assets, NOTICE | 315 | types scaled, LOD by screen size, render budget | merged 2026-11-23 (`51b03cb`, `2d7d55d`) |
 | [TASK-319](tasks/TASK-319.md) | airports | Mapped jet bridges and a ready-for-pushback state | schema, importer, sim, render3d | 315 | bridges at mapped gates, retract before push | merged 2026-11-22 (`fc3ea8d`, `4a252dc`) |
@@ -353,6 +353,26 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-327](tasks/TASK-327.md) | airports | Runway interlocks at intersections only | sim | 312 | Boston days, no runway conflicts, Zurich and LCY kept | merged 2026-11-23 (`bb78390`, `32dd6f5`) |
 | [TASK-328](tasks/TASK-328.md) | airports | One runway configuration per day; Zurich uses all three runways | sim configuration, operations | 302, 312 | no mid-day change, re-route at holds, per-runway use | merged 2026-11-23 (`58e23c2`) |
 | [TASK-329](tasks/TASK-329.md) | airports | Moving aircraft never wait for aircraft that have not started | sim admission order | 312 | Heathrow no wait cycles, Zurich/Boston/LCY days | merged 2026-11-23 (`be7aef1`) |
+| [TASK-331](tasks/TASK-331.md) | render | Aircraft: one row of cabin windows and realistic landing gear | aircraft model prep, render3d gear | 318 | one pane row per deck, wheel counts per type, render budget | merged 2026-11-23 (`74bc705`; fold retraction added by lead decision; draw calls unchanged, p95 within TASK-311) |
+| [TASK-332](tasks/TASK-332.md) | render | Train model kit, with the tram and the S-Bahn | render3d trains, variant rule | - | variant per route, budgets, picking, sim hashes identical | merged 2026-11-23 (`7909254`, two feedback rounds; sim hashes identical, 3D p95 within noise) |
+| [TASK-333](tasks/TASK-333.md) | render | DLR, Elizabeth line and DB intercity trains | render3d train variants | 332 | variants at LCY/Munich, loco and cab car ends, render budget | merged 2026-11-23 (`736a751`, one visual round; Elizabeth rule for left-hand traffic) |
+| [TASK-334](tasks/TASK-334.md) | render | Generic tube and New York subway trains | render3d train variants | 332 | Piccadilly and Philadelphia variants, real car length | merged 2026-11-23 (`c9932be`, one visual round: close-coupled, 75 ft New York car) |
+| [TASK-335](tasks/TASK-335.md) | render | Generic road vehicle models | render3d vehicles, parked cars | - | extents per class, stable choice, shadow cost, render budget | merged 2026-11-23 (`9f2a7d0`, one visual round; sim and 2D hashes identical, 3D p95 within noise) |
+| [TASK-336](tasks/TASK-336.md) | render | Night halo shader compiles in every city | `render3d/lights.ts` | 335 | no shader error at night, halos unchanged | done 2026-11-23 (lead) |
+| [TASK-337](tasks/TASK-337.md) | sim | Aircraft wait at runway holds clear of rolling widebodies | `sim/aircraft.ts` | 330 pilot | no hold overlap at Zurich seed 2, airports not worse, cities identical | merged 2026-11-24 (`92bb5ea`; Zurich mixed per seed, total +10, overlaps 4 to 1; Heathrow identical) |
+| [TASK-338](tasks/TASK-338.md) | sim | Gates on taxiway stretches that run on runway pavement | `sim/aircraft.ts` | 330 planner pilot | airports identical on main, gates on the pilot stretches, tiers green | merged 2026-11-25 (`7a2797d1`; Heathrow, Zurich, Boston, London City identical to main) |
+| [TASK-339](tasks/TASK-339.md) | sim | No waiting behind aircraft parked across the way | `sim/aircraft.ts`, `bench/airside-delay.ts` | 330 pilot (`07e5e3a6`) | Heathrow seeds 1-5 >= 630 and seed 4 >= 120, full day no freeze, Boston go-arounds <= 6, cities identical | gates run 2026-11-24 (`e7ce9b31` on `task/339-parked-blockers`, not merged): Heathrow full day seed 1 774/1306, no freeze (main 367); peak seeds 1-5 146/113/94/134/135 = 622 (gate 630 fails on seed 3: three-aircraft ring); with `T330RING` seed 3 123, total 651, Zurich seed 2 106 to 181 but +16 / +8 overlaps; Boston, Zurich 1/3, London City, switches-off, tiers and Freiburg hash pass |
+| [TASK-340](tasks/TASK-340.md) | sim | Ring-free ground ordering | `sim/aircraft.ts` | 339 (`e7ce9b31`) | Heathrow peak seed 3 >= 115, Zurich seed 2 >= 175 with no gridlock, no deadlock ring, then the TASK-339 gates (seeds 1-5 >= 630) | phase 2 passed on the pilot base 2026-11-25 (`71677176`): Heathrow full day 802/1306, no freeze, parkedBlockS 0; peak seeds 1-5 638; to be ported onto TASK-346 (line-up safety fix) and re-gated |
+| [TASK-341](tasks/TASK-341.md) | ui/render3d | Visual quality panel: lighting, shadows, vegetation style and render quality | `render/lighting.ts`, `ui/lighting-store.ts`, `ui/lighting.tsx`, `ui/layers.tsx`, new panel in `src/ui/`, `ui/app.css`, `render3d/scene.ts`, `render3d/vegetation.ts`, `render/style.ts` | `origin/main` (`47ab2d1b`) | Balanced equals main, sun within 0.5 deg of NOAA, frame times per preset, check, city, e2e light and the new spec | review 2026-11-25 (`task/341-visual-quality`, not merged): Balanced pixel-identical to main in 3D at Freiburg and Munich; NOAA test within 0.5°; check, city, e2e light and V340 pass; species mix default Map and tree and aircraft casters off in Balanced (they would change today's look) |
+| [TASK-342](tasks/TASK-342.md) | sim | Aircraft at holds clear of the next taxi lane | `sim/aircraft.ts` | 340 | Heathrow seed 3 overlaps 376 to 0, completed kept | built 2026-11-25 (`9bab2344`): standing bodies in `conflicts()`; old 340 seed 3 overlaps 376 to 0, current tip unchanged 130/145; keeper for TASK-346 |
+| [TASK-343](tasks/TASK-343.md) | sim | Heathrow runway occupancy and crossings behind each lander | `sim/aircraft.ts` | 340 | 27L landings/h +15% at peak, no go-around or overlap increase | no gain 2026-11-25 (`cd1f7d34`, switches off): 27L has no real rapid exit in the OSM data; gap is wake spacing plus crossings far down the runway |
+| [TASK-344](tasks/TASK-344.md) | sim | Turnaround and departure start efficiency | `sim/aircraft.ts`, `flight-operations.ts` | 340 | start wait and taxi-out -20% at peak, completed kept | measured 2026-11-25 (`5cfcc9ac`): 27R take-offs about 32/h against 52/h ready; extended to the take-off gap rule |
+| [TASK-345](tasks/TASK-345.md) | tests | Runway-conflict checker exemptions in the tests | `tests/sim/aircraft-checks.ts` | owner 2026-11-24 | exempt-aware count, main unchanged | merged 2026-11-25 (`472f4eea`; `npm run check` 2148 tests pass; sim unchanged) |
+| [TASK-346](tasks/TASK-346.md) | sim | Consolidated airside stack: pilot rules become the airside rules | `sim/aircraft.ts`, tests, architecture | 339 + 342 | identity with the pilot switches, airports not worse than main on the ladder, cities identical | started 2026-11-25 |
+| [TASK-347](tasks/TASK-347.md) | render | Junctions drawn as road, one surface per group (drawing only) | `render`, `render3d`, `network/groups.ts`, geometry audit | audit 2026-11-25 | degree-two nodes drawn as junctions 25/25/58 to about 0, sim hashes identical | built 2026-11-25 (`0a829ceb` on `task/347-junction-drawing`, held for owner review): census 25/25/58 to 11/8/4, tiers green, Freiburg and compile pins identical; group surfaces raise noses and square noses in the audit (measured as one junction) |
+| [TASK-348](tasks/TASK-348.md) | network | Lane geometry under junction groups and signalised crossings | `network/compile.ts`, `lanes.ts`, `junctions.ts` | 347 + owner decisions | inner-road stubs and signal-node cuts to 0, J1 overlap to about 0, traffic merge rule | proposed 2026-11-25 (4 owner decisions) |
+| [TASK-349](tasks/TASK-349.md) | city/airports | Zurich passes the showcase gate and joins the New city panel | cause on Flughafenstrasse `r:3407`, `bundled-cities.ts`, `bundled-projects.ts` | owner 2026-11-25 | showcase gate passes, cities merge rule, load reported | partly built 2026-11-25 (`bab75600`, held for owner review): tram crossings close per pass (stalled head on Flughafenstrasse fixed); Zurich still fails the gate on Kloten egress-core placement (owner decision) |
+| [TASK-350](tasks/TASK-350.md) | airports | Ground vehicles serve more turnarounds at London City | `sim/ground-vehicles.ts` | 316 | London City served >= 85%, vehicle-tug pushes >= 75%, aircraft identical, 0 vehicle overlaps | merged 2026-11-25 (`cc610d9e`; London City served 64-73% to 91-93%, vehicle-tug pushes 78-81%, Zurich 96.6%; aircraft identical, 0 vehicle overlaps; tow-on-parking tugs not done) |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
 | [TASK-060](tasks/TASK-060.md) | 5 | Tooling: workflow actions and audit advisories | `.github/workflows/ci.yml`, `package.json` devDependencies, lockfile, `eslint.config.js` | - | CI green without deprecation notes, audit clean | done (actions only; see review) |
@@ -5901,6 +5921,15 @@ showcase delay 97 to 99 s rises to 118 to 133 s (seeds 1 to 3; 31 to 43 more tri
   London City 3D render cost.
 
 Airports wave D:
+- TASK-337 (Codex; merged `92bb5ea`): an aircraft stopping short of a runway steps back along its route, 2 m at a
+  time and at most 150 m, until its body is clear of the widest fixed-wing type the runway takes rolling on its
+  centreline (rule from the TASK-330 pilot `1b57f5a8`, ported alone). Zurich 730 full days, seeds 1-3: completed
+  581/578/604 to 577/597/599 (total +10), go-arounds 0/0/0 to 2/3/0, seed 2's 24:00 gridlock gone, overlaps 2/2/0 to
+  0/1/0 (the remaining one is an unrelated taxiway pair); Boston and London City identical; Heathrow seed 1 full day
+  identical (lead run: 367 completed, 0 go-arounds, taxi-out 34.0 min). The contract's per-seed "not worse" gate missed
+  by 4-5 movements on seeds 1 and 3; the lead merged on the total and the removed overlaps (owner: "you may move the
+  fixes"). A grant-timing variant gridlocked all three Zurich seeds and was dropped. Existing cities unchanged; lead
+  tiers green (check 2,113, city 280, traffic light 5, e2e light 63, places 11, airports, Freiburg 1710089250).
 - TASK-329 (Claude Code subagent, Opus 5.5 high; merged `be7aef1`): an aircraft that starts (pushback, tow, arrival
   on approach) goes before departures and tows ranked earlier but still at their stands; nothing starts while it would
   wait for a queued arrival or an aircraft parked in its way; newly parked aircraft block ordered-but-unstarted ones;
@@ -6474,6 +6503,30 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-24 (owner): "you may move the fixes": the TASK-330 pilot's hold-clearance rule goes to main alone as
+  TASK-337 (merged). On 2026-11-23 the owner gave the TASK-330 Phase 1e landing-flow verdict:
+  - the next arrival holds the runway with priority over crossings;
+  - crossings open behind the lander and run in parallel;
+  - a queue guard limits waiting to cross.
+  The owner then said "Yes, fix them" (go-arounds and Zurich overlaps) and "build it and test with lightweight tests"
+  (the later-exit fallback). The fallback was not kept: a ring lock at Heathrow. The pilot state is `1b57f5a8` on
+  `task/330-landing-flow`, not for merge.
+- 2026-11-23 (owner): "realistic train models and car models without loss of performance": one tram, one light-rail
+  (DLR), an Elizabeth-line EMU, a DB locomotive with coaches, an S-Bahn EMU, and (follow-up) "1 generic tube style
+  train and 1 generic nyc subway train"; cars "fine with a few generic models"; aircraft windows show two rows close
+  up and the landing gear is not realistic. Accepted the lead's decisions: drawing only (sim lengths and hashes
+  unchanged), the variant chosen per route by track kind, train kind and driving side (left-hand traffic standing in
+  for the UK), operator colours without logos. Tasks TASK-331 (aircraft) to TASK-335 (cars) written; 332 first among
+  the trains, 333 and 334 after it, 331 and 335 independent.
+- 2026-11-23 (owner): "Yes, start all three" (TASK-331, 332, 335 in parallel), then "arrange the queued tasks to
+  auto start after the blocking tasks are done": TASK-333 and TASK-334 start, side by side, as soon as the lead has
+  reviewed TASK-332's branch, from its tip rather than waiting for the merge to main.
+- 2026-11-23 (lead, after TASK-332): London City's Elizabeth Line routes run as `mainline` (no stops inside the
+  extract), so the contract's table would draw them as the DB intercity. Rule changed in TASK-333: in left-hand-traffic
+  cities every heavy-rail route, stopping or not, gets the Elizabeth-line EMU; the DB intercity is for right-hand-traffic
+  cities only. York's through trains therefore draw as Class 345-like EMUs. S-Bahn units are drawn as two 67.4 m units
+  over the sim's 135 m train (TASK-332's choice, kept). TASK-333 and 334 start from main after TASK-332's merge.
 
 - 2026-11-23 (owner, after the lead's real-sim clips and wait graphs of Boston, Heathrow and Zurich): the
   three root causes are legitimate, fix them. "Let's not change runway direction mid day for now, that would be

@@ -4,13 +4,13 @@
     "lods": [
       {
         "file": "a388-0.glb",
-        "triangles": 13445,
-        "bytes": 290192
+        "triangles": 14033,
+        "bytes": 301032
       },
       {
         "file": "a388-1.glb",
-        "triangles": 1476,
-        "bytes": 70588
+        "triangles": 1458,
+        "bytes": 70044
       }
     ],
     "scale": {
@@ -82,13 +82,13 @@
     "lods": [
       {
         "file": "b748-0.glb",
-        "triangles": 14909,
-        "bytes": 486216
+        "triangles": 14926,
+        "bytes": 485324
       },
       {
         "file": "b748-1.glb",
-        "triangles": 1438,
-        "bytes": 61672
+        "triangles": 1400,
+        "bytes": 60524
       }
     ],
     "scale": {
@@ -160,13 +160,13 @@
     "lods": [
       {
         "file": "b77w-0.glb",
-        "triangles": 14986,
-        "bytes": 424860
+        "triangles": 14962,
+        "bytes": 421496
       },
       {
         "file": "b77w-1.glb",
         "triangles": 1544,
-        "bytes": 69388
+        "bytes": 69384
       }
     ],
     "scale": {
@@ -238,13 +238,13 @@
     "lods": [
       {
         "file": "a359-0.glb",
-        "triangles": 14978,
-        "bytes": 515296
+        "triangles": 14964,
+        "bytes": 509532
       },
       {
         "file": "a359-1.glb",
-        "triangles": 1335,
-        "bytes": 63180
+        "triangles": 1371,
+        "bytes": 63596
       }
     ],
     "scale": {
@@ -316,13 +316,13 @@
     "lods": [
       {
         "file": "a333-0.glb",
-        "triangles": 14983,
-        "bytes": 481612
+        "triangles": 14987,
+        "bytes": 482844
       },
       {
         "file": "a333-1.glb",
-        "triangles": 1488,
-        "bytes": 73244
+        "triangles": 1474,
+        "bytes": 72872
       }
     ],
     "scale": {
@@ -394,13 +394,13 @@
     "lods": [
       {
         "file": "b789-0.glb",
-        "triangles": 14663,
-        "bytes": 443484
+        "triangles": 14726,
+        "bytes": 453948
       },
       {
         "file": "b789-1.glb",
-        "triangles": 1475,
-        "bytes": 72904
+        "triangles": 1476,
+        "bytes": 71584
       }
     ],
     "scale": {
@@ -472,13 +472,13 @@
     "lods": [
       {
         "file": "a20n-0.glb",
-        "triangles": 14979,
-        "bytes": 522088
+        "triangles": 14867,
+        "bytes": 503268
       },
       {
         "file": "a20n-1.glb",
-        "triangles": 1358,
-        "bytes": 68008
+        "triangles": 1493,
+        "bytes": 79668
       }
     ],
     "scale": {
@@ -550,13 +550,13 @@
     "lods": [
       {
         "file": "b738-0.glb",
-        "triangles": 15000,
-        "bytes": 441352
+        "triangles": 14998,
+        "bytes": 453704
       },
       {
         "file": "b738-1.glb",
-        "triangles": 1539,
-        "bytes": 67816
+        "triangles": 1587,
+        "bytes": 69456
       }
     ],
     "scale": {
@@ -610,7 +610,7 @@
     "lights": {
       "navLeft": [-4.45, 5.58, -17.9],
       "navRight": [-4.45, 5.58, 17.9],
-      "navTail": [-18.41, 5.18, 0],
+      "navTail": [-18.41, 5.3, 0],
       "beacon": [0, 5.94, 0],
       "strobes": [
         [-5.1, 5.58, -17.9],
@@ -628,13 +628,13 @@
     "lods": [
       {
         "file": "a21n-0.glb",
-        "triangles": 14970,
-        "bytes": 528148
+        "triangles": 14845,
+        "bytes": 513900
       },
       {
         "file": "a21n-1.glb",
-        "triangles": 1672,
-        "bytes": 78964
+        "triangles": 1494,
+        "bytes": 78744
       }
     ],
     "scale": {
@@ -695,7 +695,7 @@
         [-3.85, 4.56, 17.9]
       ],
       "landing": [
-        [3.95, 3.42, -3.76],
+        [3.96, 3.42, -3.76],
         [3.96, 3.42, 3.76]
       ],
       "taxi": [15.23, 2.96, 0]
@@ -706,13 +706,13 @@
     "lods": [
       {
         "file": "bcs3-0.glb",
-        "triangles": 14998,
-        "bytes": 464472
+        "triangles": 14999,
+        "bytes": 446756
       },
       {
         "file": "bcs3-1.glb",
-        "triangles": 1501,
-        "bytes": 67744
+        "triangles": 1499,
+        "bytes": 73104
       }
     ],
     "scale": {
@@ -784,13 +784,13 @@
     "lods": [
       {
         "file": "e190-0.glb",
-        "triangles": 15000,
-        "bytes": 472348
+        "triangles": 14999,
+        "bytes": 459108
       },
       {
         "file": "e190-1.glb",
-        "triangles": 1488,
-        "bytes": 65380
+        "triangles": 1496,
+        "bytes": 65184
       }
     ],
     "scale": {
@@ -863,12 +863,12 @@
       {
         "file": "e175-0.glb",
         "triangles": 14999,
-        "bytes": 464300
+        "bytes": 458560
       },
       {
         "file": "e175-1.glb",
-        "triangles": 1479,
-        "bytes": 67356
+        "triangles": 1498,
+        "bytes": 67264
       }
     ],
     "scale": {
@@ -940,13 +940,13 @@
     "lods": [
       {
         "file": "crj9-0.glb",
-        "triangles": 12960,
-        "bytes": 363888
+        "triangles": 13344,
+        "bytes": 357724
       },
       {
         "file": "crj9-1.glb",
-        "triangles": 1496,
-        "bytes": 68508
+        "triangles": 1488,
+        "bytes": 65408
       }
     ],
     "scale": {
@@ -1018,13 +1018,13 @@
     "lods": [
       {
         "file": "at76-0.glb",
-        "triangles": 14687,
-        "bytes": 471436
+        "triangles": 14688,
+        "bytes": 481444
       },
       {
         "file": "at76-1.glb",
-        "triangles": 1373,
-        "bytes": 68080
+        "triangles": 1661,
+        "bytes": 81388
       }
     ],
     "scale": {
@@ -1096,13 +1096,13 @@
     "lods": [
       {
         "file": "dh8d-0.glb",
-        "triangles": 13417,
-        "bytes": 361156
+        "triangles": 13849,
+        "bytes": 361736
       },
       {
         "file": "dh8d-1.glb",
-        "triangles": 1773,
-        "bytes": 83348
+        "triangles": 1795,
+        "bytes": 88088
       }
     ],
     "scale": {

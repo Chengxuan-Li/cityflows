@@ -16,6 +16,7 @@ import type { RailSnapshot } from './rail-crossings';
 import type { TransitMetrics, TransitSnapshot } from './transit';
 import type { AircraftMetrics, AircraftPoseSnapshot, AirfieldSnapshot } from './aircraft';
 import type { FlightOperationsMetrics } from './flight-operations';
+import type { GroundVehicleMetrics, GroundVehiclePose } from './ground-vehicles';
 export type {
   AircraftMetrics,
   AircraftPoseSnapshot,
@@ -95,6 +96,8 @@ export interface VehicleSnapshot {
   aircraft?: AircraftPoseSnapshot[];
   /** TASK-301: the runway ends in use and the stop bars switched off, for the airfield lights. */
   airfield?: AirfieldSnapshot;
+  /** TASK-316: airside ground vehicles, where the airport has service lanes. */
+  groundVehicles?: GroundVehiclePose[];
   /** >=0: authoritative parking pose; value is its reference lane for height/layer. */
   poseLane?: Int32Array;
   parkedCars?: ParkedCarsSnapshot;
@@ -199,6 +202,7 @@ export interface Metrics {
   /** TASK-298: where the city has an airport section. */
   aircraft?: AircraftMetrics;
   flights?: FlightOperationsMetrics;
+  groundVehicles?: GroundVehicleMetrics;
   /** Per loaded trip, in input order; materialized only when requested. */
   readonly tripOutcomes?: TripOutcome[];
 }

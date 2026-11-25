@@ -11,6 +11,7 @@ import type { ParkedCarsSnapshot } from '../../src/render/types';
 import { cityHeights } from '../../src/render3d/heights';
 import { ParkedCars3D } from '../../src/render3d/parked-cars';
 import { stripGeometry } from '../../src/render3d/strips';
+import { buildVehicleModel, vehicleModelNames } from '../../src/render3d/vehicle-models';
 
 function fixture(layout: ParkingLayout = 'parallel', side: 'left' | 'right' = 'right') {
   const b = buildCity('Visible parking', 103);
@@ -62,7 +63,8 @@ test('V103 occupancy indexes, synthetic cars, class colours and body picking sha
   expect(pickParkedCar(city, spaces, snapshot, city.parkingSpaces![1]!.position, 8)).toBeNull();
   expect(parkedColour(snapshot, 9, true)).not.toBe(parkedColour(snapshot, 0, true));
   expect(parkedColour(snapshot, 0, false)).toBeLessThan(snapshot.hues[0]!);
-  const view = new ParkedCars3D(city, cityHeights(city, { nodes: {}, places: {} }));
+  const models = vehicleModelNames.map((_, i) => buildVehicleModel(i));
+  const view = new ParkedCars3D(city, cityHeights(city, { nodes: {}, places: {} }), models);
   view.setStyle(8, false);
   view.setSnapshot(snapshot);
   expect(view.mesh.count).toBe(2);
@@ -74,9 +76,8 @@ test('V103 occupancy indexes, synthetic cars, class colours and body picking sha
   expect(view.spaceAt(1)).toBe(9);
   view.setSnapshot(null);
   expect(view.mesh.count).toBe(0);
-  view.mesh.geometry.dispose();
-  view.mesh.material.dispose();
-  view.mesh.dispose();
+  view.destroy();
+  for (const model of models) model.dispose();
 });
 
 test('V103 overview parked-car tolerance leaves adjacent asphalt editable and preserves body picking', () => {

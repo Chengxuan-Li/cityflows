@@ -1,12 +1,16 @@
 import {
   BufferGeometry,
   Color,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   MeshStandardMaterial,
+  Raycaster,
+  Vector3,
   type Material,
   type Object3D,
 } from 'three';
@@ -14,7 +18,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import models from '../../fixtures/aircraft/models.json';
 import { hull, type AircraftLivery } from '../render/aircraft-livery';
-import type { AircraftLightMounts } from './aircraft-mesh';
+import { aircraftTypes } from '../schema/aircraft';
+import { buildAircraftGear, type AircraftLightMounts } from './aircraft-mesh';
 
 // TASK-318: real aircraft models, Flightradar24's fr24-3d-models (GPL-2.0, from the FlightGear
 // FGMEMBERS hangar; NOTICE), prepared by `bench/aircraft-models.ts` into two levels of detail per
@@ -141,6 +146,47 @@ export interface AircraftModel {
   lods: [ModelLod | null, ModelLod | null];
   /** Merged, coloured body geometry per level and livery, shared by every aircraft wearing it. */
   bodies: Map<string, BufferGeometry>;
+  /** TASK-331: the type's landing gear per level, shared by every aircraft of the type. */
+  gear: [ModelGear | null, ModelGear | null];
+}
+
+export interface ModelGear {
+  main: BufferGeometry;
+  nose: BufferGeometry;
+  wheels: number;
+  /** Each tyre's sides, and the gear's triangles. */
+  sides: number;
+  triangles: number;
+}
+
+const probe = new MeshBasicMaterial({ side: DoubleSide });
+
+/** TASK-331: the type's landing gear for a level, built once (`buildAircraftGear`) with each
+ * leg reaching up to the level's own underside, found by casting up from the ground. */
+export function modelGear(model: AircraftModel, lod: ModelLodIndex) {
+  const cached = model.gear[lod];
+  if (cached) return cached;
+  const type = aircraftTypes.find((t) => t.id === model.typeId)!;
+  const meshes = model.lods[lod]!.parts.map((part) => new Mesh(part.geometry, probe));
+  for (const mesh of meshes) mesh.updateMatrixWorld();
+  const raycaster = new Raycaster();
+  const up = new Vector3(0, 1, 0);
+  const { profile } = model.info;
+  const attachY = (x: number, z: number) => {
+    raycaster.set(new Vector3(x, 0.05, z), up);
+    const hit = raycaster.intersectObjects(meshes, false)[0];
+    if (hit) return hit.point.y;
+    // Nothing overhead: the fuselage's belly there.
+    const f = Math.min(
+      profile.length - 1,
+      Math.max(0, (x / model.lengthM + 0.5) * (profile.length - 1)),
+    );
+    const [, y, height] = profile[Math.round(f)]!;
+    return y - height;
+  };
+  const gear = buildAircraftGear(type, attachY, lod === 0 ? 'near' : 'middle');
+  model.gear[lod] = gear;
+  return gear;
 }
 
 /** One geometry per level and livery: every part merged and coloured per triangle. */
@@ -280,6 +326,7 @@ export class AircraftModels {
           lengthM,
           lods: [null, null],
           bodies: new Map(),
+          gear: [null, null],
         };
         entry.lods[lod] = parsed;
         this.models.set(typeId, entry);

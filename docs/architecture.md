@@ -2091,6 +2091,53 @@ carry no persons and generate no road trips.
   100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
   road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
   can at its comfortable deceleration, else clears. Aircraft never stop for road vehicles.
+- **Airside ground vehicles** (TASK-316, `network/airside-service.ts`, `sim/ground-vehicles.ts`).
+  The service network is read from the compiled city alone: the lanes of mapped `service` roads
+  closed to cars (`access=no` or `private`) within 150 m of the taxi network and outside every
+  runway strip (half the runway width plus 45 m), joined by their compiled movements and by a turn
+  at each end of a two-way road; its largest strongly connected part is kept. A zone is a stretch
+  of a vehicle's way within an airside edge's aircraft corridor (half the span its code admits,
+  capped at the largest stand's, plus 4 m). Each stand's access point is the lane point nearest
+  its aircraft's middle and at most 25 m ahead of its nose; bases (where vehicles join and leave
+  the simulation) are the lane points nearest each group of stands and each hangar. The flight
+  operations emit `drainTurnarounds()`: `on-block` (stand, type, ready-to-push time, whether it
+  landed) when an aircraft stands where it departs from with no tow to come, `tow-planned`
+  (stand, type, time) and `off-block`. A tow back is planned when the tow away is (at least 5
+  minutes ahead), and a departure after a tow is ready no sooner than 5 minutes after it, so a tug
+  can come; a tow away as the aircraft parks and the first departures of a run keep the fleet's
+  timing and go without a vehicle tug (`metrics.unannounced`).
+  `turnaroundVisits` gives the set and timeline: baggage trains (two on widebodies, one to three
+  carts), a hydrant dispenser at contact stands for narrow- and widebodies or a fuel truck,
+  catering for jets, apron buses off and on at remote stands, and a tug for each push from a
+  dead-end stop or tow; service vehicles leave 5 minutes before the ready time, the tug comes 4
+  minutes before the push or tow. Positions lie on lines parallel to the parked aircraft as the
+  fleet draws it (catering, aft and forward baggage, fuel outwards on the starboard side, the bus
+  to port), clear of its fuselage and tailplane in plan (wings and engines stand above apron
+  vehicles) and of other parked hulls; vehicles drive in along their line from the end facing the
+  access point and out forward, returning on nested outer lines, and reach the line ends from the
+  lane round the aircraft (the shortest way over a ring of corners outside all positions, clear of
+  every parked hull); ways out join the lane where it is 6 m clear of the hull. The tug backs onto the nose,
+  where TASK-314's tug is drawn; from TASK-319's `ready-for-pushback` through the push it is
+  `attachedTo` the aircraft and hidden; it stays on through a tow and leaves forward and aside
+  where a push ends, or round the aircraft to the new stand's lane after a tow (as from a push). Vehicles read the fleet snapshot
+  once a second; aircraft never see them (the fleet's hash is the same with or without them).
+  `fleet.movementSpace()` (read only, additive) gives the space aircraft movements may sweep, as
+  TASK-299's bodies: each parked aircraft's planned pushback (its stand envelope), a push under way,
+  an arrival's lead-in into its bound stand, and each moving aircraft's next 150 m. Vehicles hold
+  clear of that space (but their own aircraft's, which their timeline keeps them out of) and leave
+  a position it covers: a parked aircraft's push from 5 minutes before it is ready or due to be
+  towed, the rest at once. They give way to aircraft by entering a zone only when no moving aircraft is within its radius plus 30 m
+  or routed through it within the larger of 250 m and 40 s, and only when their way beyond it,
+  the junctions in it and its merges are clear; to each other by following on lanes, one at a time
+  through each junction (from 6 m before it), merging only into a clear lane, one mover per stand
+  (released after 20 s held up), holding short of standing vehicles and parked hulls (past a
+  hull that reaches over the way they edge 1 to 4 m to the far side where that clears every
+  parked hull, else detour round its end), and a last guard that refuses any step onto
+  another body. Two vehicles that still hold each other off for 15 s, or one held up within 45 m
+  of its base, leave the simulation (`metrics.withdrawn`); as the last resort, so does one in the
+  next 3 s (at least 15 m) of an aircraft's movement, under a parked hull or on another vehicle
+  after a step (`metrics.cleared`). `metrics.droppedBy` counts dropped visits by cause. Snapshot `groundVehicles` (poses,
+  carts, `attachedTo`, stand); `metrics.groundVehicles`. Not in the state hash.
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
 adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
@@ -3335,12 +3382,29 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-335 draws six generic road vehicle models in 3D. Cars hash their vehicle IDs to a sedan,
+hatchback or SUV. Vans, trucks and buses use one model each. Parking uses the same geometry and
+hash, falling back to the space index for anonymous occupancy. The models fit the existing class
+dimensions and retain the presentation colour. One instanced batch per visible model draws the
+body and four wheels, with dark glass and TASK-163 lamps painted in the shader. Models are used at
+6 px/m of camera depth at street zoom. The existing boxes draw farther away and parked cars still
+become dots below the detail zoom. The moving boxes remain the pick and selection volumes, carry
+the existing headlight beam transforms, and alone cast vehicle shadows. Parked stock stays unlit
+and casts no shadow.
+
 TASK-298: aircraft are drawn from the snapshot with TASK-307's outlines in 2D (over the map,
 under the evening tint; one off the ground casts a shadow displaced by its height; drawn only
 within the map's node extent) and its meshes in 3D (heights above the first runway's middle,
 gear by the snapshot, a plain pitch by state; the far plane reaches 15 km where an airport
 exists). Both pick an aircraft; the inspector shows its registration, type, status, stand,
 runway, speed, height and route by taxiway names.
+
+TASK-316: ground vehicles are drawn from `groundVehicles`, interpolated one snapshot behind like
+the aircraft (`render/ground-vehicles.ts`): in 2D as bodies with a cab, tank or box accent and a
+tractor's carts, under the aircraft (`render/layers/ground-vehicles.ts`); in 3D as one instanced
+mesh per kind and one for carts (seven draw calls) with amber roof beacons as halos
+(`render3d/ground-vehicles.ts`). A tug attached to an aircraft ready for pushback or pushing is
+left to the aircraft layers' tug; one towing is drawn from its snapshot pose.
 
 TASK-301: airfield and aircraft lighting by rule (`render/airfield-lights.ts`, shared by both
 views; ICAO Annex 14 in simplified form). `placeAirfieldLights` places every light once: runway
@@ -3388,6 +3452,20 @@ span (`lodPixels`: LOD0 from 260 px down to 210, LOD1 from 8 px down to 6, else 
 procedural mesh, which also stands in while a file loads and for types without a model). The
 real levels use the model's light mounts, the model's own skids on a helicopter, and
 `boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
+
+TASK-331: an airliner's cabin windows are placed by the preparation, not taken from the source:
+the source's cabin glass and black window decals between the first and last door become skin,
+and one row of panes per deck (A380 both decks, 747-8 upper deck on the hump) is cast onto the
+skin at the real size and frame pitch (`cabinWindows`), straight along the cabin and clear of the
+doors (LOD1: one band per row and side); a business jet keeps its source's glass. The landing
+gear of a type with a real model is `buildAircraftGear` (`render3d/aircraft-mesh.ts`): a table
+of real tracks, bogies and tyres (`gearTable`) at TASK-307's stations and ground contact, legs
+reaching the level's own underside (`modelGear` casts up from the ground), near (oleos, links,
+braces, bogies, tyres with hubs, doors, within 4,000 triangles) and middle (struts and wheel
+blocks) versions built once per type and level and drawn in the aircraft's existing gear
+batches (`Aircraft3D` swaps their geometry with the level). That gear retracts by folding in its
+own material (`gearFoldMaterial`: per-vertex pivot and turn, the sim's extension as a uniform);
+TASK-307's gear, at the far level and for types without a model, slides up; nothing is scaled.
 
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
@@ -3438,6 +3516,49 @@ with identical picking, occlusion and Rail-layer visibility. Both scenes use aut
 The inspector reads that same authoritative snapshot, identifies synthetic tram service,
 names its direction, served stops, next stop and stopped/running status. It does not replace
 a held controller pose with a raw timetable sample.
+
+TASK-332 draws 3D trains as models (drawing only: the sim, timetable and car poses are
+unchanged; 2D keeps TASK-127's bodies). `render3d/train-variants.ts` holds one record per kind of
+rolling stock (profile, width, height, floor, nose, windows, doors, bogie and pantograph designs,
+car types with their bogie, pantograph, roof-housing and door positions and livery, and the
+formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take the low-floor tram;
+otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
+metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
+elsewhere). TASK-333 draws the remaining routes in left-hand-traffic cities as Elizabeth-line
+EMUs, including through-running `mainline` routes. In right-hand-traffic cities, `mainline`
+takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn.
+`render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
+by all its cars and created only for variants a route uses: the body (the profile extruded, both
+cab noses lofted from it, end walls, inset bellows, couplers and optional buffers), the gear (three bogie, two pantograph and two
+roof-housing slots) and the far box. Body vertices carry an anchor (rear end, middle, front end)
+and a part, so the vertex shader draws a car at its own length without stretching its noses and
+hides the parts a car does not show; gear slots move to each car's positions. Windows, doors,
+livery bands, windscreens, lamps and destination displays are painted by the body shader in the
+car's metres, with TASK-163's night glow (cabins, head lamps at the train's front, tail lamps at
+its rear, the lead cab's display). Formations count from the route's forward end, so a make-up
+keeps its order when a terminal train reverses; a unit's last car is turned round, so its cab
+faces out, and a car's front faces the direction of travel or away from it accordingly. Cars
+coupled without bellows show a coupler reaching the middle of the sim's gap (limited to 0.6 m by
+default), and a coupled cab reaches up to 0.2 m into the gap. Each car
+is drawn near (the model) from 60 px along its length and far (the box) below 48 px, chosen per
+car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
+shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
+TASK-127's.
+
+TASK-333 adds the DLR's coupled two-section units with shared joint bogies and collector shoes,
+the Elizabeth-line EMU with two pantographs and gangways between its cars, and the DB push-pull
+Intercity with a 19 m locomotive, 24.8 m coach bodies on the 25 m pose pitch, and a control car
+at the opposite end. The locomotive sits towards its coach end, so the buffers meet across a
+1 m body gap. A plain Intercity coach end without bellows shows a closed gangway door. Fixed-length
+bodies shorten with poses clipped at the extract edge, and pick boxes follow the drawn bodies.
+The models use operator colours without logos or names.
+
+The London tube train draws 2.6 m wide cars with an elliptical roof, two single and two double
+red doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train uses the 75 ft (22.9 m) R46/R68 as a reference, with four double doors per side,
+a fluted stainless-steel skirt, a muted upper band and flat ends with storm doors. Both fill
+the existing car spans (21.8 m at a 22.5 m pitch), leaving the pose's 0.7 m between bodies for
+the couplers and dark gangway or storm doors. Door spacing and window pitch are fixed in metres.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
