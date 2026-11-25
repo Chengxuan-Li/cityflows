@@ -66,7 +66,27 @@ export const onRunway = (poses: readonly AircraftPoseSnapshot[]) =>
 /** Conflicts measured from physical poses: two aircraft on the same runway, or two within
  * the same protected intersection. An aircraft can pass a junction with another runway
  * occupied elsewhere along it. */
-export function runwayConflictCheck(graph: AirsideGraph) {
+/** TASK-345: pairs on one runway the owner approved as sharing it by design (2026-11-24): two
+ * crossing aircraft; a crossing aircraft at least 150 m behind a landing roll along its heading; an
+ * aircraft lining up behind a departure rolling away (take-off roll, rotation or climb). */
+export function exemptRunwayPair(a: AircraftPoseSnapshot, b: AircraftPoseSnapshot) {
+  const crossing = (p: AircraftPoseSnapshot) => p.state === 'taxi' || p.state === 'tow';
+  const behind = (p: AircraftPoseSnapshot, ahead: AircraftPoseSnapshot) =>
+    (ahead.x - p.x) * Math.cos(ahead.heading) + (ahead.y - p.y) * Math.sin(ahead.heading);
+  if (crossing(a) && crossing(b)) return true;
+  if (crossing(a) !== crossing(b)) {
+    const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
+    return mover.state === 'landing-roll' && behind(crosser, mover) >= 150;
+  }
+  const rolling = (p: AircraftPoseSnapshot) =>
+    p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
+  const [lineUp, roll] = a.state === 'line-up' ? [a, b] : [b, a];
+  return lineUp.state === 'line-up' && rolling(roll) && behind(lineUp, roll) >= 0;
+}
+
+/** Runway conflicts: pairs on one runway or in one runway intersection area. `exempt` (the
+ * default) leaves out the pairs `exemptRunwayPair` approves on one runway. */
+export function runwayConflictCheck(graph: AirsideGraph, { exempt = true } = {}) {
   const areas = runwayIntersectionAreas(graph, (graph.maxSpanM || 36) / 2 + 12);
   return (poses: readonly AircraftPoseSnapshot[]) => {
     const on = poses.filter((p) => p.onRunway);
@@ -102,7 +122,9 @@ export function runwayConflictCheck(graph: AirsideGraph) {
     for (let i = 0; i < on.length; i++)
       for (let j = i + 1; j < on.length; j++)
         if (
-          (runway[i]! >= 0 && runway[i] === runway[j]) ||
+          (runway[i]! >= 0 &&
+            runway[i] === runway[j] &&
+            !(exempt && exemptRunwayPair(on[i]!, on[j]!))) ||
           within[i]!.some((area) => within[j]!.includes(area))
         )
           count++;
