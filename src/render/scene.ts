@@ -42,7 +42,7 @@ import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
-import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
+import { drawJunction, drawRoadJoins, roadStrip } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
@@ -971,11 +971,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
         for (const node of compiled.nodes) {
-          drawNode(
-            grades.get(nodeGrades[node.idx]!)!.nodes,
-            node,
-            nodeColor(compiled, node, layerVisibility.roadClasses),
-          );
+          const grade = grades.get(nodeGrades[node.idx]!)!;
+          drawJunction(grade.surfaces, grade.nodes, compiled, node, layerVisibility.roadClasses);
         }
         // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them,
         // over the junction surface where it runs on into a junction both meet at.
@@ -985,7 +982,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             .nodes.poly(line, false)
             .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const movement of compiled.movements) {
-          if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
+          const node = compiled.nodes[movement.node]!;
+          if (!movement.neverGreen && node.outline.length && !roadStrip(compiled, node))
             drawMovementArrow(
               grades.get(nodeGrades[movement.node]!)!.arrows,
               movement,

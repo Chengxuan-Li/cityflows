@@ -12,6 +12,7 @@ import type { Graphics } from 'pixi.js';
 import { buildLine, GraphicsContext } from 'pixi.js';
 import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
 import { drawTransitions } from '../../src/render/layers/transitions';
+import { roadStrip } from '../../src/render/layers/nodes';
 import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
@@ -187,7 +188,8 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       .concat(
         city.nodes.flatMap((node) => [
           ...nodeMarkingGeometry(city, node),
-          ...(node.outline.length
+          // TASK-347: a node drawn as road has no junction arrows.
+          ...(node.outline.length && !roadStrip(city, node)
             ? node.movements.flatMap((i) =>
                 city.movements[i]!.neverGreen ? [] : movementMarkings(city.movements[i]!),
               )
@@ -244,7 +246,11 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
     for (const movement of city.movements)
-      if (!movement.neverGreen && city.nodes[movement.node]!.outline.length)
+      if (
+        !movement.neverGreen &&
+        city.nodes[movement.node]!.outline.length &&
+        !roadStrip(city, city.nodes[movement.node]!)
+      )
         drawMovementArrow(pen, movement);
     expect(lineCount).toBe(shapes.filter((s) => s.kind === 'line').length);
     expect(polygonCount).toBe(shapes.filter((s) => s.kind === 'polygon').length);

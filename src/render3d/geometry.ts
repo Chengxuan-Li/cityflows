@@ -1,6 +1,9 @@
 import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { areaD } from 'clipper2-ts';
+import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+import { drawnRings, nodeSurface } from '../render/layers/nodes';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
@@ -30,6 +33,21 @@ function polygon(target: number[], ring: Vec2[], z: (p: Vec2) => number) {
     for (const i of [triangle[2]!, triangle[1]!, triangle[0]!])
       target.push(...vertex(ring[i]!, z(ring[i]!)));
   }
+}
+
+/** Rings with holes (`drawnRings`) as triangles; a single ring stays whole. */
+function triangulateRings(rings: Vec2[][]): Vec2[][] {
+  if (rings.length <= 1) return rings;
+  const outers = rings.filter((ring) => areaD(ring) > 0);
+  const holes = rings.filter((ring) => areaD(ring) < 0);
+  return outers.flatMap((outer) => {
+    const inner = holes.filter((hole) => pointInPolygon(hole[0]!, [...outer, outer[0]!]));
+    const points = [outer, ...inner].flat();
+    return ShapeUtils.triangulateShape(
+      outer.map((p) => new Vector2(p.x, p.y)),
+      inner.map((hole) => hole.map((p) => new Vector2(p.x, p.y))),
+    ).map((t) => t.map((i) => points[i]!));
+  });
 }
 
 function quad(target: number[], a: Vertex, b: Vertex, c: Vertex, d: Vertex) {
@@ -146,22 +164,44 @@ export function buildGeometry(
       }
     }
   }
+  const followsGround = (node: number) =>
+    !!source.terrain && source.nodes[city.nodes[node]!.id]!.layer === 0;
   for (const node of city.nodes) {
     const z = heights.nodes[node.idx]!;
     const ground = heights.terrain.groundAt(node.pos.x, node.pos.y);
-    const followsGround = source.terrain && source.nodes[node.id]!.layer === 0;
-    if (followsGround) {
-      if (node.outline.length >= 3) flatAreas.push(node.outline);
-    } else polygon(surfaces, node.outline, () => z);
+    // TASK-347: a node drawn as road draws its strip, a junction group its one surface at its
+    // first member, at its members' heights (inverse-distance weighted) or on the ground; a group
+    // whose members do not all follow the ground or all stand free draws each member's own.
+    const members = node.group === undefined ? [node.idx] : city.groups![node.group]!.nodes;
+    const mixed = members.some((m) => followsGround(m) !== followsGround(node.idx));
+    const rings = mixed ? [nodeSurface(city, node)] : drawnRings(city, node);
+    const height = (p: Vec2) => {
+      if (members.length === 1 || mixed) return z;
+      let weight = 0,
+        total = 0;
+      for (const m of members) {
+        const w =
+          1 /
+          Math.max(1e-6, Math.hypot(p.x - city.nodes[m]!.pos.x, p.y - city.nodes[m]!.pos.y) ** 2);
+        weight += w;
+        total += w * heights.nodes[m]!;
+      }
+      return total / weight;
+    };
+    for (const piece of triangulateRings(rings.filter((ring) => ring.length >= 3)))
+      if (followsGround(node.idx)) flatAreas.push(piece);
+      else polygon(surfaces, piece, height);
     for (const gore of paintedGores(city, node))
       for (const triangle of goreTriangles(city, heights, gore))
         polygon(surfaces, triangle.points, (p) => triangleHeight(triangle, p));
     if (z - ground > 0)
-      for (let i = 0; i < node.outline.length; i++) {
-        const a = node.outline[i]!,
-          b = node.outline[(i + 1) % node.outline.length]!;
-        quad(slabs, vertex(a, z), vertex(b, z), vertex(b, z - 0.8), vertex(a, z - 0.8));
-      }
+      for (const ring of rings)
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i]!,
+            b = ring[(i + 1) % ring.length]!;
+          const [za, zb] = [height(a), height(b)];
+          quad(slabs, vertex(a, za), vertex(b, zb), vertex(b, zb - 0.8), vertex(a, za - 0.8));
+        }
   }
   const placeGeometry = buildPlaces(city, source, heights, palette);
   const { heads, supports } = signalLayout(city, heights);
