@@ -2719,9 +2719,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   // ----- TASK-330 departure flow.
-  /** A departure that has started its roll, its tail well clear of its line-up point. */
-  function rollingAway(o: Craft) {
-    return o.mode === 'air' && o.air?.kind === 'takeoff' && o.stationM >= o.lengthM + margin;
+  /** A departure that has started its roll, its tail well clear of its line-up point, from the
+   * same end as a line-up at `lineUp` and no further down the runway than that line-up (so it
+   * rolls away from it, not toward it). */
+  function rollingAway(o: Craft, lineUp: { end: number; lineUpU: number }) {
+    if (o.mode !== 'air' || o.air?.kind !== 'takeoff' || o.stationM < o.lengthM + margin)
+      return false;
+    const fromU = graph.runways[o.runway]!.lengthM - o.air.clearM;
+    return o.end === lineUp.end && lineUp.lineUpU <= fromU + 1;
   }
   const lastTakeoff: ({ craft: Craft; startS: number } | undefined)[] = [];
   const wakeRank = { light: 0, medium: 1, heavy: 2, super: 3 };
@@ -2754,7 +2759,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     bufferS: number,
     except: number,
     crossing?: { at: Vec2; halfM: number },
-    lineUp = false,
+    lineUp?: { end: number; lineUpU: number },
   ) {
     for (const use of uses) {
       const { resource, clearS } = use;
@@ -2762,7 +2767,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       // TASK-330 Phase 1e step 2: a crossing goes behind a landing aircraft whose tail is past it.
       // TASK-330: a departure lines up behind one that has started its roll.
       const behind = (id: number) =>
-        (lineUp && rollingAway(crafts[id - 1]!)) ||
+        (!!lineUp && rollingAway(crafts[id - 1]!, lineUp)) ||
         (!!crossing &&
           resource < graph.runways.length &&
           landedPast(crafts[id - 1]!, resource, crossing));
@@ -4309,7 +4314,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           : undefined;
       // TASK-330 departure flow: a departure lines up behind one that has started its roll.
       const lineUp =
-        independent(craft.runway) && gate.vacateM === Infinity && next?.kind === 'takeoff';
+        independent(craft.runway) && gate.vacateM === Infinity && next?.kind === 'takeoff'
+          ? next
+          : undefined;
       if (!bookingFits(booking, timeS, RUNWAY_BUFFER_S, craft.id, crossingAt, lineUp)) {
         const sinceS = craft.runwayWait?.gate === gate ? craft.runwayWait.sinceS : timeS;
         craft.runwayWait = { gate, sinceS, checkedAtS: timeS, uses: booking };

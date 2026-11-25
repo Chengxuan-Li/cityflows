@@ -1938,8 +1938,9 @@ carry no persons and generate no road trips.
   already ordered to wait for the tow. Tows run at towbarless-tractor speeds (7 m/s, 6 m/s for
   double-deckers).
 - **Departure flow** (TASK-330), on a runway that crosses no other: a departure is granted its
-  line-up behind a departure that has started its roll (its tail well clear of the line-up
-  point), and takes off once no other departure on the runway still holds it and the wake time
+  line-up behind a departure that has started its roll from the same end (its tail well clear of
+  its line-up point, which is not behind the new line-up: TASK-346, never ahead of a roll), and
+  takes off once no other departure on the runway still holds it and the wake time
   behind the last roll has run (super before a lighter class 180 s, a heavier class before a
   lighter 120 s, else 75 s, `DEP_SEP_S`).
 - **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
