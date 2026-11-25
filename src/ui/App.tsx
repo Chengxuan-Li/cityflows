@@ -28,7 +28,7 @@ import { StatusBar } from './run-bar';
 import { Sidebar } from './sidebar';
 import { useAppStore } from './store';
 import { TopBar } from './top-bar';
-import { useLighting } from './lighting-store';
+import { useVisual } from './lighting-store';
 import { NodeTopologyActions } from './tools/topology-actions';
 
 function Inspector() {
@@ -169,9 +169,16 @@ function usePhone() {
  *  selector re-renders only when the answer changes, not on every clock tick. */
 function useDocumentAppearance() {
   const { settings, systemDark } = useAppearance();
-  const lighting = useLighting((state) => state.lighting);
+  const lighting = useVisual((state) => state.visual);
   const dark = useAppStore(
-    (state) => resolveAppearance(settings, systemDark, lighting, state.run?.timeS).dark,
+    (state) =>
+      resolveAppearance(
+        settings,
+        systemDark,
+        lighting,
+        state.run?.timeS,
+        state.session?.project.city.geo?.origin,
+      ).dark,
   );
   useLayoutEffect(() => {
     document.documentElement.dataset.appearance = dark ? 'dark' : 'light';

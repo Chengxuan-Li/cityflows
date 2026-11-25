@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { sceneLight, type LightingSettings } from '../render/lighting';
+import type { LonLat } from '../geo/projection';
+import { sceneLight, type VisualSettings } from '../render/lighting';
 
 /** TASK-166: the window's appearance, a per-viewer view preference kept apart from the project. */
 export type AppearanceMode = 'system' | 'light' | 'dark';
@@ -45,9 +46,13 @@ export function saveAppearance(storage: Storage | undefined, settings: Appearanc
 
 /** Night lighting: the street lamps are on (Evening, Night, or the clock from about the sun's
  * setting, 2° above the horizon, to its rising). Before a run starts the clock reads as day. */
-export function nightLighting(lighting: LightingSettings, timeS: number | undefined) {
+export function nightLighting(
+  lighting: VisualSettings,
+  timeS: number | undefined,
+  origin?: LonLat,
+) {
   if (lighting.mode === 'clock' && timeS === undefined) return false;
-  return sceneLight(lighting, timeS ?? 0).artificial >= 0.5;
+  return sceneLight(lighting, timeS ?? 0, undefined, origin).artificial >= 0.5;
 }
 
 /** Which appearance the window shows, and whether the map takes its dark variant. The map follows
@@ -56,12 +61,13 @@ export function nightLighting(lighting: LightingSettings, timeS: number | undefi
 export function resolveAppearance(
   settings: AppearanceSettings,
   systemDark: boolean,
-  lighting: LightingSettings,
+  lighting: VisualSettings,
   timeS: number | undefined,
+  origin?: LonLat,
 ) {
   const chosen = settings.appearance === 'dark' || (settings.appearance === 'system' && systemDark);
   return {
-    dark: chosen || (settings.matchLighting && nightLighting(lighting, timeS)),
+    dark: chosen || (settings.matchLighting && nightLighting(lighting, timeS, origin)),
     darkMap: chosen,
   };
 }

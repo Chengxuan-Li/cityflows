@@ -11,7 +11,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
-import { defaultLighting, sceneLight } from '../src/render/lighting';
+import { defaultVisual, sceneLight } from '../src/render/lighting';
 import type { AircraftPose } from '../src/render/types';
 import { aircraftTypes } from '../src/schema/aircraft';
 import { Aircraft3D } from '../src/render3d/aircraft';
@@ -52,7 +52,7 @@ export function showAircraftLive(query: URLSearchParams) {
   const canvas = document.querySelector('canvas')!;
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   const scene = new Scene();
-  const light = sceneLight({ ...defaultLighting, mode }, 0);
+  const light = sceneLight({ ...defaultVisual, mode }, 0);
   renderer.setClearColor(light.background);
   const sky = new HemisphereLight(light.sky, light.ground, light.skyIntensity);
   const sun = new DirectionalLight(light.sunColor, light.sunIntensity);
