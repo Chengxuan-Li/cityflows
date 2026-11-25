@@ -9,7 +9,7 @@ import {
   type AircraftPoseSnapshot,
 } from '../../src/sim/aircraft';
 import { createEngine } from '../../src/sim/engine';
-import { overlaps, onRunway, runwayConflictCheck } from './aircraft-checks';
+import { exemptRunwayPair, overlaps, runwayConflictCheck } from './aircraft-checks';
 import { airportFixture } from './airside-fixture';
 import { setup } from './fixtures';
 
@@ -50,9 +50,13 @@ function run(
     }
     if (step % 10 === 0) {
       expect(overlaps(snapshot), `bodies at ${timeS} s`).toEqual([]);
-      if (fleet.graph.runways.length === 1)
-        expect(onRunway(snapshot).length, `runway at ${timeS} s`).toBeLessThanOrEqual(1);
-      else expect(checkRunways(snapshot), `runway at ${timeS} s`).toBe(0);
+      if (fleet.graph.runways.length === 1) {
+        // TASK-330: one aircraft on the runway at a time, but for the sharing the owner approved
+        // (TASK-345: crossings together or behind a landing roll, a line-up behind a roll).
+        const on = snapshot.filter((p) => p.onRunway);
+        const shared = on.flatMap((a, i) => on.slice(i + 1).filter((b) => !exemptRunwayPair(a, b)));
+        expect(shared.length, `runway at ${timeS} s`).toBe(0);
+      } else expect(checkRunways(snapshot), `runway at ${timeS} s`).toBe(0);
     }
     if (done()) break;
   }

@@ -171,7 +171,8 @@ function sample(timing: Timing, pose: AircraftPoseSnapshot) {
   }
 }
 
-const checkRunwayConflicts = runwayConflictCheck(graph);
+// Raw count: every pair on one runway (TASK-345 exempt: false); the exemptions are counted below.
+const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
 let overlapCount = 0;
 let runwayConflicts = 0;
 let runwayShared = 0;
@@ -180,7 +181,6 @@ let runwayCrossersApart = 0;
 // departure are by design; the rest of runwayConflicts is counted here.
 let runwayExempt = 0;
 const spans = new Map(aircraftTypes.map((t) => [t.id, t.spanM]));
-const rcKinds = new Map<string, number>();
 let peakStuck = 0;
 let peakActive = 0;
 
@@ -229,39 +229,13 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    {
-      const found = overlaps(poses);
-      overlapCount += found.length;
-      if (found.length && process.env.OVDBG)
-        for (const pair of found) {
-          const [a, b] = pair.map((r: string) => poses.find((p) => p.registration === r)!);
-          console.error(
-            'OVERLAP',
-            (timeS / 3600).toFixed(3),
-            JSON.stringify(
-              [a, b].map(
-                (p) =>
-                  p && [
-                    p.id,
-                    p.typeId,
-                    p.state,
-                    Math.round(p.x),
-                    Math.round(p.y),
-                    p.speedMps.toFixed(1),
-                    p.stand,
-                    p.runwayEnd,
-                  ],
-              ),
-            ),
-          );
-        }
-    }
+    overlapCount += overlaps(poses).length;
     {
       const found = checkRunwayConflicts(poses);
       if (found) {
         // TASK-330 Phase 1e: of the pairs on one runway, a crossing aircraft (taxi or tow) at
         // least 150 m behind a landing roll or take-off moving away (the owner's crossing behind
-        // a lander); RCDBG classifies the rest.
+        // a lander).
         const on = poses.filter((p) => p.onRunway);
         const runwayOf = (p: (typeof on)[number]) => {
           let best = -1;
@@ -283,9 +257,6 @@ for (let step = startS * 10; step < endS * 10; step++) {
             const a = on[i]!,
               b = on[j]!;
             const crossing = (p: typeof a) => p.state === 'taxi' || p.state === 'tow';
-            const note = (k: string) => {
-              if (process.env.RCDBG) rcKinds.set(k, (rcKinds.get(k) ?? 0) + 1);
-            };
             if (crossing(a) === crossing(b)) {
               if (crossing(a)) {
                 // Two crossings: apart if their points along the runway are more than half their
@@ -299,12 +270,8 @@ for (let step = startS * 10; step < endS * 10; step++) {
                 const apartPoints =
                   Math.abs(ua - ub) > (span(a) + span(b)) / 2 + 15 && across(a) && across(b);
                 if (apartPoints) runwayCrossersApart++;
-                note(
-                  `both crossing: ${apartPoints ? 'different points, paths apart' : 'same or meeting'}`,
-                );
                 runwayExempt++;
               } else {
-                note(`both moving: ${a.state}/${b.state}`);
                 const rolling = (p: typeof a) =>
                   p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
                 const [lu, roll] = a.state === 'line-up' ? [a, b] : [b, a];
@@ -323,16 +290,15 @@ for (let step = startS * 10; step < endS * 10; step++) {
               (mover.y - crosser.y) * Math.sin(mover.heading);
             if (back >= 150) apart++;
             if (back >= 150 && mover.state === 'landing-roll') runwayExempt++;
-            note(
-              `${back >= 150 ? 'behind>=150' : back >= 0 ? 'behind<150' : 'ahead'} of ${mover.state}`,
-            );
           }
         runwayConflicts += found;
         runwayShared += Math.min(found, apart);
       }
     }
   }
-  if (timeS % 3600 === 0 && timeS > startS)
+  if (timeS % 3600 === 0 && timeS > startS) {
+    // TASK-330 / TASK-339: the order's counters, for the log.
+    console.error('PROGRESSIVE', timeS / 3600, JSON.stringify(fleet.orderCounters()));
     console.info(
       JSON.stringify({
         h: timeS / 3600,
@@ -344,6 +310,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
         stuck5,
       }),
     );
+  }
 }
 timeS = endS;
 operations.step(endS);
@@ -480,4 +447,3 @@ const summary = {
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));
-if (process.env.RCDBG) console.info('RCKINDS', JSON.stringify(Object.fromEntries(rcKinds)));

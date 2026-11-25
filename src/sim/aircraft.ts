@@ -61,7 +61,6 @@ import {
   type AircraftVisualPose,
 } from './aircraft-motion';
 import type { RunwayConfiguration } from './runway-configuration';
-import { taxiFlowPreferences } from './taxi-flow-preferences';
 
 // TASK-298: aircraft on the airside (docs/architecture.md section 8, "Aircraft"). Aircraft move
 // along legs: a ground leg follows graph arcs (taxi, pushback, tow) under three rules that keep
@@ -133,26 +132,15 @@ const RUNWAY_BUFFER_S = 20;
  * tail off the runway, about 90 s from one landing to the next as at a busy runway (the
  * grants of departures and crossings keep RUNWAY_BUFFER_S). */
 const ARRIVAL_PAD_S = 5;
-/** T330R: the runway must be clear this long before a landing crosses the threshold. */
-const T330R = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R;
+/** TASK-330 landing booking: on a runway that crosses no other, a landing books its runway from
+ * this long before its threshold (not DECISION_S), and the runway must be clear by then. */
 const CLEAR_BEFORE_S = 5;
-const T330RG = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330RG;
-const T330D2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330D2;
-const T330RI = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330RI;
-const T330D3 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330D3;
-const T330IND = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330IND;
-const T330R4 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R4;
-const T330R3 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R3;
-const T330R2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330R2;
 const RETRY_S = 5;
 /** TASK-329: a ring of waits lasting this long is broken. */
 const RING_S = 60;
-// TASK-330 Phase 1d pilot switch (temporary): T330P=<metres> orders conflicts only once one of the
-// two aircraft is within that distance of it along its route; later ones as the aircraft move.
-const ORDER_HORIZON_M = Number(
-  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330P || 'Infinity',
-);
+/** TASK-330 progressive order: a conflict is ordered only once one of the two aircraft is
+ * within this distance of it along its route; later ones as the aircraft move. */
+const ORDER_HORIZON_M = 300;
 /** TASK-330: one landing to the next on a runway end, and the time a starter keeps in hand
  * against a queued arrival it goes before. */
 const LANDING_GAP_S = 90;
@@ -161,29 +149,8 @@ const HORIZON_S = 120;
 const EXIT_NEAR_M = 200;
 /** TASK-330 Phase 1e step 2: how far a landing aircraft's tail is past a crossing before it goes. */
 const CROSS_BEHIND_M = 60;
-const T330RING = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330RING;
-const T330TOW = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330TOW;
-const T330PAD0 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330PAD0;
-const GAP_WAIT_S = Number(
-  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GW || 30,
-);
-const GAP_BUFFER_S = Number(
-  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330GB || 20,
-);
-const T330TOW2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330TOW2;
-const T330BLK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330BLK;
-const T330BLK2 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330BLK2;
-const T330PARK = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330PARK;
-const T330EDGE = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env
-  .T330EDGE;
-const DBG330 = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DBG;
+/** An aircraft waiting this long at a hold gets a gap between arrivals. */
+const RUNWAY_GAP_WAIT_S = 30;
 /** TASK-330: radar spacing on final, threshold to threshold: the minimum, and the wake pairs
  * (ICAO Doc 4444; leader category, then follower's) where longer. */
 const NM = 1852;
@@ -214,13 +181,10 @@ const STRAIGHT_RAD = (0.5 * Math.PI) / 180;
 const ROAD_CLEAR_M = 1;
 const STOP_BACK_M = 20;
 const STUCK_S = 900;
-// T330D (TASK-330 pilot, not for merge): departures line up behind a rolling departure and take
-// off once it is past the runway end and the wake time behind it has run (T330DSEP: seconds
-// between rolls when no wake time applies, default 75).
-const T330D = !!(globalThis as { process?: { env: Record<string, string> } }).process?.env.T330D;
-const DEP_SEP_S = Number(
-  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DSEP || 75,
-);
+/** TASK-330 departure flow: on a runway that crosses no other, departures line up behind a
+ * rolling departure and take off once it is past the runway end and the wake time behind it has
+ * run; this many seconds between rolls where no wake time applies. */
+const DEP_SEP_S = 75;
 /** Routes avoid edges where an aircraft parked at a stand stands in the way. */
 const PARKED_FACTOR = 50;
 /** A road crossing is closed while an aircraft below this height is within the larger of 150 m
@@ -231,11 +195,6 @@ const GEAR_APPROACH_M = 600;
 const GEAR_CLIMB_M = 150;
 /** Cost factor of a parallel taxiway arc against the runway configuration's flow. */
 const FLOW_FACTOR = 3;
-// TASK-330 fix 5 pilot switch (temporary): T330F=<factor> routes against TASK-323's taxi flow
-// preferences at that cost, in place of TASK-300's parallel-taxiway factor.
-const PREF_FACTOR = Number(
-  (globalThis as { process?: { env: Record<string, string> } }).process?.env.T330F || '0',
-);
 
 export const aircraftStates = [
   'approach',
@@ -387,8 +346,6 @@ interface AreaSpan {
 
 interface BookedUse extends RunwayUse {
   clearS: number;
-  /** T330RI: when this use starts, if not the booking's own start. */
-  fromS?: number;
 }
 
 interface Leg {
@@ -444,7 +401,7 @@ interface Air {
   clearM: number;
   decided: boolean;
   touched: boolean;
-  /** T330R: committed, waiting for a runway still held by an aircraft predicted clear in time. */
+  /** TASK-330: committed, waiting for a runway still held by an aircraft predicted clear in time. */
   claimPending?: boolean;
 }
 
@@ -498,7 +455,7 @@ interface Craft {
   /** Swept body of a pushback, reserved until the tug stops on the taxiway. */
   pushSweep?: Body[];
   /** Waiting at a hold for a runway window, since when, and the occupancy asked for. */
-  runwayWait?: { gate: Gate; sinceS: number; checkedAtS: number; uses: BookedUse[]; at?: Vec2 };
+  runwayWait?: { gate: Gate; sinceS: number; checkedAtS: number; uses: BookedUse[] };
 }
 
 interface Body {
@@ -770,25 +727,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const areasByRunway = graph.runways.map((r) =>
     intersectionAreas.filter((area) => area.runways.includes(r.idx)),
   );
-  if (DBG330)
-    console.log(
-      'AREAS',
-      JSON.stringify(
-        graph.runways.map((r, i) => [
-          i,
-          (r as { name?: string; ref?: string }).name ?? (r as { ref?: string }).ref,
-          areasByRunway[i]!.length,
-        ]),
-      ),
-    );
   const runwayOccupant = new Int32Array(graph.runways.length + intersectionAreas.length).fill(-1);
-  /** T330IND: the R and D rules only on runways that cross no other runway. */
-  const independent = (r: number) => !T330IND || (areasByRunway[r]?.length ?? 0) === 0;
-  const rOn = (r: number) => T330R && independent(r);
-  const dOn = (r: number) => T330D && independent(r);
-  const leadS = (r: number) => (rOn(r) ? CLEAR_BEFORE_S : DECISION_S);
-  /** T330PAD0: no pad on either side of an R landing window (5 s margin, not 15 s). */
-  const padS = (r: number) => (T330PAD0 && rOn(r) ? 0 : ARRIVAL_PAD_S);
+  /** TASK-330: the landing booking (from CLEAR_BEFORE_S, with a deferred claim) and the departure
+   * flow (line-up behind a rolling departure, take-off by wake time) apply only on runways that
+   * cross no other runway. */
+  const independent = (r: number) => (areasByRunway[r]?.length ?? 0) === 0;
+  const leadS = (r: number) => (independent(r) ? CLEAR_BEFORE_S : DECISION_S);
   const runwayClearS = new Float64Array(runwayOccupant.length);
   const standOccupant = new Int32Array(graph.stands.length).fill(-1);
   const standBound = new Int32Array(graph.stands.length).fill(-1);
@@ -812,41 +756,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ? 'N'
         : '';
   let nowS = 0;
-  const dbg = {
-    why: new Map<Craft, string>(),
-    held: new Map<string, number>(),
-    exits: new Map<string, number>(),
-    released: [] as { id: number; timeS: number; end: number; runway: number }[],
-    lastS: 0,
-    ga: new Map<string, number>(),
-  };
-  (globalThis as unknown as { __d330: unknown }).__d330 = {
-    heads: () => {
-      const out: Record<string, { id: number; why: string; type: string }> = {};
-      for (const id of queue) {
-        const c = crafts[id - 1]!;
-        if (c.request?.kind !== 'arrival') continue;
-        const d = graph.runways[c.runway]!.ends[c.request.end]!.designator;
-        if (!(d in out)) out[d] = { id: c.id, why: dbg.why.get(c) ?? 'new', type: c.type.id };
-      }
-      return out;
-    },
-    queuedArr: () => queue.filter((id) => crafts[id - 1]!.request?.kind === 'arrival').length,
-    crossQ: () =>
-      crafts
-        .filter((c) => c.mode === 'ground' && c.runwayWait && c.runwayWait.gate.vacateM < Infinity)
-        .map((c) => [c.id, Math.round(nowS - c.runwayWait!.sinceS)]),
-    approach: () =>
-      crafts
-        .filter((c) => c.mode === 'air' && c.air?.kind === 'approach')
-        .map((c) => [c.id, Math.round(c.air!.thresholdM - c.pose!.stationM)]),
-    onRwy: () =>
-      crafts
-        .filter((c) => c.mode !== 'done' && c.mode !== 'queued' && c.pose && onRunway(c))
-        .map((c) => c.id),
-  };
-  const dbgKind = (c: Craft) =>
-    `${c.towing ? 'tow' : c.next.some((n) => n.kind === 'takeoff') || c.request?.kind === 'departure' || c.admission?.next.some((n) => n.kind === 'takeoff') ? 'departure' : c.request?.kind === 'tow' ? 'tow' : c.mode === 'queued' || (c.stand >= 0 && (c.mode === 'air' || c.next.some((n) => n.kind === 'park'))) ? 'arrival' : 'other'}/${c.mode}/${c.mode === 'queued' ? '' : stateOf(c)}${c.mode === 'ground' ? (c.speedMps < 0.05 ? ':still' : ':moving') : ''}`;
+  /** The time of the previous step. */
+  let lastStepS = 0;
   let admitted = 0;
   let ringS = -Infinity;
   /** TASK-339: seconds aircraft have stood in a wait on a parked aircraft with no admission. */
@@ -856,7 +767,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const arrivalOpen = new Uint8Array(graph.runways.length * 2);
   const departureOpen = new Uint8Array(graph.runways.length * 2);
   let flowFactor: Float64Array | null = null;
-  let flowPreferred: Int8Array | null = null;
   const runways = {
     restricted: false,
     active: null as RunwayConfiguration | null,
@@ -1571,10 +1481,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         other.mode === 'queued' &&
         other.request?.kind === 'arrival' &&
         other.admission &&
-        // T330TOW: not for one already ordered to wait for this tow; it is not released before it.
-        !(T330TOW && other.waits.some((w) => w.pred === craft && !passed(w))) &&
-        // T330TOW2: nor for one that cannot appear while this tow stands (it cannot give way to it).
-        !(T330TOW2 && !yieldWaits(other, craft))
+        // TASK-330: not for one already ordered to wait for this tow; it is not released before it.
+        !other.waits.some((w) => w.pred === craft && !passed(w))
       ) {
         const key = endKey(other.runway, other.request.end);
         if (
@@ -1604,48 +1512,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const found: [Craft, Wait[]][] = [];
     for (const other of pass) {
       const waits = yieldWaits(craft, other);
-      if (!waits) {
-        yieldBlocker = `${other.id}:${dbgKind(other)}:${yieldWhy}`;
-        return null;
-      }
+      if (!waits) return null;
       found.push([other, waits]);
     }
     return found;
   }
   /** The waits by which `other` gives way to `craft` where their remaining movements meet; null
    * if it can no longer stop short of one. */
-  let yieldWhy = '';
-  let yieldBlocker = '';
-  function yieldWaits(craft: Craft, other: Craft, anyGrant = true, atEdge = false) {
+  function yieldWaits(craft: Craft, other: Craft, anyGrant = true) {
     const waits: Wait[] = [];
     for (const c of conflicts(craft, remaining(craft), other)) {
-      let atM = c.x1 - SAMPLE_M;
-      // T330RING: in a ring, one standing at the edge of the conflict waits where it stands.
-      if (
-        atEdge &&
-        other.mode === 'ground' &&
-        other.leg === c.otherLeg &&
-        other.stationM >= atM &&
-        other.stationM <= c.x1 + 1e-6 &&
-        other.speedMps === 0
-      )
-        atM = other.stationM;
-      if (
-        (inside(other, c.otherLeg, atM) && !(atEdge && other.stationM <= atM + 1e-2)) ||
-        !canWaitAt(other, c.otherLeg, atM)
-      ) {
-        yieldWhy = `${inside(other, c.otherLeg, atM) ? 'inside' : 'cannotWait'} atM ${atM.toFixed(0)} otherM ${other.stationM?.toFixed?.(0)} sameLeg ${other.leg === c.otherLeg}`;
-        return null;
-      }
+      const atM = c.x1 - SAMPLE_M;
+      if (inside(other, c.otherLeg, atM) || !canWaitAt(other, c.otherLeg, atM)) return null;
       // TASK-330 Phase 1e: a landing aircraft never waits short of where its tail is off.
       if (
         c.otherLeg.gates[0]?.holdM === -Infinity &&
         other.mode !== 'queued' &&
         atM < safeOf(other, c.otherLeg)
-      ) {
-        yieldWhy = 'landingSafe';
+      )
         return null;
-      }
       // One holding a runway grant does not stop short of it for another.
       // (TASK-330 Phase 1e, at landing commitment: only a grant covering the stop, which
       // canWaitAt has checked.)
@@ -1653,10 +1538,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         anyGrant &&
         other.mode === 'ground' &&
         other.leg!.gates.some((g) => g.granted && !g.released)
-      ) {
-        yieldWhy = 'grant';
+      )
         return null;
-      }
       const predM = c.follow ? c.b1 + craft.lengthM : c.b2 + SAMPLE_M;
       waits.push({ leg: c.otherLeg, atM, pred: craft, predLeg: c.leg, predM });
     }
@@ -1727,8 +1610,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           : unstarted(best.other) === unstarted(other) && best.other.rank >= other.rank)
       )
         continue;
-      const waits =
-        yieldWaits(craft, other) ?? (T330RING ? yieldWaits(craft, other, true, true) : null);
+      const waits = yieldWaits(craft, other);
       if (waits) best = { craft, other, waits };
     }
     if (best) {
@@ -1737,50 +1619,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     } else if (!late.deadKeys.has(key)) {
       late.deadKeys.add(key);
       late.deadlocks++;
-      if (DBG330)
-        for (const [i, c] of ring.entries()) {
-          const o = ring[(i + 1) % ring.length]!;
-          const ws = c.waits.filter((w) => w.pred === o);
-          console.log(
-            'DEADRING',
-            nowS.toFixed(0),
-            c.id,
-            c.mode,
-            (c as { phase?: string }).phase ?? '',
-            'unstarted',
-            unstarted(c),
-            'runway',
-            (c as { runway?: number }).runway,
-            'leg',
-            '',
-            'm',
-            c.mode === 'ground' ? c.stationM?.toFixed(0) : '',
-            '-> waits for',
-            o.id,
-            JSON.stringify(
-              ws.map((w) => ({
-                m: w.atM?.toFixed?.(0),
-                pm: w.predM === Infinity ? 'inf' : w.predM?.toFixed?.(0),
-                passed: passed(w),
-                kind: (w as { kind?: string }).kind,
-              })),
-            ),
-            'yield',
-            !!yieldWaits(c, o),
-            yieldWhy,
-            'edge',
-            !!yieldWaits(c, o, true, true),
-            yieldWhy,
-            'oSpeed',
-            o.speedMps,
-            'x1s',
-            JSON.stringify(
-              conflicts(c, remaining(c), o).map((k) => [k.x1.toFixed(2), k.otherLeg === o.leg]),
-            ),
-            'oM',
-            o.stationM?.toFixed(2),
-          );
-        }
     }
   }
 
@@ -2010,54 +1848,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           late.deferred++;
           continue;
         }
-        // T330PARK: one that would park with its body in the other's way goes second (once
-        // parked it would stay there until it leaves).
-        const parksIn = (leg: Leg, toM: number) => {
-          const last = leg.pieces.at(-1);
-          return (
-            !!last &&
-            (graph.edges[last.edge]!.kind === 'lead_in' || restLegs.has(leg)) &&
-            toM >= leg.endM - 2 * SAMPLE_M
-          );
-        };
-        const otherParks = T330PARK && parksIn(c.otherLeg, c.x2) && !parksIn(c.leg, c.b2);
-        const iPark = T330PARK && parksIn(c.leg, c.b2) && !parksIn(c.otherLeg, c.x2);
         const byRank = other.rank < craft.rank && !yields && !first;
-        if (T330PARK && DBG330 && [craft.id, other.id].every((i) => i === 41 || i === 19))
-          console.error(
-            'PARKCHK',
-            nowS.toFixed(0),
-            craft.id,
-            other.id,
-            'b',
-            c.b1.toFixed(0),
-            c.b2.toFixed(0),
-            c.leg.endM.toFixed(0),
-            'x',
-            c.x1.toFixed(0),
-            c.x2.toFixed(0),
-            c.otherLeg.endM.toFixed(0),
-            'lastKind',
-            graph.edges[c.otherLeg.pieces.at(-1)!.edge]!.kind,
-            graph.edges[c.leg.pieces.at(-1)!.edge]!.kind,
-            'rest',
-            restLegs.has(c.otherLeg),
-            restLegs.has(c.leg),
-            'otherParks',
-            otherParks,
-            'iPark',
-            iPark,
-            'byRank',
-            byRank,
-            'follow',
-            c.follow,
-            'oM',
-            other.stationM?.toFixed(1),
-            'oV',
-            other.speedMps,
-            'oMode',
-            other.mode,
-          );
         const otherCanWait =
           !inside(other, c.otherLeg, c.x1 - SAMPLE_M) &&
           canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
@@ -2073,11 +1864,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             ? !otherCanWait && byRank
             : parker === craft
               ? canWaitAt(craft, c.leg, c.b1 - SAMPLE_M) || byRank
-              : otherParks
-                ? !otherCanWait && byRank
-                : iPark
-                  ? canWaitAt(craft, c.leg, c.b1 - SAMPLE_M) || byRank
-                  : byRank;
+              : byRank;
         if (parker && goesSecond === byRank) late.parkKept++;
         else if (parker) late.parkRuled++;
         if (goesSecond) {
@@ -2100,20 +1887,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           mine.push({ leg: c.leg, atM, pred: other, predLeg: c.otherLeg, predM });
         } else {
           // A re-routed aircraft keeps its place before those admitted after it.
-          let atM = c.x1 - SAMPLE_M;
-          // T330EDGE: one stopped within the sampling margin short of the conflict waits where it
-          // stands when its body there clears this one's whole sweep.
-          const edge =
-            T330EDGE &&
-            other.mode === 'ground' &&
-            other.leg === c.otherLeg &&
-            other.speedMps === 0 &&
-            other.stationM >= atM &&
-            other.stationM <= c.x1 &&
-            !parkedConflict(craft, own, other);
-          if (edge) atM = other.stationM;
-          if ((!edge && inside(other, c.otherLeg, atM)) || !canWaitAt(other, c.otherLeg, atM))
-            return null;
+          const atM = c.x1 - SAMPLE_M;
+          if (inside(other, c.otherLeg, atM) || !canWaitAt(other, c.otherLeg, atM)) return null;
           const predM = c.follow ? c.b1 + craft.lengthM : c.b2 + SAMPLE_M;
           theirs.push({
             owner: other,
@@ -2125,7 +1900,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return { mine, theirs };
   }
 
-  /** TASK-330 Phase 1d: counters of the progressive order (pilot). */
+  /** TASK-330 Phase 1d / TASK-339: counters of the progressive order and the parked-blocker rules. */
   const late = {
     deferred: 0,
     decided: 0,
@@ -2571,11 +2346,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const edge = arcEdge(arc);
     if (graph.edges[edge]!.kind === 'runway') return 1000;
     const dir = arcForward(arc) ? 1 : -1;
-    const flow = flowPreferred
-      ? flowPreferred[edge] === (arcForward(arc) ? -1 : 1)
-        ? PREF_FACTOR
-        : 1
-      : (flowFactor?.[arc] ?? 1);
+    const flow = flowFactor?.[arc] ?? 1;
     const blocked =
       parkedInTheWay(craft, edge) || (avoiding.length > 0 && avoidedOn(craft, edge))
         ? PARKED_FACTOR
@@ -2947,7 +2718,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
   }
 
-  // ----- T330D.
+  // ----- TASK-330 departure flow.
   /** A departure that has started its roll, its tail well clear of its line-up point. */
   function rollingAway(o: Craft) {
     return o.mode === 'air' && o.air?.kind === 'takeoff' && o.stationM >= o.lengthM + margin;
@@ -2962,10 +2733,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
   /** A lined-up departure waits while another departure on its runway still holds it (not yet
    * past the far end) and for the wake time behind the last take-off roll. */
-  /** T330D3: a runway no arrival end is open on. */
-  function departureOnly(runway: number) {
-    return runways.restricted && !arrivalOpen[endKey(runway, 0)] && !arrivalOpen[endKey(runway, 1)];
-  }
   function takeoffHeld(craft: Craft, timeS: number) {
     for (const o of crafts)
       if (
@@ -2991,10 +2758,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   ) {
     for (const use of uses) {
       const { resource, clearS } = use;
-      const from = use.fromS ?? fromS;
       const occupant = runwayOccupant[resource]!;
       // TASK-330 Phase 1e step 2: a crossing goes behind a landing aircraft whose tail is past it.
-      // T330D: a departure lines up behind one that has started its roll.
+      // TASK-330: a departure lines up behind one that has started its roll.
       const behind = (id: number) =>
         (lineUp && rollingAway(crafts[id - 1]!)) ||
         (!!crossing &&
@@ -3003,7 +2769,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (
         occupant !== -1 &&
         occupant !== except &&
-        (from <= nowS || runwayClearS[resource]! > from) &&
+        (fromS <= nowS || runwayClearS[resource]! > fromS) &&
         !behind(occupant)
       )
         return false;
@@ -3013,14 +2779,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           other.id !== except &&
           booking &&
           booking.uses.some(
-            (u) =>
-              u.resource === resource &&
-              (u.fromS ??
-                (T330RG && bufferS > 0
-                  ? booking.fromS - (DECISION_S - CLEAR_BEFORE_S)
-                  : booking.fromS)) <
-                clearS + bufferS &&
-              u.clearS > from,
+            (u) => u.resource === resource && booking.fromS < clearS + bufferS && u.clearS > fromS,
           ) &&
           !behind(other.id)
         )
@@ -3053,27 +2812,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** Arrivals leave a runway gap for an aircraft that has waited at one of its holds: one only
    * appears when its window starts that aircraft's occupancy (and the buffers) after the last
    * window booked before it (TASK-312: crossings and departures between arrivals). */
-  function leavesGap(
-    uses: BookedUse[],
-    fromS: number,
-    lander?: { runway: number; end: number; fromU: number; toU: number },
-  ) {
+  function leavesGap(uses: BookedUse[], fromS: number) {
     for (const { resource } of uses) {
       let needS = 0;
       for (const other of crafts) {
         const wait = other.runwayWait;
-        if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < GAP_WAIT_S) continue;
-        // T330R4: a crossing the lander rolls past goes behind it and needs no gap of its own.
-        if (lander && wait.at && resource === lander.runway) {
-          const u = nearestOnPolyline(
-            runwayLine(graph.runways[lander.runway]!, lander.end).line,
-            wait.at,
-          ).along;
-          if (u >= lander.fromU && u + other.type.spanM / 2 + margin < lander.toU) continue;
-        }
+        if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < RUNWAY_GAP_WAIT_S) continue;
         const use = wait.uses.find((use) => use.resource === resource);
-        if (use)
-          needS = Math.max(needS, use.clearS - wait.checkedAtS + 2 * (T330R3 ? 5 : GAP_BUFFER_S));
+        if (use) needS = Math.max(needS, use.clearS - wait.checkedAtS + 2 * RUNWAY_BUFFER_S);
       }
       if (!needS) continue;
       let lastS = runwayOccupant[resource] === -1 ? nowS : Math.max(nowS, runwayClearS[resource]!);
@@ -3092,11 +2838,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     timeS: number,
   ) {
     const runway = graph.runways[craft.runway]!;
-    const why = (r: string) => (dbg.why.set(craft, r), false as const);
-    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)])
-      return why('endClosed');
-    if (standOccupant[request.stand] !== -1) return why('noStand');
-    if (pushBlocksStand(craft, request.stand)) return why('pushBlocksStand');
+    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)]) return false;
+    if (standOccupant[request.stand] !== -1) return false;
+    if (pushBlocksStand(craft, request.stand)) return false;
     if (!craft.admission) {
       for (const option of landings(craft, runway, request.end, request.stand)) {
         const landing = option();
@@ -3108,28 +2852,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         craft.admission = { legs: [landing.leg], next: [], landing };
         break;
       }
-      if (!craft.admission) {
-        dbg.why.set(craft, 'unordered');
-        return 'unordered';
-      }
+      if (!craft.admission) return 'unordered';
     }
     const landing = craft.admission.landing!;
     const pass = passing(craft);
-    // T330R: an arrival ready to appear goes before queued arrivals it would wait for; they are
-    // ordered after it, as a departure at its stand is.
-    if (T330R2)
-      for (const w of craft.waits)
-        if (w.pred.mode === 'queued' && w.pred.request?.kind === 'arrival' && !passed(w))
-          pass.add(w.pred);
     // TASK-330: an arrival ahead on final to the same runway does not keep it from appearing as
     // long as it will be clear of the way off the runway by this one's landing commitment; it is
     // spaced on final from it instead.
-    const ahead = (w: Wait) => w.pred.air?.kind === 'approach' && w.pred.runway === craft.runway;
     const leg = landing.leg;
     const safeM = safeOf(craft, leg);
     // TASK-330 Phase 1e step 1: the way off the runway is ordered at landing commitment. It does
     // not appear while an aircraft stands in its way off that could not give way there.
-    void ahead;
     for (const o of crafts) {
       if (o === craft || o.mode !== 'ground') continue;
       // A landed aircraft moving off by its exit is judged at commitment; one standing is not.
@@ -3137,13 +2870,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (landed && o.speedMps > 0.5) continue;
       if (o.waits.some((w) => w.pred === craft && !passed(w))) continue;
       const meets = conflicts(craft, [{ leg, fromM: 0 }], o).some((c) => c.b1 - SAMPLE_M < safeM);
-      if (meets && !yieldWaits(craft, o)) return why('exitOccupied:' + dbgKind(o));
+      if (meets && !yieldWaits(craft, o)) return false;
     }
-    const unW = craft.waits.find((w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w));
-    if (unW) return why('unstarted:' + dbgKind(unW.pred));
+    if (craft.waits.some((w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w))) return false;
     const air = approachAir(craft, landing, timeS);
     const thresholdS = timeS + air.thresholdM / fixedWing(craft).approachSpeedMps;
-    if (!spacedOnFinal(craft, thresholdS)) return why('spacing');
+    if (!spacedOnFinal(craft, thresholdS)) return false;
 
     const exitS = timeS + air.profile.durationS;
     const taxi = taxiProfile(landing.leg.path, fixedWing(craft), {
@@ -3151,7 +2883,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       startSpeedMps: landing.exitSpeedMps,
       stopStationM: landing.leg.endM,
     });
-    const fromS = thresholdS - leadS(craft.runway) - padS(craft.runway);
+    const fromS = thresholdS - leadS(craft.runway) - ARRIVAL_PAD_S;
     const half = craft.lengthM / 2;
     const offsetM = air.path.lengthM - half;
     const uses = landing.leg.gates[0]!.uses.map((use) => ({
@@ -3162,27 +2894,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const booking = uses.map((use) => ({
       ...use,
       clearS:
-        padS(craft.runway) +
+        ARRIVAL_PAD_S +
         (use.clearM <= air.path.lengthM
           ? timeS + timeTo(air.profile, use.clearM)
           : exitS + timeTo(taxi, use.clearM - offsetM)),
     }));
-    if (T330RI)
-      for (const use of booking)
-        if (use.resource !== craft.runway)
-          (use as BookedUse).fromS = thresholdS - DECISION_S - ARRIVAL_PAD_S;
-    if (!bookingFits(booking, fromS, 0, craft.id)) return why('runwayBooking');
-    const lander = T330R4
-      ? {
-          runway: craft.runway,
-          end: request.end,
-          fromU: fromEnd(runway, request.end, runway.ends[request.end]!.thresholdM),
-          toU: landing.exitU,
-        }
-      : undefined;
-    if (!leavesGap(booking, fromS, lander)) return why('gapForDeparture');
+    if (!bookingFits(booking, fromS, 0, craft.id)) return false;
+    if (!leavesGap(booking, fromS)) return false;
     const given = yieldsTo(craft, pass);
-    if (!given) return why('yieldsNull:' + yieldBlocker.split(':').slice(1, 3).join(':'));
+    if (!given) return false;
     // TASK-330 Phase 1e: ground aircraft about to enter its way off the runway (within
     // EXIT_NEAR_M of where they would meet it, before its tail is off) wait for it from now; those
     // further off are ordered as they come near.
@@ -3196,45 +2916,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const waits = yieldWaits(craft, o);
       if (waits) given.push([o, waits]);
     }
-    dbg.exits.set(
-      landing.leg.pieces[0]!.edge + '@' + landing.exitU.toFixed(0),
-      (dbg.exits.get(landing.leg.pieces[0]!.edge + '@' + landing.exitU.toFixed(0)) ?? 0) + 1,
-    );
-    dbg.released.push({ id: craft.id, timeS, end: request.end, runway: craft.runway });
     for (const [other, waits] of given) giveWay(craft, other, waits);
     craft.mode = 'air';
     craft.air = air;
     craft.arrivalBooking = { fromS, uses: booking };
-    if ((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330BK)
-      console.error(
-        'BOOK',
-        timeS.toFixed(0),
-        craft.id,
-        craft.runway,
-        'thr+',
-        (thresholdS - timeS).toFixed(0),
-        JSON.stringify(
-          booking.map((u) => [
-            u.resource,
-            +(u.clearS - thresholdS).toFixed(0),
-            +u.clearM.toFixed(0),
-          ]),
-        ),
-        'airLen',
-        air.path.lengthM.toFixed(0),
-        'exitS-thr',
-        (exitS - thresholdS).toFixed(0),
-        'legEnd',
-        landing.leg.endM.toFixed(0),
-        'clearOnLeg',
-        JSON.stringify(landing.leg.gates[0]!.uses.map((u) => +u.clearM.toFixed(0))),
-        'half',
-        half.toFixed(0),
-        'exitV',
-        landing.exitSpeedMps.toFixed(1),
-        'id',
-        craft.id,
-      );
     craft.next = [
       { kind: 'taxi', leg: landing.leg, pauseS: 0 },
       { kind: 'park', stand: request.stand },
@@ -3252,7 +2937,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     for (const other of crafts) {
       if (other === craft || other.air?.kind !== 'approach' || other.runway !== craft.runway)
         continue;
-      const otherS = other.arrivalBooking!.fromS + leadS(other.runway) + padS(other.runway);
+      const otherS = other.arrivalBooking!.fromS + leadS(other.runway) + ARRIVAL_PAD_S;
       const [leader, follower] = otherS <= thresholdS ? [other, craft] : [craft, other];
       const nm = wakeSpacingNm[wakeOf(leader.type)]?.[wakeOf(follower.type)] ?? 0;
       const gapS = Math.max(FINAL_SPACING_M, nm * NM) / fixedWing(follower).approachSpeedMps;
@@ -3330,7 +3015,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           predLeg: c.otherLeg,
           predM: c.follow ? c.x1 + p.lengthM : c.x2 + SAMPLE_M,
         });
-      dbg.ga.set('commit:refreshed', (dbg.ga.get('commit:refreshed') ?? 0) + 1);
     }
     for (const w of craft.waits) {
       if (w.leg !== leg || w.atM >= safeM || passed(w)) continue;
@@ -3352,10 +3036,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         continue;
       }
       const waits = p.mode === 'ground' ? yieldWaits(craft, p, false) : null;
-      if (!waits) {
-        dbg.ga.set('commit:' + dbgKind(p), (dbg.ga.get('commit:' + dbgKind(p)) ?? 0) + 1);
-        return false;
-      }
+      if (!waits) return false;
       yielding.set(p, waits);
     }
     // Ground aircraft whose way meets this stretch and that are not ordered with it yet (their
@@ -3367,10 +3048,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const near = conflicts(craft, own, o).filter((c) => c.b1 - SAMPLE_M < safeM);
       if (!near.length) continue;
       const waits = yieldWaits(craft, o);
-      if (!waits) {
-        dbg.ga.set('commit:late:' + dbgKind(o), (dbg.ga.get('commit:late:' + dbgKind(o)) ?? 0) + 1);
-        return false;
-      }
+      if (!waits) return false;
       yielding.set(o, waits);
     }
     let cap = Infinity;
@@ -3423,17 +3101,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
       if (!moved) break;
     }
-    if (firstConflict(craft, leg, 0, want, ignore) < Infinity) {
-      dbg.ga.set('commit:claim', (dbg.ga.get('commit:claim') ?? 0) + 1);
-      return false;
-    }
-    if (pushBlocksStand(craft, craft.stand)) {
-      dbg.ga.set('commit:push', (dbg.ga.get('commit:push') ?? 0) + 1);
-      return false;
-    }
+    if (firstConflict(craft, leg, 0, want, ignore) < Infinity) return false;
+    if (pushBlocksStand(craft, craft.stand)) return false;
     for (const [other, waits] of yielding) giveWay(craft, other, waits);
-    dbg.ga.set('commit:yields', (dbg.ga.get('commit:yields') ?? 0) + yielding.size);
-    dbg.ga.set('commit:leaders', (dbg.ga.get('commit:leaders') ?? 0) + leaving.size);
     lock(craft, leg, 0, leg.pieces.length);
     craft.leg = leg;
     craft.claimLo = 0;
@@ -3714,8 +3384,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   /** TASK-339: whether a departure or tow not started would wait, beyond its pushback, for an
    * aircraft parked or at rest across its way with no movement planned (it would stand in the
    * way until that one leaves). A wait on its pushback keeps it at its stand anyway. */
-  function refuseBehindParked(craft: Craft, waits: Wait[], legs: Leg[]) {
-    const block = waits.find(
+  function refuseBehindParked(waits: Wait[], legs: Leg[]) {
+    const block = waits.some(
       (w) =>
         w.predM === Infinity &&
         w.pred.mode === 'parked' &&
@@ -3724,23 +3394,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         !(w.leg === legs[0] && legs[0].mode === 'pushback') &&
         !passed(w),
     );
-    if (!block) return false;
-    late.startRefused++;
-    if (DBG330)
-      console.error(
-        'REFUSED',
-        nowS.toFixed(0),
-        craft.id,
-        craft.request?.kind,
-        'by',
-        block.pred.id,
-        block.pred.stand,
-        'atLeg',
-        legs.indexOf(block.leg),
-        block.atM.toFixed(0),
-        craft.admission ? 'dropped' : 'new',
-      );
-    return true;
+    if (block) late.startRefused++;
+    return block;
   }
 
   /** TASK-339: whether an aircraft moving on the ground (and not ordered after `craft`) is to come
@@ -3803,18 +3458,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!decided) return;
       // TASK-339: not while its way passes an aircraft parked or at rest across it with no
       // movement planned; it plans again on a later try.
-      if (refuseBehindParked(craft, decided.mine, legs)) return;
-      // T330BLK2: not while its way passes an aircraft parked across it with no movement planned
-      // (it would wait in the way until that one leaves); it plans again on a later try.
-      if (
-        T330BLK2 &&
-        decided.mine.some(
-          (w) => w.predM === Infinity && w.pred.mode === 'parked' && !w.pred.admission,
-        )
-      ) {
-        late.blockedTries++;
-        return;
-      }
+      if (refuseBehindParked(decided.mine, legs)) return;
       commitOrder(craft, decided);
       craft.admission = { legs, next: planned.next };
     }
@@ -3840,7 +3484,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             legs: legs.legs,
             next: [request.stand >= 0 ? { kind: 'park', stand: request.stand } : { kind: 'rest' }],
           };
-          if (request.stand < 0) restLegs.add(legs.legs.at(-1)!);
         }
       }
       return planned;
@@ -3848,7 +3491,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const { legs } = craft.admission;
     // TASK-339: nor once ordered, when an aircraft has since parked or come to rest across its
     // way: its movement is dropped and planned again on a later try.
-    if (refuseBehindParked(craft, craft.waits, legs)) {
+    if (refuseBehindParked(craft.waits, legs)) {
       dropAdmission(craft);
       return;
     }
@@ -4084,13 +3727,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const arrivals = resolveEnds(configuration?.arrivalEnds ?? []);
     const departures = resolveEnds(configuration?.departureEnds ?? []);
     flowFactor = flowFactors(new Set([...arrivals, ...departures]));
-    flowPreferred =
-      PREF_FACTOR && configuration
-        ? taxiFlowPreferences(graph, {
-            arrivalEnds: [...configuration.arrivalEnds],
-            departureEnds: [...configuration.departureEnds],
-          }).preferred
-        : null;
     if (!runways.restricted) {
       runways.restricted = true;
       for (const key of arrivals) arrivalOpen[key] = 1;
@@ -4180,13 +3816,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
    * is kept up to a node it can still turn at and continues from there to the new line-up. A
    * departure holding a runway grant (crossing or lining up) keeps its route until it is clear;
    * one whose new route cannot be ordered yet tries again on the next step. */
-  let blkWhy = '';
-  /** T330PARK: tow legs that end at a rest point (it stays there). */
-  const restLegs = new WeakSet<Leg>();
+  /** TASK-339: re-routing around an aircraft parked in the way, only turns short of this
+   * station of the leg. */
   let blockedBefore = Infinity;
   function reroute(craft: Craft, avoid?: Craft) {
     const takeoff = craft.next.findIndex((n) => n.kind === 'takeoff');
-    blkWhy = 'noTakeoff';
     if (takeoff < 0) return false;
     const leg = craft.leg!;
     if (leg.gates.some((g) => g.granted && !g.released)) return false;
@@ -4204,12 +3838,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     for (const [k, piece] of target.pieces.entries()) {
       const clearance = held ? 0 : Math.max(brake + 20, 0.5 * (piece.endM - piece.startM));
       if (piece.endNode < 0 || piece.endM - clearance < s) continue;
-      // T330BLK: only turns short of the aircraft parked in the way.
+      // TASK-339: only turns short of the aircraft parked in the way.
       if (avoid && piece.endM > blockedBefore) break;
       cuts.push(k);
       if (!held && !avoid) break;
     }
-    blkWhy = `cuts ${cuts.length} takeoffIdx ${takeoff} s ${s.toFixed(0)} pieces ${target.pieces.length}`;
     const heldPose = held ? poseAt(target, s) : undefined;
     const heldGate = held ? leg.gates.find((gate) => !gate.granted) : undefined;
     if (runways.departures.size || avoid)
@@ -4321,23 +3954,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               ...query,
               goal: (a) => a === option.goal,
             });
-            if (!route) {
-              blkWhy += ' noRoute';
-              continue;
-            }
+            if (!route) continue;
             const next = buildLeg(craft, 'taxi', [
               ...kept,
               ...route.arcs.slice(0, -1).map((a) => arcSegment(a)),
               ...option.after(),
             ]);
-            if (avoid && parkedConflict(craft, [{ leg: next, fromM: current ? s : 0 }], avoid)) {
-              blkWhy += ' stillConflict';
+            if (avoid && parkedConflict(craft, [{ leg: next, fromM: current ? s : 0 }], avoid))
               continue;
-            }
-            if (!replaceTaxi(next, runway.idx)) {
-              blkWhy += ' replaceFail';
-              continue;
-            }
+            if (!replaceTaxi(next, runway.idx)) continue;
             craft.next[takeoff] = {
               kind: 'takeoff',
               end: key & 1,
@@ -4404,37 +4029,6 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       blockedBefore = w.atM;
       if (reroute(craft, w.pred)) late.blockedReroutes++;
       blockedBefore = Infinity;
-    }
-  }
-
-  /** T330BLK: a departure stopped behind an aircraft that parked across its way (a wait that
-   * lasts while it stays parked) and has no movement planned re-routes around it. */
-  function rerouteBlocked() {
-    for (const craft of crafts) {
-      if (craft.mode !== 'ground') continue;
-      const w = craft.waits.find(
-        (w) =>
-          w.predM === Infinity &&
-          w.pred.mode === 'parked' &&
-          !w.pred.admission &&
-          w.leg === craft.leg &&
-          !passed(w),
-      );
-      if (!w || w.atM - craft.stationM < 20) continue;
-      late.blockedTries++;
-      blockedBefore = w.atM;
-      if (reroute(craft, w.pred)) late.blockedReroutes++;
-      else if (DBG330 && late.blockedTries % 10 === 1)
-        console.error(
-          'BLKFAIL',
-          nowS.toFixed(0),
-          craft.id,
-          'blocker',
-          w.pred.id,
-          'atM',
-          w.atM.toFixed(0),
-          blkWhy.slice(0, 300),
-        );
     }
   }
 
@@ -4522,20 +4116,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const foreign = ({ resource }: BookedUse) =>
           runwayOccupant[resource] !== -1 && runwayOccupant[resource] !== craft.id;
         const held = booking.uses.some(foreign);
-        // T330R: an occupant predicted off the runway before the threshold does not force a go-around.
+        // TASK-330 landing booking: an occupant predicted off the runway before the threshold
+        // does not force a go-around; the claim waits until it is off.
         const clearsInTime =
-          rOn(craft.runway) &&
+          independent(craft.runway) &&
           booking.uses.every(
-            (use) =>
-              !foreign(use) ||
-              ((!T330RI || use.resource === craft.runway) &&
-                runwayClearS[use.resource]! <= thresholdS - CLEAR_BEFORE_S),
+            (use) => !foreign(use) || runwayClearS[use.resource]! <= thresholdS - CLEAR_BEFORE_S,
           );
-        if ((held && !clearsInTime) || !commitLanding(craft)) {
-          const r = held ? 'runwayHeld' : 'commit';
-          dbg.ga.set(r, (dbg.ga.get(r) ?? 0) + 1);
-          return goAround(craft, timeS);
-        }
+        if ((held && !clearsInTime) || !commitLanding(craft)) return goAround(craft, timeS);
         if (held) air.claimPending = true;
         else claimRunways(craft, booking.uses);
       } else if (air.claimPending) {
@@ -4547,10 +4135,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         if (!held) {
           air.claimPending = false;
           claimRunways(craft, booking.uses);
-        } else if (timeS >= thresholdS - CLEAR_BEFORE_S) {
-          dbg.ga.set('lateClear', (dbg.ga.get('lateClear') ?? 0) + 1);
-          return goAround(craft, timeS);
-        }
+        } else if (timeS >= thresholdS - CLEAR_BEFORE_S) return goAround(craft, timeS);
       }
       if (!air.touched && pose.stationM >= air.touchdownM) {
         air.touched = true;
@@ -4722,23 +4307,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               halfM: craft.type.spanM / 2,
             }
           : undefined;
+      // TASK-330 departure flow: a departure lines up behind one that has started its roll.
       const lineUp =
-        dOn(craft.runway) &&
-        (!T330D3 || departureOnly(craft.runway)) &&
-        gate.vacateM === Infinity &&
-        next?.kind === 'takeoff' &&
-        // T330D2: only where no arrival's booking shares its runway or intersection areas.
-        !(
-          T330D2 &&
-          crafts.some(
-            (o) =>
-              o.arrivalBooking &&
-              o.arrivalBooking.uses.some((u) => booking.some((b) => b.resource === u.resource)),
-          )
-        );
+        independent(craft.runway) && gate.vacateM === Infinity && next?.kind === 'takeoff';
       if (!bookingFits(booking, timeS, RUNWAY_BUFFER_S, craft.id, crossingAt, lineUp)) {
         const sinceS = craft.runwayWait?.gate === gate ? craft.runwayWait.sinceS : timeS;
-        craft.runwayWait = { gate, sinceS, checkedAtS: timeS, uses: booking, at: crossingAt?.at };
+        craft.runwayWait = { gate, sinceS, checkedAtS: timeS, uses: booking };
       } else {
         craft.runwayWait = undefined;
         gate.granted = true;
@@ -4881,131 +4455,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   function step(timeS: number) {
-    const dtS = timeS - dbg.lastS;
-    dbg.lastS = timeS;
-    if (dtS > 0 && dtS < 1) {
-      const seenEnds = new Set<number>();
-      for (const id of queue) {
-        const c = crafts[id - 1]!;
-        if (c.request?.kind !== 'arrival') continue;
-        const k = endKey(c.runway, c.request.end);
-        if (seenEnds.has(k)) continue;
-        seenEnds.add(k);
-        const key = `${graph.runways[c.runway]!.ends[c.request.end]!.designator} ${dbg.why.get(c) ?? 'new'}`;
-        dbg.held.set(key, (dbg.held.get(key) ?? 0) + dtS);
-      }
-      for (const id of queue) {
-        const c = crafts[id - 1]!;
-        if (c.request?.kind !== 'arrival') continue;
-        const key = 'ALL ' + (dbg.why.get(c) ?? 'new').split(':')[0];
-        dbg.held.set(key, (dbg.held.get(key) ?? 0) + dtS);
-      }
-    }
-    {
-      const W = (globalThis as { process?: { env: Record<string, string> } }).process?.env
-        .T330WATCH;
-      if (W) {
-        const [ids, from, to] = W.split(':');
-        if (
-          timeS >= +from! &&
-          timeS <= +to! &&
-          Math.floor(timeS / 5) > Math.floor((timeS - dtS) / 5)
-        )
-          for (const id of ids!.split(',').map(Number)) {
-            const c = crafts[id - 1];
-            if (!c) continue;
-            console.error(
-              'WATCH',
-              timeS.toFixed(0),
-              c.id,
-              c.mode,
-              c.request?.kind ?? '',
-              c.mode === 'ground'
-                ? c.stationM.toFixed(0) + '/' + c.leg!.endM.toFixed(0) + ' legs' + c.next.length
-                : '',
-              'v',
-              (c.speedMps ?? 0).toFixed(1),
-              'towing',
-              c.towing,
-              'waits',
-              JSON.stringify(
-                c.waits
-                  .filter((w) => !passed(w))
-                  .map((w) => [
-                    w.pred.id,
-                    w.atM.toFixed(0),
-                    w.predM === Infinity ? 'inf' : w.predM.toFixed(0),
-                    w.leg === c.leg,
-                  ]),
-              ),
-              'gates',
-              c.mode === 'ground'
-                ? JSON.stringify(
-                    c.leg!.gates.map((g) => [
-                      g.granted ? 'G' : '-',
-                      g.released ? 'R' : '-',
-                      g.holdM.toFixed(0),
-                      g.vacateM.toFixed(0),
-                    ]),
-                  )
-                : '',
-            );
-          }
-      }
-    }
-    if (DBG330 && Math.floor(timeS / 3600) > Math.floor((timeS - dtS) / 3600)) {
-      console.error(
-        'HELD',
-        (timeS / 3600).toFixed(1),
-        JSON.stringify(
-          Object.fromEntries(
-            [...dbg.held].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, Math.round(v)]),
-          ),
-        ),
-      );
-      console.error('EXITS', JSON.stringify(Object.fromEntries(dbg.exits)));
-      if ((globalThis as { process?: { env: Record<string, string> } }).process?.env.T330DUMP)
-        for (const c of crafts)
-          if (c.mode !== 'done' && (c.mode !== 'parked' || c.admission || c.waits.length))
-            console.error(
-              'DUMP',
-              (timeS / 3600).toFixed(1),
-              c.id,
-              c.mode,
-              c.request?.kind ?? '',
-              'rwy',
-              (c as { runway?: number }).runway,
-              'm',
-              c.mode === 'ground' ? c.stationM.toFixed(0) + '/' + c.leg!.endM.toFixed(0) : '',
-              'v',
-              (c.speedMps ?? 0).toFixed(1),
-              'waits',
-              JSON.stringify(
-                c.waits
-                  .filter((w) => w.pred.mode !== 'done' && !passed(w))
-                  .map((w) => [w.pred.id, w.pred.mode, w.atM.toFixed(0)]),
-              ),
-              'gates',
-              c.mode === 'ground'
-                ? JSON.stringify(
-                    c.leg!.gates.map((g) => [
-                      g.granted ? 'G' : '-',
-                      g.released ? 'R' : '-',
-                      (g as { holdM?: number }).holdM?.toFixed?.(0),
-                    ]),
-                  )
-                : '',
-              'why',
-              dbg.why.get(c) ?? '',
-            );
-      console.error('GA', JSON.stringify(Object.fromEntries(dbg.ga)));
-      const rel = dbg.released.map((r) => r.timeS).sort((a, b) => a - b);
-      const gaps = rel
-        .slice(1)
-        .map((t, i) => t - rel[i]!)
-        .sort((a, b) => a - b);
-      console.error('RELEASED', rel.length, 'median gap', gaps[gaps.length >> 1]);
-    }
+    const dtS = timeS - lastStepS;
+    lastStepS = timeS;
     nowS = timeS;
     // Queued arrivals appear in request order when their runway window is free; one that cannot
     // be ordered yet keeps those behind it to the same runway end waiting this step.
@@ -5015,10 +4466,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const request = craft.request;
       if (request?.kind === 'arrival' && timeS - craft.retryS >= RETRY_S) {
         const key = endKey(craft.runway, request.end);
-        if (unordered.has(key)) {
-          dbg.why.set(craft, 'behindUnorderedHead');
-          continue;
-        }
+        if (unordered.has(key)) continue;
         craft.retryS = timeS;
         if (trySpawnArrival(craft, request, timeS) === 'unordered') unordered.add(key);
       } else if (request?.kind === 'helicopter-arrival') helicopterStep(craft, timeS);
@@ -5036,13 +4484,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       } else if (craft.mode === 'waiting') {
         if (
           timeS >= craft.pauseUntilS &&
-          !(
-            dOn(craft.runway) &&
-            (!T330D3 || departureOnly(craft.runway)) &&
-            takeoffHeld(craft, timeS)
-          )
+          !(independent(craft.runway) && takeoffHeld(craft, timeS))
         ) {
-          if (T330D) lastTakeoff[craft.runway] = { craft, startS: timeS };
+          lastTakeoff[craft.runway] = { craft, startS: timeS };
           craft.mode = 'air';
           craft.air!.startS = timeS;
           stepAir(craft, timeS);
@@ -5067,36 +4511,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         )
       ) {
         parkedBlockS += dtS;
-        if (DBG330 && Math.floor(timeS / 60) > Math.floor((timeS - dtS) / 60))
-          console.error(
-            'PBLOCK',
-            timeS.toFixed(0),
-            craft.id,
-            craft.stationM.toFixed(0),
-            'by',
-            JSON.stringify(
-              craft.waits
-                .filter((w) => w.predM === Infinity && w.leg === craft.leg && !passed(w))
-                .map((w) => [w.pred.id, w.pred.stand, w.pred.request?.kind ?? '-']),
-            ),
-            craft.next.map((n) => n.kind).join(','),
-          );
       }
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;
-      if (ORDER_HORIZON_M < Infinity) extendOrder();
-      if (T330BLK) rerouteBlocked();
-      else rerouteParked();
+      extendOrder();
+      rerouteParked();
       breakRings();
-      if (
-        Math.floor(timeS / 3600) > Math.floor((timeS - RETRY_S) / 3600) &&
-        ORDER_HORIZON_M < Infinity
-      )
-        console.error(
-          'PROGRESSIVE',
-          (timeS / 3600).toFixed(1),
-          JSON.stringify({ ...late, ringKeys: undefined, deadKeys: undefined }),
-        );
     }
     settleRunways();
     updateCrossings();
@@ -5348,6 +4768,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     runwayOccupant: (runway: number) => runwayOccupant[runway]!,
     /** TASK-339: seconds aircraft have stood waiting on a parked aircraft with no admission. */
     parkedBlockS: () => parkedBlockS,
+    /** TASK-330 / TASK-339: counters of the progressive order and the parked-blocker rules. */
+    orderCounters: () =>
+      Object.fromEntries(Object.entries(late).filter(([, value]) => typeof value === 'number')),
     hash(word: (hash: number, value: number) => number, hash: number) {
       hash = word(hash, crafts.length);
       for (const craft of crafts) {

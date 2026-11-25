@@ -1877,6 +1877,27 @@ carry no persons and generate no road trips.
   where a parked aircraft stands in the way of the mover (factor 50), and an aircraft whose way an
   aircraft parks across waits short of it until it leaves its stand. Edges an aircraft will use are
   still marked with its direction; routes taxiing against such a mark cost 3 times as much.
+- **Progressive order** (TASK-330). Admission orders only the conflicts within 300 m
+  (`ORDER_HORIZON_M`) of either aircraft along its route; aircraft parked in the way are still
+  taken over the whole route. Every 5 s each ground aircraft orders the conflicts that have come
+  within 300 m: a pair already ordered keeps its direction; otherwise the one that can no longer
+  stop short goes first, else a started one before one not started, else the one that gets there
+  first (ties by admission). A direction that would close a ring of waits is not taken (the other
+  is, or the pair stays open while both can still stop). A departure or tow at its stand does not
+  wait for a queued arrival that cannot reach where they meet before it is past (90 s per arrival
+  queued before it on its end, the 10 km final, its taxi; against the starter's push, tug and taxi
+  plus 120 s); that arrival is ordered after it. An arrival behind another on the same way off the
+  runway waits only until the leader's tail is a margin past the nose of one standing at its safe
+  point (tail off the runway). TASK-342: a ground aircraft's body where it stands is tested against
+  the other's sweep too, so a wait is short of a holder's wing in an adjacent lane.
+- **Parked in the way** (TASK-339). A tow at its rest point counts as parked (route cost, waits).
+  Of a pair, the one whose movement ends (stand, rest point, return) with its body in the other's
+  remaining way goes second where it can still stop short. A departure or tow not started does not
+  push back while it would wait, beyond its pushback, for an aircraft parked or at rest with no
+  movement planned (a new admission is refused; an admitted one is dropped and planned again), nor
+  while an aircraft still moving is to come to rest across its way. A taxiing departure ordered to
+  wait for such an aircraft re-routes around it while a turn short of it is ahead; a parked
+  aircraft that others stand waiting for plans its route off their bodies.
 - **Runways.** A grant covers the runway a movement uses and each intersection area its path
   reaches (TASK-327). An intersection area is the overlap of two runway strips at their shared
   node, widened by the aircraft protection margin. The aircraft releases each area when its tail
@@ -1885,14 +1906,42 @@ carry no persons and generate no road trips.
   resource is free and the estimated clear time plus 20 s fits before its next booking. A crossing
   releases the runway when its tail passes the next hold beyond (else 75 m past the runway). An
   arrival appears about 10 km out (`FINAL_M`) on the extended centreline when its windows are free
-  of bookings and holders. It books each resource from 35 s before the threshold to 5 s after
-  estimated clearance, then takes them 30 s before the threshold. If a holder remains, it goes
-  around straight ahead at approach speed and its climb gradient, then queues again. It releases
+  of bookings and holders and it keeps its spacing on final (TASK-330: 2.5 NM threshold to
+  threshold, or the ICAO wake pair if longer, at the follower's approach speed; A388 super,
+  double-deckers and widebodies heavy, private light, the rest medium; super to heavy, medium,
+  light 6, 7, 8 NM, heavy to the same 4, 5, 6, medium to light 5), so several can be on final
+  to one runway. It books each resource from 35 s before the threshold to 5 s after estimated
+  clearance, then takes them 30 s before the threshold. If a holder remains, it goes around
+  straight ahead at approach speed and its climb gradient, then queues again. TASK-330, on a
+  runway that crosses no other (no intersection area): the booking starts 10 s before the
+  threshold (5 s, `CLEAR_BEFORE_S`, plus the 5 s pad); at the decision a holder predicted off
+  the runway by 5 s before the threshold does not force a go-around: the arrival commits and
+  claims the runway once the holder is off, and goes around if it is still held 5 s before the
+  threshold. It releases
   its runway when its tail passes the first hold beyond its exit (else 75 m past it). A departure
   releases its runway passing the far end. A ground aircraft that has waited 30 s for a runway
   window gets a gap on the resources it needs. A new arrival that needs one of those resources
   appears only when its window starts the waiting aircraft's occupancy plus twice 20 s after the
   last window on that resource (TASK-312).
+- **Landing flow** (TASK-330). An arrival does not appear while an aircraft stands in its way off
+  the runway that could not give way there. At the decision (30 s before the threshold) its way
+  off is ordered: an arrival ahead on the same way off counts as clear if its exit speed profile
+  has its tail past in time and no ungranted runway hold stops it before; a ground aircraft that
+  can still stop short (and holds no runway grant covering its stop) gives way; ground aircraft
+  not yet ordered with it are ordered then; anything else and it goes around. Its claim runs to
+  its safe point only. No order gives a landing aircraft a wait short of its safe point. A
+  crossing is granted behind a landing aircraft whose tail is 60 m past the crossing, rolling
+  away (the runway is shared). A stop short of a runway moves back, 2 m at a time and at most
+  150 m, until the waiting body is clear of the widest type the runway takes rolling on its
+  centreline. A tow does not start while an arrival on final, or the next to appear on an end,
+  would meet its route before that arrival's tail is off the runway, unless that arrival is
+  already ordered to wait for the tow. Tows run at towbarless-tractor speeds (7 m/s, 6 m/s for
+  double-deckers).
+- **Departure flow** (TASK-330), on a runway that crosses no other: a departure is granted its
+  line-up behind a departure that has started its roll (its tail well clear of the line-up
+  point), and takes off once no other departure on the runway still holds it and the wake time
+  behind the last roll has run (super before a lighter class 180 s, a heavier class before a
+  lighter 120 s, else 75 s, `DEP_SEP_S`).
 - **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
   (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
   roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
