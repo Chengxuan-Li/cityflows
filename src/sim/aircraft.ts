@@ -1817,6 +1817,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const found: Conflict[] = [];
     const theirs = remaining(other);
     if (!theirs.length) return found;
+    // TASK-342: an aircraft on the ground stands where it is, between two samples of its sweep
+    // (whose first is up to a sample ahead of it): its body there is sampled too, so a wait is
+    // short of the body of one standing at a hold whose wing reaches into another lane.
+    const mineNow = craft.mode === 'ground' ? standingPoint(craft) : null;
+    const theirNow = other.mode === 'ground' ? standingPoint(other) : null;
     for (const { leg, fromM } of own) {
       const incoming = sweptLeg(craft, leg);
       const box = sweepBox.get(leg)!;
@@ -1831,6 +1836,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         )
           continue;
         const touching = [new Map<number, [number, number]>(), new Map<number, [number, number]>()];
+        const record = (a: SweepPoint, b: SweepPoint) => {
+          const meet = sweepsMeet(leg, a, route, b);
+          if (!meet) return;
+          const map = touching[meet - 1]!;
+          const range = map.get(a.stationM);
+          if (!range) map.set(a.stationM, [b.stationM, b.stationM]);
+          else {
+            range[0] = Math.min(range[0], b.stationM);
+            range[1] = Math.max(range[1], b.stationM);
+          }
+        };
         for (const bucket of incoming.values()) {
           const { body } = bucket[0]!;
           const x = Math.floor(body.x / cellM);
@@ -1841,21 +1857,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               if (!slice) continue;
               for (const a of bucket) {
                 if (a.stationM < fromM) continue;
-                for (const b of slice) {
-                  if (b.stationM < passedM) continue;
-                  const meet = sweepsMeet(leg, a, route, b);
-                  if (!meet) continue;
-                  const map = touching[meet - 1]!;
-                  const range = map.get(a.stationM);
-                  if (!range) map.set(a.stationM, [b.stationM, b.stationM]);
-                  else {
-                    range[0] = Math.min(range[0], b.stationM);
-                    range[1] = Math.max(range[1], b.stationM);
-                  }
-                }
+                for (const b of slice) if (b.stationM >= passedM) record(a, b);
               }
             }
         }
+        // Each one's body where it stands, against the other's sweep (and body).
+        const ownNow = mineNow && leg === craft.leg ? mineNow : null;
+        const otherNow = theirNow && route === other.leg ? theirNow : null;
+        if (ownNow) {
+          for (const b of near3(occupied, ownNow)) if (b.stationM >= passedM) record(ownNow, b);
+          if (otherNow) record(ownNow, otherNow);
+        }
+        if (otherNow)
+          for (const a of near3(incoming, otherNow)) if (a.stationM >= fromM) record(a, otherNow);
         touching.forEach((map, kind) => {
           let current: Conflict | undefined;
           for (const m of [...map.keys()].sort((p, q) => p - q)) {
@@ -1882,6 +1896,38 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
     }
     return found;
+  }
+
+  /** TASK-342: an aircraft on the ground as a sweep point: its body where it stands on its leg. */
+  function standingPoint(craft: Craft): SweepPoint | null {
+    const leg = craft.leg;
+    if (!leg) return null;
+    const m = craft.stationM;
+    const { points, stationsM } = leg.path;
+    const heading =
+      headingAtDistance(points, stationsM, m) + (leg.mode === 'pushback' ? Math.PI : 0);
+    const body = bodyAt(craft, pointAtDistance(points, stationsM, m), heading);
+    const piece = leg.pieces.find((p) => p.startM <= m && p.endM >= m);
+    const areas = leg.gates.flatMap((gate) => gate.areas);
+    return {
+      body,
+      stationM: m,
+      edge: piece ? piece.edge : -1,
+      dir: piece && piece.toE < piece.fromE ? -1 : 1,
+      runway: leg.runwayRanges.find(([from, to]) => m >= from && m <= to)?.[2] ?? -1,
+      ...(areas.length > 0 && {
+        areas: areas.flatMap(({ resource, fromM, toM }) =>
+          m >= fromM && m <= toM ? [resource] : [],
+        ),
+      }),
+    };
+  }
+  /** The sweep points in the cells around a point. */
+  function* near3(buckets: Map<string, SweepPoint[]>, point: SweepPoint) {
+    const x = Math.floor(point.body.x / cellM);
+    const y = Math.floor(point.body.y / cellM);
+    for (let i = x - 1; i <= x + 1; i++)
+      for (let j = y - 1; j <= y + 1; j++) yield* buckets.get(cell(i, j)) ?? [];
   }
 
   let replacing: { next: Leg; target: Leg } | null = null;
