@@ -3146,6 +3146,17 @@ origin zone, and delivery roads only for delivery trips. Reverse propagation inc
 distance needed for each lane change, so a late strip slot cannot borrow an upstream exit.
 A lot stall also needs a local circulation path to a usable outbound connector.
 
+TASK-351: when the public network splits inside the map (Zurich: Kloten and the airport landside
+meet only on private and no-access airport roads), every other strongly connected part that a map
+entry (a gateway's out connector) feeds and a map exit (its in connector) drains, by movements and
+lane changes, joins the largest in the core: the roads go on beyond the map. The importer's repair
+of a trapped place entrance moves it at most 1 km from the place's outline or point, and never onto
+a lot's aisle. A car trip between two places is served only if the origin's car (at home: each
+facility the home owns) reaches the destination or a facility it could park at; a first trip's car
+starts only in a facility that reaches its destination, and, bound for a gateway, from which the
+router finds a route. A gateway trip leaves the map by one of the gateway's connectors its car can
+reach (Zurich's `p:6241` has connectors in Kloten and on the landside).
+
 Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
 virtual garages need a usable exit too. Assigned cars stay in their garages or use the next
 eligible space in the existing choice order. Explicit background occupancy is retained.

@@ -243,14 +243,19 @@ const pins = {
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-    compile: '8ac9b6b0eb1388038c26b5c079731d9aefd2ea999fd5812d513b077a4846f0a2',
+    // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    compile: '249401dfe79a8392f2b379483652931468bc5b2889f9c20c761d0c3ccb1e7065',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
+    // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+    lamps: '4cb04c240a77c3c0f3cc71a27ebb6edc8a3f2fc0710ac19af31b44255c590bc4',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's garage mouth moves from r:97 to r:954 and changes the curb openings.
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-    curbs: '7ec0a06430844352d33e106cdafe73856d9b49dd254e477f34b514389cdbaffd',
+    // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    curbs: 'dfa5d8eb80d56ed65989a069a22e8ec724487db62fc7fc1eb6541d231e0107f5',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
@@ -259,7 +264,9 @@ const pins = {
     // TASK-290: Sindelfingen's moved garage mouth changes German keep-clear paint on r:97 and r:954.
     // TASK-347: de and us paint re-pinned: lines run on across nodes drawn as road (`roadStrip`).
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-    de: '33eb09dbff0390d6249c3bba54da03b552b8d725fc5353cccaad8195b8fad532',
+    // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    de: 'd5d2bbc64526cf2de0e05e308988333d58191efc0bb0d2e1f27f2d44dac811ee',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
@@ -267,7 +274,9 @@ const pins = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's moved garage mouth changes US keep-clear paint on r:97 and r:954.
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-    us: '043a33f2fcbfa0508feb17139a75c4f0f6a93812b3c60dea29c3faf816db0d90',
+    // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    us: '171f7361ff074a2aad0de374629e4d846c809a9206f115fc1228c043ec5e0f0c',
   },
 } as const;
 const hash = (value: unknown) =>

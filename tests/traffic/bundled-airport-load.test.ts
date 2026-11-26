@@ -10,17 +10,20 @@ import { limit } from '../timeouts';
 // the startup states and boards (stand rule, order, Boston and Heathrow schedules and runway tables).
 // TASK-320 re-pins the compiled graphs (stands' road bands and room ahead; the rest unchanged) and
 // the startup states and boards where parked poses change (London City, Zurich, Heathrow).
+// TASK-351 re-pins the compiled graphs of the three airports it rebuilds (their car entrances and
+// parking exits) and the startup states that follow. TASK-348 + TASK-351 (merge): Zurich's and
+// Heathrow's graphs (crossings outside junction groups laid out as plain nodes) and Heathrow's state.
 const pins = [
   {
     id: 'london-city-airport',
-    compiled: '5147d31fd2188e92690e4500dedeb34675e249f70a0c3313949ab799373218c2',
-    state: [3987169813, 886009363],
+    compiled: 'e76955d8a627e065dec27fbe4b91f7b3a9082821f9e34156b8236e2dfe9d8d8c',
+    state: [193940800, 1229324366],
     board: 'b1c98cc15570f53d5c02f8cf2828b09879337d4d04325b68fcb4eebfe15f180c',
   },
   {
     id: 'zurich-airport',
-    compiled: '5b079ccbc54a73687cc3999cb2e38a9dd1e13c5fb2ab547bcfe6a70d126a890b',
-    state: [2699325225, 3382430523],
+    compiled: 'fb9a6f683dbc57b56f7381df6780aa64b8abb1b5a72781d751d66258057feb2e',
+    state: [1233058347, 420095907],
     board: 'f0b7bc5b71b5e04b1cad6b1849863054b40c4b809fc960a0d72f7b80f1204ffe',
   },
   {
@@ -31,8 +34,8 @@ const pins = [
   },
   {
     id: 'heathrow',
-    compiled: '34ed206e2ac48dc75881b5563343e59abe223bafa4814a7b8eaa0a0ee674a9b5',
-    state: [3284891146, 37696474],
+    compiled: '29c4a6bff6e9ca9edf7b26a97156860d803d9e6262df1ad0ab51b734013d1991',
+    state: [3394981357, 646132797],
     board: '03695df6916ac1950720e1a2469fa7e69dbc0c6561f3acc516b76313114cd26f',
   },
 ];

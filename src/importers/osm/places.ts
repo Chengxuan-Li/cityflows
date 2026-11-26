@@ -529,10 +529,12 @@ export function placeConnector(
   const candidates = compiled.lanes.flatMap((lane) => {
     // Lead (TASK-124 review): a new portal is a driveway on the curb lane of an at-grade
     // street, never in a tunnel, on a bridge, on a motorway, trunk or ramp, or on an inner lane.
+    // TASK-351: a place's, unlike a car park's, never on a lot's aisle (Sindelfingen's p:1338).
     const road = compiled.roads[lane.road]!,
       source = city.roads[road.id]!;
     if (
       (source.layer ?? 0) !== 0 ||
+      (!parking && source.provenance.inferred?.includes('lotAccess')) ||
       ['motorway', 'trunk', 'ramp'].includes(source.roadClass) ||
       lane.lane !== (city.drivingSide === 'left' ? 0 : road.lanes.length - 1)
     )
@@ -646,6 +648,13 @@ export function placeConnector(
   };
 }
 
+/** TASK-351: how far a trapped place entrance may move, from the place's outline or point; beyond
+ * it, the entrance stays where the layout put it. Zurich's moved up to 4.2 km, 114 of them onto one
+ * 204 m service road in Kloten, while the public network split. Buildings on airport roads still
+ * reach a public road within it; at the parking search radius (400 m) they lost their car exits,
+ * their people walked instead and 33 walks found no path. */
+export const CAR_EXIT_MOVE_LIMIT_M = 1000;
+
 /** Final import pass: keep the mapped vehicle/parking layout, repair only trapped portals. */
 export function connectCarExits(
   city: City,
@@ -685,6 +694,7 @@ export function connectCarExits(
     footprints: Vec2[][],
     mapped: boolean,
     anchor?: Vec2,
+    away?: (point: Vec2) => number,
   ) => {
     if (entry.direction === 'in') return false;
     const road = compiled.roads[compiled.index.road.get(entry.roadId)!]!;
@@ -703,6 +713,17 @@ export function connectCarExits(
     ));
     const candidate = snap(point, footprints, false, entry.id);
     if (!candidate) return false;
+    if (away) {
+      const to =
+        layout.lanes[
+          layout.roads[layout.index.road.get(candidate.roadId)!]!.lanes[candidate.lane]!
+        ]!;
+      if (
+        away(pointAtDistance(to.polyline, to.cumulative, candidate.positionM)) >
+        CAR_EXIT_MOVE_LIMIT_M
+      )
+        return false;
+    }
     if (reachableArrival) {
       entry.direction = 'in';
       entries.push({
@@ -723,9 +744,16 @@ export function connectCarExits(
   for (const place of Object.values(city.places)) {
     if (refreshLots) break;
     if (place.kind === 'gateway') continue;
-    const anchor =
-      place.shape.kind === 'point' ? place.shape.pos : polygonCenter(place.shape.ring)!;
-    for (const entry of [...place.connectors]) repair(entry, place.connectors, [], false, anchor);
+    const { shape } = place;
+    const anchor = shape.kind === 'point' ? shape.pos : polygonCenter(shape.ring)!;
+    const away = (p: Vec2) =>
+      shape.kind === 'point'
+        ? Math.hypot(p.x - shape.pos.x, p.y - shape.pos.y)
+        : pointInPolygon(p, shape.ring)
+          ? 0
+          : nearestOnPolyline([...shape.ring, shape.ring[0]!], p).away;
+    for (const entry of [...place.connectors])
+      repair(entry, place.connectors, [], false, anchor, away);
   }
   for (const source of Object.values(city.parking ?? {})) {
     if (refreshLots && !refreshLots.has(source.id)) continue;

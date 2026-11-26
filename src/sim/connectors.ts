@@ -113,15 +113,16 @@ export function createConnectors(
       (c) => parking.exitShare(id, c),
     );
     const destination = place(trip.destinationPlaceId);
-    const into = pickConnector(
-      compiled,
-      destination.connectorsIn.length
-        ? destination.connectorsIn
-        : compiled.parking
-            .filter((f) => f.place === destination.idx)
-            .flatMap((f) => f.connectorsIn),
-      rng,
-    );
+    const entries = destination.connectorsIn.length
+      ? destination.connectorsIn
+      : compiled.parking.filter((f) => f.place === destination.idx).flatMap((f) => f.connectorsIn);
+    // TASK-351: a map exit with connectors in several parts of a split public network (Zurich's
+    // p:6241, in Kloten and on the airport landside) is left by one the car can reach.
+    const reachable =
+      destination.kind === 'gateway' && out !== -1
+        ? carService(compiled).reachable(compiled.connectors[out]!.lane, entries)
+        : entries;
+    const into = pickConnector(compiled, reachable.length ? reachable : entries, rng);
     if (out === -1 || (into === -1 && !parking.required(id))) {
       accounting.fail(id, out === -1 ? 'no_origin_connector' : 'no_destination_connector');
       continue;
