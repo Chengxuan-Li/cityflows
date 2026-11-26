@@ -42,7 +42,7 @@ import {
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
 import { roadStrip } from './layers/nodes';
-import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
+import { SETBACK_CAP_M, isSignalCrossing, junctionCorners } from '../network/junctions';
 import { keepClearZones, type KeepClearZone } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
@@ -1226,6 +1226,8 @@ const arrowMovements = (city: CompiledCity, lane: CLane) =>
  * where no two movements cross (`innerCarriageway`'s crossing; movements to or from service roads
  * aside, so a median crossover's end is none, Freiburg `n:1147`). */
 function noJunction(city: CompiledCity, node: CNode): boolean {
+  // TASK-348: a signalised crossing laid out as a plain node is no junction for the arrows.
+  if (node.group === undefined && isSignalCrossing(node)) return true;
   if (node.group !== undefined || node.signal || node.control !== 'uncontrolled') return false;
   const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
   const counted = (m: CMovement) =>

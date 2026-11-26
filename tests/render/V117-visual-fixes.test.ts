@@ -242,13 +242,15 @@ const pins = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-    compile: '825d248a8b603d8104ede35d983c9f1672b99252cad46f87cc74cd50983eabcd',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    compile: '8ac9b6b0eb1388038c26b5c079731d9aefd2ea999fd5812d513b077a4846f0a2',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's garage mouth moves from r:97 to r:954 and changes the curb openings.
-    curbs: '3d9a7d2bd2aede8d00353ddea65a0ad8bef80ddb344c3d4abecc22a99d4b1f10',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    curbs: '7ec0a06430844352d33e106cdafe73856d9b49dd254e477f34b514389cdbaffd',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
@@ -256,14 +258,16 @@ const pins = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's moved garage mouth changes German keep-clear paint on r:97 and r:954.
     // TASK-347: de and us paint re-pinned: lines run on across nodes drawn as road (`roadStrip`).
-    de: '81c605063244b6a426cdcee94a32e82817834cd6694b0306f948ed69f7d2cfeb',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    de: '33eb09dbff0390d6249c3bba54da03b552b8d725fc5353cccaad8195b8fad532',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
     // TASK-256: no keep-clear box on shared one-lane streets (r:737, r:738: 2 boxes).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's moved garage mouth changes US keep-clear paint on r:97 and r:954.
-    us: 'd03b1c696df1622c4b8230740528282bbbffa108d0524a94450b3c3574e36f03',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    us: '043a33f2fcbfa0508feb17139a75c4f0f6a93812b3c60dea29c3faf816db0d90',
   },
 } as const;
 const hash = (value: unknown) =>

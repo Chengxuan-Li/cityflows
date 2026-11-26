@@ -120,12 +120,25 @@ export const STOP_POSITION = 'stopPosition';
 /** TASK-255: a `STOP_POSITION` mapped on its signalised crossing (`crossing=traffic_signals`):
  * the stop line lies before the crossing (`populateStops`), not at the node. */
 export const STOP_POSITION_CROSSING = 'stopPositionCrossing';
+/** TASK-348: a signalised node whose roads lead to two other nodes (a signalised crossing between
+ * junctions, not a junction group's member) keeps its control but is laid out
+ * as a plain node, by TASK-255's rule for a stop position: no floor and no cuts (as a junction its
+ * 2.5 to 6.3 m cuts overlapped the lanes beside it, Freiburg r:1706/r:1821 at n:1705); its crossing
+ * is drawn from the node out (`placeCrossing`), the stop line before it. Compile marks these nodes
+ * (as `junctionCorners` keeps a polygon's corners). */
+const signalCrossings = new WeakSet<CNode>();
+export const markSignalCrossing = (node: CNode) => signalCrossings.add(node);
+export const isSignalCrossing = (node: CNode) => signalCrossings.has(node);
 /** TASK-269 (D4): `Provenance.inferred` of a node read from `highway=mini_roundabout`. With the
  * importer's `yield` on every entry, it compiles as `CNode.miniRoundabout`. */
 export const MINI_ROUNDABOUT = 'miniRoundabout';
 
 function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boolean {
   if (node.control !== 'uncontrolled' && !stopPosition) return false;
+  // TASK-348: a signalised crossing runs through where the road's lanes run on within 30 degrees
+  // (owner: corners beyond stay drawing-only), whatever the ways' names and classes (Freiburg
+  // n:1511, Kronenstraße into the Lessingstraße ramp).
+  const crossing = isSignalCrossing(node);
   const arms = new Map<string, { road: Road; heading: number; width: number }[]>();
   for (const road of roads) {
     const outgoing = road.from === node.id;
@@ -146,13 +159,13 @@ function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boole
       b.some(
         (other) =>
           (end.road.to === node.id) !== (other.road.to === node.id) &&
-          end.road.name === other.road.name &&
-          end.road.roadClass === other.road.roadClass &&
+          (crossing ||
+            (end.road.name === other.road.name && end.road.roadClass === other.road.roadClass)) &&
           end.road.lateralOffsetM === other.road.lateralOffsetM &&
           end.road.lanes.length === other.road.lanes.length &&
           end.road.lanes.every((lane, i) => lane.widthM === other.road.lanes[i]!.widthM) &&
           end.width === other.width &&
-          Math.cos(end.heading - other.heading) < -Math.cos(Math.PI / 36),
+          Math.cos(end.heading - other.heading) < -Math.cos(crossing ? Math.PI / 6 : Math.PI / 36),
       ),
     )
   );
