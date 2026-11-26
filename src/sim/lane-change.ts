@@ -554,6 +554,42 @@ export function createLaneChanges(
   }
 
   return {
+    /** Read the active transition or the adjacent lane needed by the current mandatory plan. */
+    intentLane(id: number, tick: number, required?: number) {
+      const index = vehicles.lane[id]!;
+      const lane = compiled.lanes[index];
+      if (!lane || gaveUp[id]) return null;
+      if (lateralM(id, tick) !== 0) return index;
+      const plan = id * PLAN;
+      if (
+        planRoute[id] !== vehicles.route[id] ||
+        plans[plan + LANE] !== index ||
+        plans[plan + STEP] !== vehicles.routeStep[id] ||
+        plans[plan + DESTINATION] !== vehicles.destination[id]
+      )
+        return null;
+      const final = plans[plan + FINAL] === 1;
+      const remaining =
+        (final
+          ? Math.min(lane.lengthM, compiled.connectors[vehicles.destination[id]!]!.positionM)
+          : lane.lengthM) - vehicles.position[id]!;
+      const needed =
+        required === undefined
+          ? plans[plan + NEEDED]!
+          : Math.abs(compiled.lanes[required]!.lane - lane.lane);
+      if (!needed || remaining < 0 || remaining >= needed * laneChangeDistanceM + mandatoryUrgencyM)
+        return null;
+      for (const side of [lane.left, lane.right]) {
+        if (side < 0 || !allowedLanes[vehicles.vclass[id]!]![side]) continue;
+        const ordinal = compiled.lanes[side]!.lane;
+        const after =
+          required === undefined
+            ? changesToTargets(id, ordinal, vehicles.routeStep[id]!, final)
+            : Math.abs(compiled.lanes[required]!.lane - ordinal);
+        if (after < needed) return side;
+      }
+      return null;
+    },
     startProposals,
     propose,
     resolve,

@@ -1,5 +1,6 @@
 import { headingAtDistance, pointAtDistance } from '../geo/polyline';
-import type { CConnector, CompiledCity } from '../network';
+import type { CConnector, CLane, CMovement, CompiledCity } from '../network';
+import { markWaitCycles, type DebugRequest, type DebugSnapshot } from './debug-snapshot';
 import {
   createRouteProvider,
   movementPenaltyS,
@@ -816,6 +817,42 @@ function createRun({
     }
   }
 
+  // The physical leader may straddle a segment boundary. Return its front in its own
+  // segment and the origin offset separately, without allocating on the travel path.
+  let leaderOffsetM = 0;
+  function physicalLeader(
+    ahead: number,
+    lane: CLane | undefined,
+    path: CMovement | null,
+    movement: CMovement | undefined,
+    arriving: boolean,
+  ) {
+    leaderOffsetM = 0;
+    if (ahead !== -1) return ahead;
+    if (path) {
+      leaderOffsetM = path.lengthM;
+      return vehicles.last(path.toLane);
+    }
+    if (!lane || arriving) return -1;
+    leaderOffsetM = lane.lengthM;
+    let leader = -1;
+    for (const idx of lane.out) {
+      const occupant = vehicles.last(-idx - 1);
+      if (
+        occupant !== -1 &&
+        (leader === -1 ||
+          vehicles.position[occupant]! - profile(occupant).lengthM <
+            vehicles.position[leader]! - profile(leader).lengthM)
+      )
+        leader = occupant;
+    }
+    if (leader === -1 && movement) {
+      leaderOffsetM += movement.lengthM;
+      return vehicles.last(movement.toLane);
+    }
+    return leader;
+  }
+
   function prepareTravel(timeS: number) {
     orderCount = 0;
     const { occupied } = vehicles;
@@ -824,7 +861,6 @@ function createRun({
       const head = vehicles.head[segment]!;
       const lane = compiled.lanes[segment];
       const path = lane ? null : compiled.movements[segment - compiled.lanes.length]!;
-      const length = lane?.lengthM ?? path!.lengthM;
       const field = lane ? segment : -path!.idx - 1;
       const speedLimit =
         lane?.speedLimitMps ??
@@ -867,30 +903,8 @@ function createRun({
         const granted =
           intersections.grants[id] !== -1 ||
           (movement !== undefined && intersections.continuations[movement.idx]);
-        let leader = ahead;
-        let offset = 0;
-        if (leader === -1 && path) {
-          leader = vehicles.last(path.toLane);
-          offset = length;
-        } else if (leader === -1 && lane && !destination) {
-          // A car's rear can still be on this approach after its front enters a turn.
-          offset = length;
-          for (const idx of lane.out) {
-            const occupant = vehicles.last(-idx - 1);
-            if (
-              occupant !== -1 &&
-              (leader === -1 ||
-                vehicles.position[occupant]! - profile(occupant).lengthM <
-                  vehicles.position[leader]! - profile(leader).lengthM)
-            ) {
-              leader = occupant;
-            }
-          }
-          if (leader === -1 && movement) {
-            leader = vehicles.last(movement.toLane);
-            offset += movement.lengthM;
-          }
-        }
+        const leader = physicalLeader(ahead, lane, path, movement, !!destination);
+        const offset = leaderOffsetM;
         const rear =
           leader === -1 ? Infinity : offset + vehicles.position[leader]! - profile(leader).lengthM;
         limit[id] = Math.max(position, rear - idm.minGapM);
@@ -1595,7 +1609,115 @@ function createRun({
     };
   }
 
-  function snapshot(): VehicleSnapshot {
+  function debugSnapshot(request: DebugRequest, snapshot: VehicleSnapshot): DebugSnapshot {
+    const debug: DebugSnapshot = {};
+    if (request.aircraft || request.gridlock) {
+      Object.assign(
+        debug,
+        fleet?.debugSnapshot(!!request.aircraft) ?? {
+          ...(request.aircraft && { aircraft: [] }),
+          aircraftWaits: [],
+        },
+      );
+    }
+    if (!request.vehicles && !request.gridlock) return debug;
+    if (request.vehicles) debug.vehicles = [];
+    if (request.gridlock) debug.vehicleWaits = [];
+    for (const publicId of snapshot.id) {
+      const id = publicId - 1;
+      const field = vehicles.lane[id]!;
+      const position = vehicles.position[id]!;
+      const onRoad = !parking.moving[id] && vehicles.state[id] !== IN_LOT;
+      const lane = onRoad ? compiled.lanes[field] : undefined;
+      const path = onRoad && field < 0 ? compiled.movements[-field - 1]! : null;
+      const movement = compiled.movements[vehicles.movement[id]!];
+      const leader = onRoad
+        ? physicalLeader(vehicles.previous[id]!, lane, path, movement, arrival[id] !== -1)
+        : -1;
+      const gapM =
+        leader === -1
+          ? null
+          : leaderOffsetM + vehicles.position[leader]! - profile(leader).lengthM - position;
+      if (debug.vehicles) {
+        const route = vehicles.route[id];
+        const step = vehicles.routeStep[id]!;
+        const routeMovements: number[] = [];
+        const routeLanes: number[] = lane ? [lane.idx] : [];
+        if (onRoad && route) {
+          for (let k = step; k < route.movements.length; k++) {
+            const part =
+              k === step
+                ? (path ?? movement ?? compiled.movements[route.movements[k]!])
+                : compiled.movements[route.movements[k]!];
+            if (!part) break;
+            routeMovements.push(part.idx);
+            if (routeLanes.at(-1) !== part.fromLane && !(k === step && path))
+              routeLanes.push(part.fromLane);
+            routeLanes.push(part.toLane);
+            // A fallback turn commits to a different road; its onward route is chosen on entry.
+            if (compiled.lanes[part.toLane]!.road !== route.roads[k + 1]) break;
+          }
+        }
+        const cleared =
+          lane &&
+          intersections.groupPaths[id]?.movements.find(
+            (m) => compiled.lanes[compiled.movements[m]!.fromLane]!.road === lane.road,
+          );
+        debug.vehicles.push({
+          id: publicId,
+          positionM: position,
+          routeLanes,
+          routeMovements,
+          leaderId: leader === -1 ? null : leader + 1,
+          gapM,
+          intentLane: lane
+            ? laneChanges.intentLane(
+                id,
+                tick,
+                cleared === undefined ? undefined : compiled.movements[cleared]!.fromLane,
+              )
+            : null,
+        });
+      }
+      if (
+        !debug.vehicleWaits ||
+        !onRoad ||
+        vehicles.state[id] !== DRIVING ||
+        vehicles.speed[id]! >= 0.1
+      )
+        continue;
+      const blockers = new Set<number>();
+      if (leader !== -1 && gapM! <= idm.minGapM + 0.5) blockers.add(leader);
+      if (lane) {
+        if (
+          movement &&
+          vehicles.first(field) === id &&
+          intersections.grants[id] === -1 &&
+          (lane.stopM - position <= idm.minGapM + 0.5 || keepClearHeld[id])
+        ) {
+          intersections.debugWaits(id, movement, (car) => blockers.add(car));
+        }
+        const requester = laneChanges.yieldingTo[id]!;
+        if (
+          requester !== -1 &&
+          vehicles.position[requester]! - profile(requester).lengthM - position <= idm.minGapM + 0.5
+        )
+          blockers.add(requester);
+      } else if (path) {
+        let holder = -1;
+        const stop = intersections.zoneStop(path, position, (car) => {
+          holder = car;
+        });
+        if (holder !== -1 && stop - position <= 0.5) blockers.add(holder);
+      }
+      for (const car of blockers)
+        if (car !== id) debug.vehicleWaits.push({ from: publicId, to: car + 1, cycle: false });
+    }
+    if (debug.vehicleWaits) markWaitCycles(debug.vehicleWaits);
+    return debug;
+  }
+
+  function snapshot(debug?: DebugRequest): VehicleSnapshot {
     const { respawnS, fadeS } = params.gridlock;
     const count = accounting.trips.driving + accounting.trips.queuedDestination;
     const snapshot: VehicleSnapshot = {
@@ -1652,6 +1774,8 @@ function createRun({
       snapshot.fade[i] = fadeS > 0 ? Math.min(1, (respawnS - vehicles.jamS[id]!) / fadeS) : 1;
       i++;
     }
+    if (debug?.vehicles || debug?.aircraft || debug?.gridlock)
+      snapshot.debug = debugSnapshot(debug, snapshot);
     return snapshot;
   }
 
@@ -2131,7 +2255,7 @@ export function createEngine() {
     step(n = 1) {
       loaded().step(n);
     },
-    snapshot: () => loaded().snapshot(),
+    snapshot: (debug?: DebugRequest) => loaded().snapshot(debug),
     metrics: () => loaded().metrics(),
     flightBoard: () => loaded().flightBoard(),
     setAirportWind: (wind: AirportWind) => loaded().setAirportWind(wind),

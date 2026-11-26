@@ -35,16 +35,21 @@ function browserStorage(): Storage | undefined {
 }
 
 export const useVisual = create<{
+  urlDebug: boolean;
   visual: VisualSettings;
   /** An offline (category 4) value was confirmed in this session; not stored. */
   offlineConfirmed: boolean;
   setVisual: (next: Partial<VisualSettings>) => void;
 }>((set, get) => ({
+  urlDebug: new URLSearchParams(globalThis.location?.search).has('debug'),
   visual: loadVisual(browserStorage()),
   offlineConfirmed: false,
   setVisual: (next) => {
     const visual = parseVisual({ ...get().visual, ...next });
     saveVisual(browserStorage(), visual);
-    set({ visual });
+    set({ visual, ...(next.developerTools !== undefined && { urlDebug: false }) });
   },
 }));
+
+export const developerToolsEnabled = (state: ReturnType<typeof useVisual.getState>) =>
+  state.urlDebug || state.visual.developerTools;

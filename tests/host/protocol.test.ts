@@ -158,6 +158,13 @@ test('round-trips every request through the worker and matches replies by ID', a
     'hash',
     'step',
   ]);
+  const normalRequest = client.snapshot();
+  const vehicleRequest = client.snapshot({ vehicles: true });
+  expect(client.snapshot({ vehicles: true })).toBe(vehicleRequest);
+  expect(await normalRequest).not.toHaveProperty('debug');
+  expect((await vehicleRequest).debug).toEqual({
+    vehicles: [expect.objectContaining({ id: 1, leaderId: null, gapM: null })],
+  });
   expect(await client.tripRecords()).toMatchObject([{ vehicleClass: 'truck', purpose: 'through' }]);
   const beforeComparison = await client.metrics();
   const comparisonHash = await client.hash();

@@ -26,7 +26,7 @@ import {
   type VisualSettings,
 } from '../render/lighting';
 import { DisclosureGroup, SegmentedControl, Sheet, Slider, Stepper, Switch } from './controls';
-import { useVisual } from './lighting-store';
+import { developerToolsEnabled, useVisual } from './lighting-store';
 import { useAppStore } from './store';
 
 // TASK-341: the Visual quality section: lighting by date, time and place, light by source,
@@ -162,6 +162,7 @@ const degrees = (value: number, positive: string, negative: string) =>
 
 export function VisualQuality() {
   const { visual, setVisual } = useVisual();
+  const developerTools = useVisual(developerToolsEnabled);
   const view3d = useAppStore((state) => state.viewMode === '3d');
   const origin = useAppStore((state) => state.session?.project.city.geo?.origin);
   const hasAirside = useAppStore((state) => Boolean(state.session?.compiled.airside));
@@ -529,7 +530,11 @@ export function VisualQuality() {
               onChange={(colourVariation) => update({ colourVariation })}
             />
           </DisclosureGroup>
-          <DisclosureGroup title="Render" defaultOpen={false}>
+        </>
+      )}
+      <DisclosureGroup title="Render" defaultOpen={false}>
+        {view3d && (
+          <>
             <Field
               label="Render scale"
               cost={scales.find((s) => s.value === visual.renderScale)!.cost}
@@ -556,9 +561,14 @@ export function VisualQuality() {
                 onChange={(event) => update({ dropLines: event.currentTarget.checked })}
               />
             )}
-          </DisclosureGroup>
-        </>
-      )}
+          </>
+        )}
+        <Switch
+          label="Developer tools"
+          checked={developerTools}
+          onChange={(event) => update({ developerTools: event.currentTarget.checked })}
+        />
+      </DisclosureGroup>
       <Sheet title="Offline rendering" open={pending !== null} onClose={() => setPending(null)}>
         <p>
           This setting is meant for rendering videos frame by frame. The view becomes very slow

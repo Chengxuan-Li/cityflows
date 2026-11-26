@@ -1,4 +1,5 @@
 import type { LonLat } from '../geo/projection';
+import { defaultDebug, parseDebug, type DebugSettings } from './debug-settings';
 import type { CompiledCity } from '../network';
 import { platformRing, spine } from './station-furniture';
 import { style } from './style';
@@ -20,6 +21,8 @@ export type RenderScale = 1 | 1.5 | 2;
 export type QualityPreset = 'low' | 'balanced' | 'high' | 'ultra' | 'cinematic';
 
 export interface VisualSettings {
+  developerTools: boolean;
+  debug: DebugSettings;
   mode: LightingMode;
   /** Multiplies the scene's light: sun, sky, unlit surfaces and the background. */
   exposure: number;
@@ -125,6 +128,8 @@ const mapCasters = { ...allCasters, trees: false, aircraft: false };
 const munich: LonLat = { lon: 11.575, lat: 48.137 };
 
 export const defaultVisual: VisualSettings = {
+  developerTools: false,
+  debug: defaultDebug,
   mode: 'day',
   exposure: 1,
   date: '2026-03-21',
@@ -306,6 +311,8 @@ export function parseVisual(value: unknown): VisualSettings {
     finite(v[key], intensityRange.min, intensityRange.max, d[key] as number);
   return {
     mode: oneOf(v.mode, lightingModes, d.mode),
+    developerTools: v.developerTools === true,
+    debug: parseDebug(v.debug),
     exposure: finite(v.exposure, exposureRange.min, exposureRange.max, d.exposure),
     date: validDate(v.date) ? (v.date as string) : (seasonDates[v.season as string] ?? d.date),
     time: validTime(v.time) ? (v.time as string) : d.time,

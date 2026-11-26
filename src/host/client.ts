@@ -4,6 +4,7 @@ import type { AirportWind } from '../sim/runway-configuration';
 import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
+  DebugRequest,
   HostEvent,
   HostReply,
   HostRequest,
@@ -26,7 +27,7 @@ export interface EngineClient {
   setSpeed(multiplier: number): Promise<void>;
   step(steps: number): Promise<void>;
   restart(): Promise<void>;
-  snapshot(): Promise<HostSnapshot>;
+  snapshot(debug?: DebugRequest): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
   flightBoard(): Promise<FlightBoard | null>;
   /** TASK-300: sets the airport's wind; a change past the runway limits reconfigures. */
@@ -55,7 +56,7 @@ export function createEngineClient(worker: Worker): EngineClient {
   const pending = new Map<number, (reply: HostReply) => void>();
   const listeners = new Set<(event: HostEvent) => void>();
   let nextId = 1;
-  let snapshotInFlight: Promise<HostSnapshot> | undefined;
+  const snapshotsInFlight = new Map<number, Promise<HostSnapshot>>();
   let closed: string | undefined;
   let retired = false;
 
@@ -134,10 +135,15 @@ export function createEngineClient(worker: Worker): EngineClient {
     setSpeed: (multiplier) => send({ type: 'setSpeed', multiplier }),
     step: (steps) => send({ type: 'step', steps }),
     restart: () => send({ type: 'restart' }),
-    snapshot() {
-      return (snapshotInFlight ??= send<HostSnapshot>({ type: 'snapshot' }).finally(() => {
-        snapshotInFlight = undefined;
-      }));
+    snapshot(debug) {
+      const key = (debug?.vehicles ? 1 : 0) | (debug?.aircraft ? 2 : 0) | (debug?.gridlock ? 4 : 0);
+      const pending = snapshotsInFlight.get(key);
+      if (pending) return pending;
+      const reply = send<HostSnapshot>({ type: 'snapshot', ...(key && { debug }) }).finally(() =>
+        snapshotsInFlight.delete(key),
+      );
+      snapshotsInFlight.set(key, reply);
+      return reply;
     },
     metrics: () => send({ type: 'metrics' }),
     flightBoard: () => send({ type: 'flightBoard' }),

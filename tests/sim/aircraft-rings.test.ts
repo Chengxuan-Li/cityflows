@@ -19,6 +19,8 @@ test('three tows meeting at a junction all park, apart', () => {
   expect(fleet.requestTow(c.id, { stand: stands.C1 }).ok).toBe(true);
   expect(fleet.requestTow(a.id, { stand: stands.E1 }).ok).toBe(true);
   let asked = false;
+  let sawReservation = false;
+  let sawWait = false;
   for (let step = 0; step * 0.1 <= 2400 && fleet.metrics().towed < 3; step++) {
     // L1's tow asks for L2 once L2's aircraft has left it.
     if (!asked && fleet.statusOf(c.id) !== 'parked') {
@@ -26,8 +28,22 @@ test('three tows meeting at a junction all park, apart', () => {
       asked = r.ok;
     }
     fleet.step(step * 0.1);
-    if (step % 10 === 0) expect(overlaps(fleet.snapshot()), `bodies at ${step / 10} s`).toEqual([]);
+    if (step % 10 === 0) {
+      expect(overlaps(fleet.snapshot()), `bodies at ${step / 10} s`).toEqual([]);
+      if (!sawWait || !sawReservation) {
+        const debug = fleet.debugSnapshot(true);
+        sawWait ||= debug.aircraftWaits!.some(({ from, to }) => from !== to);
+        sawReservation ||= debug.aircraft!.some(
+          ({ reservations, radiusM }) =>
+            radiusM > 0 &&
+            reservations.some(
+              ({ edge, fromM, toM }) => fleet.graph.edges[edge] && fromM >= 0 && toM > fromM,
+            ),
+        );
+      }
+    }
   }
   expect(asked).toBe(true);
+  expect(sawReservation && sawWait).toBe(true);
   expect(fleet.metrics()).toMatchObject({ towed: 3, stuck: 0 });
 });

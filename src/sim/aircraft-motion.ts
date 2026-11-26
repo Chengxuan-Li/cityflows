@@ -541,6 +541,18 @@ export interface ApproachProfileOptions {
   exitSpeedMps?: number;
 }
 
+export const approachFinalM = 10_000;
+export const approachFlareM = 150;
+/** ICAO aiming point, in metres beyond the threshold. */
+export const approachAimingM = (landingDistanceM: number) => Math.min(300, 0.2 * landingDistanceM);
+
+/** Match the glide slope at flare entry and flatten the trajectory exactly at touchdown. */
+export function approachHeightM(remainingM: number, slope: number, flareDistanceM = approachFlareM) {
+  return slope * (remainingM <= flareDistanceM
+    ? remainingM ** 2 / (2 * flareDistanceM)
+    : remainingM - flareDistanceM / 2);
+}
+
 /** The path follows the extended inbound centreline through the aiming point to the runway exit. */
 export function approachProfile(
   path: AircraftPath,
@@ -548,7 +560,7 @@ export function approachProfile(
   {
     aimingStationM,
     glideAngleRad,
-    flareDistanceM = 150,
+    flareDistanceM = approachFlareM,
     exitStationM = aimingStationM + p.landingRollM,
     exitSpeedMps = p.taxiStraightMps,
   }: ApproachProfileOptions,
@@ -581,10 +593,8 @@ export function approachProfile(
     }
     const stationM = timeS * p.approachSpeedMps;
     const remainingM = aimingStationM - stationM;
-    // Match the glide slope at flare entry and flatten the trajectory exactly at touchdown.
     const flaring = remainingM <= flareDistanceM;
-    const heightM =
-      slope * (flaring ? remainingM ** 2 / (2 * flareDistanceM) : remainingM - flareDistanceM / 2);
+    const heightM = approachHeightM(remainingM, slope, flareDistanceM);
     return {
       stationM,
       heightM,

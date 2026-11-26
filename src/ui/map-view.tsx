@@ -19,7 +19,8 @@ import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
-import { useVisual } from './lighting-store';
+import { developerToolsEnabled, useVisual } from './lighting-store';
+import { debugIn2D, type DebugSettings } from '../render/debug-settings';
 import { resolveAppearance, useAppearance } from './appearance-store';
 import { selectionAnchor } from './selection-anchor';
 
@@ -61,6 +62,16 @@ function snapshotForMap(
   // stop bars are drawn on the edited one by id (runways are not edited).
   const [before, after] = [loadedCompiled.airside, compiled.airside];
   let { aircraft, airfield } = snapshot;
+  let debug = snapshot.debug;
+  if (debug?.vehicles) {
+    const laneIndex = (idx:number) => compiled.index.lane.get(loadedCompiled.lanes[idx]!.id);
+    debug = { ...debug, vehicles: debug.vehicles.map(vehicle => ({
+      ...vehicle,
+      routeLanes: vehicle.routeLanes.flatMap(idx => laneIndex(idx) ?? []),
+      routeMovements: vehicle.routeMovements.flatMap(idx => compiled.index.movement.get(loadedCompiled.movements[idx]!.id) ?? []),
+      intentLane: vehicle.intentLane === null ? null : laneIndex(vehicle.intentLane) ?? null,
+    })) };
+  }
   if (before && after && before !== after) {
     const ids =
       <T extends { id: string }>(items: T[], index: (id: string) => number | undefined) =>
@@ -74,8 +85,12 @@ function snapshotForMap(
     const holds = ids(before.holds, (id) => holdIndex.get(id));
     aircraft = aircraft?.map((pose) => ({ ...pose, route: edges(pose.route) }));
     if (airfield) airfield = { ...airfield, clearedHolds: holds(airfield.clearedHolds) };
+    if (debug?.aircraft) debug = { ...debug, aircraft: debug.aircraft.map(plane => ({
+      ...plane, reservations: plane.reservations.flatMap(segment =>
+        edges([segment.edge]).map(edge => ({...segment,edge}))),
+    })) };
   }
-  return { ...presentation, lane, poseLane, signals, aircraft, airfield };
+  return { ...presentation, lane, poseLane, signals, aircraft, airfield, ...(debug && {debug}) };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
@@ -220,7 +235,7 @@ function pickAirside(world: Vec2, zoom: number): Pick | null {
 
 function bindPointer(
   canvas: HTMLCanvasElement,
-  scene: Scene,
+  scene: ReturnType<typeof createScene>,
   signal: AbortSignal,
   canPick: () => boolean,
   activeTool: () => MapTool,
@@ -320,14 +335,15 @@ function bindPointer(
       if (!drag.moved && drag.pick && canPick()) {
         const { world, screen } = point(event);
         useAppStore.setState({ selectionPoint: world });
-        const hit = scene.pick(screen.x, screen.y);
+        const debugPick = scene.debugHit(screen.x, screen.y)?.pick;
+        const hit = debugPick ?? scene.pick(screen.x, screen.y);
         // An airside item under a place's tint or the bare map is picked before them.
         const airside = (pick: Pick | null) =>
           !pick || pick.kind === 'place' || pick.kind === 'flight-board'
             ? (pickAirside(world, camera.zoom) ?? pick)
             : pick;
         getState().select(
-          hit?.kind === 'aircraft'
+          debugPick || hit?.kind === 'aircraft'
             ? hit
             : (pickStand(screen, (p) => camera.worldToScreen(p)) ?? airside(hit)),
         );
@@ -436,6 +452,8 @@ function bindPointer(
 export function MapView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvas3DRef = useRef<HTMLCanvasElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const statsRef = useRef<HTMLOutputElement>(null);
   const mode = useAppStore((state) => state.viewMode);
   const tool = useAppStore((state) => state.tool);
 
@@ -526,6 +544,12 @@ export function MapView() {
       // is made or the sheet settles at a new height with the selection's anchor under it, the
       // camera pans (in 2D and 3D, never zooms) to put the anchor in the middle of what is left.
       let latestSnapshot: VehicleSnapshot | null = null;
+      let debug: DebugSettings | null = null;
+      let debug3D = false;
+      let snapshotDebug: DebugSettings | null = null;
+      let statsText = '';
+      const tooltip = tooltipRef.current!;
+      const stats = statsRef.current!;
       let revealing: Vec2 | null = null;
       let revealCheck = false;
       let revealFrame = 0;
@@ -539,6 +563,29 @@ export function MapView() {
           ? selectionAnchor(state.selection, state.session.compiled, latestSnapshot)
           : null;
       for (const surface of [canvas, canvas3D]) {
+        const hideTip = () => {
+          tooltip.hidden = true;
+        };
+        surface.addEventListener('pointerleave', hideTip, { signal });
+        surface.addEventListener('pointerdown', hideTip, { signal });
+        surface.addEventListener(
+          'pointermove',
+          (event) => {
+            if (!debug || event.buttons) return hideTip();
+            const rect = surface.getBoundingClientRect();
+            const x = event.clientX - rect.left,
+              y = event.clientY - rect.top;
+            const hit = (active3D ? three : view)?.debugHit(x, y);
+            if (!hit) return hideTip();
+            tooltip.textContent = hit.id;
+            tooltip.hidden = false;
+            tooltip.style.left =
+              Math.max(0, Math.min(rect.width - tooltip.offsetWidth, x + 12)) + 'px';
+            tooltip.style.top =
+              Math.max(0, Math.min(rect.height - tooltip.offsetHeight, y + 16)) + 'px';
+          },
+          { signal },
+        );
         // Someone taking the map into their own hands ends the pan.
         surface.addEventListener('pointerdown', () => (revealing = null), { signal });
         surface.addEventListener('wheel', () => (revealing = null), { passive: true, signal });
@@ -555,7 +602,17 @@ export function MapView() {
       view.setTiles(drawnLayers.basemap);
 
       async function pull(session: Session) {
-        const snapshot = await session.engine.snapshot();
+        const requested = debug;
+        const overlays = requested?.overlays;
+        const snapshot = await session.engine.snapshot(
+          overlays && (overlays.vehicles || overlays.aircraft || overlays.gridlock)
+            ? {
+                vehicles: overlays.vehicles,
+                aircraft: overlays.aircraft,
+                gridlock: overlays.gridlock,
+              }
+            : undefined,
+        );
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
         latestSnapshot = snapshot;
@@ -613,7 +670,8 @@ export function MapView() {
           snapshot.timeS,
           snapshot.signals,
         );
-        if (snapshot.timeS !== snapshotTime) {
+        if (snapshot.timeS !== snapshotTime || requested !== snapshotDebug) {
+          snapshotDebug = requested;
           const presentation = snapshotForMap(snapshot, session);
           const playbackSpeed = current.run?.status === 'playing' ? current.run.speed : 0;
           if (active3D) three!.setSnapshot(presentation, playbackSpeed);
@@ -837,6 +895,26 @@ export function MapView() {
           snapshotTime = NaN;
         }
         if (active3D) three!.setMapPalette(palette);
+        const visualState = useVisual.getState();
+        const nextDebug = developerToolsEnabled(visualState) ? visualState.visual.debug : null;
+        if (debug !== nextDebug || debug3D !== active3D) {
+          debug = nextDebug;
+          debug3D = active3D;
+          tooltip.hidden = true;
+          stats.hidden = true;
+          statsText = '';
+          view.setDebug(debug && !active3D ? debugIn2D(debug) : null);
+          three?.setDebug(active3D ? debug : null);
+        }
+        if (debug?.overlays.stats) {
+          const raw = (active3D ? canvas3D : canvas).dataset.debugStats;
+          if (raw && raw !== statsText) {
+            statsText = raw;
+            const { frameMs, fps, calls, triangles, geometries, textures } = JSON.parse(raw);
+            stats.textContent = `${frameMs.toFixed(1)} ms · ${Math.round(fps)} fps\n${calls} draws · ${triangles.toLocaleString()} triangles\n${geometries} geometries · ${textures} textures`;
+            stats.hidden = false;
+          }
+        }
         if (
           active3D &&
           (drawn3D?.compiled !== session.compiled ||
@@ -1029,9 +1107,10 @@ export function MapView() {
           down = null;
           const rect = canvas3D.getBoundingClientRect();
           const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-          const hit = three!.pick(screen.x, screen.y);
+          const debugPick = debug && three!.debugHit(screen.x, screen.y)?.pick;
+          const hit = debugPick ?? three!.pick(screen.x, screen.y);
           getState().select(
-            hit?.kind === 'aircraft'
+            debugPick || hit?.kind === 'aircraft'
               ? hit
               : (pickStand(screen, (p) => three!.worldToScreen(p)) ?? hit),
           );
@@ -1071,6 +1150,8 @@ export function MapView() {
         tabIndex={mode === '3d' ? 0 : -1}
         style={{ position: 'absolute', inset: 0, visibility: mode === '3d' ? 'visible' : 'hidden' }}
       />
+      <span ref={tooltipRef} className="tooltip debug-tooltip" role="tooltip" hidden />
+      <output ref={statsRef} className="debug-stats" aria-live="off" hidden />
     </>
   );
 }

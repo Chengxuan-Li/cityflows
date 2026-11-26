@@ -82,6 +82,38 @@ function fades(engine: Engine) {
   return new Map([...snapshot.id].map((id, i) => [id, snapshot.fade[i]!]));
 }
 
+test('debug snapshots trace the square deadlock across junctions without changing the run', () => {
+  const fixture = squareDeadlock(0.1);
+  const engine = load(fixture, fixture.params);
+  const baseline = load(fixture, fixture.params);
+  engine.step(20);
+  baseline.step(20);
+  const normal = engine.snapshot();
+  expect(normal).not.toHaveProperty('debug');
+  const frame = engine.snapshot({ vehicles: true, gridlock: true });
+  const waits = frame.debug!.vehicleWaits!;
+  expect(waits).toHaveLength(frame.count);
+  expect(waits.every(({ cycle }) => cycle)).toBe(true);
+  const followers = frame.debug!.vehicles!.filter(({ id }) => !fixture.heads.includes(id));
+  for (const follower of followers) {
+    const leader = engine.inspect(follower.leaderId!)!;
+    expect(leader.id).toBe(waits.find(({ from }) => from === follower.id)!.to);
+    expect(follower.gapM).toBeCloseTo(
+      leader.positionM - DEFAULT_SIM_PARAMS.vehicleClasses.car.lengthM - follower.positionM,
+      6,
+    );
+  }
+  for (const head of fixture.heads)
+    expect(
+      frame.debug!.vehicles!.find(({ id }) => id === head)!.routeMovements.length,
+    ).toBeGreaterThan(0);
+  expect(engine.snapshot({ gridlock: true }).debug).not.toHaveProperty('vehicles');
+  engine.step(300);
+  baseline.step(300);
+  expect(engine.stateHash()).toBe(baseline.stateHash());
+  expect(engine.snapshot()).toEqual(baseline.snapshot());
+});
+
 test('T46 gridlock respawn preserves the trip class and purpose in its next route request', () => {
   const fixture = squareDeadlock(0.1);
   const firstHead = fixture.heads[0]!;

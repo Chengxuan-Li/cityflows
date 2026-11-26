@@ -3,6 +3,7 @@ import { groupDiagnostics } from './diagnostics';
 import { Diagnostics } from './inspector/diagnostics';
 import { Layers } from './layers';
 import { VisualQuality } from './visual-quality';
+import { DebugSection } from './debug-section';
 import { ComparePanel } from './panels/compare';
 import { DemandPanel } from './panels/demand';
 import { MetricsPanel } from './panels/metrics';
@@ -129,6 +130,7 @@ export function Sidebar() {
       <DisclosureGroup title="Visual quality" defaultOpen={false}>
         <VisualQuality />
       </DisclosureGroup>
+      <DebugSection />
       <DisclosureGroup
         title="Chart"
         open={metricsOpen}

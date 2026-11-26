@@ -1,4 +1,5 @@
 import { createRandom } from '../geo/random';
+import { markWaitCycles, type DebugSnapshot, type WaitLink } from './debug-snapshot';
 import {
   boxOf,
   cumulativeLengths,
@@ -3214,8 +3215,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         continue;
       const otherS = other.arrivalBooking!.fromS + leadS(other.runway) + ARRIVAL_PAD_S;
       const [leader, follower] = otherS <= thresholdS ? [other, craft] : [craft, other];
-      const nm = wakeSpacingNm[wakeOf(leader.type)]?.[wakeOf(follower.type)] ?? 0;
-      const gapS = Math.max(FINAL_SPACING_M, nm * NM) / fixedWing(follower).approachSpeedMps;
+      const gapS = finalSpacing(leader, follower) / fixedWing(follower).approachSpeedMps;
       if (Math.abs(thresholdS - otherS) < gapS) return false;
     }
     return true;
@@ -4874,6 +4874,56 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     );
   }
 
+  function finalSpacing(leader: Craft, follower: Craft) {
+    const nm = wakeSpacingNm[wakeOf(leader.type)]?.[wakeOf(follower.type)] ?? 0;
+    return Math.max(FINAL_SPACING_M, nm * NM);
+  }
+
+  function debugSnapshot(withAircraft: boolean): DebugSnapshot {
+    const waits: WaitLink[] = [];
+    const aircraft: DebugSnapshot['aircraft'] = withAircraft ? [] : undefined;
+    for (const craft of crafts) {
+      if (craft.mode === 'done') continue;
+      const predecessors = new Set<number>();
+      for (const wait of craft.waits) {
+        if (wait.pred.mode !== 'done' && !passed(wait)) predecessors.add(wait.pred.id);
+      }
+      for (const to of predecessors) {
+        waits.push({
+          from: craft.id,
+          to,
+          cycle: false,
+          stuck: craft.speedMps < 0.1 && timeSince(craft) > 1,
+        });
+      }
+      if (!aircraft || !craft.pose || craft.mode === 'queued') continue;
+      // On the ground the longitudinal claim extends a margin past the nose. On final
+      // the wake pair and actual arrival order determine the spacing at the threshold.
+      let radiusM = craft.lengthM / 2 + margin;
+      if (craft.air?.kind === 'approach' && craft.pose.heightM > 0.01 && craft.arrivalBooking) {
+        let leader: Craft | undefined;
+        for (const other of crafts) {
+          if (
+            other !== craft &&
+            other.air?.kind === 'approach' &&
+            other.runway === craft.runway &&
+            other.arrivalBooking &&
+            other.arrivalBooking.fromS <= craft.arrivalBooking.fromS &&
+            (!leader || other.arrivalBooking.fromS > leader.arrivalBooking!.fromS)
+          )
+            leader = other;
+        }
+        radiusM = leader ? finalSpacing(leader, craft) : FINAL_SPACING_M;
+      }
+      aircraft.push({
+        id: craft.id,
+        radiusM,
+        reservations: craft.claimed.map(({ edge, lo, hi }) => ({ edge, fromM: lo, toM: hi })),
+      });
+    }
+    return { ...(aircraft && { aircraft }), aircraftWaits: markWaitCycles(waits) };
+  }
+
   function snapshot(): AircraftPoseSnapshot[] {
     const result: AircraftPoseSnapshot[] = [];
     for (const craft of crafts) {
@@ -5076,6 +5126,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     requestHoverTaxi,
     step,
     snapshot,
+    debugSnapshot,
     airfield,
     setActiveEnds,
     metrics,

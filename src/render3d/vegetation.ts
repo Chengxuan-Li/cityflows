@@ -20,6 +20,8 @@ import { mix32, treeKits, type FoliageColour, type Season, type TreeKit } from '
 import { style } from '../render/style';
 import { surfaceGrain, type Surface, type Tree } from '../render/vegetation';
 
+export const treeDetailDistanceM = 1200;
+
 /** TASK-105's groundAt is wired here at merge; every tree base uses this one adapter. */
 export const groundHeight: (point: Vec2) => number = () => 0;
 
@@ -205,8 +207,8 @@ export function buildVegetation(
   for (const mesh of meshes) mesh.castShadow = look.castShadow;
   // Only visibility changes during camera motion; instance buffers stay immutable.
   const update = (distance: number) => {
-    for (const near of details) near.visible = distance < 1200;
-    for (const far of blobs) far.visible = distance >= 1200;
+    for (const near of details) near.visible = distance < treeDetailDistanceM;
+    for (const far of blobs) far.visible = distance >= treeDetailDistanceM;
   };
   update(0);
   const counts = Object.fromEntries(

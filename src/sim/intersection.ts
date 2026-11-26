@@ -353,7 +353,7 @@ export function createIntersections(
     movement: CMovement,
     reason: Parameters<IntersectionObserver>[2],
     other?: CMovement,
-  ) {
+  ): false {
     options.onDecision?.(id, movement, reason, other);
     return false;
   }
@@ -505,14 +505,29 @@ export function createIntersections(
     }
     return storage < profile(id).lengthM + gap;
   }
-  function blockedExit(id: number, movement: CMovement): 'exit-full' | 'box' | null {
+  function blockedExit(
+    id: number,
+    movement: CMovement,
+    observe?: (car: number) => void,
+  ): 'exit-full' | 'box' | null {
     const groupIndex = compiled.nodes[movement.node]!.group;
     if (groupIndex !== undefined && !inner(movement)) {
-      const chain = entryChain(id, movement);
+      // A debug read only inspects the clearance the run has already considered.
+      const cached = chainCache[id];
+      const chain = observe
+        ? cached?.route === vehicles.route[id] &&
+          cached?.step === vehicles.routeStep[id] &&
+          cached?.version === (options.routeVersion?.() ?? 0)
+          ? cached.chains.get(movement.idx)
+          : undefined
+        : entryChain(id, movement);
       if (!chain) return 'box';
       for (const car of groupOccupants[groupIndex]!) {
         if (car === id) continue;
-        if (conflictsWithClearance(chain, car, id, movement)) return 'box';
+        if (conflictsWithClearance(chain, car, id, movement)) {
+          observe?.(car);
+          return 'box';
+        }
       }
       let distance = 0;
       for (const idx of chain.movements) {
@@ -522,8 +537,10 @@ export function createIntersections(
           compiled.movements[chain.movements[chain.movements.indexOf(idx) - 1]!]!.toLane !==
             part.fromLane &&
           vehicles.last(part.fromLane) !== -1
-        )
+        ) {
+          observe?.(vehicles.last(part.fromLane));
           return 'box';
+        }
         distance += part.lengthM;
         const tail = vehicles.last(part.toLane);
         const clearance =
@@ -531,15 +548,24 @@ export function createIntersections(
           profile(id).lengthM +
           params.idm.minGapM +
           reservedSpace[part.toLane]!;
-        if (reservedSpace[part.toLane]! > 0 && compiled.lanes[part.toLane]!.lengthM < clearance)
+        if (reservedSpace[part.toLane]! > 0 && compiled.lanes[part.toLane]!.lengthM < clearance) {
+          if (observe)
+            for (const car of groupOccupants[groupIndex]!) {
+              const last = groupPaths[car]!.movements.at(-1)!;
+              if (car !== id && compiled.movements[last]!.toLane === part.toLane) observe(car);
+            }
           return 'exit-full';
+        }
         if (tail !== -1) {
           const horizon = Math.min(
             params.intersection.boxWaitS,
             candidateTime(id, movement, distance),
           );
           const space = exitRear(tail, horizon);
-          if (space < clearance) return 'exit-full';
+          if (space < clearance) {
+            observe?.(tail);
+            return 'exit-full';
+          }
         }
         distance += compiled.lanes[part.toLane]!.lengthM;
       }
@@ -554,7 +580,10 @@ export function createIntersections(
     const exitTail = vehicles.last(movement.toLane);
     if (exitTail !== -1) {
       const space = exitRear(exitTail, horizon);
-      if (space < clearance) return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
+      if (space < clearance) {
+        observe?.(exitTail);
+        return vehicles.position[exitTail]! < clearance ? 'exit-full' : 'box';
+      }
     }
     // Cars still crossing toward the exit are moving: they need room for the body only, as a
     // platoon shares a green. A queue that forms is judged from the exit lane's tail above.
@@ -563,7 +592,10 @@ export function createIntersections(
       for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
         const front = vehicles.position[car]! - incoming.lengthM + vehicles.speed[car]! * horizon;
         if (idx !== movement.idx && front < 0) continue;
-        if (front - profile(car).lengthM < body) return 'box';
+        if (front - profile(car).lengthM < body) {
+          observe?.(car);
+          return 'box';
+        }
       }
     }
     return null;
@@ -573,6 +605,22 @@ export function createIntersections(
     if (!signalAllows(id, movement)) return refuse(id, movement, 'signal');
     const blocked = blockedExit(id, movement) ?? (obstructsRailExit(id, movement) ? 'box' : null);
     if (blocked) return refuse(id, movement, blocked);
+    return (
+      rivalsAllow(id, movement) && (mergeAllows(id, movement) || refuse(id, movement, 'merge'))
+    );
+  }
+
+  function rivalsAllow(
+    id: number,
+    movement: CMovement,
+    denied: (
+      id: number,
+      movement: CMovement,
+      reason: Parameters<IntersectionObserver>[2],
+      other: CMovement,
+      car: number,
+    ) => false = refuse,
+  ) {
     const control = compiled.nodes[movement.node]!.control;
     for (let i = 0; i < movement.conflicts.length; i++) {
       const idx = movement.conflicts[i]!;
@@ -604,14 +652,15 @@ export function createIntersections(
       };
       for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!) {
         if (vehicles.position[car]! >= end + profile(car).lengthM) continue;
-        if (overlaps(car, -vehicles.position[car]!)) return refuse(id, movement, 'movement', other);
+        if (overlaps(car, -vehicles.position[car]!))
+          return denied(id, movement, 'movement', other, car);
       }
       if (occupancy[idx]! > 0) {
         const lane = compiled.lanes[other.fromLane]!;
         for (let car = vehicles.first(lane.idx); car !== -1; car = vehicles.next[car]!) {
           if (grants[car] !== idx) continue;
           if (overlaps(car, lane.lengthM - vehicles.position[car]!))
-            return refuse(id, movement, 'approach', other);
+            return denied(id, movement, 'approach', other, car);
         }
       }
       if (inner(movement) || (control !== 'yield' && control !== 'stop' && !onRed(movement)))
@@ -633,14 +682,14 @@ export function createIntersections(
           length - vehicles.position[approaching]! + start <
             vehicles.speed[approaching]! * params.intersection.gapS
         ) {
-          return refuse(id, movement, 'gap', higher);
+          return denied(id, movement, 'gap', higher, approaching);
         }
       }
     }
-    return mergeAllows(id, movement) || refuse(id, movement, 'merge');
+    return true;
   }
 
-  function zoneStop(movement: CMovement, position: number) {
+  function zoneStop(movement: CMovement, position: number, observe?: (car: number) => void) {
     let stop = Infinity;
     for (let i = 0; i < movement.conflicts.length; i++) {
       const start = movement.conflictZones[i]![0];
@@ -656,6 +705,7 @@ export function createIntersections(
         other.lengthM + vehicles.position[exitTail]! < otherEnd + profile(exitTail).lengthM
       ) {
         stop = start;
+        observe?.(exitTail);
         continue;
       }
       for (
@@ -667,6 +717,7 @@ export function createIntersections(
         if (front <= otherStart) break;
         if (front < otherEnd + profile(car).lengthM) {
           stop = start;
+          observe?.(car);
           break;
         }
       }
@@ -756,6 +807,15 @@ export function createIntersections(
   }
 
   return {
+    debugWaits(id: number, movement: CMovement, observe: (car: number) => void) {
+      if (!signalAllows(id, movement) || (needsStop(movement) && vehicles.stopped[id]! < 1 - 1e-9))
+        return;
+      if (blockedExit(id, movement, observe)) return;
+      rivalsAllow(id, movement, (_id, _m, _reason, _other, car) => {
+        observe(car);
+        return false;
+      });
+    },
     signals,
     blockedExit,
     reservedSpace,

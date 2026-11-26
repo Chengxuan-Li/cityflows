@@ -1,4 +1,5 @@
 import type { CompiledCity } from '../network';
+import type { DebugSnapshot } from '../host/protocol';
 import type { City } from '../schema';
 import type { Camera } from './camera';
 import type { EditOverlay } from './layers/edit-overlay';
@@ -14,6 +15,7 @@ export interface RoadDifference {
 }
 
 export interface VehicleSnapshot {
+  debug?: DebugSnapshot;
   poseLane?: Int32Array;
   timeS: number;
   count: number;

@@ -1,6 +1,9 @@
 import { cityMarkingTheme } from '../schema/marking-theme';
 import { markingThemes } from './style';
-import { Application, Container, Graphics, Polygon } from 'pixi.js';
+import { Application, Container, Graphics, Polygon, type WebGLRenderer } from 'pixi.js';
+import { DebugMap } from './debug-map';
+import type { DebugSettings } from './debug-settings';
+import { samplePixiFrame } from './debug-frame';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import type { ContextFeature, Place } from '../schema';
@@ -197,6 +200,8 @@ export function createGrade(layer: number) {
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene & {
+  setDebug(settings: DebugSettings | null): void;
+  debugHit(x: number, y: number): { id: string; pick?: Pick } | null;
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
@@ -204,6 +209,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setMapPalette(palette: MapPalette): void;
 } {
   const app = new Application();
+  let debugMap: DebugMap | undefined;
+  let debug: DebugSettings | null = null;
   const demand = new FrameDemand();
   const invalidate = demand.invalidate;
   let active = true;
@@ -464,7 +471,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   /** The clear colour sits under the map's tint, as the map does. */
   function syncBackground() {
     void ready.then(() => {
-      if (!destroyed) app.renderer.background.color = tinted(palette.background, night.mapTint);
+      if (!destroyed)
+        app.renderer.background.color = world.visible
+          ? tinted(palette.background, night.mapTint)
+          : palette.background;
     });
   }
 
@@ -676,6 +686,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         };
       }
       let lastFrame = performance.now();
+      let sampledAt = -Infinity;
+      let previousSample = 0;
+      let frames = 0;
       const frame = (now: number) => {
         animation = requestAnimationFrame(frame);
         // Preserve the ticker's fade delta cap on slow frames.
@@ -686,8 +699,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           const { width, height } = app.screen;
           if (tiles.update(camera, width, height, deltaMS)) invalidate();
         }
-        if (demand.consume(renderContinuously())) {
-          app.render();
+        if (demand.consume(renderContinuously() || debug?.overlays.stats)) {
+          debugMap?.draw(camera);
+          if (debug?.overlays.stats && now - sampledAt >= 350) {
+            const frameMs = frames ? (now - previousSample) / frames : 1000 / 60;
+            canvas.dataset.debugStats = JSON.stringify(
+              samplePixiFrame(app.renderer as WebGLRenderer, () => app.render(), frameMs),
+            );
+            sampledAt = previousSample = now;
+            frames = 0;
+          } else app.render();
+          if (debug?.overlays.stats) frames++;
           if (import.meta.env.MODE === 'test')
             canvas.dataset.frames = String(Number(canvas.dataset.frames) + 1);
         }
@@ -708,6 +730,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
 
   const camera = new Camera(() => {
+    debugMap?.invalidate();
     invalidate();
     const { x, y } = camera.worldToScreen({ x: 0, y: 0 });
     world.position.set(x, y);
@@ -729,6 +752,29 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   vehicles.setZoom(camera.zoom);
 
   return {
+    setDebug(settings) {
+      if (settings === debug) return;
+      debug = settings;
+      if (settings) {
+        if (!debugMap) {
+          debugMap = new DebugMap(canvas, settings);
+          if (city) debugMap.setCity(city, sourceGeometry);
+          debugMap.updateSnapshot(vehicles.snapshot ?? null);
+          debugMap.select(selection);
+        }
+        debugMap.configure(settings);
+      } else {
+        debugMap?.destroy();
+        debugMap = undefined;
+      }
+      if (!settings?.overlays.stats) delete canvas.dataset.debugStats;
+      world.visible = !settings || (settings.rendered && !debugMap?.showHeights);
+      syncBackground();
+      invalidate();
+    },
+    debugHit(x, y) {
+      return debugMap?.hit(camera.screenToWorld({ x, y }), 5 / camera.zoom) ?? null;
+    },
     ready,
     camera,
     setActive(next) {
@@ -765,6 +811,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         tiles = source?.geo ? new Tiles(source.geo) : undefined;
       }
       sourceGeometry = source;
+      debugMap?.setCity(compiled, source);
       selection = null;
       selectedVehicle = -1;
       updateVehicleRing();
@@ -1207,6 +1254,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       invalidate();
     },
     setSnapshot(snapshot, playbackSpeed = 0) {
+      debugMap?.updateSnapshot(snapshot);
       invalidate();
       if (!city) return;
       trainTimeS = snapshot.timeS;
@@ -1277,6 +1325,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       return aircraftTracks.get(id)?.pose;
     },
     setSelection(next) {
+      debugMap?.select(next);
       invalidate();
       selection = next;
       redrawTrains();
@@ -1469,6 +1518,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       );
     },
     destroy() {
+      debugMap?.destroy();
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(animation);

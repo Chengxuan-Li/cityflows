@@ -1930,6 +1930,46 @@ input[type='file']::file-selector-button {
   padding: 0 0 2px;
 }
 
+.debug-display {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.debug-display ~ fieldset {
+  margin-top: 8px;
+}
+
+.debug-map-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.debug-tooltip {
+  visibility: visible;
+  opacity: 1;
+  translate: none;
+}
+
+.debug-stats {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 4px 7px;
+  color: var(--label);
+  background: var(--popover);
+  border-radius: 4px;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  pointer-events: none;
+}
+
 .sheet-actions {
   display: flex;
   justify-content: flex-end;

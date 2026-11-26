@@ -13,10 +13,10 @@ import {
 } from 'three';
 import { vehicleModelMaterial } from './vehicle-models';
 
-const modelPixelsPerMetre = 6;
+export const vehicleModelPixelsPerMetre = 6;
 // Keep the normal overview path cheap. Below half the model scale, even the near
 // pavement at the bottom of the usual view has little room to show wheel detail.
-export const vehicleDetailZoom = modelPixelsPerMetre / 2;
+export const vehicleDetailZoom = vehicleModelPixelsPerMetre / 2;
 export const vehicleShadowLayer = 1;
 
 export class VehicleDetailView {
@@ -34,7 +34,7 @@ export class VehicleDetailView {
     this.active = active;
     if (!active) return toggled;
     this.camera = camera;
-    this.depth = (distance * zoom) / modelPixelsPerMetre;
+    this.depth = (distance * zoom) / vehicleModelPixelsPerMetre;
     this.projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     if (!toggled && this.previous.equals(this.projection)) return false;
     this.previous.copy(this.projection);

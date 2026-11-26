@@ -1,4 +1,5 @@
 import type { CompiledCity } from '../network';
+import type { DebugRequest, DebugSnapshot } from './debug-snapshot';
 import type { Route } from '../routing';
 import type {
   PlaceId,
@@ -54,7 +55,7 @@ export interface TrafficEngine {
   patch(compiled: CompiledCity): PatchResult;
   step(n?: number): void;
   readonly timeS: number;
-  snapshot(): VehicleSnapshot;
+  snapshot(debug?: DebugRequest): VehicleSnapshot;
   metrics(): Metrics;
   inspect(vehicleId: number): VehicleDetail | null;
   /** TASK-111: a test pedestrian, by its snapshot id. */
@@ -89,6 +90,7 @@ export interface ParkingClaimsSnapshot {
 }
 
 export interface VehicleSnapshot {
+  debug?: DebugSnapshot;
   rail?: RailSnapshot;
   /** TASK-174: vehicles in service with the person ids aboard, by train pose id. */
   transit?: { vehicles: TransitSnapshot['vehicles'] };

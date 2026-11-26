@@ -41,6 +41,8 @@ import {
   type ParkedCarsSnapshot,
 } from '../render/types';
 import type { PresentationSnapshot } from '../render/vehicle-pose';
+import type { DebugSettings } from '../render/debug-settings';
+import { DebugView3D } from './debug-view';
 import { Basemap3D } from './basemap';
 import { buildGeometry, buildMapContext, buildPlaces } from './geometry';
 import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
@@ -214,6 +216,23 @@ export class Scene3D {
   private readonly vehicleDetail = new VehicleDetailView();
   private shadowView = '';
   private compilePending = false;
+  private debug?: DebugView3D;
+  private selectionPick: Pick | null = null;
+
+  setDebug(settings: DebugSettings | null) {
+    if ((this.debug?.settings ?? null) === settings) return;
+    if (!settings) {
+      this.debug?.dispose();
+      this.debug = undefined;
+    } else if (!this.debug) this.debug = new DebugView3D(this.canvas, settings);
+    else this.debug.configure(settings);
+    this.invalidate();
+  }
+
+  debugHit(x: number, y: number) {
+    return this.debug?.hit(this.camera, x, y) ?? null;
+  }
+
   private readonly restoreContext = () => {
     this.renderer.setClearColor(this.light.background);
     this.rail?.paintCache.reset();
@@ -960,6 +979,7 @@ export class Scene3D {
     this.invalidate();
   }
   setSelection(pick: Pick | null) {
+    this.selectionPick = pick;
     const train = pick?.kind === 'train' ? pick.id : null;
     if (train !== this.selectedTrain) {
       this.selectedTrain = train;
@@ -1274,6 +1294,10 @@ export class Scene3D {
         );
   }
   pick(x: number, y: number): Pick | null {
+    if (this.debug) {
+      const hit = this.debugHit(x, y);
+      if (hit?.pick || !this.debug.settings.rendered) return hit?.pick ?? null;
+    }
     const aircraft = this.aircraft?.pick(
       this.camera,
       x,
@@ -1448,6 +1472,7 @@ export class Scene3D {
       )
     )
       this.invalidate();
+    const frameMs = now - this.lastRenderMs;
     this.lastRenderMs = now;
     this.canvas.dataset.tiles = String(this.tilesEnabled ? (this.basemap?.visibleCount ?? 0) : 0);
     this.canvas.dataset.crossings = String(
@@ -1549,14 +1574,31 @@ export class Scene3D {
     const cachedRail = this.rail?.paintCache.update(
       this.renderer,
       this.camera,
-      this.railVisible && !this.belowGround && !this.geometry?.heights.terrain.grid,
+      this.railVisible &&
+        !this.belowGround &&
+        !this.geometry?.heights.terrain.grid &&
+        (!this.debug ||
+          (this.debug.settings.rendered &&
+            this.debug.settings.shading === 'normal' &&
+            !this.debug.settings.overlays.wireframe &&
+            !this.debug.settings.overlays.detailRanges)),
     );
     // TASK-206: a rebuilt scene's programs are all requested before the draw, so the GPU process
     // compiles them in parallel; the draw alone compiles and waits for them one at a time (Freiburg's
     // first 3D frame: 0.33 s instead of 0.53 s).
     if (this.compilePending) this.renderer.compile(this.scene, this.camera);
     this.compilePending = false;
-    this.renderer.render(this.scene, this.camera);
+    if (this.debug) {
+      if (this.city && this.source && this.geometry)
+        this.debug.sync(
+          this.city,
+          this.source,
+          this.geometry.heights.terrain,
+          this.vehicles.poses.snapshot,
+          this.selectionPick,
+        );
+      this.debug.draw(this.renderer, this.scene, this.camera, this.sun, target, frameMs);
+    } else this.renderer.render(this.scene, this.camera);
     if (import.meta.env.MODE === 'test') {
       this.canvas.dataset.railPaint = cachedRail ? 'cached' : 'mesh';
       this.canvas.dataset.frames = String(Number(this.canvas.dataset.frames) + 1);
@@ -1661,6 +1703,7 @@ export class Scene3D {
     this.content.clear();
   }
   destroy() {
+    this.debug?.dispose();
     this.canvas.removeEventListener('webglcontextrestored', this.restoreContext);
     this.observer.disconnect();
     this.controls.dispose();
