@@ -11,7 +11,7 @@ import {
 import type { Box } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, CrossingMarking } from '../schema';
-import { junctionCorners } from './junctions';
+import { isSignalCrossing, junctionCorners } from './junctions';
 import type { CLane, CompiledCity, CNode, CRoad } from './types';
 
 // Pedestrian crossings (TASK-091, TASK-094): which road ends have one, where its stripes lie, and
@@ -369,7 +369,8 @@ const placements = new WeakMap<CRoad, Placement[]>();
 
 function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
   const node = city.nodes[atEnd ? road.to : road.from]!;
-  if (!node.outline.length) return { stripes: [], nearM: 0, farM: 0 };
+  // TASK-348: a signalised crossing laid out as a plain node keeps its crossing, from the node out.
+  if (!node.outline.length && !isSignalCrossing(node)) return { stripes: [], nearM: 0, farM: 0 };
   const arm = crossingArms(city, node).find((a) =>
     a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
   )!;
