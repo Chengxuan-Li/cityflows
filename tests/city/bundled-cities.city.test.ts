@@ -25,11 +25,13 @@ test('the panel lists every bundled real place not held out of it, and each has 
   );
 });
 
+// TASK-348: Zurich's and Heathrow's archives rebuilt on its layout (signalised crossings between
+// nodes laid out as plain nodes in their landside roads).
 test.for([
   ['london-city-airport', '19bab63b0627b1e367191fadfd2cfd7e8232af397a677c7cf7d49efac57dc3c3'],
-  ['zurich-airport', '4ccf6ed18192886f1087ab4dbd90a6f6f612a3ff4c15a3ec8e36f2dcc577a85d'],
+  ['zurich-airport', 'e1876c81825179829b93b2ae943cf2a41c400d20ebb4ceb621a043817e0b4e4c'],
   ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
-  ['heathrow', '32ddbf2f896959cb45a46a1c0127a08a7689629a787164b4a351067fbe289733'],
+  ['heathrow', '79d2aa7a5f3f90b048423d941d358a1e28eec8fee26ae843b0acec62eb469e73'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
   expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);

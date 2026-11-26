@@ -356,8 +356,8 @@ test.each(
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
       // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-      '907938549cb091bb1266ad22201525d50ccf19d09fce6ee40df594259191a814',
-      '741cf5660bbb6893febbfa55824038cf263df106c5fb3a863b64f3c8a6e9f64c',
+      'defd576f3b6ff6773018188465b76a09a6afc0eae9e6ad117305624615c46672',
+      '4eae0dd0cab5c7d413e09db20c3312b1f0ef10ead629b9f09549ea3497afc34c',
       14,
       79,
     ],

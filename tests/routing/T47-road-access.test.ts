@@ -27,7 +27,7 @@ const hashes = {
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
   Sindelfingen: 'db253d9647e7aefa62acbb18fa8dacc60a16e2381004882c09bcd160e0680272',
-  Munich: '4fc743e04e2f39c2105c779f1b5019a3674f1b9f5a025f13afd32379a5387040',
+  Munich: '6583230469120ad76c0cc6ba22e1c27308c6f41b02f8ee3f2f3698260cb43933',
 };
 
 test.each(tierCities(throughputCities))(

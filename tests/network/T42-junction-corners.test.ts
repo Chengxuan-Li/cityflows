@@ -199,12 +199,13 @@ test.each(tierCities(auditCities))(
 // TASK-131 keeps OSM nodes: main's merged n:262 and n:247 are members of one group (n:246, n:249,
 // n:251 and n:362 around the Donnersberger bridge); main's n:291 is no node of its own (its
 // signal stands at n:294, a group with n:12, and Westendstraße r:301 runs from n:1 to n:294); n:104
-// is a group with n:1307. T42.2 and T42.3 check the members.
+// is a group with n:1307. T42.2 and T42.3 check the members. TASK-348: n:12 is that group's
+// signalised crossing between two nodes, laid out as a plain node with no corners of its own.
 cityTest(
   'T42.2: the owner’s corners at n:262, n:291, n:104 and n:247 have curbs (B49)',
   () => {
     const { city, net } = load('munich');
-    for (const id of ['n:246', 'n:249', 'n:251', 'n:362', 'n:294', 'n:12', 'n:104', 'n:1307']) {
+    for (const id of ['n:246', 'n:249', 'n:251', 'n:362', 'n:294', 'n:104', 'n:1307']) {
       const corners = cornerAudit(city, net, node(net, id));
       expect(corners.length, id).toBeGreaterThan(1);
       const sharp = corners.filter((c) => c.sharp).map((c) => `${c.node} ${c.roads}`);

@@ -96,8 +96,8 @@ const baseline = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    compile: '97941451fe25e95587e1380378ec210400c74357908628c7299dfff0c773f90c',
-    arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
+    compile: 'cc1cd9cc84aae075eab4c06e9ed0d9cbbb853adb4f8a608d395c84bda3eaa296',
+    arrows: 'b3df25ae210635b134c60ea72b65653f04946e9a92d5bbb60b45806fcfc00dde',
   },
 } as const;
 const hash = (value: unknown) =>

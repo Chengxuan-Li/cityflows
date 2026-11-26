@@ -226,7 +226,9 @@ test.each(
     // 66 before the lead's merge fix; three merges that absorb a lane stay ordinary junctions.
     // TASK-101 retains two additional continuation nodes; budget unchanged. TASK-131: 115, as
     // every OSM node of two arms stays a continuation node (main's compiler gives 115 too).
-    ['Munich', 115, 12],
+    // TASK-348: 121, with the signalised crossings n:12 and n:1204 laid out as plain nodes and
+    // the one-way to two-way nodes (n:347 and n:40 among them) as continuations.
+    ['Munich', 121, 12],
   ] as const),
 )(
   'T25: %s keeps the baseline setbacks of ordinary junctions within 0.5 m',

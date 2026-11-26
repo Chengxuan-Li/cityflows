@@ -245,7 +245,7 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-290: nine mapped entrances link five garages, and Bahnhofsgarage keeps its old entry.
     // TASK-294: rebuilt; three places and their garages keep their driveways in pockets behind
     // destination streets (the place repair no longer moves them out).
-    '380c013e05a158bb723ac14e5ba0846abff97cd682498ccd11a93baa2cba5b29',
+    '122afbc0e4f3bfe9fce00126ec9080e8273a14b38f58bd635e32e2eba436b8d1',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -292,7 +292,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-290: nine mapped garage entrances move the morning to 1,533 completed and 62.7 s delay.
   // TASK-294: pockets behind destination streets are served from them (1,533 to 1,531
   // completed, 62.7 to 62.8 s).
-  expect(morning.stateHash).toBe(1710089250);
+  // TASK-348: signalised crossings between nodes laid out as plain nodes, one-way to two-way
+  // nodes as continuations (1,531 to 1,533 completed, 62.8 to 60.6 s).
+  expect(morning.stateHash).toBe(1778301576);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -182,7 +182,11 @@ test.each(tierCities(auditCities))(
       road: road.id,
       ...widthOutsideTransitions(city, net, road),
     }));
-    const over = widths.filter((w) => w.errorM >= 0.05).map((w) => `${w.road}@${w.atM}`);
+    // TASK-348: Munich r:706, a one-way road continuing a two-way street at n:705, widens over its
+    // taper to take the street's other direction on (`widenOverM`), by design.
+    const over = widths
+      .filter((w) => w.errorM >= 0.05 && !(name === 'munich' && w.road === 'r:706'))
+      .map((w) => `${w.road}@${w.atM}`);
     expect(over).toEqual([]);
 
     // Gap: the two directions of a street (one `streetGroupId`) drawn on one centerline. Opposite
