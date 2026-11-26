@@ -165,9 +165,9 @@ All departures in the window use 27R; arrivals 27L.
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 120 → 143 | 50/71 → 61/90 | 8 → 5 | 0 → 3 | 0 → 0 | none | 1,699 → 1,643 | 22.5, 120 s → 30.5, 75 s | 18 |
 | 2 | 123 → 130 | 60/69 → 56/79 | 1 → 2 | 0 → 0 | 0 → 0 | none | 1,639 → 1,628 | 22.5, 135 s → 29.5, 75 s | 12 |
-| 3 | 121 → 133 | 56/67 → 55/82 | 5 → 0 | 0 → 0 | 0 → 0 | none | 1,566 → 1,442 | MAIN3 → 25.5, 81 s | 13 |
-| 4 | 124 → 134 | 64/61 → 64/74 | 5 → 4 | 0 → 0 | 0 → 0 | none | 1,795 → 1,846 | MAIN4 → 25.5, 79 s | 11 |
-| 5 | 129 → 136 | 60/70 → 52/85 | 2 → 7 | 0 → 0 | 0 → 0 | none | 1,609 → 1,685 | MAIN5 → 29, 75 s | 21 |
+| 3 | 121 → 133 | 56/67 → 55/82 | 5 → 0 | 0 → 0 | 0 → 0 | none | 1,566 → 1,442 | 22.5, 126 s → 25.5, 81 s | 13 |
+| 4 | 124 → 134 | 64/61 → 64/74 | 5 → 4 | 0 → 0 | 0 → 0 | none | 1,795 → 1,846 | 18.5, 172 s → 25.5, 79 s | 11 |
+| 5 | 129 → 136 | 60/70 → 52/85 | 2 → 7 | 0 → 0 | 0 → 0 | none | 1,609 → 1,685 | 22.5, 125 s → 29, 75 s | 21 |
 | sum | 617 → 676 | 290/338 → 288/410 | 21 → 18 | 0 → 3 | 0 → 0 | | | | 75 |
 
 Light rung first (seed 1): rule 1 alone (`T360=i`) 143 (58/92, 5 go-arounds, 0 overlaps), take-offs 29.5/h with a
@@ -204,18 +204,23 @@ departure taxiing across it (2, seeds 1 and 4); none is a departure on 27R.
 |---|---|---|---|---|---|---|---|
 | Heathrow 1 | 752 → 849 | 381/372 → 427/423 | 20 → 21 | 0 → 0 | 0 → 0 | none | 16,869 → 14,350 |
 | Heathrow 2 | 758 → 813 | 385/376 → 415/399 | 24 → 15 | 0 → 0 | 0 → 0 | none | 13,926 → 14,185 |
-| Heathrow 3 | LHR3 |
+| Heathrow 3 | 777 → 757 | 401/379 → 390/369 | 27 → 15 | 2 → 0 | 0 → 0 | none | 14,070 → 16,064 |
 | Zurich 730, 1–3 | 729/727/746 → identical | | 7/7/8 → identical | 0 | 0 | none | 371.9/440.0/337.2 → identical |
-| Boston 1–3 | BOS |
+| Boston 1–2 | 992/968 → identical | | 17/35 → identical | 22/0 | 0 | none | 489.4/769.8 → identical |
 | London City 1 | 150 → 150 | 75/75 | 0 → 0 | 0 | 0 | none | 11.6 → 11.6 |
 
-Heathrow days: 27R take-offs 17.5/h (median gap 106 s) and 16.6/h (112 s) over the day; 62 and 51 multiple line-ups,
-none delaying a landing. Diverted 160 → 112 and 158 → 145, cancelled 143 → 98 and 142 → 132. Seed 2's mean delay is 1.9 % higher
-with 55 more movements completed.
+Heathrow days: 27R take-offs 17.5/16.6/15.3 per hour over the day (median gaps 106/112/139 s); 62/51/40 multiple
+line-ups, none delaying a landing. Diverted 160/158/151 → 112/145/162, cancelled 143/142/131 → 98/132/146. In sum
+2,287 → 2,419 completed (+5.8 %), mean delay about equal (44,865 → 44,599 s summed). Seed 3 is worse (−20 completed,
+mean delay +14 %): from 06:00 the head of the 27L queue waits for a queued arrival behind it that was admitted earlier
+and is ordered before it (`unstarted:queued:behind:lowerRank`: 4,700 s in 00:00–08:00 against none in main's top
+causes; 9,380 s over the day), the arrival-side admission-order hold TASK-352 described (its `T352SEQ`); by 07:00 the
+branch has 62 completed against main's 79 and 42 queued arrivals against 17, and it never catches up. The departure
+rules change who stands where and when; they do not hold that arrival.
 
 Zurich, Boston and London City: with rule 1 on runways that cross no other, Zurich and Boston do not change (their
 departure runways cross others; their JSON matches main's field for field but for wall time, Zurich seeds 1–3 and Boston
-seed 1), and London City
+seeds 1–2; Boston seed 3 was not run, identical by the same token), and London City
 changes 8 line-ups a day for the same outcome. Rule 1 on every runway (`T360=irma`), run before the restriction:
 Zurich 731/727 (main 729/727), go-arounds 10/4 (7/7), mean delay 402/449 s (372/440 s); Boston 993/968 (992/968),
 go-arounds 37/43 (17/35), overlaps 22/1 (22/0), mean delay 559/877 s (489/770 s). At Boston the rule moved only 11–14
