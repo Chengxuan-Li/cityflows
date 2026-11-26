@@ -317,7 +317,12 @@ describe('T71 crossing walk links at the stripes', () => {
     const { net, ys } = centreY(city);
     for (const y of ys) expect(y).toBeCloseTo(9, 1);
     const link = net.walk.links.filter((l) => l.id.startsWith('wl:900') && l.crossing);
-    expect(link.flatMap((l) => l.crossing!.spans)).toHaveLength(4);
+    const spans = link.flatMap((l) => l.crossing!.spans);
+    expect(spans).toHaveLength(4);
+    for (const span of spans) {
+      const lane = net.lanes[span.lane]!;
+      expect(pointAtDistance(lane.polyline, lane.cumulative, span.atM).y).toBeCloseTo(9, 1);
+    }
     for (const p of link.flatMap((l) => l.line)) expect(Math.abs(p.y - 9)).toBeLessThan(0.1);
     // The crossing way of T71.4 at the same place keeps the curb rule's stripes.
     for (const y of centreY(signalJunction()).ys) expect(y).toBeCloseTo(14.25, 1);

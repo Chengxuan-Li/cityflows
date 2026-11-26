@@ -23,8 +23,10 @@ const pins = {
   // TASK-351: three Freiburg car parks on the Schwabentorring leave by their own streets.
   // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop.
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-  freiburg: 'e288da6fbf053258071a8ad536e9a5897a9e183b8b6d307bd6df7e4760e4d3c1',
-  munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
+  // TASK-265: sidewalk openings follow relocated node crossings. Footways, steps and
+  // footbridges are byte-identical to main's meshes in both cities.
+  freiburg: '42c67b745715868fb9abd91803f56cc3298bc2eb802f29189c8d0b70f90b2717',
+  munich: '1d6dab9c48250e6770b89fb7e0d4154f7014f2b730f1e002a983ecb60405b1dd',
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
   sindelfingen: '9fe5cb9ff6d8ff332280db07f226c9058df63732393575173aec090f4f60a849',
 };

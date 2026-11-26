@@ -397,11 +397,12 @@ const MOVE_OUT_M = 6;
  * storage and a longer start at green: Munich at 0.15 gridlocked 75 times with the move-out, 41
  * without); their stop line lies behind the crossing (`populateStops`), and where it would fall
  * in a lane's first half the end has no stripes and keeps TASK-072's stop. TASK-265: where OSM
- * maps a crossing node on the end (`mappedCentreM`), the band is centred on it instead (no nearer
- * than 0.25 m from the cut, no move-out), so the stripes, the walk link (`crossingCentreM`), the
- * walker conflict zone and the stop line stand where it is mapped; a node inside the drawn curb
- * returns keeps the band there, its stripes only 0.2 m clear of the curb; where that leaves no
- * stripe, or a served signal's stop line in a lane's first half, the curb rule places the band.
+ * maps a crossing node on an outlined junction's end (`mappedCentreM`), the band is centred on
+ * it instead (no nearer than 0.25 m from the cut, no move-out), so the stripes, walk link
+ * (`crossingCentreM`), walker conflict zone and stop line stand where it is mapped. A node inside
+ * the drawn curb returns keeps the band there, its stripes only 0.2 m clear of the curb. Where
+ * that leaves no stripe, or a served signal's stop line in a lane's first half, the curb rule
+ * places the band.
  */
 export function crossingPlacement(
   city: CompiledCity,
@@ -535,7 +536,8 @@ function placeCrossing(
     }
     return stripes;
   };
-  const mapped = mappedCentreM(city, road, atEnd, source);
+  // Keep TASK-348's crossing floor and approach storage at a plain signalised crossing.
+  const mapped = node.outline.length ? mappedCentreM(city, road, atEnd, source) : null;
   if (mapped !== null) {
     const from = Math.max(0.25, mapped - CROSSING_M / 2);
     const stripes = at(from, MAPPED_CURB_CLEAR_M);
