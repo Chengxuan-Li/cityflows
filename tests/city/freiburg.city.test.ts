@@ -129,7 +129,7 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
     'rn:12879>rn:12510',
     'rn:12223>rn:12221',
   ]);
-  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12881'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12879'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
   expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
@@ -142,7 +142,8 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // (ts:13306 to ts:13313); same routes, stops and headways.
   // TASK-270: the ids two down give other offsets; same routes, stops and headways.
   // TASK-281: the ids one further down, again other offsets; same routes, stops and headways.
-  expect(table.hash).toBe('15cc1c0e');
+  // TASK-351: the ids two further down, again other offsets; same routes, stops and headways.
+  expect(table.hash).toBe('773256d9');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
