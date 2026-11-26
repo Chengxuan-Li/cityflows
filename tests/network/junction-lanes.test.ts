@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity } from '../../src/network';
 import { crossingSpan } from '../../src/network/crossings';
-import { INNER_LANE_M } from '../../src/network/lanes';
+import { INNER_LANE_M_PENDING } from '../../src/network/lanes';
 import type { City } from '../../src/schema';
 import { dualSingle, osm } from '../importers/junction-group-osm';
 
@@ -25,7 +25,8 @@ const setbackAt = (net: CompiledCity, node: number, road: number) => {
 };
 
 describe('TASK-348 junction lanes', () => {
-  it('an inner road shorter than its members’ cuts carries no lane block of its own', () => {
+  // Rule 1 is off (`INNER_LANE_M`) until its follow-up diagnoses Freiburg's gridlock with it.
+  it.skip('an inner road shorter than its members’ cuts carries no lane block of its own', () => {
     // An 8 m median crossing between two 7 m carriageways: each member cuts it by more than half.
     const { net } = compiled(dualSingle(8, true));
     const group = net.groups![0]!;
@@ -35,7 +36,7 @@ describe('TASK-348 junction lanes', () => {
       const cuts = setbackAt(net, road.from, idx) + setbackAt(net, road.to, idx);
       expect(cuts).toBeGreaterThan(road.lengthM);
       // The 5 m floor kept the whole 8 m road as lanes inside the group surface.
-      expect(road.stations.at(-1)! - road.stations[0]!).toBeCloseTo(INNER_LANE_M, 6);
+      expect(road.stations.at(-1)! - road.stations[0]!).toBeCloseTo(INNER_LANE_M_PENDING, 6);
       for (const lane of road.lanes) expect(net.lanes[lane]!.lengthM).toBeLessThan(1);
     }
   });

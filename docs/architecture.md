@@ -1128,11 +1128,11 @@ routing, demand, the timetable or simulation state.
   outer edge as one smooth taper over `taperM`; a change to which nodes are continuation
   nodes is allowed only where every movement stays as compiled.
 - TASK-348 (lane geometry under junction groups and signalised crossings; owner decisions
-  2026-11-25/26). (1) An inner road of a junction group keeps `INNER_LANE_M` = 0.5 m of lane
-  under its cuts instead of 5 m: where it is shorter than its members' cuts it carries no lane
-  block of its own, and the member movements on either side meet at its middle (one chain across
-  the group). Its cuts are scaled on the cuts it keeps (none at a continuation node), and it is
-  laid out again wherever a cut moved. (2) A signalised node whose roads lead to two other nodes
+  2026-11-25/26). (1) Deferred (lead, 2026-11-26): an inner road of a junction group keeping
+  0.5 m of lane under its cuts instead of 5 m, so that where it is shorter than its members' cuts
+  it carries no lane block of its own, gridlocked Freiburg's gate; it is off (`INNER_LANE_M` =
+  `MIN_LANE_M`) until a follow-up diagnoses that. A road whose cut moves after the first layout
+  (a continuation node's cut dropped) is laid out again at that end. (2) A signalised node whose roads lead to two other nodes
   (a signalised crossing between junctions, or a signalised group's member between two others)
   keeps its control but is laid out as TASK-255's stop position is: a through node (setback 0, no
   outline) where its two arms run on within 30 degrees with the same lanes, whatever the ways'

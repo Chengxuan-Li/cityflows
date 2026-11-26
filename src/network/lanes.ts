@@ -241,12 +241,16 @@ function laneNormals(lane: CLane, roadLanes: CLane[]): Vec2[] {
 }
 
 /** The lane a road keeps when its two cuts take more than its length (architecture 5.1): both
- * cuts are scaled to leave this much. TASK-348: an inner road of a junction group keeps
- * `INNER_LANE_M`, so where it is shorter than its members' cuts it carries no lane block of its own
- * (Freiburg r:1179, 13 m under 9.8 + 9.8 m cuts, kept 5 m of lanes inside the group surface,
- * J1's lane overlap) and the member movements on either side meet at its middle. */
+ * cuts are scaled to leave this much. */
 export const MIN_LANE_M = 5;
-export const INNER_LANE_M = 0.5;
+/** TASK-348 rule 1, off: an inner road of a junction group would keep `INNER_LANE_M_PENDING`
+ * (0.5 m), so that where it is shorter than its members' cuts it carries no lane block of its own
+ * (Freiburg r:1179, 13 m under 9.8 + 9.8 m cuts, keeps 5 m of lanes inside the group surface, J1's
+ * lane overlap) and the member movements on either side meet at its middle. Measured on, it
+ * gridlocked Freiburg's gate (16 trips, mean delay 62.8 to 74.5 s), so it waits for its follow-up;
+ * until then inner roads keep `MIN_LANE_M` and every inner-road path compiles as before. */
+export const INNER_LANE_M_PENDING = 0.5;
+export const INNER_LANE_M = MIN_LANE_M;
 
 /** The factor both cuts of a road are scaled by to leave `floorM` of lane. */
 export function trimScale(lengthM: number, trimM: number, floorM = MIN_LANE_M): number {

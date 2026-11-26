@@ -568,13 +568,8 @@ test.each(tierCities(auditCities))(
   'T38.4: %s loses more than 2 m on few lanes and no more than 10 m on any against stage 2',
   (name) => {
     const { net } = load(name);
-    // TASK-348: a junction group's inner road stores no queue (its cars were cleared at the
-    // group's entry); shorter than its members' cuts it keeps 0.5 m of lane, not 5 m.
     const losses = net.lanes
-      .filter(
-        (lane) =>
-          stage2Lanes[name][lane.id] !== undefined && net.roads[lane.road]!.group === undefined,
-      )
+      .filter((lane) => stage2Lanes[name][lane.id] !== undefined)
       .map((lane) => ({ id: lane.id, lossM: stage2Lanes[name][lane.id]! - lane.lengthM }))
       .filter((lane) => lane.lossM > 2);
     const unrecorded = losses.filter((lane) => !storageExceptions[name][lane.id]);

@@ -51,13 +51,6 @@ const named: Record<AuditCity, Record<string, string>> = {
   grid: {},
   town: {},
   sindelfingen: {
-    // TASK-348: an inner road shorter than its members' cuts is a 0.5 m stub, so the member's curb
-    // against it has no room; the group is drawn as one surface over it (TASK-347).
-    'n:142 r:147>r:146': groupInner('r:146', 4.5),
-    'n:276 r:278>r:289': groupInner('r:289', 6.2),
-    'n:282 r:284>r:288': groupInner('r:288', 6.2),
-    'n:452 r:454>r:876': groupInner('r:454', 7.4),
-    'n:686 r:1127>r:691': groupInner('r:691', 7.1),
     // TASK-101: short private/bus-exempt segments that consolidation must now retain.
     'n:1069 r:878>r:1070':
       'the retained 9.52 m private bus-exempt approach has a 1.54 m curb turning 31.1 degrees between samples',
