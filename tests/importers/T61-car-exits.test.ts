@@ -367,7 +367,8 @@ test.each(
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-      '85babc335ea6d9c02e2b0104cb746d15d0e022dfd53678a813dfe2827e18b806',
+      // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+      '157532339433f59745bc4d1d9acf5a9e50bd9b906fa3a8d8c977c320271ad30e',
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
       '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
       // TASK-351: Entenseestraße's loop, fed by a map entry and drained by an exit, is circulation.

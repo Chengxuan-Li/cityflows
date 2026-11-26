@@ -1,6 +1,6 @@
 # TASK-348 — Lane geometry under junction groups and signalised crossings
 
-Status: proposed 2026-11-25; waits for TASK-347 and four owner decisions (below). Owner: to be decided.
+Status: started 2026-11-26 after TASK-347 (owner: "ok to your default decisions"). Owner: Claude subagent (Opus 5.5).
 Base: main after TASK-347.
 
 ## Finding (lead audit, 2026-11-25)
@@ -23,14 +23,13 @@ lane overlap: `r:1706`/`r:1821` at `n:1705`, 11.94 m².
    before the stripes, walk link and paint kept.
 3. Optional, by decision 1: one-way to two-way nodes become continuations.
 
-## Owner decisions needed
+## Owner decisions (2026-11-25/26)
 
-1. Amend `docs/architecture.md` section 5.1 so one-way to two-way nodes become continuations?
-2. Should corners bending more than 30° stay drawing-only (TASK-347), or be laid out again as continuations? Laying
-   them out again changes turn classification, and so traffic.
-3. Keep the 30 m smoothing exclusion around plain degree-two nodes (an owner decision at TASK-131 checkpoint 0)?
-4. Retire the superseded branches `task/131-phase3-b56`, `226-group-surfaces-2`, `239-node-crossings` and the
-   `D:\cityflows-wt\131p3` worktree?
+1. One-way to two-way nodes become continuations: **yes**, amend `docs/architecture.md` §5.1.
+2. Corners bending more than 30°: **drawing-only** (TASK-347); do not re-lay them.
+3. The 30 m smoothing exclusion around plain degree-two nodes: **kept**.
+4. Superseded branches `task/131-phase3-b56`, `226-group-surfaces-2`, `239-node-crossings`: retired with archive
+   tags; the `131p3` worktree removed (done 2026-11-25).
 
 ## Scope
 

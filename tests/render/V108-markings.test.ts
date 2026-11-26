@@ -12,6 +12,7 @@ import type { Graphics } from 'pixi.js';
 import { buildLine, GraphicsContext } from 'pixi.js';
 import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
 import { drawTransitions } from '../../src/render/layers/transitions';
+import { roadStrip } from '../../src/render/layers/nodes';
 import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
@@ -72,10 +73,12 @@ const baseline = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
-    compile: 'a32861f0730d07b557082c47bd5226102a280517c51d38e720572ca4fe52db85',
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    compile: 'a3243720690aaf209df3f511c461c1dbe40330caec3111bbfbae7799cbf141a2',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
+    arrows: '903940e28f151203a0c7088933826075b826e0b44ab49edf415b47ea861570a8',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -188,7 +191,8 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       .concat(
         city.nodes.flatMap((node) => [
           ...nodeMarkingGeometry(city, node),
-          ...(node.outline.length
+          // TASK-347: a node drawn as road has no junction arrows.
+          ...(node.outline.length && !roadStrip(city, node)
             ? node.movements.flatMap((i) =>
                 city.movements[i]!.neverGreen ? [] : movementMarkings(city.movements[i]!),
               )
@@ -245,7 +249,11 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
     for (const movement of city.movements)
-      if (!movement.neverGreen && city.nodes[movement.node]!.outline.length)
+      if (
+        !movement.neverGreen &&
+        city.nodes[movement.node]!.outline.length &&
+        !roadStrip(city, city.nodes[movement.node]!)
+      )
         drawMovementArrow(pen, movement);
     expect(lineCount).toBe(shapes.filter((s) => s.kind === 'line').length);
     expect(polygonCount).toBe(shapes.filter((s) => s.kind === 'polygon').length);

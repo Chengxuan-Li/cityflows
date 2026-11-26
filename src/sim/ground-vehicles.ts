@@ -744,6 +744,12 @@ interface Turn {
   /** Where its vehicles leave the lane (TASK-350: before a hull over the stand's own point). */
   access?: ServicePoint;
   gone: boolean;
+  /** TASK-356: a tow away announced as the aircraft comes (touchdown about `comingS`): its tug
+   * waits at the nose of the pose the fleet has it bound to park in; cleared once it stands
+   * there. */
+  comingS?: number;
+  /** TASK-356: on its stand when the run starts: its tug is placed at the nose at once. */
+  atStart?: boolean;
 }
 
 interface Vehicle {
@@ -821,6 +827,11 @@ const STUCK_S = 600;
 const CROSS_BEFORE_S = 60;
 /** TASK-350: two vehicles holding each other off give way by rule after this long. */
 const GIVE_WAY_S = 3;
+/** TASK-356: a tug for a tow away as the aircraft parks is at the nose this long before its
+ * touchdown, and gives up on an aircraft that has not come this long after it. Once the aircraft
+ * stands there the tug stays for its first push, a tow or (none found) the departure. */
+const TOW_TUG_BEFORE_S = 3 * MIN;
+const COMING_WAIT_S = 30 * MIN;
 /** A departure's tug disconnects and the engines start over 20 s (the fleet's pause). */
 const TUG_CLEAR_S = 15;
 /** How far a vehicle edges over to pass a hull that reaches over its way (`squeezePast`). */
@@ -842,6 +853,8 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
   const byId = new Map<number, AircraftPoseSnapshot>();
   const readyOf = new Map<number, number>();
   const towOf = new Map<number, number>();
+  /** TASK-356: where an arrival bound for a stand parks (the end of its lead-in), by aircraft. */
+  const boundPose = new Map<number, { x: number; y: number; heading: number }>();
   /** The movement space as plan boxes, by aircraft: whether it is due, and its near part. */
   let space: {
     aircraft: number;
@@ -1135,13 +1148,17 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       if (event.kind === 'on-block') towOf.delete(event.id);
       const type = typeById.get(event.typeId)!;
       if (event.kind === 'tow-planned') {
-        // A tow: the tug comes as for a pushback, couples and stays on to the new stand.
-        towOf.set(event.id, event.timeS);
+        // A tow: the tug comes as for a pushback, couples and stays on to the new stand. One
+        // announced as the aircraft comes (TASK-356) waits at the nose before it parks.
+        if (!event.arriving) towOf.set(event.id, event.timeS);
         if (!network?.stands[event.stand] || !pushes[event.stand]) continue;
         const tug = {
           slot: 'tug' as const,
           kind: 'tug' as const,
-          arriveS: Math.max(timeS + MIN, event.timeS - TUG_BEFORE_READY_S),
+          arriveS: Math.max(
+            timeS + MIN,
+            event.timeS - (event.arriving ? TOW_TUG_BEFORE_S : TUG_BEFORE_READY_S),
+          ),
           leaveS: Infinity,
           carts: 0,
           state: 'planned' as const,
@@ -1157,6 +1174,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
           visits: [tug],
           ways: null,
           gone: false,
+          ...(event.arriving && { comingS: event.timeS }),
         });
         continue;
       }
@@ -1182,7 +1200,14 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         visits,
         ways: null,
         gone: false,
+        ...(nextReadS === -Infinity && !event.arrived && { atStart: true }),
       });
+    }
+    for (const turn of turns.values()) {
+      if (turn.comingS === undefined) continue;
+      const pose = byId.get(turn.aircraft);
+      if (pose && standing(pose.state) && pose.stand === graph.stands[turn.stand]!.id)
+        turn.comingS = undefined;
     }
     // Pushbacks: attach a waiting tug; count a push its tug missed.
     for (const a of aircraft) {
@@ -1204,7 +1229,11 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     }
     for (const id of lastState.keys()) if (!byId.has(id)) lastState.delete(id);
     for (const [id, turn] of turns)
-      if (turn.gone || !byId.has(id)) {
+      if (
+        turn.comingS !== undefined
+          ? timeS > turn.comingS + COMING_WAIT_S
+          : turn.gone || !byId.has(id)
+      ) {
         if (turn.visits.every((v) => v.state === 'done' || v.state === 'dropped') || !byId.has(id))
           turns.delete(id);
       }
@@ -1213,6 +1242,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       if (vehicle.phase !== 'in' || standHolder.get(vehicle.stand) === vehicle.id) continue;
       const pose = byId.get(vehicle.turn!.aircraft);
       if (pose?.state === 'parked' && timeS < vehicle.visit!.leaveS - MIN) continue;
+      if (vehicle.turn!.comingS !== undefined) continue;
       const e = elementOf(vehicle);
       if (!e || e.key < 0 || e.toS > vehicle.path.holds.find((h) => h.kind === 'stand')!.atS + 1e-6)
         continue;
@@ -1252,12 +1282,15 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
    * otherwise any due space of another aircraft. */
   function inSpace(vehicle: Vehicle, imminent: boolean) {
     const own = vehicle.turn?.aircraft ?? -1;
+    // TASK-356: a tug at the nose its aircraft parks short of (its way into the stand ends there).
+    const atNose = vehicle.kind === 'tug' && vehicle.phase === 'serving';
     const boxes = bodyBoxes(vehicle);
     const reach = vehicle.lengthM / 2 + vehicle.carts * 4 + 2;
     return space.some(
       (b) =>
         (imminent
-          ? b.imminent && !(b.aircraft === own && nowS < vehicle.detachedS + TUG_CLEAR_S)
+          ? b.imminent &&
+            !(b.aircraft === own && (atNose || nowS < vehicle.detachedS + TUG_CLEAR_S))
           : b.aircraft !== own) &&
         Math.abs(b.box.x - vehicle.pos.x) < (b.box.lengthM + b.box.widthM) / 2 + reach &&
         Math.abs(b.box.y - vehicle.pos.y) < (b.box.lengthM + b.box.widthM) / 2 + reach &&
@@ -1271,8 +1304,13 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
    * always are. The near part (the next 3 s, at least 15 m) of a moving aircraft is imminent. */
   function movementBoxes(timeS: number) {
     const boxes: typeof space = [];
+    boundPose.clear();
     for (const { id, kind, bodies, aheadM } of source.movementSpace()) {
       const pose = byId.get(id);
+      if (kind === 'bound') {
+        const end = bodies.at(-1)!;
+        boundPose.set(id, { x: end.x, y: end.y, heading: Math.atan2(end.s, end.c) });
+      }
       let due = kind !== 'push' || (pose !== undefined && !standing(pose.state));
       let soon = due;
       if (!due && pose) {
@@ -1314,9 +1352,16 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         const steps = plan?.steps ?? null;
         const lengthM = plan?.lengthM ?? 0;
         const leadS = lengthM / 6 + 60;
-        if (timeS < visit.arriveS - leadS) continue;
+        const placed = turn.atStart && visit.slot === 'tug';
+        if (timeS < visit.arriveS - leadS && !placed) continue;
         const pose = byId.get(turn.aircraft);
-        if (
+        // TASK-356: the tug for a tow as the aircraft parks goes while it is still in the air,
+        // laid out round the pose it is to park in.
+        let parkAt: { x: number; y: number; heading: number } | undefined = pose?.visual ?? pose;
+        if (turn.comingS !== undefined && steps) {
+          parkAt = boundPose.get(turn.aircraft);
+          if (!parkAt || !pose?.airborne) continue;
+        } else if (
           !steps ||
           turn.gone ||
           !pose ||
@@ -1335,7 +1380,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         }
         if (!turn.ways) {
           // Ways out join the lane after the access point, where the lane is clear of the hull.
-          const hull = aircraftHull(turn.type, pose.visual ?? pose);
+          const hull = aircraftHull(turn.type, parkAt!);
           const lane = compiled.lanes[access.lane]!;
           let merge = mergePoint(access);
           for (
@@ -1365,7 +1410,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
           turn.access = entry;
           turn.ways = standWays(
             turn.type,
-            pose.visual ?? pose,
+            parkAt!,
             turn.visits,
             entry.pos,
             merge.pos,
@@ -1379,7 +1424,7 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
           continue;
         }
         const path = inbound(turn, way, nearestDepot(turn.access!.pos));
-        if (path && !startClear(path, visit.kind, visit.carts)) continue;
+        if (path && !placed && !startClear(path, visit.kind, visit.carts)) continue;
         if (!path) {
           visit.state = 'dropped';
           drop('no-way');
@@ -1387,6 +1432,13 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         }
         visit.state = 'sent';
         spawn(visit.kind, visit.carts, path, turn, visit);
+        if (placed) {
+          // The first departures of a run: the tug stands at the nose from the start.
+          const tug = vehicles.at(-1)!;
+          tug.s = path.lengthM;
+          place(tug);
+          arrive(tug);
+        }
       }
     }
   }
@@ -1684,7 +1736,11 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
     vehicle.lookReason = '';
     // TASK-350: its own aircraft's hull too where the way runs on the lanes (a tail over the
     // apron road before the stand's access point).
-    const own = vehicle.turn && vehicle.phase !== 'out' ? vehicle.turn.aircraft : -1;
+    // TASK-356: a tug that let go of its aircraft after a tow drives off round it (`detach`).
+    const own =
+      vehicle.turn && (vehicle.phase !== 'out' || vehicle.detachedS > -Infinity)
+        ? vehicle.turn.aircraft
+        : -1;
     const nearby: number[] = [];
     for (let k = 0; k < parkedBoxes.length; k++) {
       const box = parkedBoxes[k]!;
@@ -2208,6 +2264,12 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
         const visit = vehicle.visit!;
         const pose = byId.get(vehicle.turn!.aircraft);
         if (vehicle.kind === 'tug') {
+          const turn = vehicle.turn!;
+          // TASK-356: at the nose before its aircraft parks, it waits for it.
+          if (turn.comingS !== undefined) {
+            if (timeS > turn.comingS + COMING_WAIT_S) leaveTug(vehicle);
+            continue;
+          }
           // An aircraft that left without its tug (never pushed): the tug goes home.
           if (!pose || (pose.state !== 'parked' && !pushing(pose.state))) leaveTug(vehicle);
           continue;

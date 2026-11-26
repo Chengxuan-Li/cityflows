@@ -18,13 +18,15 @@ const pins = {
   // Lead merge: re-pinned on TASK-271 (passages and covered ways at grade change the walk).
   // TASK-290: Freiburg's nine mapped garage entrances change the 3D sidewalk mesh.
   // TASK-294: three Freiburg places keep their driveways in pockets behind destination streets.
-  // TASK-351: three Freiburg car parks on the Schwabentorring leave by their own streets.
-  freiburg: '705363198d537820eba5e2e5c105c2ff43fa71c9a4381186f2b1fe89d9cc45d4',
   // TASK-290: Munich's garage connector moves to r:1070 and changes the 3D footway mesh.
-  munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
   // TASK-290: Sindelfingen's garage connector moves to r:954 and changes the 3D sidewalk mesh.
+  // TASK-351: three Freiburg car parks on the Schwabentorring leave by their own streets.
   // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop.
-  sindelfingen: 'fe345ad82f4f941047a85e7f5a35d061ca80e946f14d941e9f3f914a9c49628a',
+  // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+  freiburg: 'e288da6fbf053258071a8ad536e9a5897a9e183b8b6d307bd6df7e4760e4d3c1',
+  munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
+  // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+  sindelfingen: '9fe5cb9ff6d8ff332280db07f226c9058df63732393575173aec090f4f60a849',
 };
 
 for (const [name, pin] of Object.entries(pins))

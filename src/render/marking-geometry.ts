@@ -41,7 +41,8 @@ import {
   type CrossingSource,
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
-import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
+import { roadStrip } from './layers/nodes';
+import { SETBACK_CAP_M, isSignalCrossing, junctionCorners } from '../network/junctions';
 import { keepClearZones, type KeepClearZone } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
@@ -1225,6 +1226,8 @@ const arrowMovements = (city: CompiledCity, lane: CLane) =>
  * where no two movements cross (`innerCarriageway`'s crossing; movements to or from service roads
  * aside, so a median crossover's end is none, Freiburg `n:1147`). */
 function noJunction(city: CompiledCity, node: CNode): boolean {
+  // TASK-348: a signalised crossing laid out as a plain node is no junction for the arrows.
+  if (node.group === undefined && isSignalCrossing(node)) return true;
   if (node.group !== undefined || node.signal || node.control !== 'uncontrolled') return false;
   const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
   const counted = (m: CMovement) =>
@@ -2526,6 +2529,7 @@ function buildNodeMarkings(
   );
   return [
     ...guides,
+    ...stripLines(city, node, markingTheme),
     ...paintedGores(city, node).flatMap((g) =>
       hatchGeometry(g.ring, g.heading, g.road, g.holes, markingTheme).map((shape) => ({
         ...shape,
@@ -2534,6 +2538,86 @@ function buildNodeMarkings(
     ),
     ...miniRoundaboutMarkings(city, node, markingTheme),
   ];
+}
+
+/**
+ * TASK-347: across an uncontrolled node drawn as road (`roadStrip`) without a crossing, the lines
+ * of its roads run on along the movements: dividers midway between neighbouring paths of one road
+ * pair (dashed on in the road's phase, a gap first after the dash its approach ends with), the
+ * centre midway between the two directions' median-side paths, and outside the German theme the
+ * edges along the outermost paths, as `buildRoadMarkings` draws them on the roads.
+ */
+function stripLines(city: CompiledCity, node: CNode, markingTheme: MarkingTheme): MarkingShape[] {
+  if (node.control !== 'uncontrolled' || !roadStrip(city, node)) return [];
+  const roads = nodeRoads(city, node);
+  if (
+    roads.some((r) =>
+      [false, true].some(
+        (end) => (end ? r.to : r.from) === node.idx && crossingEnabled(city, r, end),
+      ),
+    )
+  )
+    return [];
+  const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
+  const movements = node.movements
+    .map((i) => city.movements[i]!)
+    .filter((m) => !m.neverGreen && m.turn !== 'uturn');
+  const pairs = new Map<string, CMovement[]>();
+  for (const m of movements) {
+    const key = `${city.lanes[m.fromLane]!.road}>${city.lanes[m.toLane]!.road}`;
+    pairs.set(key, [...(pairs.get(key) ?? []), m]);
+  }
+  // From the median side to the curb.
+  const curb = city.drivingSide === 'right' ? 1 : -1;
+  const key = (lane: number) => curb * city.lanes[lane]!.lane;
+  const shapes: MarkingShape[] = [];
+  const inners: CMovement[] = [];
+  for (const group of pairs.values()) {
+    group.sort((a, b) => key(a.fromLane) - key(b.fromLane) || key(a.toLane) - key(b.toLane));
+    const road = roadOf(group[0]!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].lane.dash!;
+    for (let i = 1; i < group.length; i++) {
+      const [a, b] = [group[i - 1]!, group[i]!];
+      if (a.fromLane === b.fromLane || a.toLane === b.toLane) continue;
+      for (const line of midway(a, b, false)) {
+        const total = cumulativeLengths(line).at(-1)!;
+        if (total <= pattern[1]) continue;
+        for (const dash of roadDashes(trimPolyline(line, pattern[1], 0), false, pattern))
+          shapes.push(lineShape(road, 'lane', dash, 0.78, markingTheme));
+      }
+    }
+    if (road.streetGroupId !== null) inners.push(group[0]!);
+    const ends = road.streetGroupId === null ? [group[0]!, group.at(-1)!] : [group.at(-1)!];
+    if (markingTheme.id === 'de' || (markingTheme.id === 'uk' && ukTownRoad(road))) continue;
+    for (const m of ends) {
+      const side = m === group.at(-1)! ? curb : -curb;
+      const line = parallelOffset(edge(city, m, side), -side * 0.15);
+      shapes.push({
+        ...lineShape(road, 'edge', line, 0.85, markingTheme),
+        ...(markingTheme.id === 'uk' ? { color: markingTheme.colors.lane } : {}),
+      });
+    }
+  }
+  // The two directions of one street: their median-side paths run opposite.
+  const [a, b] = inners;
+  const paired = (x: CMovement, y: CMovement) => {
+    const [from, to] = [roadOf(x.fromLane), roadOf(y.toLane)];
+    return from.streetGroupId !== null && from.streetGroupId === to.streetGroupId;
+  };
+  if (inners.length === 2 && paired(a!, b!) && paired(b!, a!)) {
+    const road = roadOf(a!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].centre.dash;
+    for (const line of midway(a!, b!, true)) {
+      const lines =
+        markingTheme.id === 'us'
+          ? [parallelOffset(line, 0.15), parallelOffset(line, -0.15)]
+          : pattern
+            ? roadDashes(trimPolyline(line, pattern[1], 0), false, pattern)
+            : [line];
+      shapes.push(...lines.map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)));
+    }
+  }
+  return shapes;
 }
 
 /**

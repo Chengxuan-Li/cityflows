@@ -7,7 +7,7 @@ import {
 import type { Vec2 } from '../geo/vec2';
 import type { Node, Road } from '../schema';
 import type { Reference } from './corridor';
-import { SETBACK_CAP_M, STOP_POSITION, type ThroughPair } from './junctions';
+import { isSignalCrossing, SETBACK_CAP_M, STOP_POSITION, type ThroughPair } from './junctions';
 import type { CLane, CMovement, CNode, CRoad } from './types';
 import {
   CONVERGING,
@@ -19,7 +19,9 @@ import {
   shiftAt,
   smoothstep,
   smootherstep,
+  MIN_LANE_M,
   taperLength,
+  trimScale,
   type ContinuationEnd,
   type RoadContinuity,
 } from './lanes';
@@ -47,6 +49,9 @@ interface Arm {
 // Centerline lengths for the current `continuationLayout` call (importers edit centerlines in
 // place between compiles, so nothing is kept across calls).
 let centerlineLengths = new Map<readonly Vec2[], Float64Array>();
+/** Each road's lane floor under its cuts (`trimScale`), for the current call (TASK-348: inner roads
+ * of junction groups keep less). */
+let laneFloors: readonly number[] = [];
 
 function blockPoint(arm: Arm, a: number, side: number) {
   const line = arm.source.centerline;
@@ -150,6 +155,15 @@ export function defaultSlice(
   return Array.from({ length: count }, (_, i) => [start + i, branchStart + i]);
 }
 
+/** TASK-348: the most a one-way road may turn into the two-way street it continues. */
+const ONE_WAY_TURN = Math.PI / 18;
+/** TASK-348: the shortest one-way road that takes the street's lanes on (TASK-080's 15 m taper). */
+const MIN_TAPER_ROAD_M = 15;
+/** TASK-348 rule 3, off: one-way to two-way continuations moved Munich's full demand (fixed time,
+ * mean of seeds 1 to 5: +5.3% delay, 111 fewer trips) and its 0.15 actuated morning with mode
+ * choice (+4.6%, seeds 1 to 5) past the owner's merge rule; off, Munich compiles as on main. */
+const ONE_WAY_CONTINUATIONS = false;
+
 /** Movement topology determines eligibility; road geometry orders physical branch slices. */
 export function continuationLayout(
   nodes: CNode[],
@@ -160,8 +174,10 @@ export function continuationLayout(
   headings: { start: number; end: number }[],
   side: 'left' | 'right',
   sourceNodes: Node[],
+  floors: readonly number[],
 ) {
   centerlineLengths = new Map();
+  laneFloors = floors;
   const ends: RoadContinuity[] = roads.map(() => ({}));
   const pairs = new Map<number, ContinuationPairs>();
   const groups: ContinuationGroup[] = [];
@@ -169,7 +185,8 @@ export function continuationLayout(
     const legal = node.movements.map((i) => movements[i]!);
     if (
       (node.control !== 'uncontrolled' &&
-        !sourceNodes[node.idx]!.provenance.inferred?.includes(STOP_POSITION)) ||
+        !sourceNodes[node.idx]!.provenance.inferred?.includes(STOP_POSITION) &&
+        !isSignalCrossing(node)) ||
       !legal.length ||
       legal.some((m) => !['through', 'merge', 'diverge'].includes(m.turn))
     )
@@ -193,6 +210,39 @@ export function continuationLayout(
       }
       components.push([...group].map((i) => roads[i]!));
       for (const i of group) remaining.delete(i);
+    }
+    // TASK-348 (owner decision 1, architecture 5.1): a one-way road continuing one direction of a
+    // two-way street straight on (within `ONE_WAY_TURN`), with its lanes, at a node of their own (Freiburg n:224,
+    // n:695; Munich n:347, n:40). The street's other direction has no movement there: it is left
+    // out of the layout and starts or ends at the node. The one-way road jogs onto the direction it
+    // continues, which keeps its line (no ray, no taper), and takes the other direction's width on
+    // over its taper (`widenM`), so the width change reads as a lane taper, not a junction.
+    let widening: { road: CRoad; lone: CRoad; street: CRoad } | undefined;
+    const lone = components.filter((g) => g.length === 1);
+    if (ONE_WAY_CONTINUATIONS && lone.length === 1 && incident.length === 3) {
+      const single = lone[0]![0]!;
+      const street = sources[single.idx]!.streetGroupId;
+      const opposite = incident.find(
+        (r) =>
+          sources[r.idx]!.streetGroupId === street && r.from === single.to && r.to === single.from,
+      );
+      const oneWay = incident.find((r) => r !== single && r !== opposite);
+      const heading = (r: CRoad) => headings[r.idx]![r.to === node.idx ? 'end' : 'start'];
+      if (
+        street !== null &&
+        opposite &&
+        oneWay &&
+        sources[oneWay.idx]!.streetGroupId === null &&
+        !sources[oneWay.idx]!.corridorId &&
+        oneWay.lanes.length === opposite.lanes.length &&
+        // Room for TASK-080's shortest taper: Freiburg's 7.4 m r:1751 bent its end at n:1747.
+        polylineLength(sources[oneWay.idx]!.centerline) >= MIN_TAPER_ROAD_M &&
+        (oneWay.to === node.idx) !== (opposite.to === node.idx) &&
+        Math.cos(heading(oneWay) - heading(opposite)) >= Math.cos(ONE_WAY_TURN)
+      ) {
+        widening = { road: oneWay, lone: single, street: opposite };
+        components.splice(components.indexOf(lone[0]!), 1);
+      }
     }
     const layout = new Map<number, RoadContinuity>();
     const selected: ContinuationPairs = new Map();
@@ -258,7 +308,7 @@ export function continuationLayout(
         branches.length === 1 &&
         !balanced &&
         !!sources[branches[0]!.idx]!.provenance.inferred?.includes(PLACEMENT_TRANSITION);
-      const trunkJogs =
+      let trunkJogs =
         branches.length === 1 &&
         !balanced &&
         trunkSource.streetGroupId === null &&
@@ -329,13 +379,23 @@ export function continuationLayout(
         sharedWidth.push(reused.reduce((sum, [i]) => sum + trunkSource.lanes[i]!.widthM, 0));
         const [firstTrunk, firstBranch] = matches[0]!;
         const offsetM = laneOffset(trunkSource, firstTrunk) - laneOffset(source, firstBranch);
+        // TASK-348: where TASK-093's lane step lines the one-way road up already (its converging
+        // shift at the node), nothing moves.
+        const stepped =
+          widening &&
+          (widening.road.to === node.idx ? widening.road.endShift : widening.road.startShift)
+            .length > 0;
+        const applied = stepped ? 0 : offsetM;
         // A direction of a two-way street never moves (architecture 5): where a carriageway
         // continues into one at a node of its own (TASK-131 keeps Benzstrasse's splits n:867 and
         // n:902 apart), lining the lanes up would lay it over its other direction; the node stays
-        // a junction.
-        if (source.streetGroupId !== null && Math.abs(offsetM) > 0.01) {
-          valid = false;
-          break;
+        // a junction. TASK-348: a one-way road continuing a two-way street jogs onto it instead.
+        if (source.streetGroupId !== null && Math.abs(applied) > 0.01) {
+          if (trunk !== widening?.road) {
+            valid = false;
+            break;
+          }
+          trunkJogs = true;
         }
         if (
           matches.some(
@@ -354,14 +414,14 @@ export function continuationLayout(
             roadPair(from, to),
             new Set(matches.map(([a, b]) => (split ? `${a}:${b}` : `${b}:${a}`))),
           );
-        if (trunkJogs) trunkOffsetM = -offsetM;
+        if (trunkJogs) trunkOffsetM = -applied;
         const outside = (lanes: number[]) =>
           lanes.reduce((sum, i) => sum + trunkSource.lanes[i]!.widthM, 0);
         const trunkUsed = matches.map(([a]) => a);
         layout.set(branch.idx, {
           [split ? 'start' : 'end']: {
             heading,
-            offsetM: trunkJogs ? 0 : offsetM,
+            offsetM: trunkJogs ? 0 : applied,
             tapers: branch.lanes.map((_, i) => i).filter((i) => !usedBranch.has(i)),
             holdM: 0,
             taperM: 0,
@@ -431,6 +491,21 @@ export function continuationLayout(
       });
     }
     if (!valid) continue;
+    if (widening) {
+      const street = widening.street;
+      Object.assign(layout.get(street.idx)![street.to === node.idx ? 'end' : 'start']!, {
+        holdM: 0,
+        taperM: 0,
+      });
+      const road = widening.road;
+      const end = layout.get(road.idx)![road.to === node.idx ? 'end' : 'start']!;
+      // Lined up by its lane step already, the one-way road keeps its line too.
+      if ((road.to === node.idx ? road.endShift : road.startShift).length)
+        Object.assign(end, { holdM: 0, taperM: 0 });
+      const width = roadWidth(sources[widening.lone.idx]!);
+      end.widenM = side === 'right' ? [width, 0] : [0, width];
+      end.widenOverM = taperLength(sources[road.idx]!);
+    }
     pairs.set(node.idx, selected);
     const unchanged =
       node.setbacks.every((s) => s === 0) &&
@@ -463,13 +538,34 @@ function cutAt(node: CNode, roads: CRoad[], road: CRoad): number {
   return node.setbacks[incident.indexOf(road)]!;
 }
 
-/** TASK-214: the cut at `node` as compile trims the road: both ends' setbacks scaled to leave it
- * 5 m of lane. A side-by-side block measured from the unscaled cut ran a short road's lanes past
- * its node (Freiburg r:718 at n:717, 3 m beyond, a 2.3 m step and a fold). */
-function trimmedCut(node: CNode, nodes: CNode[], roads: CRoad[], road: CRoad): number {
-  const cut = cutAt(node, roads, road);
-  const trim = cutAt(nodes[road.from]!, roads, road) + cutAt(nodes[road.to]!, roads, road);
-  return trim === 0 ? cut : cut * Math.min(1, Math.max(0, road.lengthM - 5) / trim);
+/** The road's cuts at its start and end as compile trims it: both setbacks scaled to leave its lane
+ * floor (`trimScale`), none at a continuation node. TASK-348: an inner road is scaled on the cuts it
+ * keeps, so a member that became a continuation leaves its whole floor to the other member. */
+function trimmedCuts(
+  road: CRoad,
+  nodes: CNode[],
+  roads: CRoad[],
+  pairs: ReadonlyMap<number, unknown>,
+): [number, number] {
+  const cuts = [cutAt(nodes[road.from]!, roads, road), cutAt(nodes[road.to]!, roads, road)];
+  const kept = cuts.map((c, i) => (pairs.has(i ? road.to : road.from) ? 0 : c));
+  const floor = laneFloors[road.idx]!;
+  const trim = (floor < MIN_LANE_M ? kept : cuts).reduce((a, b) => a + b, 0);
+  const scale = trimScale(road.lengthM, trim, floor);
+  return [kept[0]! * scale, kept[1]! * scale];
+}
+
+/** TASK-214: the cut at `node`, not a continuation node, as compile trims the road. A
+ * side-by-side block measured from the unscaled cut ran a short road's lanes past its node
+ * (Freiburg r:718 at n:717, 3 m beyond, a 2.3 m step and a fold). */
+function trimmedCut(
+  node: CNode,
+  nodes: CNode[],
+  roads: CRoad[],
+  road: CRoad,
+  pairs: ReadonlyMap<number, unknown>,
+): number {
+  return trimmedCuts(road, nodes, roads, pairs)[road.from === node.idx ? 0 : 1];
 }
 
 /** TASK-221: the nodes where no road end moves its lanes (no offset, split or taper). Compile
@@ -497,16 +593,8 @@ function fitContinuations(
     const transition = ends[road.idx]!;
     if (!transition.start && !transition.end) continue;
     const length = polylineLength(sources[road.idx]!.centerline);
-    // As compile trims the road: setbacks scaled to leave 5 m, none at a continuation node.
-    const setbacks = [cutAt(nodes[road.from]!, roads, road), cutAt(nodes[road.to]!, roads, road)];
-    const trim = setbacks[0]! + setbacks[1]!;
-    const scale = trim === 0 ? 1 : Math.min(1, Math.max(0, length - 5) / trim);
-    const total =
-      length -
-      [road.from, road.to].reduce(
-        (sum, n, i) => sum + (pairs.has(n) ? 0 : setbacks[i]! * scale),
-        0,
-      );
+    const [start, end] = trimmedCuts(road, nodes, roads, pairs);
+    const total = length - start - end;
     const room = transition.start && transition.end ? total / 2 : total;
     for (const end of [transition.start, transition.end]) {
       if (!end) continue;
@@ -583,7 +671,7 @@ function plainChain(
       roadWidth(source) !== roadWidth(sources[last.idx]!) ||
       source.lateralOffsetM !== sources[last.idx]!.lateralOffsetM
     ) {
-      const cut = pairs.has(far.idx) ? 0 : trimmedCut(far, nodes, roads, last);
+      const cut = pairs.has(far.idx) ? 0 : trimmedCut(far, nodes, roads, last, pairs);
       return { chain, room: start + lengthOf(last) - cut };
     }
     chain.roads.push(next);
@@ -971,7 +1059,7 @@ function sideBySide(
   for (const i of order) {
     const chain = chains[i]!;
     for (const [k, road] of chain.roads.entries()) {
-      const near = chain.starts[k]! + (k === 0 ? trimmedCut(node, nodes, roads, road) : 0);
+      const near = chain.starts[k]! + (k === 0 ? trimmedCut(node, nodes, roads, road, pairs) : 0);
       if (apart + taperM <= near) break;
       const source = sources[road.idx]!;
       const end: ContinuationEnd = {

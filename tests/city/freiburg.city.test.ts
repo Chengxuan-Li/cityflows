@@ -296,9 +296,12 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-290: nine mapped garage entrances move the morning to 1,533 completed and 62.7 s delay.
   // TASK-294: pockets behind destination streets are served from them (1,533 to 1,531
   // completed, 62.7 to 62.8 s).
+  // TASK-348: the four signalised crossings outside junction groups laid out as plain nodes
+  // (1,531 to 1,533 completed, 62.8 to 61.3 s).
   // TASK-351: three car parks on the Schwabentorring leave by their own streets (1,528 completed,
   // 62.3 s).
-  expect(morning.stateHash).toBe(2442797869);
+  // TASK-348 + TASK-351: both on main (1,533 to 1,528 completed, 61.3 to 62.5 s).
+  expect(morning.stateHash).toBe(1766099943);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -47,6 +47,7 @@ for (const [width, height] of [
   test(`the New city panel groups real places and test layouts at ${width} px, and opens each place`, async ({
     page,
   }, info) => {
+    // TASK-357: Heathrow opens twice here, in up to 180 s each on a loaded machine.
     test.setTimeout(600_000);
     const errors = pageErrors(page);
     await page.setViewportSize({ width, height });
@@ -74,8 +75,9 @@ for (const [width, height] of [
         );
         await page.screenshot({ path: info.outputPath(`new-city-${width}.png`) });
       }
-      // The airports' archives load longest (TASK-302: Zurich ready 31 to 42 s on a quiet machine).
-      const timeout = id === 'zurich-airport' || id === 'heathrow' ? 180_000 : undefined;
+      // Heathrow's and Zurich's 180 s to open, as in their render check below (TASK-302: Zurich
+      // ready 31 to 42 s on a quiet machine).
+      const timeout = id === 'heathrow' || id === 'zurich-airport' ? 180_000 : undefined;
       await place.click();
       await opened(page, name, timeout);
       await page.goto(`/?city=${id}`);
@@ -159,10 +161,9 @@ for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg')
     await writeFile(info.outputPath(`${id}-frames.json`), JSON.stringify(report, null, 2));
     // Freiburg's frame budgets (freiburg-landing.spec.ts); CI's software GPU skips them.
     if (!process.env.CI) {
-      // TASK-354: Heathrow joined the panel at 4.9 ms 2D p95 (dev machine, 2026-11-25), to be
-      // brought under Freiburg's 4 ms in parallel.
-      const twoDBudget = id === 'heathrow' ? 6 : 4;
-      expect(report['2d'].renderP95Ms, '2D render CPU p95').toBeLessThanOrEqual(twoDBudget);
+      // TASK-357: Heathrow is held to Freiburg's 4 ms too (4.9 ms when it joined the panel; its
+      // aircraft are no longer triangulated every frame).
+      expect(report['2d'].renderP95Ms, '2D render CPU p95').toBeLessThanOrEqual(4);
       const threeDBudget = id === 'london-city-airport' ? 4 : 6;
       expect(report['3d'].renderP95Ms, '3D render CPU p95').toBeLessThanOrEqual(threeDBudget);
     }

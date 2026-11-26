@@ -13,7 +13,7 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { computeVertexNormals, mergeVertices } from './buffers';
 import { cumulativeLengths, parallelOffset } from '../geo/polyline';
 import type { CompiledCity } from '../network';
 import {
@@ -136,7 +136,7 @@ export function buildCurbs(
     'position',
     new Float32BufferAttribute(positions, 3),
   );
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   const indexed = mergeVertices(geometry);
   geometry.dispose();
   return indexed;

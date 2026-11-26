@@ -15,7 +15,7 @@ const pins = {
   // order after the gateway ids move.
   // TASK-281: one shape changes, platform 5's surface: the same 942.3 m² and bounds in another
   // triangulation, once the unreachable lots' aisles near the Hauptbahnhof are left out.
-  freiburg: '1a1c7329c2ffbae3f6427fe96843ec68e18878683575a4113fb0404e4fa22007',
+  freiburg: '39d8defbab784b9e0dddc61f3141cd7da9aae5c5c552379c460e82ed58fdc1cc',
   munich: 'f35c2fa18c1fc8c56dac4d8385c1dc65714009d42166b2d909517c85b4e3c6bf',
   // TASK-271 (lead merge): the Daimler passage road at grade is a ground road the level-crossing
   // rails are cut to.

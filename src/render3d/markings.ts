@@ -27,12 +27,14 @@ import {
   type GoreSurface,
   type PaintedGore,
 } from '../render/marking-geometry';
+import { roadStrip } from '../render/layers/nodes';
 import { airsideMarkings } from '../render/airside-markings';
 import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, levelRoad, roadStation, roadSurfaceAt, type cityHeights } from './heights';
+import { heightAt, levelRoad, once, roadStation, roadSurfaceAt, type cityHeights } from './heights';
 import { drape } from './terrain';
+import { computeVertexNormals } from './buffers';
 
 export function goreHeight(
   city: CompiledCity,
@@ -202,7 +204,8 @@ export function buildMarkings(
     target = terrain && profile.crossfall ? land : raised;
     add(
       [...geometry.below, ...geometry.above, ...transitionMarkings(city, road, markingTheme)],
-      (p) => roadSurfaceAt(road, profile, p),
+      // A line's 0.5 m pieces share their ends.
+      once((p) => roadSurfaceAt(road, profile, p)),
       !terrain && profile.fromM === profile.toM && profile.fromM === profile.deckM,
     );
   }
@@ -213,7 +216,7 @@ export function buildMarkings(
     const nodeZ = (p: Vec2) => (followsGround ? z + terrain.surfaceAt(p.x, p.y) - ground : z);
     target = followsGround ? land : raised;
     add(nodeMarkingGeometry(city, node, markingTheme), nodeZ, true);
-    if (node.outline.length)
+    if (node.outline.length && !roadStrip(city, node))
       for (const index of node.movements) {
         const movement = city.movements[index]!;
         // Pixi draws movement paths before the junction fill; retain that occlusion in 3D.
@@ -243,7 +246,7 @@ export function buildMarkings(
     draped.dispose();
   }
   geometry.userData.markingCounts = counts;
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
 }
 

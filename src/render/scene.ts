@@ -19,8 +19,8 @@ import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
-import { drawAircraft, pickAircraft } from './layers/aircraft';
-import { drawGroundVehicles } from './layers/ground-vehicles';
+import { Aircraft2D, pickAircraft } from './layers/aircraft';
+import { GroundVehicles2D } from './layers/ground-vehicles';
 import { GroundVehicleTracks, shownVehicle } from './ground-vehicles';
 import { AircraftPoseTrack } from './aircraft-pose';
 import { apronLayout, JetBridgeStates } from './apron';
@@ -44,7 +44,7 @@ import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
-import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
+import { drawJunction, drawRoadJoins, roadStrip } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
@@ -243,7 +243,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let light = sceneLight(defaultVisual, 0);
   let drawnLight = '';
   // TASK-298: aircraft over the map, under the evening tint.
-  const aircraft = new Graphics();
+  const aircraft = new Aircraft2D();
   let aircraftPoses: AircraftPose[] = [];
   let aircraftTracks = new Map<number, AircraftPoseTrack>();
   let aircraftPlaying = false;
@@ -252,18 +252,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let jetBridges: JetBridgeStates | null = null;
   let aircraftTimeS = 0;
   // TASK-316: airside ground vehicles, under the aircraft.
-  const groundVehicles = new Graphics();
+  const groundVehicles = new GroundVehicles2D();
   const groundTracks = new GroundVehicleTracks();
   const redrawGroundVehicles = () => {
     const byId = new Map(aircraftPoses.map((p) => [p.id, p]));
     const shown = groundTracks.poses.filter((p) => shownVehicle(p, byId));
-    drawGroundVehicles(groundVehicles, shown, mapBounds);
+    groundVehicles.draw(shown, mapBounds);
     canvas.dataset.groundVehicles = String(shown.length);
   };
   const redrawAircraft = () => {
     redrawGroundVehicles();
-    drawAircraft(
-      aircraft,
+    aircraft.draw(
       aircraftPoses,
       mapBounds,
       selection?.kind === 'aircraft' ? selection.id : null,
@@ -283,8 +282,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   world.addChild(
     map,
-    groundVehicles,
-    aircraft,
+    groundVehicles.container,
+    aircraft.container,
     night.container,
     labels.container,
     routeOverlay,
@@ -984,11 +983,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
         for (const node of compiled.nodes) {
-          drawNode(
-            grades.get(nodeGrades[node.idx]!)!.nodes,
-            node,
-            nodeColor(compiled, node, layerVisibility.roadClasses),
-          );
+          const grade = grades.get(nodeGrades[node.idx]!)!;
+          drawJunction(grade.surfaces, grade.nodes, compiled, node, layerVisibility.roadClasses);
         }
         // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them,
         // over the junction surface where it runs on into a junction both meet at.
@@ -998,7 +994,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             .nodes.poly(line, false)
             .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const movement of compiled.movements) {
-          if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
+          const node = compiled.nodes[movement.node]!;
+          if (!movement.neverGreen && node.outline.length && !roadStrip(compiled, node))
             drawMovementArrow(
               grades.get(nodeGrades[movement.node]!)!.arrows,
               movement,

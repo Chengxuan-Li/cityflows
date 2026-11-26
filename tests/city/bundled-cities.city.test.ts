@@ -25,6 +25,8 @@ test('the panel lists every bundled real place not held out of it, and each has 
   );
 });
 
+// TASK-348: Heathrow's archive rebuilt on its layout (signalised crossings between nodes laid out
+// as plain nodes in its landside roads).
 // TASK-351: rebuilt. A public part a map entry feeds and an exit drains is circulation: London
 // City's car parks leave by their own entrances, Zurich's entrances stay by their buildings,
 // Heathrow's pk:11441 gains exits on r:11590. No new place entrance on a lot's aisle: Heathrow's
@@ -33,7 +35,8 @@ test.for([
   ['london-city-airport', '41e898110f9da0db81c60ca1ec90066652c5bb30274d359fbf45f266bc9abad9'],
   ['zurich-airport', '49e10df7abb53a6641b11308e1bfe4aedc246ba1d362a9c07af0a3f166f80017'],
   ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
-  ['heathrow', 'c6f485e915655a0b7b69187a087a61e0b0e3343a5bd1962f9f3800cd7b08ffe6'],
+  // TASK-348 + TASK-351: rebuilt on the merged code (both changes above).
+  ['heathrow', 'd1739a1c11c80e53a4219ad647c3f237d0a3f9d73e532825a9fbc06ac3bc1403'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
   expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
