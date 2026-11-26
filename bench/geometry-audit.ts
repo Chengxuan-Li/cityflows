@@ -1558,6 +1558,10 @@ export interface CornerSharpness {
 const CORNER_STEP_M = 0.5;
 const CORNER_EDGE_M = 2;
 const SHARP_DEG = 30;
+/** TASK-355: how far beyond the outline a curb sample looks for road. */
+const SEAM_M = 0.25;
+/** A nose whose drawn boundary turns more than this between samples doubles back on itself. */
+const SPIKE_DEG = 170;
 
 function resample(line: readonly Vec2[], step: number): Vec2[] {
   const lengths = cumulativeLengths(line);
@@ -1598,7 +1602,15 @@ function bends(points: readonly Vec2[]) {
 /** Measure 10 at a node with an outline. Walking the outline, every stretch between corners of two
  * different road ends is a curb: from where it leaves the first end's edge to where it meets the
  * second's (the outline runs out along a road edge to a curb's tangent point and back), with
- * `CORNER_EDGE_M` of each road edge beyond, as drawn. */
+ * `CORNER_EDGE_M` of each road edge beyond, as drawn.
+ *
+ * TASK-355: a curb is a kerb, the drawn surface on one side and no road on the other. Outline with
+ * road surface `SEAM_M` beyond it (a road end or inner road of the node or group, a strip's cut
+ * across its road) is a seam: a stretch that is seam or under a road all along, sampled every
+ * 0.25 m, is no curb. Nor is one left from and back to the same road edge, and a nose whose drawn
+ * boundary doubles back (turns more than `SPIKE_DEG`: a group surface's spike) is no nose. Seams
+ * are not cut from a curb that has kerb too: the boundary beyond such a cut would run along a road
+ * that is not the node's, which the measure does not follow. */
 export function cornerAudit(
   city: City,
   net: CompiledCity,
@@ -1633,6 +1645,22 @@ export function cornerAudit(
   const order = [...groups.keys()].sort((a, b) => a - b).map((k) => groups.get(k)!);
   const surfaces = incident.map((end) => preparePolygon(closed(end.road.surface), 0.01));
   const inOutline = preparePolygon(closed(node.outline), 0);
+  const members = node.group === undefined ? [node.idx] : net.groups![node.group]!.nodes;
+  const roadsHere = net.roads
+    .filter((r) => members.includes(r.from) || members.includes(r.to))
+    .map((r) => preparePolygon(closed(r.surface), 0.01));
+  // Outward of travel along the outline: clipper's positive area has the inside on the left.
+  const sign = areaD(ring) > 0 ? 1 : -1;
+  const kerb = (line: Vec2[], lengths: Float64Array, s: number) => {
+    const p = pointAtDistance(line, lengths, s);
+    if (surfaces.some((inside) => inside(p))) return false;
+    const a = pointAtDistance(line, lengths, Math.max(0, s - 0.1)),
+      b = pointAtDistance(line, lengths, Math.min(lengths.at(-1)!, s + 0.1));
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const dx = (sign * (b.y - a.y)) / l,
+      dy = (-sign * (b.x - a.x)) / l;
+    return !roadsHere.some((inside) => inside({ x: p.x + SEAM_M * dx, y: p.y + SEAM_M * dy }));
+  };
   const out: CornerSharpness[] = [];
   const direction = (edge: Vec2[], s: number) => {
     const lengths = cumulativeLengths(edge);
@@ -1691,6 +1719,12 @@ export function cornerAudit(
         j = path.length - 1;
       while (i + 1 < j && covered(path[i + 1]!)) i++;
       while (j - 1 > i && covered(path[j - 1]!)) j--;
+      curb = path.slice(i, j + 1);
+      // All seam, no kerb: no curb.
+      const along = cumulativeLengths(curb);
+      const count = Math.max(1, Math.round(along.at(-1)! / 0.25));
+      const samples = Array.from({ length: count + 1 }, (_, k) => (along.at(-1)! * k) / count);
+      if (!samples.some((s) => kerb(curb, along, s))) return;
       // The drawn boundary runs on along the road edge where the curb leaves the roads (usually
       // its corners' own, but a corner under another road is not on the outline).
       const edgeAt = (p: Vec2) =>
@@ -1698,9 +1732,10 @@ export function cornerAudit(
           nearestOnPolyline(c.edge, p).away < nearestOnPolyline(best.edge, p).away ? c : best,
         ).edge;
       [e1, e2] = [edgeAt(path[i]!), edgeAt(path[j]!)];
+      // Left from and back to one road edge: no curb between two road ends.
+      if (e1 === e2) return;
       s1 = nearestOnPolyline(e1, path[i]!).along;
       s2 = nearestOnPolyline(e2, path[j]!).along;
-      curb = path.slice(i, j + 1);
     }
     const along = (edge: Vec2[], s: number) => {
       const lengths = cumulativeLengths(edge);
@@ -1725,6 +1760,8 @@ export function cornerAudit(
     const gap = across(curb[0]!, curb.at(-1)!);
     const step = kind === 'nose' ? Math.min(CORNER_STEP_M, Math.max(0.02, gap / 6)) : CORNER_STEP_M;
     const { turnDeg, radiusM } = bends(resample(drawn, step));
+    // A gore's tip (one point where two road edges cross) is not a spike.
+    if (kind === 'nose' && curb.length > 1 && turnDeg > SPIKE_DEG) return;
     // Deflection from the first edge, inward, to the second, outward.
     const deflection = (Math.acos(Math.max(-1, Math.min(1, -cos))) * 180) / Math.PI;
     out.push({
