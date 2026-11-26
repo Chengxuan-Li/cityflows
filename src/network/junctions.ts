@@ -121,7 +121,7 @@ export const STOP_POSITION = 'stopPosition';
  * the stop line lies before the crossing (`populateStops`), not at the node. */
 export const STOP_POSITION_CROSSING = 'stopPositionCrossing';
 /** TASK-348: a signalised node whose roads lead to two other nodes (a signalised crossing between
- * junctions, or a signalised group's member between two others) keeps its control but is laid out
+ * junctions, not a junction group's member) keeps its control but is laid out
  * as a plain node, by TASK-255's rule for a stop position: no floor and no cuts (as a junction its
  * 2.5 to 6.3 m cuts overlapped the lanes beside it, Freiburg r:1706/r:1821 at n:1705); its crossing
  * is drawn from the node out (`placeCrossing`), the stop line before it. Compile marks these nodes

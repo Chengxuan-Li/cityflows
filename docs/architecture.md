@@ -1133,7 +1133,7 @@ routing, demand, the timetable or simulation state.
   it carries no lane block of its own, gridlocked Freiburg's gate; it is off (`INNER_LANE_M` =
   `MIN_LANE_M`) until a follow-up diagnoses that. A road whose cut moves after the first layout
   (a continuation node's cut dropped) is laid out again at that end. (2) A signalised node whose roads lead to two other nodes
-  (a signalised crossing between junctions, or a signalised group's member between two others)
+  (a signalised crossing between junctions; a junction group's member keeps its junction layout)
   keeps its control but is laid out as TASK-255's stop position is: a through node (setback 0, no
   outline) where its two arms run on within 30 degrees with the same lanes, whatever the ways'
   names and classes, else a continuation by TASK-071's rule; its crossing stays where the

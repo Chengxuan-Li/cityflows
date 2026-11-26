@@ -169,7 +169,10 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     return compiled;
   });
   const roadIndex = indices(roads);
-  // TASK-348: a signalised crossing between junctions is laid out as a stop position is.
+  // TASK-348: a signalised crossing between junctions is laid out as a stop position is. A junction
+  // group's member keeps its junction layout (lead, 2026-11-26: London City's n:1093 and Freiburg's
+  // n:492 as plain members cost the showcase gate and the arrows through the Siegesdenkmal group).
+  const members = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
   const neighbours = nodes.map(() => new Set<number>());
   for (const road of roads) {
     neighbours[road.from]!.add(road.to);
@@ -179,6 +182,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     if (
       node.control === 'signal' &&
       neighbours[node.idx]!.size === 2 &&
+      !members.has(node.id) &&
       !stopPositions.has(node.idx)
     ) {
       markSignalCrossing(node);
