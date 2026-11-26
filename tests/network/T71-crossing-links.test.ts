@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
-import { distance, segmentDistance } from '../../src/geo/polyline';
+import { distance, pointAtDistance, segmentDistance } from '../../src/geo/polyline';
 import type { Vec2 } from '../../src/geo/vec2';
 import { importOsm } from '../../src/importers/osm';
 import { compile, type CompiledCity, type CWalkLink } from '../../src/network';
@@ -265,6 +265,70 @@ describe('T71 crossing walk links at the stripes', () => {
     // The mapped footways on both sides still connect through the crossing.
     const node = (x: number) => net.walk.nodes.findIndex((n) => n.pos.x === x && n.pos.y === 60);
     expect(reachable(net.walk.links, node(-11))).toContain(node(11));
+  });
+
+  test('T71.6 a crossing mapped as a node places the stripes, its walk link and the stop line', () => {
+    // TASK-265: TASK-239's link from a crossing mapped only as a node of the south arm, 9 m from
+    // the junction node (the link and both its ends carry the node's OSM id). TASK-091's curb rule
+    // puts the stripes' centre at y = 14.25 m; the stripes, the link and the stop line follow the
+    // mapped node, nearer the junction.
+    const city = signalJunction();
+    const osm = 2479358348;
+    city.walk = { nodes: {}, links: {} };
+    for (const [id, x] of [
+      ['wn:1', -11],
+      ['wn:3', 11],
+    ] as const)
+      city.walk.nodes[id] = {
+        id,
+        pos: { x, y: 9 },
+        layer: 0,
+        provenance: { source: 'osm', osmIds: [osm] },
+      };
+    city.walk.links['wl:900'] = {
+      id: 'wl:900',
+      from: 'wn:1',
+      to: 'wn:3',
+      line: [city.walk.nodes['wn:1']!.pos, city.walk.nodes['wn:3']!.pos],
+      kind: 'crossing',
+      widthM: null,
+      provenance: { source: 'osm', osmIds: [osm] },
+    };
+    const centreY = (build: City) => {
+      const net = compiled(build);
+      const centre = net.nodes.findIndex((n) => n.pos.x === 0 && n.pos.y === 0);
+      const south = net.roads.filter(
+        (r) => [r.from, r.to].includes(centre) && r.surface.every((p) => p.y > 0),
+      );
+      expect(south).toHaveLength(2);
+      return {
+        net,
+        ys: south.flatMap((road) =>
+          road.lanes.map((i) => {
+            const lane = net.lanes[i]!;
+            const atEnd = road.to === centre;
+            const span = crossingSpan(net, lane, atEnd, build)!;
+            if (atEnd) expect(lane.stopM).toBeCloseTo(span.farM - STOP_CLEAR_M, 6);
+            return pointAtDistance(lane.polyline, lane.cumulative, (span.nearM + span.farM) / 2).y;
+          }),
+        ),
+      };
+    };
+    const { net, ys } = centreY(city);
+    for (const y of ys) expect(y).toBeCloseTo(9, 1);
+    const link = net.walk.links.filter((l) => l.id.startsWith('wl:900') && l.crossing);
+    const spans = link.flatMap((l) => l.crossing!.spans);
+    expect(spans).toHaveLength(4);
+    for (const span of spans) {
+      const lane = net.lanes[span.lane]!;
+      expect(pointAtDistance(lane.polyline, lane.cumulative, span.atM).y).toBeCloseTo(9, 1);
+    }
+    for (const p of link.flatMap((l) => l.line)) expect(Math.abs(p.y - 9)).toBeLessThan(0.1);
+    // The crossing way of T71.4 at the same place keeps the curb rule's stripes.
+    for (const y of centreY(signalJunction()).ys) expect(y).toBeCloseTo(14.25, 1);
+    // A node farther out than the curb-based band does not move that band's placement.
+    for (const n of Object.values(city.walk.nodes)) n.pos.y = 16;
+    for (const y of centreY(city).ys) expect(y).toBeCloseTo(14.25, 1);
   });
 
   test.each(cases)('T71.5 %s: the same city compiles to the same walk graph', (_, build) => {

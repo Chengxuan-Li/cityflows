@@ -44,7 +44,7 @@ describe('TASK-348 junction lanes', () => {
   it('a signalised crossing between junctions is laid out as a plain node', () => {
     // A street changing its name at a signalised crossing, which keeps the signal there.
     const street = { highway: 'residential' };
-    const { net } = compiled(
+    const { city, net } = compiled(
       osm(
         [
           {
@@ -52,6 +52,7 @@ describe('TASK-348 junction lanes', () => {
             tags: { ...street, name: 'West' },
             points: [
               [-200, 0],
+              [-9, 0],
               [0, 0],
             ],
           },
@@ -64,9 +65,13 @@ describe('TASK-348 junction lanes', () => {
             ],
           },
         ],
-        { '0,0': { highway: 'traffic_signals', crossing: 'traffic_signals' } },
+        {
+          '0,0': { highway: 'traffic_signals', crossing: 'traffic_signals' },
+          '-9,0': { highway: 'crossing', crossing: 'zebra' },
+        },
       ),
     );
+    expect(Object.values(city.walk!.links).some((link) => link.marking === 'zebra')).toBe(true);
     const node = net.nodes.find((n) => n.control === 'signal')!;
     expect(node).toBeDefined();
     expect(node.setbacks.every((s) => s === 0)).toBe(true);
@@ -76,10 +81,10 @@ describe('TASK-348 junction lanes', () => {
     expect(approaches).toHaveLength(2);
     for (const road of approaches) {
       const lane = net.lanes[road.lanes[0]!]!;
-      const span = crossingSpan(net, lane, true);
+      const span = crossingSpan(net, lane, true, city);
       expect(span).not.toBeNull();
       expect(lane.stopM).toBeLessThan(span!.farM);
-      // Where the junction's floor (half the road plus 1 m) put it, over the mapped walkway.
+      // Keep TASK-348's floor and storage, even with a nearby node-only zebra on the approach.
       expect(lane.lengthM - span!.nearM).toBeCloseTo(lane.widthM / 2 + 1.25, 6);
     }
   });
