@@ -86,14 +86,14 @@ export interface AircraftType {
 // distances); model rotation speeds and ground rolls are estimates, since the published speeds and
 // field lengths include airborne portions. Turn radii are rounded aircraft airport-planning
 // geometry estimates. Taxi, pushback, tow and braking limits are shared operating assumptions by
-// class. Helicopter pad manoeuvre speeds are model assumptions within manufacturer performance.
+// class; tows run at towbarless-tractor speeds, about 25 km/h (TASK-330; 22 km/h for an A380). Helicopter pad manoeuvre speeds are model assumptions within manufacturer performance.
 const groundPerformance = {
   double_decker: {
     taxiStraightMps: 12,
     taxiTurnMps: 4,
     maxLateralAccelerationMps2: 0.7,
     pushbackSpeedMps: 1.5,
-    towSpeedMps: 3,
+    towSpeedMps: 6,
     brakingDecelerationMps2: 3.4,
   },
   widebody: {
@@ -101,7 +101,7 @@ const groundPerformance = {
     taxiTurnMps: 4.5,
     maxLateralAccelerationMps2: 0.8,
     pushbackSpeedMps: 1.5,
-    towSpeedMps: 3,
+    towSpeedMps: 7,
     brakingDecelerationMps2: 3.4,
   },
   narrowbody: {
@@ -109,7 +109,7 @@ const groundPerformance = {
     taxiTurnMps: 5,
     maxLateralAccelerationMps2: 0.9,
     pushbackSpeedMps: 1.8,
-    towSpeedMps: 3.5,
+    towSpeedMps: 7,
     brakingDecelerationMps2: 3.4,
   },
   regional_jet: {
@@ -117,7 +117,7 @@ const groundPerformance = {
     taxiTurnMps: 5,
     maxLateralAccelerationMps2: 0.9,
     pushbackSpeedMps: 1.8,
-    towSpeedMps: 3.5,
+    towSpeedMps: 7,
     brakingDecelerationMps2: 3.4,
   },
   propeller: {
@@ -125,7 +125,7 @@ const groundPerformance = {
     taxiTurnMps: 4.5,
     maxLateralAccelerationMps2: 0.9,
     pushbackSpeedMps: 1.5,
-    towSpeedMps: 3,
+    towSpeedMps: 7,
     brakingDecelerationMps2: 3.4,
   },
   private: {
@@ -133,7 +133,7 @@ const groundPerformance = {
     taxiTurnMps: 4.5,
     maxLateralAccelerationMps2: 1,
     pushbackSpeedMps: 1.5,
-    towSpeedMps: 3,
+    towSpeedMps: 7,
     brakingDecelerationMps2: 3.5,
   },
 } satisfies Record<Exclude<AircraftClass, 'helicopter'>, GroundPerformance>;

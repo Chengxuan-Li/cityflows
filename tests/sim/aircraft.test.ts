@@ -9,7 +9,7 @@ import {
   type AircraftPoseSnapshot,
 } from '../../src/sim/aircraft';
 import { createEngine } from '../../src/sim/engine';
-import { overlaps, onRunway, runwayConflictCheck } from './aircraft-checks';
+import { exemptRunwayPair, overlaps, runwayConflictCheck } from './aircraft-checks';
 import { airportFixture } from './airside-fixture';
 import { setup } from './fixtures';
 
@@ -50,9 +50,13 @@ function run(
     }
     if (step % 10 === 0) {
       expect(overlaps(snapshot), `bodies at ${timeS} s`).toEqual([]);
-      if (fleet.graph.runways.length === 1)
-        expect(onRunway(snapshot).length, `runway at ${timeS} s`).toBeLessThanOrEqual(1);
-      else expect(checkRunways(snapshot), `runway at ${timeS} s`).toBe(0);
+      if (fleet.graph.runways.length === 1) {
+        // TASK-330: one aircraft on the runway at a time, but for the sharing the owner approved
+        // (TASK-345: crossings together or behind a landing roll, a line-up behind a roll).
+        const on = snapshot.filter((p) => p.onRunway);
+        const shared = on.flatMap((a, i) => on.slice(i + 1).filter((b) => !exemptRunwayPair(a, b)));
+        expect(shared.length, `runway at ${timeS} s`).toBe(0);
+      } else expect(checkRunways(snapshot), `runway at ${timeS} s`).toBe(0);
     }
     if (done()) break;
   }
@@ -253,11 +257,11 @@ test('a departure pushes back, taxis, holds for a landing, lines up and climbs o
 });
 
 test.each([
-  { code: 'E', roller: 'B77W', departureAt: 1400 },
-  { code: 'C', roller: 'E175', departureAt: 1670 },
+  { code: 'E', roller: 'B77W', towAt: 400 },
+  { code: 'C', roller: 'E175', towAt: 150 },
 ] as const)(
   'a crossing hold clears a rolling aircraft on a code $code runway',
-  ({ code, roller, departureAt }) => {
+  ({ code, roller, towAt }) => {
     const holdX = -900;
     const holdY = 25;
     const target = 'an:9000';
@@ -288,13 +292,18 @@ test.each([
     const crossing = fleet.spawnParked({ typeId: crossingType.id, stand: stands.C1 });
     if (!departure.ok) throw new Error(departure.reason);
     if (!crossing.ok) throw new Error(crossing.reason);
-    expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(true);
+    // TASK-346: a departure holds the runway from its line-up, not while it taxis, so the tow is
+    // asked for once the departure is on its way, to reach the hold while it rolls past.
+    expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
     const { poses } = run(
       fleet,
       900,
       () => fleet.metrics().departed === 1 && fleet.metrics().towed === 1,
       (step) => {
-        if (step === departureAt) expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
+        if (step === towAt)
+          expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(
+            true,
+          );
       },
     );
     const pass = poses.get(departure.id)!.find((p) => p.state === 'takeoff-roll' && p.x >= holdX)!;
@@ -371,7 +380,7 @@ test('a crossing of an unused runway can pass while the intersecting runway is o
     900,
     () => fleet.idle(parked.id) && fleet.idle(arrival.id),
     (step) => {
-      if (step === 200) expect(fleet.requestTow(parked.id, { stand: stands.East! }).ok).toBe(true);
+      if (step === 550) expect(fleet.requestTow(parked.id, { stand: stands.East! }).ok).toBe(true);
     },
   );
   const crossing = poses.get(parked.id)!.find(({ x, y }) => Math.abs(x + 900) < 5 && y < -780)!;
@@ -512,6 +521,7 @@ test('a helicopter lands vertically on its pad and leaves climbing then forward'
   ]);
 });
 
+const TOW_REQUEST_S = 30;
 test('road traffic gives way where a service road crosses the airside; the aircraft never stops', () => {
   const { city, stands } = airportFixture({ road: true });
   const compiled = setup(city);
@@ -539,11 +549,13 @@ test('road traffic gives way where a service road crosses the airside; the aircr
       fleet = f;
       return {
         step(timeS) {
-          if (timeS !== 0) return;
-          const parked = f.spawnParked({ typeId: 'E190', stand: stands.R });
-          if (!parked.ok) throw new Error(parked.reason);
-          aircraft = parked.id;
-          f.requestTow(parked.id, { stand: stands.E1 });
+          if (timeS === 0) {
+            const parked = f.spawnParked({ typeId: 'E190', stand: stands.R });
+            if (!parked.ok) throw new Error(parked.reason);
+            aircraft = parked.id;
+          }
+          // Requested so that the tow reaches the road as the cars do.
+          if (timeS === TOW_REQUEST_S) f.requestTow(aircraft, { stand: stands.E1 });
         },
       };
     },

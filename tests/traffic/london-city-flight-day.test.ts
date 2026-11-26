@@ -6,7 +6,7 @@ import { createFlightOperations } from '../../src/sim/flight-operations';
 import { createGroundVehicles } from '../../src/sim/ground-vehicles';
 import { groundOverlaps } from '../sim/ground-vehicle-checks';
 import type { AirportWind } from '../../src/sim/runway-configuration';
-import { onRunway, overlaps } from '../sim/aircraft-checks';
+import { overlaps, runwayConflictCheck } from '../sim/aircraft-checks';
 import { limit } from '../timeouts';
 
 async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind }[] = []) {
@@ -15,6 +15,8 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
   if (!result.ok || !result.compiled.airside) throw new Error('London City must compile');
   const fleet = createAircraftFleet(result.compiled.airside, seed);
   const operations = createFlightOperations(fleet, seed, 0);
+  // TASK-346: runway conflicts without the sharing the owner approved (TASK-345).
+  const checkRunways = runwayConflictCheck(result.compiled.airside);
   // TASK-316: with its ground vehicles, which the aircraft never see.
   const ground = createGroundVehicles(result.compiled, {
     snapshot: () => fleet.snapshot(),
@@ -40,7 +42,7 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
     vehicleOverlaps += vehicles.withVehicles.length;
     vehicleAircraftOverlaps += vehicles.withAircraft.length;
     overlapCount += overlaps(aircraft).length;
-    runwayConflicts += Number(onRunway(aircraft).length > 1);
+    runwayConflicts += Number(checkRunways(aircraft) > 0);
     peakStuck = Math.max(peakStuck, fleet.metrics().stuck);
     const moving = aircraft.filter(
       ({ state, speedMps, onRunway }) =>
