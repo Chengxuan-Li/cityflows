@@ -2820,12 +2820,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const need = p.takeoffRollM + p.rotationSpeedMps * 3;
     // Full-length entries first; then backtracks of up to BACKTRACK_M along the runway; then
     // intersection departures with a quarter of the take-off run to spare (TASK-312), before a
-    // longer backtrack would hold the runway for minutes. TASK-360 rule 1: full-length entries
-    // and intersection take-offs with INTERSECTION_FACTOR of the run to spare are one choice,
-    // made by the route (`departurePlan`), before any backtrack, which holds the runway for the
-    // whole line-up (TASK-352: intersections make the most of runway capacity, SKYbrary
-    // "Intersection Take-off"; Heathrow 27R's end is a dead end, and its backtracks set the gap
-    // between take-offs at about 110 s).
+    // longer backtrack would hold the runway for minutes. TASK-360 rule 1: intersection
+    // take-offs with INTERSECTION_FACTOR of the run to spare, and with them the full-length
+    // entries, are one choice made by the route (`departurePlan`), before any backtrack, which
+    // holds the runway for the whole line-up (TASK-352: intersections make the most of runway
+    // capacity, SKYbrary "Intersection Take-off"; Heathrow 27R's end is a dead end, and its
+    // backtracks set the gap between take-offs at about 110 s).
     const ranked: {
       rank: number;
       goal: number;
@@ -2842,7 +2842,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (goal < 0 || runway.lengthM - lineUpU < need * spare) continue;
       if (arcsFrom(graph, node).length < 2) continue;
       ranked.push({
-        rank: T360I ? 1 : full ? 0 : 2,
+        rank: full ? 0 : T360I ? 1 : 2,
         goal,
         lineUpU,
         entryU: u,
@@ -2871,6 +2871,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ],
       });
     }
+    // TASK-360 rule 1: where an intersection take-off fits, the full-length entries join that
+    // choice; where none fits, the full-length entry is taken as before.
+    if (T360I && ranked.some((o) => o.rank === 1))
+      for (const o of ranked) if (o.rank === 0) o.rank = 1;
     // A stable sort keeps the station order within a rank.
     const options = ranked.sort((a, b) => a.rank - b.rank);
     return options;

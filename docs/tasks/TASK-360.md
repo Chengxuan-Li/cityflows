@@ -110,3 +110,48 @@ Report:
 - the share of intersection take-offs by type;
 - the number of multiple line-ups;
 - a close-up screenshot or trace of one multiple line-up at Heathrow, for the owner.
+
+## Result (2026-11-26)
+
+**Rules** (`src/sim/aircraft.ts`; all three on by default, the env `T360=<i|r|m letters>` picks them for the ladder,
+`T360=` is the line-up choice before them).
+
+1. **Intersection take-off by performance** (`lineUps`, `departurePlan`). Full-length entries and intersection
+   entries whose remaining runway covers the take-off run with 15 % to spare are one choice, made before any
+   backtrack. The run (`need`, roll plus 3 s at rotation speed) is about the distance to 35 ft; certification's
+   all-engines take-off distance is 115 % of it (CS-25.113(a)(2), 14 CFR 25.113(a)(2)), and the declared distance from
+   an intermediate holding position must cover it (ICAO Doc 7030, 6.5.4: intersection take-off criteria shall be
+   complied with). Of those, the departure takes the entry nearest its taxi route (route cost without the runway arc it
+   lines up on) plus 300 m for each other departure planned to that entry and not lined up yet (the controller names
+   the intermediate holding position in the line-up instruction: CAP 493, Section 2, Chapter 1, 14.2). An entry whose
+   hold leaves the holding body in the way of the widest type rolling on the centreline is not used (Heathrow 27R's
+   A5, drawn 16 degrees off the runway: an A380 at its fallback hold stood 29 m from the centreline). A follower with a
+   wake interval behind a leader that started its roll more than 150 m behind its own line-up keeps a minute more
+   (ICAO Doc 4444, 5.8.3.2: 3 instead of 2 minutes from an intermediate part of the same runway; ported from TASK-352).
+   SKYbrary's intersection take-off pages (intersections used to make the most of runway capacity) refused automated
+   fetches; the TASK-352 citation stands.
+2. **Line-up behind a passing roll** (`rollingAway`). On a runway that crosses no other (the IND rule), a departure may
+   line up at an entry ahead of a rolling departure's start once that one's tail is `margin` (half the widest span +
+   12 m) past the nose of the line-up and its entry, rolling away from it (CAP 493, Section 2, Chapter 1, 13.3 and 14:
+   conditional line-up behind departing traffic).
+3. **Multiple line-ups** (`linedUpAhead`, `takeoffHeld`). On such a runway a departure may line up while another stands
+   lined up (or is lining up) ahead of it from the same end, its nose 200 m behind that one's tail (CAP 493, Section 2,
+   Chapter 1, 14.1: line-up instructions may be issued to more than one aircraft at different points on the same
+   runway; ICAO Doc 7030, 6.5.4 (Asia/Pacific text, ATM/SG/6 Appendix H): wake separation is applied). 200 m is our
+   choice: CAP 493, 10F asks for particular care with preceding departures' jet blast in multiple line-ups and sets no
+   distance. The front one takes off first; the rear one rolls once the front one is off the runway (CAP 493, 15.5:
+   not before the preceding departure is airborne) and its departure and wake gap has run. A grant checks every
+   aircraft holding the runway, not only the last to claim it, and the rear one's booking counts its wait behind the
+   front one, so arrivals' windows see its real occupancy. No landing clearance with an aircraft lined up, as before
+   (CAP 493, 13.1).
+
+**Checker.** `exemptRunwayPair` also exempts two aircraft lined up for the same runway end with the rear one's centre
+at least half their lengths behind the front one along its heading. A line-up behind a passing roll was already exempt
+(a line-up behind a roll rolling away, wherever it started). Two rolls, a roll toward a lined-up aircraft, and two
+lined-up aircraft for opposite ends still count (`tests/sim/runway-exemptions.test.ts`). Fixture tests
+(`tests/sim/aircraft.test.ts`): rule 1 (an E190 enters at x = 300 with 1.8 km ahead; a B77W backtracks), rule 2 (a PC24
+lines up at x = -300 while the E190 that started at x = 300 rolls past), rule 3 (an E175 lines up at x = 300 behind the
+lined-up PC24; the PC24 rolls first, the E175 75 s or more later), and the same three departures with the rules off.
+The 27 backtrack test (kept as it was) and six other tests that test something else on the pre-rule line-up choice (closed holds,
+crossing holds, the pavement gate, an editor re-route) run with `withRules('')`; one test's stop condition now waits
+for all three arrivals to park; the synthetic airport's parallel layout asserts no backtrack instead of the 27 end.
