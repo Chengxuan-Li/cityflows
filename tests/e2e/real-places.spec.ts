@@ -106,7 +106,8 @@ for (const { id, name } of heldOut)
 
 for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg'))
   test(`${name} renders in 2D and 3D while its morning plays`, async ({ page }, info) => {
-    test.setTimeout(240_000);
+    // Heathrow's 3D scene on a CI runner's software GPU outlasts 4 min (Full 45836124508).
+    test.setTimeout(id === 'heathrow' && process.env.CI ? 480_000 : 240_000);
     const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 180, warm: 30 };
     const p95 = (values: number[]) =>
       [...values].sort((a, b) => a - b)[

@@ -149,6 +149,7 @@ describe.for([
       expect(morning.failedByReason.no_parking).toBeLessThan(0.02 * morning.localArrivals);
       expect(worstVisit.addedS, worstVisit.road).toBeLessThan(900);
     },
-    limit(900_000),
+    // Zurich's morning takes about 22 min on a CI runner (Full 45833844542), the others under 15.
+    limit(id === 'zurich-airport' ? 1_800_000 : 900_000),
   );
 });
