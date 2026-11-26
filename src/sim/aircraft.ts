@@ -143,11 +143,11 @@ const ENTRY_QUEUE_M = 300;
 const MULTI_LINEUP_M = 200;
 /** TASK-360 rule switches, read when a fleet is created (the gate ladder's variants): the env
  * T360=<letters>, i intersection take-offs by performance, r line-up behind a passing roll, m
- * multiple line-ups; T360= (empty) is main before them. */
+ * multiple line-ups; all three by default, T360= (empty) for the line-up choice before them. */
 function t360Rules() {
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
-  const rules = env?.T360 ?? '';
+  const rules = env?.T360 ?? 'irm';
   return { T360I: rules.includes('i'), T360R: rules.includes('r'), T360M: rules.includes('m') };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */
@@ -5072,9 +5072,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     addAirUses(uses, air, leg.endM, craft.lengthM / 2);
     const readyS = timeS + taxiS(leg.endM) + next.pauseS;
     let rollS = readyS;
-    if (T360R || T360M) {
+    if ((T360R || T360M) && independent(craft.runway)) {
       // TASK-360: lined up behind a departure (rolling or lined up ahead), it rolls once that one
-      // is off the runway and the gap behind its roll has run; so too after the last take-off.
+      // is off the runway and the gap behind its roll has run; so too after the last take-off
+      // (`takeoffHeld`, on a runway that crosses no other).
       const last = lastTakeoff[craft.runway];
       if (last && last.craft !== craft)
         rollS = Math.max(
