@@ -118,18 +118,19 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
   // east and back. TASK-214's rebuild of the project renumbers the rail nodes by one; TASK-270's
   // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one;
-  // TASK-351's (two car parks' split exits become one connector each) by two.
+  // TASK-351's (two car parks' split exits become one connector each) by two; TASK-254's (the
+  // importer allocates one more id before the rail) by one up.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
-    'rn:12238>rn:12221',
-    'rn:12879>rn:12221',
-    'rn:12223>rn:12556',
-    'rn:12512>rn:12572',
-    'rn:12044>rn:12510',
-    'rn:12512>rn:12877',
-    'rn:12879>rn:12510',
-    'rn:12223>rn:12221',
+    'rn:12239>rn:12222',
+    'rn:12880>rn:12222',
+    'rn:12224>rn:12557',
+    'rn:12513>rn:12573',
+    'rn:12045>rn:12511',
+    'rn:12513>rn:12878',
+    'rn:12880>rn:12511',
+    'rn:12224>rn:12222',
   ]);
-  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12879'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12880'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
   expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
@@ -143,7 +144,8 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // TASK-270: the ids two down give other offsets; same routes, stops and headways.
   // TASK-281: the ids one further down, again other offsets; same routes, stops and headways.
   // TASK-351: the ids two further down, again other offsets; same routes, stops and headways.
-  expect(table.hash).toBe('773256d9');
+  // TASK-254: the ids one up, again other offsets; same routes, stops and headways.
+  expect(table.hash).toBe('427b4cee');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -249,7 +251,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // destination streets (the place repair no longer moves them out).
     // TASK-351: rebuilt; the Schwabentorring's part, fed by a map entry and drained by an exit, is
     // circulation, so three car parks on it (pk:2627, pk:2647, pk:2831) leave by their own streets.
-    'e80ca097f05c15908d65981c37c83e38b1eb7b3f61a9c10e5e4733b5fbadb034',
+    // TASK-254: rebuilt; tagged widths (Rotteckring r:1690 4 m and 9 more roads) and `placement`
+    // (46 one-way roads off-centre).
+    '7b0bf83be35f4a65f7daeb4c9a7fc8b87f6272cccb1d9d0a62ac61483758f2e0',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -301,7 +305,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-351: three car parks on the Schwabentorring leave by their own streets (1,528 completed,
   // 62.3 s).
   // TASK-348 + TASK-351: both on main (1,533 to 1,528 completed, 61.3 to 62.5 s).
-  expect(morning.stateHash).toBe(1766099943);
+  // TASK-254: tagged widths and `placement` (1,528 to 1,531 completed, 62.5 to 60.6 s).
+  expect(morning.stateHash).toBe(480576647);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -200,7 +200,8 @@ const baselines = {
   // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
   // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-  'sindelfingen-a81': '249401dfe79a8392f2b379483652931468bc5b2889f9c20c761d0c3ccb1e7065',
+  // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+  'sindelfingen-a81': '244b6e8e2a485abf526aab23a7d8b0180b57fa6ae0dd8f8affa5dec5ff5eb286',
 };
 const lampCounts = {
   grid: [0, 0],

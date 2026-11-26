@@ -368,7 +368,8 @@ test.each(
       // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
       // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-      '157532339433f59745bc4d1d9acf5a9e50bd9b906fa3a8d8c977c320271ad30e',
+      // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+      '2da8d908c917115109865f1999e75f66dd8ad50a34660747fbbd91a3d4419e3d',
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
       '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
       // TASK-351: Entenseestraße's loop, fed by a map entry and drained by an exit, is circulation.

@@ -284,7 +284,8 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
   // TASK-290: nine mapped garage entrances bring Freiburg's keep-clear box count from 137 to 139.
   // TASK-294: two Freiburg places' driveways back in the pocket behind Anlieger streets: 141.
   // TASK-351: three car parks on the Schwabentorring leave by their own streets: 144.
-  expect(boxes).toBe(144);
+  // TASK-254: Freiburg rebuilt with tagged widths and `placement` (46 roads off-centre): 146.
+  expect(boxes).toBe(146);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
@@ -543,9 +544,10 @@ test('TASK-257: crossings paint as OSM marks them; a project without the field p
   // Lead merge on TASK-255: its stop positions draw no crossing paint, so both counts drop
   // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
   // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
-  // 1,939 to 1,959 dashes; with it 2,023 to 2,043).
-  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1959 });
-  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2043 });
+  // 1,939 to 1,959 dashes; with it 2,023 to 2,043). TASK-254: Freiburg rebuilt with tagged widths
+  // and `placement`: one dash more (without the field 1,960; with it 2,044).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1960 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2044 });
   // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
   // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
   // junction's broken lines: now broken lines only.

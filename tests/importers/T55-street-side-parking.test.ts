@@ -406,7 +406,8 @@ test.each(
         // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
         // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
         // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-        '0193497f6047997976f3d118ac7086eaf12ab181505b779f3da9504b1c146286',
+        // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+        '93e9bcee241569fd356cf5de9d27a46babb129c10a9d0bd7935098e8f474ab55',
   );
   writeFileSync(`node_modules/.cache/task119-${name}.json`, JSON.stringify(counts, null, 2));
   expect(skipped).toEqual([]);

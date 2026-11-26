@@ -76,9 +76,11 @@ const baseline = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    compile: 'a3243720690aaf209df3f511c461c1dbe40330caec3111bbfbae7799cbf141a2',
+    // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+    compile: '22ed3b87ddabc9c799df509d9f227c2868b0cc2d39b9c17692c453b52b845cf8',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    arrows: '903940e28f151203a0c7088933826075b826e0b44ab49edf415b47ea861570a8',
+    // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+    arrows: 'c43a0a8fc7eedf498d1d19cae20bb2d0a93ac875729fea110b233c16a55da650',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
