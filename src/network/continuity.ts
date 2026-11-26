@@ -490,6 +490,9 @@ export function continuationLayout(
       });
       const road = widening.road;
       const end = layout.get(road.idx)![road.to === node.idx ? 'end' : 'start']!;
+      // Lined up by its lane step already, the one-way road keeps its line too.
+      if ((road.to === node.idx ? road.endShift : road.startShift).length)
+        Object.assign(end, { holdM: 0, taperM: 0 });
       const width = roadWidth(sources[widening.lone.idx]!);
       end.widenM = side === 'right' ? [width, 0] : [0, width];
       end.widenOverM = taperLength(sources[road.idx]!);

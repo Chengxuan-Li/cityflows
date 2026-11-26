@@ -373,7 +373,11 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   // keeps it, as does the road before it there.
   const shifts = (end: ContinuationEnd | undefined) =>
     !!end &&
-    (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0 || (end.referenceFromM ?? 0) > 0);
+    (end.offsetM !== 0 ||
+      !!end.splitM ||
+      end.tapers.length > 0 ||
+      (end.referenceFromM ?? 0) > 0 ||
+      !!end.widenM);
   const plain = nodes.map(() => true);
   for (const road of roads) {
     const { start, end } = continuity.ends[road.idx]!;
