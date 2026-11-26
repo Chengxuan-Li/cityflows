@@ -1,5 +1,5 @@
-import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs';
-import { extname, isAbsolute, relative, resolve } from 'node:path';
+import { existsSync, globSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import type { Plugin } from 'vite';
 
 // Capture (cinematic-captures branch only): the dev server's endpoints for the Capture panel.
@@ -45,9 +45,19 @@ export function captureEndpoints(): Plugin {
           return;
         }
         if (url.pathname === '/shot' && request.method === 'POST') {
-          const inside = relative(resolve(root, 'capture'), file);
-          if (inside.startsWith('..') || isAbsolute(inside) || extname(file) !== '.json')
-            return fail(400, 'Shot files save under capture/');
+          // Only the app's own page writes: another site's form or fetch cannot send a
+          // same-origin, JSON-typed request.
+          const site = request.headers['sec-fetch-site'];
+          const origin = request.headers.origin;
+          const sameOrigin =
+            site === 'same-origin' ||
+            (!site && !!origin && new URL(origin).host === request.headers.host);
+          if (!sameOrigin || !request.headers['content-type']?.startsWith('application/json'))
+            return fail(403, 'Shot files save from the app only');
+          const folder = existsSync(dirname(file)) ? realpathSync(dirname(file)) : '';
+          const inside = relative(realpathSync(resolve(root, 'capture')), folder);
+          if (!folder || inside.startsWith('..') || isAbsolute(inside) || extname(file) !== '.json')
+            return fail(400, 'Shot files save in an existing folder under capture/');
           let body = '';
           request.on('data', (chunk) => (body += String(chunk)));
           request.on('end', () => {

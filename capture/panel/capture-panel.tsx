@@ -266,6 +266,7 @@ function Panel({ onClose }: { onClose: () => void }) {
     const text = serializeShot(shot);
     const response = await fetch(`/__capture/shot?path=${encodeURIComponent(to)}`, {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: text,
     });
     if (!response.ok) return setStatus(`Not saved: ${await response.text()}`);
