@@ -34,6 +34,7 @@ import { aircraftLivery, type AircraftLivery } from '../render/aircraft-livery';
 import { AircraftPoseTrack, pushbackDrawbarM } from '../render/aircraft-pose';
 import { aircraftFlash, aircraftLights, type AircraftLightState } from '../render/airfield-lights';
 import type { AircraftPose, Pick } from '../render/types';
+import { AircraftBatches, batchedLayer, type BatchedPart } from './aircraft-batches';
 import {
   batchAircraftMesh,
   buildAircraftMesh,
@@ -43,6 +44,10 @@ import {
 } from './aircraft-mesh';
 import { placeAircraft } from './aircraft-attitude';
 import {
+  liveryDepthMaterial,
+  liveryMaterial,
+  liveryOutline,
+  liveryValues,
   modelGear,
   modelInfo,
   modelLodObject,
@@ -93,7 +98,9 @@ interface Model {
   /** TASK-331: the main and nose gear batches, which draw the type's shared gear at the real
    * model's levels and their own procedural gear (`far`) at the far level. */
   gear: { mesh: Mesh; far: BufferGeometry }[];
-  gearMaterial: MeshLambertMaterial | null;
+  /** TASK-359: the parts drawn by the batches, and the gear's extension for them. */
+  parts: BatchedPart[];
+  gearValues: { gearExtension: number[] };
 }
 
 type Disc = Mesh<CircleGeometry, MeshBasicMaterial>;
@@ -155,22 +162,32 @@ function pushbackTug(noseX: number, drawbar: number) {
   return tug;
 }
 
-/** A thin dark rim in screen pixels: the back faces pushed out along their normals. */
-function outlineMaterial() {
+/** A thin dark rim in screen pixels: the back faces pushed out along their normals. Instanced
+ * (TASK-359) like three's own materials: the instance matrix turns the normal, scaled per axis. */
+const outlineVertex = `
+  uniform float pixelScale;
+  uniform float widthPx;
+  void main() {
+    vec4 local = vec4(position, 1.0);
+    vec3 objectNormal = normal;
+    #ifdef USE_INSTANCING
+      local = instanceMatrix * local;
+      mat3 im = mat3(instanceMatrix);
+      objectNormal = im * (objectNormal / vec3(dot(im[0], im[0]), dot(im[1], im[1]), dot(im[2], im[2])));
+    #endif
+    vec4 mv = modelViewMatrix * local;
+    mv.xyz += normalize(normalMatrix * objectNormal) * widthPx * pixelScale * -mv.z;
+    gl_Position = projectionMatrix * mv;
+  }`;
+
+function outlineMaterial(vertexShader = outlineVertex, uniforms?: ShaderMaterial['uniforms']) {
   const material = new ShaderMaterial({
-    uniforms: {
+    uniforms: uniforms ?? {
       pixelScale: { value: 0.001 },
       widthPx: { value: 1.1 },
       color: { value: new Color(0x2f3a46) },
     },
-    vertexShader: `
-      uniform float pixelScale;
-      uniform float widthPx;
-      void main() {
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        mv.xyz += normalize(normalMatrix * normal) * widthPx * pixelScale * -mv.z;
-        gl_Position = projectionMatrix * mv;
-      }`,
+    vertexShader,
     fragmentShader: `
       uniform vec3 color;
       void main() {
@@ -187,6 +204,18 @@ export class Aircraft3D {
   readonly group = new Group();
   private readonly models = new Map<number, Model>();
   private readonly outline = outlineMaterial();
+  /** TASK-359: the batches' materials: real-model bodies in their liveries and their outline,
+   * TASK-307's procedural parts, and the folding gear. */
+  private readonly livery = liveryMaterial();
+  private readonly liveryOutline = outlineMaterial(
+    liveryOutline(outlineVertex),
+    this.outline.uniforms,
+  );
+  private readonly plain = new MeshLambertMaterial({ vertexColors: true });
+  private readonly gearFold = gearFoldMaterial();
+  private readonly batches = new AircraftBatches();
+  /** The procedural meshes' geometry by type and livery, shared by every aircraft wearing it. */
+  private readonly procedural = new Map<string, Mesh[]>();
   private readonly halos = pointHalos(512, 1.6, 2);
   private readonly beams: InstancedMesh;
   private readonly shadowShapes = new Map<string, ShapeGeometry>();
@@ -233,7 +262,9 @@ export class Aircraft3D {
     this.beams.instanceMatrix.setUsage(DynamicDrawUsage);
     this.group.matrixAutoUpdate = false;
     this.beams.matrixAutoUpdate = false;
-    this.group.add(this.halos.mesh, this.beams);
+    const depth = liveryDepthMaterial();
+    this.livery.userData.depth = this.liveryOutline.userData.depth = depth;
+    this.group.add(this.halos.mesh, this.beams, this.batches.group);
     this.setLight(0);
   }
 
@@ -258,7 +289,8 @@ export class Aircraft3D {
     const mesh = buildAircraftMesh(type, livery);
     mesh.root.userData.aircraft = pose.id;
     const discs = spinnerDiscs([...mesh.propellers, ...mesh.rotors]);
-    batchAircraftMesh(mesh, this.outline);
+    const batched = batchAircraftMesh(mesh, this.outline);
+    this.shareProcedural(`${type.id}:${JSON.stringify(livery)}`, mesh.root);
     // Everything but the landing gear is the far level; the real model's levels share the gear.
     const far = new Group();
     far.name = 'procedural';
@@ -274,9 +306,21 @@ export class Aircraft3D {
             return { mesh: batch, far: batch.geometry };
           })
         : [];
-    // Both gear batches fold in one material of their own.
-    const gearMaterial = gear.length ? gearFoldMaterial() : null;
-    for (const { mesh: batch } of gear) batch.material = gearMaterial!;
+    // The airframe, its outline and the gear are drawn by the batches; the gear of a type with a
+    // real model folds (`gearFoldMaterial`), at every level.
+    const gearValues = { gearExtension: [1] };
+    const parts: BatchedPart[] = [];
+    for (const { frame, batch, contour } of batched) {
+      if (frame !== mesh.root && frame !== mesh.gear && frame !== mesh.noseGear) continue;
+      const folds = gear.length > 0 && frame !== mesh.root;
+      parts.push({
+        mesh: batch,
+        materials: [folds ? this.gearFold : this.plain],
+        values: folds ? gearValues : undefined,
+      });
+      if (contour) parts.push({ mesh: contour, materials: [this.outline] });
+    }
+    for (const part of parts) part.mesh.layers.set(batchedLayer);
     const { bodyY, radius } = aircraftLayout(type);
     const { noseX, mainX } = fixedWingGearStations(type.lengthM);
     const tug = mesh.noseGear ? pushbackTug(noseX, pushbackDrawbarM(type.lengthM)) : null;
@@ -325,8 +369,26 @@ export class Aircraft3D {
       levels: [null, null],
       lod: 2,
       gear,
-      gearMaterial,
+      parts,
+      gearValues,
     };
+  }
+
+  /** Gives an aircraft's procedural meshes the geometry of the first aircraft of its type and
+   * livery, so that the batches draw them together; the trees are alike, mesh for mesh. */
+  private shareProcedural(key: string, root: Object3D) {
+    const meshes: Mesh[] = [];
+    root.traverse((object) => {
+      if (object instanceof Mesh && !(object instanceof InstancedMesh)) meshes.push(object);
+    });
+    const shared = this.procedural.get(key);
+    if (!shared) this.procedural.set(key, meshes);
+    meshes.forEach((mesh, i) => {
+      mesh.userData.shared = true;
+      if (!shared) return;
+      mesh.geometry.dispose();
+      mesh.geometry = shared[i]!.geometry;
+    });
   }
 
   update(poses: readonly AircraftPose[], timeS: number, playbackSpeed = 0) {
@@ -386,7 +448,7 @@ export class Aircraft3D {
       // The real models' gear folds; TASK-307's slides up.
       const folds = model.lod < 2 && model.gear.length > 0;
       placeAircraft(mesh, pose, this.elevationM, model.mainX, folds ? 0 : model.gearStowY);
-      if (model.gearMaterial) model.gearMaterial.userData.extension.value = folds ? visual.gear : 1;
+      model.gearValues.gearExtension[0] = folds ? visual.gear : 1;
       // A real helicopter model carries its own skids.
       if (model.lod < 2 && !mesh.noseGear) mesh.gear.visible = false;
       const { x, z: y } = root.position;
@@ -483,6 +545,7 @@ export class Aircraft3D {
   setQuality(casting: boolean, dropLines: boolean) {
     if (casting !== this.casting)
       for (const model of this.models.values()) castShadows(model.mesh.root, casting);
+    this.batches.setCasting(casting);
     if (dropLines !== this.dropLines) this.renderedAgeS = NaN;
     this.casting = casting;
     this.dropLines = dropLines;
@@ -508,6 +571,12 @@ export class Aircraft3D {
       if (this.loader && modelInfo(type.id))
         this.chooseLevel(model, (2 * radiusM) / (Math.max(depth, radiusM) * scale));
     }
+    // Called before every drawn frame, with the levels chosen: the batches take this frame's parts.
+    this.batches.draw(this.parts(), this.group);
+  }
+
+  private *parts() {
+    for (const model of this.models.values()) yield* model.parts;
   }
 
   /** TASK-318: the real model's level by on-screen size, loading levels as they are first
@@ -531,10 +600,16 @@ export class Aircraft3D {
       const level = modelLodObject(
         loader.get(model.type.id)!,
         lod as 0 | 1,
-        model.livery,
         this.modelMaterial,
         this.outline,
       );
+      level.body.layers.set(batchedLayer);
+      level.contour.layers.set(batchedLayer);
+      model.parts.push({
+        mesh: level.body,
+        materials: [this.livery, this.liveryOutline],
+        values: liveryValues(model.livery),
+      });
       model.mesh.root.add(level.group);
       if (this.casting) castShadows(level.group, true);
       model.levels[lod] = { ...level, discs: spinnerDiscs(level.spinners) };
@@ -599,6 +674,7 @@ export class Aircraft3D {
   ): Pick | null {
     if (!this.models.size) return null;
     const raycaster = new Raycaster();
+    raycaster.layers.enable(batchedLayer);
     raycaster.setFromCamera(new Vector2((2 * x) / width - 1, 1 - (2 * y) / height), camera);
     const roots = [...this.models.values()].map((m) => m.mesh.root);
     const hit = raycaster.intersectObjects(roots, true).find(({ object }) => {

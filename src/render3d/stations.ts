@@ -333,12 +333,7 @@ export class Stations3D {
       const size = entrance
         ? { w: dims.entrance.length, h: dims.entrance.height, centre: dims.entrance.centre }
         : { w: furnitureSize.board.length, h: dims.boardHeight, centre: dims.boardCentre };
-      // BoxGeometry face order: +x, -x, +y, -y, +z, -z.
-      const mesh = new InstancedMesh(
-        new BoxGeometry(1, 1, 1),
-        [this.edge, this.edge, this.edge, this.edge, face, face],
-        items.length,
-      );
+      const mesh = new InstancedMesh(panelBox(), [this.edge, face], items.length);
       items.forEach((it, i) =>
         place(
           mesh,
@@ -360,14 +355,7 @@ export class Stations3D {
       const canvas = create(800, 300);
       const texture = canvasTexture(canvas);
       const face = new MeshBasicMaterial({ map: texture });
-      const mesh = new Mesh(new BoxGeometry(1, 1, 1), [
-        this.edge,
-        this.edge,
-        this.edge,
-        this.edge,
-        face,
-        face,
-      ]);
+      const mesh = new Mesh(panelBox(), [this.edge, face]);
       mesh.scale.set(furnitureSize.display.length, dims.displayHeight, dims.panelM);
       mesh.position.set(box.x, ground(box.x, box.y, p.layer) + dims.displayCentre, box.y);
       mesh.rotation.y = -box.heading;
@@ -413,6 +401,16 @@ export class Stations3D {
   content(platform: string, bucket: number) {
     return departureDisplay(this.rail, this.table, platform, bucket * displayRefreshS);
   }
+}
+
+/** A unit box drawn in two groups, the edges then the faces (BoxGeometry's face order: +x, -x,
+ * +y, -y, then +z, -z): TASK-359, two draws per panel instead of one per side. */
+function panelBox() {
+  const box = new BoxGeometry(1, 1, 1);
+  box.clearGroups();
+  box.addGroup(0, 24, 0);
+  box.addGroup(24, 12, 1);
+  return box;
 }
 
 export class StationDisplay {
