@@ -32,10 +32,9 @@ test(
       canopyPosts: 18,
       handrailLinks: 58,
       centerRailM: 15,
-      // TASK-348: walk links at plain signalised crossings (172 to 173, 534 to 550 m2).
-      coveredLinks: 173,
+      coveredLinks: 172,
       lightCanopies: 90,
-      lightCanopyM2: 550,
+      lightCanopyM2: 534,
     });
     const p = (
       group.children[2] as never as {

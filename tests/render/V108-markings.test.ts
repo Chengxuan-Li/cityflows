@@ -73,10 +73,10 @@ const baseline = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
-    compile: '2b6649385d3a5238975736962bf3b47b962eabf9489710c09bd61de828188998',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    compile: 'af8868c18de9281c68ec6c3b52161fa59cc92727fb6a82c2b8133aeb0ff7ffdf',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    arrows: '78bd3d5f5e2a2129c8d014a2bfd5b4e08f6352d15ffb02a3d0e9ddc42cecf314',
+    arrows: '903940e28f151203a0c7088933826075b826e0b44ab49edf415b47ea861570a8',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -96,8 +96,8 @@ const baseline = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    compile: 'cc1cd9cc84aae075eab4c06e9ed0d9cbbb853adb4f8a608d395c84bda3eaa296',
-    arrows: 'b3df25ae210635b134c60ea72b65653f04946e9a92d5bbb60b45806fcfc00dde',
+    compile: '97941451fe25e95587e1380378ec210400c74357908628c7299dfff0c773f90c',
+    arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
   },
 } as const;
 const hash = (value: unknown) =>

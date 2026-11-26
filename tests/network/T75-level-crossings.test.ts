@@ -160,7 +160,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
           // TASK-290: Munich's mapped garage entrance moves c:1911 from r:1071 to r:1070.
-          '65159f722323c9479d75779a7f8552246881c3e3e0e43b6eb1b84c4028915df4',
+          '6fcdf825427650c4e60b14bcd890aa1c53e92dc162a239505d91716aa21e1af6',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -176,7 +176,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
           // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
           // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-          '84f9d8ae20e20e1236dc09b09ef5b7dfd9f9689993b6dbf426fa2e3fbebf14dc',
+          '2a1177263f24fe71098c676118cecfc777e1c291182ac1c6d78ee9d68832cbfb',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -195,8 +195,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
           // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
-          'e5bd84bcad5dac13738ee7c2800de33f377e535a524a7ba50d1895f7d6e800ea',
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+          '94bb73a49e405365a1a62ad0a514db0b52db3cec7f3ac5a4dba64c13a490bf1f',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

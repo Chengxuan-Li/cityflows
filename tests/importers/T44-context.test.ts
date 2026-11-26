@@ -58,7 +58,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
             // TASK-290: Munich's mapped garage entrance moves c:1911 from r:1071 to r:1070.
-            '80a7d66be7d40077b29041b6669ec477899d7f3f9d8c3a864e11f9f501842ba4',
+            'a2e06370cf98fc75825ad8c06d4dfc3435eb2fa55401b24d2ebb7e457e4284b4',
             // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -74,7 +74,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
             // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
             // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-            '9d2d90b211b264b3e72c6468516f8c4706eacca529a79f2d6455e3a9f8447710',
+            'f70841fe1adcf1f747263c8b99952482c3f17dd0bba768803f96f311df80a41b',
           ]
         : [
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -94,8 +94,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
             // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
             // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-            // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
-            '5ee3dbca6648f4e47147c0fab8c55a7c3c413e53682191517f26125f633b66e8',
+            // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+            'e83e2b5d2656286571083d1fec87f7e5698662e696729b88fad2627a2e9f0661',
           ];
     // V114 adds a display-only setting; retain the original network hash.
     const { markingTheme, ...originalCity } = off.city;

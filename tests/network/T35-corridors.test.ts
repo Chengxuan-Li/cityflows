@@ -182,11 +182,7 @@ test.each(tierCities(auditCities))(
       road: road.id,
       ...widthOutsideTransitions(city, net, road),
     }));
-    // TASK-348: Munich r:706, a one-way road continuing a two-way street at n:705, widens over its
-    // taper to take the street's other direction on (`widenOverM`), by design.
-    const over = widths
-      .filter((w) => w.errorM >= 0.05 && !(name === 'munich' && w.road === 'r:706'))
-      .map((w) => `${w.road}@${w.atM}`);
+    const over = widths.filter((w) => w.errorM >= 0.05).map((w) => `${w.road}@${w.atM}`);
     expect(over).toEqual([]);
 
     // Gap: the two directions of a street (one `streetGroupId`) drawn on one centerline. Opposite
@@ -444,9 +440,6 @@ const sharpStations: Record<string, number> = {
   'sindelfingen r:176#0 0.25': 0.15,
   'sindelfingen r:29#0 0.25': 0.12,
   'sindelfingen r:863#0 0.25': 0.14,
-  // TASK-348: r:597, a one-way road continuing a two-way street at n:493, eases onto the
-  // direction it continues, so its lane runs 0.8 m shorter than its reference (0.19 m).
-  'sindelfingen r:597#0 0.75': 0.2,
 };
 
 test.each(tierCities(auditCities))(

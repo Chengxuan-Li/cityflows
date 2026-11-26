@@ -192,8 +192,7 @@ test.each(tierCities(auditCities))(
     // one divider there, 19 -> 18.
     expect({ nodes, dividers }).toEqual(
       name === 'munich'
-        ? // TASK-348: one split node is now a one-way to two-way continuation (10 -> 9).
-          { nodes: 9, dividers: 17 }
+        ? { nodes: 10, dividers: 18 }
         : name === 'sindelfingen'
           ? { nodes: 1, dividers: 1 }
           : { nodes: 0, dividers: 0 },

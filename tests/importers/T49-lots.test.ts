@@ -35,7 +35,7 @@ const baseline = {
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's aisle-stripped city retains garage connector c:1911 on r:1070.
-    '7fbffd1339fac6dc5896b6c6e8ae09e4a3c5651071c04e79a348b45ca2b69f50',
+    '8904122b302fd63ef0f53a62aa8eded7aca869e657c2a06efe2afc5bbc265f43',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
@@ -47,7 +47,7 @@ const baseline = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's aisle-stripped compile places garage connector c:1911 on r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    '836222f209307a6194d12aa9688e1ad75f2a40d2bdc453b4774e0f9d7b5ef39f',
+    '0a8d7ac7b16fd3e461e4b89bf4c27d122af2d48f69f820616651f9a528136e06',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -65,8 +65,8 @@ const baseline = {
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's aisle-stripped compile places garage connector c:1449 on r:954.
-    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
-    '802c5341c4ccc380c7b5a3bb5eea1ff346987c28b88b46d0849f6215d94c3341',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    'c026885d8f8542a49693b0a2695c68a29067e901cd0019f12bdc44554c5faef6',
   ],
 };
 

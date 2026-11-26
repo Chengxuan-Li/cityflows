@@ -541,9 +541,10 @@ test('TASK-257: crossings paint as OSM marks them; a project without the field p
   for (const link of Object.values(old.links)) delete link.marking;
   // Lead merge on TASK-255: its stop positions draw no crossing paint, so both counts drop
   // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
-  // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (1,939 to 1,959).
+  // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
+  // 1,939 to 1,959 dashes; with it 2,023 to 2,043).
   expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1959 });
-  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2023 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2043 });
   // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
   // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
   // junction's broken lines: now broken lines only.
