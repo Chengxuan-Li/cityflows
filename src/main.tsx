@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
+import { useVisual } from './ui/lighting-store';
 import { useAppStore } from './ui/store';
 import './ui/app.css';
 
@@ -21,6 +22,8 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
       return useAppStore.getState().control('step', steps);
     },
     movementId: (index) => useAppStore.getState().session!.loadedCompiled.movements[index]!.id,
+    setVisual: (next) => useVisual.getState().setVisual(next),
+    appStore: useAppStore,
   };
 }
 

@@ -13,6 +13,7 @@ import {
   ShapeGeometry,
   ShapeUtils,
   Vector2,
+  Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { computeVertexNormals, mergeVertices } from './buffers';
@@ -508,9 +509,12 @@ export function buildContext(
       } else geometry = drape(geometry, terrain, lift);
     }
     const surface = feature.kind === 'area' ? groundSurface(feature) : undefined;
-    const surfaceIndex = surface
-      ? ['grass', 'meadow', 'forest', 'pavement'].indexOf(surface) + 1
-      : 0;
+    const surfaceIndex =
+      feature.class === 'water' || feature.class === 'waterway'
+        ? WATER_SURFACE
+        : surface
+          ? ['grass', 'meadow', 'forest', 'pavement'].indexOf(surface) + 1
+          : 0;
     const p = geometry.getAttribute('position');
     const uv = new Float32BufferAttribute(new Float32Array(p.count * 2), 2);
     for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 2.56, p.getZ(i) / 2.56);
@@ -538,7 +542,22 @@ export function buildContext(
   };
 }
 
-/** One ordered context mesh, with five repeatable grains in one atlas and one draw call. */
+/** The ground's surface index for water: past the atlas, so its colour stays plain, and shaded by
+ * `groundMaterial` as moving water. */
+const WATER_SURFACE = 5;
+
+/** The uniforms `groundMaterial` keeps in `userData.water`: simulation seconds for the ripples,
+ * the sky the water reflects (linear RGB), the direction towards the sun and its light. */
+export interface WaterUniforms {
+  waterTime: { value: number };
+  waterSky: { value: Vector3 };
+  waterSunDirection: { value: Vector3 };
+  waterSun: { value: Vector3 };
+}
+
+/** One ordered context mesh, with five repeatable grains in one atlas and one draw call. Water
+ * (`WATER_SURFACE`) ripples with the simulation clock, reflects the sky towards grazing angles
+ * (Schlick's Fresnel term) and catches the sun. */
 export function groundMaterial() {
   const pixels = new Uint8Array(320 * 64 * 4).fill(255);
   const surfaces: Surface[] = ['grass', 'meadow', 'forest', 'pavement'];
@@ -557,19 +576,52 @@ export function groundMaterial() {
     transparent: true,
     depthWrite: false,
   });
+  const water: WaterUniforms = {
+    waterTime: { value: 0 },
+    waterSky: { value: new Vector3(0.8, 0.8, 0.8) },
+    waterSunDirection: { value: new Vector3(0, 1, 0) },
+    waterSun: { value: new Vector3(0, 0, 0) },
+  };
+  material.userData.water = water;
   material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, water);
     shader.vertexShader =
-      'attribute float surfaceIndex; varying float vSurfaceIndex;\n' +
+      'attribute float surfaceIndex; varying float vSurfaceIndex; varying vec3 vWorld;\n' +
       shader.vertexShader.replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\nvSurfaceIndex = surfaceIndex;',
+        '#include <begin_vertex>\nvSurfaceIndex = surfaceIndex;\nvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
     shader.fragmentShader =
-      'varying float vSurfaceIndex;\n' +
-      shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        'diffuseColor *= texture2D(map, vec2((fract(vMapUv.x) * 63.0 + 0.5 + vSurfaceIndex * 64.0) / 320.0, fract(vMapUv.y)));',
-      );
+      'varying float vSurfaceIndex; varying vec3 vWorld;\n' +
+      'uniform float waterTime; uniform vec3 waterSky; uniform vec3 waterSunDirection; uniform vec3 waterSun;\n' +
+      shader.fragmentShader
+        .replace(
+          '#include <map_fragment>',
+          'diffuseColor *= texture2D(map, vec2((fract(vMapUv.x) * 63.0 + 0.5 + vSurfaceIndex * 64.0) / 320.0, fract(vMapUv.y)));',
+        )
+        .replace(
+          '#include <opaque_fragment>',
+          `if (vSurfaceIndex > ${WATER_SURFACE - 0.5}) {
+            vec3 toEye = cameraPosition - vWorld;
+            vec3 view = normalize(toEye);
+            // Three wave trains; their slope fades with distance so far water does not alias.
+            vec2 p = vWorld.xz;
+            float t = waterTime;
+            float fade = 1.0 / (1.0 + length(toEye) / 900.0);
+            vec2 slope = vec2(
+              0.6 * cos(p.x * 0.31 + p.y * 0.12 + t * 1.1) + 0.35 * cos(p.x * 0.83 - p.y * 0.47 + t * 1.9),
+              0.6 * cos(p.y * 0.27 - p.x * 0.09 - t * 0.9) + 0.35 * cos(p.y * 0.91 + p.x * 0.53 + t * 2.3)
+            ) + 0.2 * vec2(cos(p.x * 2.1 + p.y * 1.3 + t * 3.1), cos(p.y * 2.3 - p.x * 1.1 - t * 2.9));
+            vec3 n = normalize(vec3(-0.13 * fade * slope.x, 1.0, -0.13 * fade * slope.y));
+            vec3 r = reflect(-view, n);
+            // The reflected sky: the horizon's colour, deepening to blue overhead.
+            vec3 sky = mix(waterSky * 1.08, waterSky * vec3(0.5, 0.62, 0.95), sqrt(clamp(r.y, 0.0, 1.0)));
+            float fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(n, view), 0.0), 5.0);
+            float glint = pow(max(dot(r, waterSunDirection), 0.0), 300.0);
+            outgoingLight = mix(outgoingLight * 0.82, sky, min(0.9, 1.2 * fresnel)) + waterSun * glint * 3.0;
+          }
+          #include <opaque_fragment>`,
+        );
   };
   return material;
 }

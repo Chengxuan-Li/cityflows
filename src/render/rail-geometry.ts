@@ -590,9 +590,11 @@ function buildRailGeometry(
       platform,
     });
   }
+  // The station disc is a map symbol: 3D shows the station itself, its name and its furniture.
   for (const p of city.places.filter((p) => places?.[p.id]?.station)) {
-    add([circle(p.centroid, 5)], 0, 0x587f77, 1, false, { kind: 'place', place: p.idx });
-    add([circle(p.centroid, 2.4)], 0, 0xf8f6ef, 1, false, { kind: 'place', place: p.idx });
+    const pick: Pick = { kind: 'place', place: p.idx };
+    add([circle(p.centroid, 5)], 0, 0x587f77, 1, false, pick, false, { only2d: true });
+    add([circle(p.centroid, 2.4)], 0, 0xf8f6ef, 1, false, pick, false, { only2d: true });
   }
   return shapes;
 }

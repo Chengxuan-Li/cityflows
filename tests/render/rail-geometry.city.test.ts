@@ -15,8 +15,10 @@ const pins = {
   // order after the gateway ids move.
   // TASK-281: one shape changes, platform 5's surface: the same 942.3 m² and bounds in another
   // triangulation, once the unreachable lots' aisles near the Hauptbahnhof are left out.
-  freiburg: '39d8defbab784b9e0dddc61f3141cd7da9aae5c5c552379c460e82ed58fdc1cc',
-  munich: 'f35c2fa18c1fc8c56dac4d8385c1dc65714009d42166b2d909517c85b4e3c6bf',
+  // Cinematic captures: the station discs are drawn in 2D only (`only2d`), each shape otherwise
+  // the same.
+  freiburg: 'dab93b9295e1d43ae67355979f1ea84ce0a036ead23a11664af3ff1aa81d71d4',
+  munich: '5887e514af95b5784a69b64b010cc1330eb2d12a5dd290c172f2a7be2ec2d52e',
   // TASK-271 (lead merge): the Daimler passage road at grade is a ground road the level-crossing
   // rails are cut to.
   sindelfingen: 'b1d5677b314f0d7a4db73c301397cabe5ef79ce7e056aad6c73b5f58035c11b4',

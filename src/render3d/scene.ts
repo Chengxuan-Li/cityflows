@@ -46,10 +46,11 @@ import { buildGeometry, buildMapContext, buildPlaces } from './geometry';
 import { pickLane3D, pickVehicle3D, vehicleScreenPoint } from './picking';
 import { signalMountM, signalRotationY } from './signals';
 import { buildBeacons } from './markings';
-import { buildingMaterial, groundMaterial, setBuildingLights } from './context';
+import { buildingMaterial, groundMaterial, setBuildingLights, type WaterUniforms } from './context';
 import {
   defaultVisual,
   foliageSeason,
+  hexToLinear,
   lampColors,
   lightKey,
   mixWeights,
@@ -150,6 +151,8 @@ export class Scene3D {
   private aircraft: Aircraft3D | undefined;
   /** TASK-316: airside ground vehicles. */
   private groundVehicles: GroundVehicles3D | undefined;
+  /** Debug: the clock time the sun follows instead of the simulation's, or null. */
+  private sunTimeS: number | null = null;
   /** TASK-318: real aircraft models, kept across cities once loaded. */
   private readonly aircraftModels = new AircraftModels();
   /** TASK-301: airfield lights, the aircraft the camera follows, and the aircraft animation's
@@ -723,7 +726,13 @@ export class Scene3D {
    * View-only: they never reach the simulation, the project or their hashes. */
   setVisual(settings: VisualSettings, timeS: number, origin?: LonLat) {
     // Following the clock, the light moves once a simulated minute.
-    const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
+    // A held sun (debug) keeps its exact time, so an animated one moves smoothly.
+    const minute =
+      settings.mode !== 'clock'
+        ? 0
+        : this.sunTimeS !== null
+          ? this.sunTimeS / 60
+          : Math.floor(timeS / 60);
     if (settings === this.visual && minute === this.lightMinute && origin === this.lightOrigin)
       return;
     const previous = this.visual;
@@ -1162,7 +1171,12 @@ export class Scene3D {
     this.canvas.dataset.buildingDetails = String(enabled);
   }
 
-  setView(centre: Vec2, zoom: number, pitch = 55, bearing = 0) {
+  /** `fov`, the vertical field of view in degrees, stays until the next call that gives one. */
+  setView(centre: Vec2, zoom: number, pitch = 55, bearing = 0, fov?: number) {
+    if (fov !== undefined && fov !== this.camera.fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     // Consume and clear the previous gesture before installing the next view.
     const damping = this.controls.enableDamping;
     this.controls.enableDamping = false;
@@ -1180,6 +1194,22 @@ export class Scene3D {
       centre.y + distance * Math.cos(angle) * Math.cos(azimuth),
     );
     this.controls.update();
+  }
+  /** Debug: holds the sun at clock time `timeS` (seconds since midnight) under Clock lighting,
+   * whatever the simulation's time; null follows the simulation again. */
+  setSunTime(timeS: number | null) {
+    this.sunTimeS = timeS;
+    if (this.visual.mode === 'clock' && timeS !== null) {
+      this.lightMinute = timeS / 60;
+      this.light = sceneLight(
+        this.visual,
+        this.lightMinute * 60,
+        this.palette.background,
+        this.lightOrigin,
+      );
+      this.applyLight();
+    } else this.lightMinute = NaN;
+    this.invalidate();
   }
   captureFrames(): Promise<string[]> {
     return new Promise((resolve) => {
@@ -1401,6 +1431,20 @@ export class Scene3D {
   render(elapsedS: number, timeS: number, playing: boolean) {
     const renderStart = performance.now();
     this.controls.update();
+    // The water reflects the current sky and sun and ripples with the simulation clock.
+    const water = this.surroundings?.material.userData.water as WaterUniforms | undefined;
+    if (water) {
+      const light = this.light;
+      water.waterSky.value.fromArray(hexToLinear(light.background));
+      water.waterSunDirection.value.fromArray(light.sun).normalize();
+      water.waterSun.value
+        .fromArray(hexToLinear(light.sunColor))
+        .multiplyScalar(light.sun[1] > 0 ? light.sunIntensity : 0);
+      if (water.waterTime.value !== timeS) {
+        water.waterTime.value = timeS;
+        this.invalidate();
+      }
+    }
     this.setSignals(timeS);
     if (this.city?.rail && this.trains && this.railVisible && this.trainTimeS !== timeS) {
       const snapshot = this.vehicles.poses.snapshot;

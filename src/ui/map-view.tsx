@@ -517,8 +517,10 @@ export function MapView() {
         window.cityflows.aircraftToScreen = (id) => three?.aircraftToScreen(id) ?? null;
         window.cityflows.capture3D = () => three!.captureFrames();
         window.cityflows.view3D = () => three?.getView() ?? null;
-        window.cityflows.setView3D = (centre, zoom, pitch, bearing) =>
-          three?.setView(centre, zoom, pitch, bearing);
+        window.cityflows.setView3D = (centre, zoom, pitch, bearing, fov) =>
+          three?.setView(centre, zoom, pitch, bearing, fov);
+        window.cityflows.setSunTime3D = (timeS) => three?.setSunTime(timeS);
+        window.cityflows.scene3D = () => three;
       }
       let snapshotAgeS = 0;
       let lastFrame = performance.now();

@@ -13,6 +13,7 @@ import {
 import {
   nearestOnPolyline,
   pointInPolygon,
+  polylineLength,
   preparePolygon,
   segmentDistance,
 } from '../geo/polyline';
@@ -455,11 +456,12 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
    * The paving's boundary edges (those of one triangle only) in pieces of at most 1 m, each with
    * its edge's outward normal and, for TASK-275's tags, its side of the link in the link's
    * direction: `left` or `right` within 45 degrees of square to the link, none across an end.
+   * `joined`: the piece rounds an end of the link (its paving's cap) where other links meet.
    */
   const boundary = (
     shape: WalkShape,
     visit: (
-      piece: { p0: Vec2; p1: Vec2; mid: Vec2; lengthM: number; first: boolean },
+      piece: { p0: Vec2; p1: Vec2; mid: Vec2; lengthM: number; first: boolean; joined: boolean },
       nx: number,
       ny: number,
       side: 'left' | 'right' | undefined,
@@ -495,10 +497,19 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
         ny = -ny;
       }
       // The left of a heading d is (d.y, -d.x) with y south (`offsetPolyline`'s right is -that).
-      const d = nearestOnPolyline(shape.link.line, {
-        x: (a.x + b.x) / 2,
-        y: (a.y + b.y) / 2,
-      }).direction;
+      const middle = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const near = nearestOnPolyline(shape.link.line, middle);
+      const d = near.direction;
+      // Beyond an end of the line, the edge is the end's round cap: a railing there would curl
+      // over the deck or the flight that continues from it.
+      const line = shape.link.line;
+      const beyond =
+        (near.along < 1e-6 &&
+          (middle.x - line[0]!.x) * d.x + (middle.y - line[0]!.y) * d.y < -0.02) ||
+        (near.along > polylineLength(line) - 1e-6 &&
+          (middle.x - line.at(-1)!.x) * d.x + (middle.y - line.at(-1)!.y) * d.y > 0.02);
+      const end = near.along < polylineLength(line) / 2 ? shape.link.from : shape.link.to;
+      const joined = beyond && city.walk.nodes[end]!.links.length > 1;
       const left = nx * d.y - ny * d.x;
       const side = left > Math.SQRT1_2 ? 'left' : left < -Math.SQRT1_2 ? 'right' : undefined;
       const pieces = Math.ceil(length / 1);
@@ -509,7 +520,7 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
           y: a.y + ((b.y - a.y) * (j + 1)) / pieces,
         };
         const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-        visit({ p0, p1, mid, lengthM: length / pieces, first: j === 0 }, nx, ny, side);
+        visit({ p0, p1, mid, lengthM: length / pieces, first: j === 0, joined }, nx, ny, side);
       }
     }
   };
@@ -561,7 +572,7 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
     for (const tri of shape.polygons) under(tri);
     if (handrail) counts.handrailLinks++;
     let run = false;
-    boundary(shape, ({ p0, p1, mid, lengthM, first }, nx, ny, side) => {
+    boundary(shape, ({ p0, p1, mid, lengthM, first, joined }, nx, ny, side) => {
       if (first) run = false;
       const zm = z(mid),
         h = zm - ground(mid);
@@ -579,8 +590,9 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
       // TASK-262: a railing on an open edge 1 m up. TASK-275: on a side, only where the mapped
       // `handrail` names it; stairs carry a named handrail along the whole flight, also beside a
       // wall or near the ground.
-      const ruled = open && h >= 1;
-      const railed = handrail && side ? handrail.includes(side) && (stairs || ruled) : ruled;
+      const ruled = open && h >= 1 && !joined;
+      const railed =
+        !joined && (handrail && side ? handrail.includes(side) && (stairs || ruled) : ruled);
       if (!railed) {
         run = false;
         return;
@@ -600,9 +612,9 @@ export function buildFootbridges(city: CompiledCity, source: CityGeometry, heigh
     const { shape, z, handrail } = way;
     counts.handrailLinks++;
     let run = false;
-    boundary(shape, ({ p0, p1, lengthM, first }, nx, ny, side) => {
+    boundary(shape, ({ p0, p1, lengthM, first, joined }, nx, ny, side) => {
       if (first) run = false;
-      if (!side || !handrail!.includes(side)) {
+      if (!side || joined || !handrail!.includes(side)) {
         run = false;
         return;
       }

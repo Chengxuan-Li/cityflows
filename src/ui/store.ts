@@ -13,6 +13,7 @@ import { compile, type CompiledCity, type Diagnostic } from '../network';
 import { openProject } from '../project/open';
 import { saveProject } from '../project/save';
 import type { Project } from '../project/types';
+import type { VisualSettings } from '../render/lighting';
 import type { Pick as MapPick, VehicleSnapshot } from '../render/types';
 import { defaultLayers, type LayerVisibility } from '../render/types';
 import { placeHue } from '../render/style';
@@ -955,7 +956,23 @@ declare global {
       aircraftToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
       view3D?: () => { centre: Vec2; zoom: number; pitch: number; bearing: number } | null;
-      setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;
+      setView3D?: (
+        centre: Vec2,
+        zoom: number,
+        pitch?: number,
+        bearing?: number,
+        fov?: number,
+      ) => void;
+      /** The app store, which the intro tuner (bench/intro) drives: opening, layers, restart. */
+      appStore?: typeof useAppStore;
+      /** Changes the viewer's lighting, as the Layers panel does (the intro tuner's exposure). */
+      setVisual?: (next: Partial<VisualSettings>) => void;
+      /** Holds the 3D sun at a clock time (s since midnight) under Clock lighting; null follows
+       * the simulation (the intro tuner's time of day). */
+      setSunTime3D?: (timeS: number | null) => void;
+      /** The 3D scene itself, for the intro cut's extra detail (bench/intro/detail.ts). */
+      scene3D?: () => unknown;
+      /** Hides or shows the drop lines under airborne aircraft in 3D (intro footage). */
       worldToScreen?: (point: Vec2) => Vec2;
       selectionAnchor?: () => Vec2 | null;
       city?: () => Project['city'];
