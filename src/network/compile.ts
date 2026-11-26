@@ -1,4 +1,5 @@
 import { compileRail } from './rail';
+import { compileAirside } from './airside';
 import { cumulativeLengths, headingAtDistance } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { City, Place, RoadClass, SignalProgram } from '../schema';
@@ -7,12 +8,14 @@ import { populateConflicts } from './conflicts';
 import { validateCity, warnAboutConnectivity, warnAboutProvenance } from './diagnostics';
 import { continuationLayout, convergingFlows, convergingShifts } from './continuity';
 import { continuingRoad, corridorReferences, corridorSurfaces, EASED_NOTE_M } from './corridor';
-import { layoutRoad, type ContinuationEnd } from './lanes';
+import { INNER_LANE_M, layoutRoad, MIN_LANE_M, trimScale, type ContinuationEnd } from './lanes';
 import {
   farThrough,
   junctionCuts,
   junctionPolygon,
   MAX_SHIFT_M,
+  markSignalCrossing,
+  MINI_ROUNDABOUT,
   STOP_POSITION,
   throughAlignments,
   throughPath,
@@ -26,6 +29,7 @@ import { populateStops } from './stops';
 import { compileBayDepartures, compileParking, compileVisibleParking } from './parking';
 import { generateStalls } from './stalls';
 import { compileLotPaths } from './lot-paths';
+import { assignPocketZones } from './zones';
 import type {
   CConnector,
   CLane,
@@ -99,7 +103,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   validateCity(city, sourceNodes, sourceRoads, sourcePlaces, diagnostics);
   if (diagnostics.length) return { ok: false, diagnostics };
 
-  const nodes: CNode[] = sourceNodes.map(({ id, pos, layer, control }, idx) => ({
+  const nodes: CNode[] = sourceNodes.map(({ id, pos, layer, control, provenance }, idx) => ({
     idx,
     id,
     pos: { ...pos },
@@ -110,8 +114,15 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     control,
     movements: [],
     signal: null,
+    ...(control === 'yield' && provenance.inferred?.includes(MINI_ROUNDABOUT)
+      ? { miniRoundabout: true as const }
+      : {}),
   }));
   const nodeIndex = indices(nodes);
+  const innerRoads = new Set<string>(
+    Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads),
+  );
+  const floor = (road: CRoad) => (innerRoads.has(road.id) ? INNER_LANE_M : MIN_LANE_M);
   const stopPositions = new Set(
     sourceNodes.flatMap((node, idx) =>
       node.provenance.inferred?.includes(STOP_POSITION) ? [idx] : [],
@@ -158,6 +169,25 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     return compiled;
   });
   const roadIndex = indices(roads);
+  // TASK-348: a signalised crossing between junctions is laid out as a stop position is. A junction
+  // group's member keeps its junction layout (lead, 2026-11-26: London City's n:1093 and Freiburg's
+  // n:492 as plain members cost the showcase gate and the arrows through the Siegesdenkmal group).
+  const members = new Set(Object.values(city.junctionGroups ?? {}).flatMap((g) => g.nodes));
+  const neighbours = nodes.map(() => new Set<number>());
+  for (const road of roads) {
+    neighbours[road.from]!.add(road.to);
+    neighbours[road.to]!.add(road.from);
+  }
+  for (const node of nodes)
+    if (
+      node.control === 'signal' &&
+      neighbours[node.idx]!.size === 2 &&
+      !members.has(node.id) &&
+      !stopPositions.has(node.idx)
+    ) {
+      markSignalCrossing(node);
+      stopPositions.add(node.idx);
+    }
   const incident = nodes.map((node) =>
     [...incoming[node.idx]!, ...outgoing[node.idx]!].sort((a, b) => a.idx - b.idx),
   );
@@ -260,6 +290,11 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   }
   const jointDeviations = roads.map(() => 0);
   const lanes: CLane[] = [];
+  // The cuts each road's lanes are first laid out with (`layoutRoad` scales them).
+  const laid = trims.map((t, idx) => {
+    const scale = trimScale(roads[idx]!.lengthM, t.start + t.end, floor(roads[idx]!));
+    return { start: t.start * scale, end: t.end * scale };
+  });
   for (const road of roads) {
     const before =
       trims[road.idx]!.start === 0
@@ -281,6 +316,8 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
         before: before ? references[before.idx]!.points.at(-2) : undefined,
         after: after ? references[after.idx]!.points[1] : undefined,
       },
+      {},
+      floor(road),
     ).jointDeviationM;
   }
 
@@ -309,11 +346,17 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     headings,
     city.drivingSide,
     sourceNodes,
+    roads.map(floor),
   );
   for (const road of roads) {
     const trim = trims[road.idx]!;
+    // TASK-348: an inner road is scaled on the cuts it keeps (`trimmedCuts`).
+    if (floor(road) < MIN_LANE_M) {
+      if (continuity.pairs.has(road.from)) trim.start = 0;
+      if (continuity.pairs.has(road.to)) trim.end = 0;
+    }
     const total = trim.start + trim.end;
-    const scale = total === 0 ? 1 : Math.min(1, Math.max(0, road.lengthM - 5) / total);
+    const scale = trimScale(road.lengthM, total, floor(road));
     trim.start *= scale;
     trim.end *= scale;
   }
@@ -334,7 +377,11 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
   // keeps it, as does the road before it there.
   const shifts = (end: ContinuationEnd | undefined) =>
     !!end &&
-    (end.offsetM !== 0 || !!end.splitM || end.tapers.length > 0 || (end.referenceFromM ?? 0) > 0);
+    (end.offsetM !== 0 ||
+      !!end.splitM ||
+      end.tapers.length > 0 ||
+      (end.referenceFromM ?? 0) > 0 ||
+      !!end.widenM);
   const plain = nodes.map(() => true);
   for (const road of roads) {
     const { start, end } = continuity.ends[road.idx]!;
@@ -345,7 +392,12 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     const ends = continuity.ends[road.idx]!;
     const moving = (end: ContinuationEnd | undefined, node: number) =>
       end && (!plain[node] || end.holdM + end.taperM === 0) ? end : undefined;
-    if (!ends.start && !ends.end) continue;
+    // TASK-348: an inner road whose cut moved (`trimmedCuts`) is laid out again at that end.
+    const kept = {
+      start: !ends.start && Math.abs(trims[road.idx]!.start - laid[road.idx]!.start) < 1e-9,
+      end: !ends.end && Math.abs(trims[road.idx]!.end - laid[road.idx]!.end) < 1e-9,
+    };
+    if (kept.start && kept.end) continue;
     const transition = { start: moving(ends.start, road.from), end: moving(ends.end, road.to) };
     road.startOffsetM = transition.start?.offsetM ?? 0;
     road.endOffsetM = transition.end?.offsetM ?? 0;
@@ -380,9 +432,10 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
         after: after ? references[after.idx]!.points[1] : undefined,
       },
       transition,
+      floor(road),
     ).jointDeviationM;
     for (const atEnd of [false, true]) {
-      if (atEnd ? ends.end : ends.start) continue;
+      if (!(atEnd ? kept.end : kept.start)) continue;
       const oldCut = atEnd ? road.surface.length / 2 : 0;
       const newCut = atEnd ? copy.surface.length / 2 : 0;
       for (const side of [-1, 0]) {
@@ -395,8 +448,8 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     road.stations = copy.stations;
     for (const [i, lane] of rebuilt.entries()) {
       const original = lanes[road.lanes[i]!]!;
-      if (!ends.start) lane.polyline[0] = original.polyline[0]!;
-      if (!ends.end) lane.polyline[lane.polyline.length - 1] = original.polyline.at(-1)!;
+      if (kept.start) lane.polyline[0] = original.polyline[0]!;
+      if (kept.end) lane.polyline[lane.polyline.length - 1] = original.polyline.at(-1)!;
       lane.cumulative = cumulativeLengths(lane.polyline);
       lane.lengthM = lane.cumulative.at(-1)!;
       original.polyline = lane.polyline;
@@ -435,9 +488,6 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     lane.in = [];
     lane.out = [];
   }
-  const innerRoads = new Set<string>(
-    Object.values(city.junctionGroups ?? {}).flatMap((g) => g.innerRoads),
-  );
   // TASK-255: a road from a stop position to its junction is the approach's last stretch, not a
   // median between the group's carriageways: its corners are an approach's (`corner`'s median
   // rule drew Freiburg's n:1350 curb 6 m inside Schreiberstraße's edge).
@@ -584,6 +634,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     },
     laneSpatial: buildLaneSpatial(lanes),
   };
+  assignPocketZones(compiled);
   compileParking(city, compiled, diagnostics, centroid);
   for (const lane of lanes)
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
@@ -633,6 +684,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     lane.connectors.sort((a, b) => connectors[a]!.positionM - connectors[b]!.positionM || a - b);
   warnAboutConnectivity(compiled, diagnostics);
   if (city.rail) compiled.rail = compileRail(city, compiled);
+  if (city.airport) compiled.airside = compileAirside(city.airport, city, compiled);
   if (deferWalk)
     // Filled in place: views made of the compiled city before (paintedCity) share the graph.
     deferWalk(() => {

@@ -10,6 +10,9 @@ import {
 import { loadAuditCity } from '../../bench/junction-audit';
 import { compile, type CompiledCity } from '../../src/network';
 import { referenceLine } from '../../src/network/corridor';
+import { PLACEMENT_TRANSITION } from '../../src/network/lanes';
+import { approachMarkings } from '../../src/render/layers/roads';
+import { transitionLanes } from '../../src/render/road-paint';
 import type { City } from '../../src/schema';
 import { limit } from '../timeouts';
 
@@ -63,6 +66,22 @@ test('the wider road jogs at a lane gain or drop with one branch (S2, S3)', () =
   expect(joint('munich', 'n:695')).toBeLessThan(0.05);
   // But not a 4 m wide road beside a 27 m narrow one (n:1209), which takes the shorter taper.
   expect(joint('freiburg', 'n:1209')).toBeLessThan(0.05);
+});
+
+test('a gain whose narrower way is the mapped transition tapers on it (TASK-264, D7)', () => {
+  // Friedrichstraße 2 to 5 lanes at n:1146: way 233466339 (r:1175) is tagged placement=transition;
+  // r:1148's three added lanes fanned over its first 15 m, after the painted arrows.
+  const { city, net } = cities.freiburg!;
+  expect(city.roads['r:1175' as never]!.provenance.inferred).toContain(PLACEMENT_TRANSITION);
+  const lanes = (id: string) =>
+    net.roads[net.index.road.get(id as never)!]!.lanes.map((i) => net.lanes[i]!);
+  const painted = transitionLanes(net);
+  expect(lanes('r:1148').map((l) => painted.lanes[l.idx]!.taperStartM)).toEqual([0, 0, 0, 0, 0]);
+  // Its arrows stand on the widening, 9 m before the node (the painted ones about 8 m).
+  for (const lane of lanes('r:1148'))
+    expect(approachMarkings(net, lane).arrowAt).toBeCloseTo(-9, 0);
+  // The compiled lanes still part from the lane that feeds them, as on main (0.117 m).
+  expect(joint('freiburg', 'n:1146')).toBeLessThan(0.12);
 });
 
 test('a side-by-side block on a short road is measured from its trimmed cut (S3, S4)', () => {

@@ -1,6 +1,7 @@
 import type Flatbush from 'flatbush';
 import type { WalkGraph } from './walk';
 import type { RailGraph } from './rail';
+import type { AirsideGraph } from './airside';
 import type { Vec2 } from '../geo/vec2';
 import type {
   Control,
@@ -34,6 +35,8 @@ export interface Diagnostic {
 
 export interface CompiledCity {
   rail?: RailGraph;
+  /** TASK-298: the compiled airside, where the city has an airport section. */
+  airside?: AirsideGraph;
   walk: WalkGraph;
   version: number;
   drivingSide: DrivingSide;
@@ -147,6 +150,10 @@ export interface CNode {
   /** A member of a signalised group runs its derived program in lockstep with the others. */
   signal: CSignal | null;
   group?: number; // TASK-131: its junction group's idx, when a member
+  /** TASK-269 (D4): a mini-roundabout (`MINI_ROUNDABOUT` on a `yield` node): every movement has
+   * one priority, and of cars arriving together each gives way to the one on the side the
+   * circulating traffic comes from (left in right-hand traffic, right in left-hand). */
+  miniRoundabout?: true;
 }
 /** TASK-131: one lane path through a junction group, entry road to exit road. */
 export interface CChain {

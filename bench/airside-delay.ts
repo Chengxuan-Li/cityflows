@@ -1,0 +1,448 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import { compile } from '../src/network';
+import { compileAirside } from '../src/network/airside';
+import { openProject } from '../src/project/open';
+import { airportSchedules, largeAirportSchedule } from '../src/demand/flight-schedule';
+import { createAircraftFleet, type AircraftPoseSnapshot } from '../src/sim/aircraft';
+import { createFlightOperations } from '../src/sim/flight-operations';
+import { createGroundVehicles } from '../src/sim/ground-vehicles';
+import { overlaps, runwayConflictCheck } from '../tests/sim/aircraft-checks';
+import { groundOverlaps } from '../tests/sim/ground-vehicle-checks';
+
+// TASK-317 / TASK-312: the airside alone (no roads, no rendering), sampled every simulated
+// second, with each movement's time split by the state it spends it in.
+//   node --experimental-strip-types --import ./bench/register.ts bench/airside-delay.ts \
+//     PROJECT SEED OUTPUT [--from H] [--to H] [--drain H] [--daily N] [--checks]
+// --from / --to: the window of planned times reported (hours; default the whole day); the run
+// starts at --from with the apron as the schedule has it and goes on --drain hours past --to
+// (default 1, or to midnight for a whole day). --daily: fixed-wing movements in place of the
+// airport's schedule size. --checks: count body overlaps and runway conflicts each second.
+// --roads (TASK-320): compile the whole city as the app does (road crossings, and the apron roads
+// that parked aircraft keep clear of) in place of the airside alone.
+// --vehicles (TASK-316): with the airside ground vehicles (implies --roads); with --checks, also
+// count vehicle overlaps with aircraft and with one another each second.
+const args = process.argv.slice(2);
+const flag = (name: string) => {
+  const at = args.indexOf(`--${name}`);
+  const bare = name === 'checks' || name === 'roads' || name === 'vehicles';
+  return at < 0 ? undefined : (args.splice(at, bare ? 1 : 2)[1] ?? '');
+};
+const fromH = Number(flag('from') ?? 0);
+const toH = Number(flag('to') ?? 24);
+const drainH = Number(flag('drain') ?? (toH >= 24 ? 0 : 1));
+const daily = flag('daily');
+const checks = flag('checks') !== undefined;
+const withVehicles = flag('vehicles') !== undefined;
+const roads = withVehicles || flag('roads') !== undefined;
+const [projectPath, seedArg, output] = args;
+if (!projectPath || !seedArg || !output) throw new Error('Expected project path, seed and output');
+const seed = Number(seedArg);
+const project = await openProject(readFileSync(projectPath));
+if (!project.ok) throw new Error('Project did not open');
+const { city } = project.project;
+if (!city.airport) throw new Error('Project has no airport');
+const whole = roads ? compile(city) : null;
+if (whole && !whole.ok) throw new Error('City did not compile');
+const graph =
+  whole?.compiled.airside ??
+  compileAirside(city.airport, city, {
+    roads: [],
+    lanes: [],
+    movements: [],
+    index: { road: new Map() },
+  });
+if (daily !== undefined)
+  (airportSchedules[graph.icao ?? ''] ?? largeAirportSchedule).dailyMovements = Number(daily);
+const fleet = createAircraftFleet(graph, seed);
+const startS = fromH * 3600;
+const windowEndS = toH * 3600;
+const endS = Math.min(86_400, windowEndS + drainH * 3600);
+const newTiming = () => ({
+  taxiMovingS: 0,
+  taxiDistanceM: 0,
+  peakTaxiMps: 0,
+  surfaceWaitS: 0,
+  holdS: 0,
+  pushbackS: 0,
+  pushbackDistanceM: 0,
+  runwayS: 0,
+  airborneS: 0,
+  goAroundS: 0,
+  sequencingS: 0,
+  startWaitS: 0,
+});
+type Timing = ReturnType<typeof newTiming>;
+
+interface Track {
+  arrival: Timing;
+  departure: Timing;
+  arrivalRequestS?: number;
+  departureRequestS?: number;
+  touchdownS?: number;
+  parkedS?: number;
+  offBlockS?: number;
+  wheelsOffS?: number;
+  departedS?: number;
+  goArounds: number;
+  /** TASK-353: parked at the run's start, and its tows (request, end). */
+  carriedIn?: boolean;
+  tows?: { requestS: number; towedS?: number }[];
+}
+const tracks = new Map<number, Track>();
+function track(id: number) {
+  let row = tracks.get(id);
+  if (!row) {
+    row = { arrival: newTiming(), departure: newTiming(), goArounds: 0 };
+    tracks.set(id, row);
+  }
+  return row;
+}
+
+let timeS = startS;
+// TASK-329: aircraft stuck 5 min or more (on the ground away from a stand: not parked or ready
+// for pushback, still for 300 s), and a gridlock: 3 or more of them with no landing or departure
+// for 30 min.
+let lastCompletionS = startS;
+const stillSince = new Map<number, number>();
+let peakStuck5 = 0;
+let stuck5 = 0;
+let gridlockS: number | null = null;
+const requestArrival = fleet.requestArrival;
+fleet.requestArrival = (...args) => {
+  const result = requestArrival(...args);
+  if (result.ok) track(result.id).arrivalRequestS = timeS;
+  return result;
+};
+const requestHelicopterArrival = fleet.requestHelicopterArrival;
+fleet.requestHelicopterArrival = (...args) => {
+  const result = requestHelicopterArrival(...args);
+  if (result.ok) track(result.id).arrivalRequestS = timeS;
+  return result;
+};
+const spawnParked = fleet.spawnParked;
+fleet.spawnParked = (...args) => {
+  const result = spawnParked(...args);
+  if (result.ok && timeS <= startS) track(result.id).carriedIn = true;
+  return result;
+};
+const requestTow = fleet.requestTow;
+fleet.requestTow = (...args) => {
+  const result = requestTow(...args);
+  if (result.ok) (track(result.id).tows ??= []).push({ requestS: timeS });
+  return result;
+};
+const requestDeparture = fleet.requestDeparture;
+fleet.requestDeparture = (...args) => {
+  const result = requestDeparture(...args);
+  if (result.ok) track(result.id).departureRequestS = timeS;
+  return result;
+};
+/** TASK-330: touchdowns by runway end, for landings per hour and the gap between them. */
+const touchdowns: { timeS: number; end: string }[] = [];
+const drainEvents = fleet.drainEvents;
+fleet.drainEvents = () => {
+  const events = drainEvents();
+  for (const event of events) {
+    const row = track(event.id);
+    switch (event.kind) {
+      case 'landed':
+        lastCompletionS = event.timeS;
+        row.touchdownS = event.timeS;
+        touchdowns.push({
+          timeS: event.timeS,
+          end: fleet.snapshot().find((pose) => pose.id === event.id)?.runwayEnd ?? '?',
+        });
+        break;
+      case 'parked':
+        row.parkedS = event.timeS;
+        break;
+      case 'off-block':
+        row.offBlockS = event.timeS;
+        break;
+      case 'departed':
+        lastCompletionS = event.timeS;
+        row.departedS = event.timeS;
+        break;
+      case 'towed': {
+        const tow = row.tows?.at(-1);
+        if (tow) tow.towedS = event.timeS;
+        break;
+      }
+      case 'go-around':
+        row.goArounds++;
+        break;
+    }
+  }
+  return events;
+};
+
+function sample(timing: Timing, pose: AircraftPoseSnapshot) {
+  if (pose.state === 'go-around') timing.goAroundS++;
+  else if (pose.state === 'holding') timing.holdS++;
+  else if (pose.onRunway || pose.state === 'line-up') timing.runwayS++;
+  else if (pose.state === 'pushback') {
+    timing.pushbackS++;
+    timing.pushbackDistanceM += pose.speedMps;
+  } else if (pose.airborne && pose.state !== 'hover-taxi') timing.airborneS++;
+  else if (pose.state === 'taxi' || pose.state === 'hover-taxi') {
+    if (pose.speedMps > 0.05) {
+      timing.taxiMovingS++;
+      timing.taxiDistanceM += pose.speedMps;
+      timing.peakTaxiMps = Math.max(timing.peakTaxiMps, pose.speedMps);
+    } else timing.surfaceWaitS++;
+  }
+}
+
+const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
+// TASK-345: without the pairs the owner approved as sharing a runway by design.
+const checkRunwayConflictsReal = runwayConflictCheck(graph);
+let overlapCount = 0;
+let runwayConflicts = 0;
+let runwayConflictsReal = 0;
+let peakStuck = 0;
+let peakActive = 0;
+
+const wall0 = performance.now();
+const operations = createFlightOperations(fleet, seed, startS);
+const ground =
+  withVehicles && whole
+    ? createGroundVehicles(whole.compiled, {
+        snapshot: () => fleet.snapshot(),
+        movementSpace: () => fleet.movementSpace(),
+        drainTurnarounds: () => operations.drainTurnarounds(),
+      })
+    : null;
+let vehicleAircraftOverlaps = 0;
+let vehicleOverlaps = 0;
+console.info({ airport: graph.icao, seed, fromH, toH, endH: endS / 3600, ...operations.metrics() });
+for (let step = startS * 10; step < endS * 10; step++) {
+  timeS = step / 10;
+  operations.step(timeS);
+  fleet.step(timeS);
+  ground?.step(timeS);
+  if (step % 10) continue;
+  const poses = fleet.snapshot();
+  if (ground && checks) {
+    const found = groundOverlaps(ground.snapshot(), poses);
+    vehicleAircraftOverlaps += found.withAircraft.length;
+    vehicleOverlaps += found.withVehicles.length;
+  }
+  const seen = new Set<number>();
+  for (const pose of poses) {
+    seen.add(pose.id);
+    const row = track(pose.id);
+    if (row.arrivalRequestS !== undefined && row.parkedS === undefined) sample(row.arrival, pose);
+    if (row.offBlockS !== undefined && row.departedS === undefined) {
+      if (pose.airborne && pose.state !== 'hover-taxi') row.wheelsOffS ??= timeS;
+      sample(row.departure, pose);
+    }
+  }
+  // The fleet keeps queued aircraft off the map. Parked departures with a request are waiting
+  // for their start (surface clearance), apart from turnaround or a tow.
+  for (const [id, row] of tracks) {
+    if (row.arrivalRequestS !== undefined && row.touchdownS === undefined && !seen.has(id))
+      row.arrival.sequencingS++;
+    if (row.departureRequestS !== undefined && row.offBlockS === undefined)
+      row.departure.startWaitS++;
+  }
+  stuck5 = 0;
+  for (const pose of poses) {
+    if (
+      pose.airborne ||
+      pose.state === 'parked' ||
+      pose.state === 'ready-for-pushback' ||
+      pose.speedMps > 0.3
+    )
+      stillSince.delete(pose.id);
+    else if (timeS - (stillSince.get(pose.id) ?? (stillSince.set(pose.id, timeS), timeS)) >= 300)
+      stuck5++;
+  }
+  peakStuck5 = Math.max(peakStuck5, stuck5);
+  if (gridlockS === null && stuck5 >= 3 && timeS - lastCompletionS >= 1800) gridlockS = timeS;
+  const metrics = fleet.metrics();
+  peakStuck = Math.max(peakStuck, metrics.stuck);
+  peakActive = Math.max(peakActive, metrics.active);
+  if (checks) {
+    overlapCount += overlaps(poses).length;
+    runwayConflicts += checkRunwayConflicts(poses);
+    runwayConflictsReal += checkRunwayConflictsReal(poses);
+  }
+  if (timeS % 3600 === 0 && timeS > startS) {
+    // TASK-330 / TASK-339: the order's counters, for the log.
+    console.error('PROGRESSIVE', timeS / 3600, JSON.stringify(fleet.orderCounters()));
+    console.info(
+      JSON.stringify({
+        h: timeS / 3600,
+        wallS: Math.round((performance.now() - wall0) / 1000),
+        ...operations.metrics(),
+        active: metrics.active,
+        queued: metrics.queuedArrivals,
+        stuck: metrics.stuck,
+        stuck5,
+      }),
+    );
+  }
+}
+timeS = endS;
+operations.step(endS);
+
+// Separate stand admission and pre-departure readiness from the aircraft-level clocks.
+const board = operations.board(endS);
+const byRegistration = new Map<string, Track>();
+for (const [id, row] of tracks) {
+  const registration = fleet.registrationOf(id)!;
+  if (byRegistration.has(registration)) throw new Error(`Duplicate registration ${registration}`);
+  byRegistration.set(registration, row);
+}
+const inWindow = ({ timeS }: { timeS: number }) => timeS >= startS && timeS < windowEndS;
+const arrivals = board.arrivals.filter(inWindow).map((movement) => {
+  const row = movement.registration ? byRegistration.get(movement.registration) : undefined;
+  const dispatchS = Math.max(0, Math.ceil(movement.timeS - fleet.arrivalLeadS(movement.typeId)));
+  const waitEndS =
+    row?.arrivalRequestS ??
+    (movement.state === 'diverted' ? movement.timeS + movement.delayS! : endS);
+  return {
+    ...movement,
+    ...(row?.arrival ?? newTiming()),
+    standWaitS: Math.max(0, waitEndS - Math.max(startS, dispatchS)),
+    goArounds: row?.goArounds ?? 0,
+    taxiS:
+      row?.parkedS !== undefined && row.touchdownS !== undefined
+        ? row.parkedS - row.touchdownS
+        : null,
+  };
+});
+const departures = board.departures.filter(inWindow).map((movement) => {
+  const row = movement.registration ? byRegistration.get(movement.registration) : undefined;
+  const readyEndS = row?.departureRequestS ?? row?.offBlockS ?? endS;
+  return {
+    ...movement,
+    ...(row?.departure ?? newTiming()),
+    readinessS: movement.state === 'cancelled' ? 0 : Math.max(0, readyEndS - movement.timeS),
+    carriedIn: row?.carriedIn ?? false,
+    tows: row?.tows ?? [],
+    taxiS:
+      row?.wheelsOffS !== undefined && row.offBlockS !== undefined
+        ? row.wheelsOffS - row.offBlockS
+        : null,
+  };
+});
+
+const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / (values.length || 1);
+const round = (value: number) => Math.round(value * 10) / 10;
+function stages<T extends Record<string, unknown>>(rows: T[], keys: (keyof T)[]) {
+  return Object.fromEntries(
+    keys.map((key) => [key, round(mean(rows.map((r) => r[key] as number)))]),
+  );
+}
+const done = (state: string) => state === 'arrived' || state === 'departed';
+const delays = [...arrivals, ...departures].filter((m) => done(m.state)).map((m) => m.delayS!);
+const moving = (rows: (Timing & { taxiS: number | null })[]) => {
+  const finished = rows.filter((r) => r.taxiS !== null);
+  return {
+    meanMovingKt: round(
+      (mean(finished.map((r) => r.taxiDistanceM)) /
+        (mean(finished.map((r) => r.taxiMovingS)) || 1)) *
+        1.943844,
+    ),
+    peakKt: round(Math.max(0, ...finished.map((r) => r.peakTaxiMps)) * 1.943844),
+    meanTaxiMin: round(mean(finished.map((r) => r.taxiS!)) / 60),
+  };
+};
+const summary = {
+  airport: graph.icao,
+  seed,
+  window: [fromH, toH],
+  wallS: Math.round((performance.now() - wall0) / 1000),
+  scheduled: arrivals.length + departures.length,
+  completed: delays.length,
+  diverted: arrivals.filter((m) => m.state === 'diverted').length,
+  cancelled: departures.filter((m) => m.state === 'cancelled').length,
+  meanDelayS: round(mean(delays)),
+  worstDelayS: round(Math.max(0, ...delays)),
+  goArounds: arrivals.reduce((n, m) => n + m.goArounds, 0),
+  peakActive,
+  peakStuck,
+  peakStuck5,
+  endStuck5: stuck5,
+  endQueued: fleet.metrics().queuedArrivals,
+  gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
+  ...(checks && {
+    overlapCount,
+    parkedBlockS: Math.round(fleet.parkedBlockS()),
+    runwayConflicts,
+    runwayConflictsReal,
+  }),
+  ...(ground && {
+    groundVehicles: ground.metrics(),
+    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps }),
+  }),
+  day: operations.metrics(),
+  fleet: fleet.metrics(),
+  arrivalStages: stages(arrivals, [
+    'standWaitS',
+    'sequencingS',
+    'airborneS',
+    'runwayS',
+    'taxiMovingS',
+    'surfaceWaitS',
+    'holdS',
+    'goAroundS',
+  ]),
+  departureStages: stages(departures, [
+    'readinessS',
+    'startWaitS',
+    'surfaceWaitS',
+    'pushbackS',
+    'taxiMovingS',
+    'holdS',
+    'runwayS',
+    'airborneS',
+  ]),
+  // TASK-353: readiness wait of departures parked at the run's start (carried in) and of the
+  // rest, summed (s), and the tows of those carried in: requested to towed (s).
+  readiness: {
+    carriedIn: Math.round(
+      departures.filter((d) => d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    carriedInN: departures.filter((d) => d.carriedIn).length,
+    others: Math.round(
+      departures.filter((d) => !d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    othersN: departures.filter((d) => !d.carriedIn).length,
+    carriedInTowS: Math.round(
+      departures
+        .filter((d) => d.carriedIn)
+        .flatMap((d) => d.tows)
+        .reduce((n, t) => n + (t.towedS ?? endS) - t.requestS, 0),
+    ),
+  },
+  startRefusals: Object.fromEntries(
+    Object.entries(fleet.startRefusals())
+      .sort((a, b) => b[1].s - a[1].s)
+      .map(([why, { n, s }]) => [why, { n, s: Math.round(s) }]),
+  ),
+  taxiIn: moving(arrivals),
+  taxiOut: moving(departures),
+  landings: Object.fromEntries(
+    [...new Set(touchdowns.map((t) => t.end))].sort().map((end) => {
+      const times = touchdowns
+        .filter((t) => t.end === end && t.timeS >= startS && t.timeS < windowEndS)
+        .map((t) => t.timeS);
+      const gaps = times
+        .slice(1)
+        .map((t, i) => t - times[i]!)
+        .sort((a, b) => a - b);
+      return [
+        end,
+        {
+          perHour: round(times.length / ((windowEndS - startS) / 3600)),
+          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
+        },
+      ];
+    }),
+  ),
+};
+writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
+console.info(JSON.stringify(summary, null, 1));

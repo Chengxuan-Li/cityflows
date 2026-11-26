@@ -183,8 +183,11 @@ const baselines = {
   // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
   // TASK-239: one crossing link from the zebra mapped only as node 1252289978 (at n:6).
-  // TASK-265: n:6's zebra, its walk link and walker spans stand on that node, 3.6 m farther out.
-  'munich-donnersberger': 'a6f742244c50fc1d57ccdf08df6eb196b43391029ca8a8edacef89c81d7a7189',
+  // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+  // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+  // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+  // TASK-265: n:6's zebra, walk link and conflict spans follow the mapped crossing node.
+  'munich-donnersberger': '36c6183040ae5dd944b7b38eee98c3fe4e85a597dee15a8e3b29e2e8be9e31c6',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -192,7 +195,13 @@ const baselines = {
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
   // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-  'sindelfingen-a81': '1c1dc61655f698be069e5e8b4844bffc85d10e53321fe9e58ae3b1fe498c45c8',
+  // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+  // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+  // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+  // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+  // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+  // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+  'sindelfingen-a81': '249401dfe79a8392f2b379483652931468bc5b2889f9c20c761d0c3ccb1e7065',
 };
 const lampCounts = {
   grid: [0, 0],
@@ -448,6 +457,51 @@ unitTest('V107 curbs remain continuous beneath a grade-separated crossing', () =
     expect(curb.points.some((p) => Math.abs(p.x) < 1)).toBe(true);
   }
 });
+
+unitTest('V107 a tight return builds both curb sides when the inside offset loses corners', () => {
+  const b = buildCity('return curb', 1);
+  b.road(b.node(0, 0), b.node(100, 0));
+  const network = compiled(b.city);
+  const points = [
+    { x: 50, y: 0 },
+    { x: 52, y: 0 },
+    { x: 52, y: 0.17 },
+    { x: 50, y: 0.17 },
+  ];
+  expect(parallelOffset(points, -0.1).length).not.toBe(parallelOffset(points, 0.1).length);
+  const mesh = buildCurbs([{ road: 0, points }], network, cityHeights(network, b.city));
+  const positions = mesh.getAttribute('position').array;
+  expect(positions.length).toBeGreaterThan(0);
+  expect(positions.every(Number.isFinite)).toBe(true);
+  mesh.dispose();
+});
+
+unitTest(
+  'V107 a tight curb retains corners on both sides when their offsets trim differently',
+  () => {
+    const b = buildCity('tight curb', 1);
+    b.road(b.node(0, 0), b.node(100, 0));
+    const city = compiled(b.city);
+    const points = [
+      { x: 30, y: 0 },
+      { x: 31, y: 0 },
+      { x: 31, y: 0.15 },
+      { x: 30.001, y: 0.15 },
+    ];
+    const outside = parallelOffset(points, -0.1);
+    const inside = parallelOffset(points, 0.1);
+    expect(outside.length).toBeGreaterThan(inside.length);
+    const geometry = buildCurbs([{ road: 0, points }], city, cityHeights(city, b.city));
+    const vertices = geometry.getAttribute('position');
+    for (const p of [...inside, ...outside])
+      expect(
+        Array.from({ length: vertices.count }, (_, i) =>
+          Math.hypot(vertices.getX(i) - p.x, vertices.getZ(i) - p.y),
+        ).some((distance) => distance < 1e-5),
+      ).toBe(true);
+    geometry.dispose();
+  },
+);
 
 unitTest('V107 curved curb meshes bound plan error to 1cm without dense subpixel vertices', () => {
   const b = buildCity('curved curb mesh', 1),

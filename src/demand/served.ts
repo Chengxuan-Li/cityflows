@@ -2,7 +2,8 @@ import { compile, type CompiledCity } from '../network';
 import { carService } from '../network/car-service';
 import type { City, PlaceId } from '../schema';
 
-export type Served = (from: PlaceId, to: PlaceId) => boolean;
+/** `fromHome`: the trip leaves the person's home, where their own car stands (TASK-283). */
+export type Served = (from: PlaceId, to: PlaceId, fromHome?: boolean) => boolean;
 
 /**
  * TASK-155: whether a car can serve a trip with a gateway end at all (`carService`). `compiled`
@@ -17,5 +18,5 @@ export function servedTrips(city: City, compiled?: CompiledCity): Served {
   }
   const { index } = compiled;
   const { served } = carService(compiled);
-  return (from, to) => served(index.place.get(from)!, index.place.get(to)!);
+  return (from, to, fromHome) => served(index.place.get(from)!, index.place.get(to)!, fromHome);
 }

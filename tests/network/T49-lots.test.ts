@@ -181,6 +181,11 @@ test('T49 a neighbouring private-road origin cannot use a lot as a through short
   const aisle = road(b, c, { roadClass: 'service', speedKmh: 10 });
   aisle.access = { all: 'destination' };
   const destination = road(c, d);
+  // TASK-294: the private road has its own way in from the public roads; one only the lot
+  // reaches would take the lot's zone on the way in.
+  const e = node(300, 100);
+  road(d, e);
+  road(e, a);
   place('Destination', 'work', d.pos, [{ road: destination, direction: 'in' }]);
   const id = allocateId(city, 'pk');
   city.parking = {

@@ -11,3 +11,12 @@ NOTICE
 fixtures/**/*.osm
 fixtures/**/*.xml
 fixtures/projects/freiburg.cityflows.json
+fixtures/projects/munich.cityflows.json
+fixtures/projects/sindelfingen.cityflows.json
+fixtures/projects/philadelphia.cityflows.json
+fixtures/projects/luebeck.cityflows.json
+fixtures/projects/york.cityflows.json
+fixtures/projects/london-city-airport.cityflows.json
+fixtures/projects/boston-logan.cityflows.json
+fixtures/projects/heathrow.cityflows.json
+fixtures/projects/zurich-airport.cityflows.json

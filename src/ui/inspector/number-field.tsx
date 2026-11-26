@@ -8,6 +8,7 @@ export function NumberField({
   max,
   step = 'any',
   nullable = false,
+  placeholder = 'Unlimited',
 }: {
   label: string;
   value: number | null;
@@ -16,6 +17,7 @@ export function NumberField({
   max?: number;
   step?: number | 'any';
   nullable?: boolean;
+  placeholder?: string;
 }) {
   const text = value === null ? '' : String(value);
   return (
@@ -29,7 +31,7 @@ export function NumberField({
           max={max}
           step={step}
           required={!nullable}
-          placeholder={nullable ? 'Unlimited' : undefined}
+          placeholder={nullable ? placeholder : undefined}
           defaultValue={text}
           onBlur={({ currentTarget: input }) => {
             const next = input.value === '' ? null : input.valueAsNumber;

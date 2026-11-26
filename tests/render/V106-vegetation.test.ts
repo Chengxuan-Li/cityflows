@@ -63,7 +63,10 @@ const baselines = {
   // tram `form` stripped the city equals b3bcde6's.
   // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-  'munich-donnersberger': '873f2868d6e84900b0ddaa033a6b04742df54870f3d36c704de89d0cd102b854',
+  // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+  // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+  // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+  'munich-donnersberger': 'f70841fe1adcf1f747263c8b99952482c3f17dd0bba768803f96f311df80a41b',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -71,7 +74,13 @@ const baselines = {
   // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
   // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
   // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-  'sindelfingen-a81': 'a6ec148d86c6d50ddfec9d3b4a7c1e443aacefb7c4975112b3330e3a6e1e2913',
+  // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+  // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+  // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+  // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+  // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+  // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+  'sindelfingen-a81': '2abb5c641d1414e595d9ef53a3d56934e7ff1561335bdb2f2ff82d878b1703b2',
 };
 
 unitTest(

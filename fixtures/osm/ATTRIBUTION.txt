@@ -75,3 +75,83 @@ BBox of the polygon: 7.834, 47.9894, 7.8578, 48.001
 6,244,482 bytes, SHA-256 cdc4fe437d19320cfa27f41d630b67e009dd938f04f52b0d9c8c584c9d5b0bc4
 It replaces TASK-197's extract of 2026-11-17 (6,026,432 bytes, SHA-256
 b3af79c9fd7b73ecfd73de9c3959d36840bda40b574615cfc0d40784f3241882).
+
+philadelphia-center-city.osm — Center City, Vine Street Expressway to Spruce Street, 19th to 12th
+Street, Philadelphia, Pennsylvania (TASK-259 scouted it, TASK-285 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T07:03:49Z, finished
+07:04:42Z
+OSM snapshot: 2026-11-21T07:02:38Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 10) with
+every (s,w,n,e) filter replaced by (poly:"...") with the polygon below, [timeout:180]. Overpass
+returns every way that touches the polygon whole; the file has no bounds element.
+Polygon (lat lon): 39.9592 -75.159 39.9592 -75.17 39.9585 -75.1722 39.9566 -75.173 39.9465
+-75.173 39.9465 -75.159
+BBox of the polygon: -75.173, 39.9465, -75.159, 39.9592
+3,614,043 bytes, SHA-256 0dd8a433d90f8fa5ac064edf1cc38e1d67c8c146fcbe6d0bfcc03c779cc68ef4
+
+luebeck-altstadt.osm — the Altstadt island and the Hauptbahnhof, Lübeck, Schleswig-Holstein
+(TASK-259 scouted it, TASK-284 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T07:00:41Z, finished 07:01:39Z
+OSM snapshot: 2026-11-21T07:00:36Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 10, before
+TASK-273 added city walls and gates) with every (s,w,n,e) filter replaced by (poly:"...") with the
+polygon below, [timeout:180]. Overpass returns every way that touches the polygon whole; the file has
+no bounds element.
+Polygon (lat lon): 53.876 10.6895 53.8738 10.682 53.8725 10.6775 53.8708 10.673 53.868 10.666
+53.865 10.669 53.864 10.6745 53.8618 10.679 53.856 10.687 53.8612 10.695 53.8655 10.6982 53.871
+10.6985 53.8752 10.695
+BBox of the polygon: 10.666, 53.856, 10.6985, 53.876
+7,986,825 bytes, SHA-256 4557d9e505e975b6bc844e12f3b0e3dd1bbcbbdda03ecc94174505be6f1a2f44
+
+york-walls-v11.osm — inside the city walls, with the station, York, North Yorkshire
+(TASK-259 scouted it, TASK-273 fetched it again with the walls, TASK-284 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-21T09:52:49Z (after one empty
+502 at 09:51:31Z), finished 09:53:54Z
+OSM snapshot: 2026-11-21T09:51:52Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 11, which
+adds barrier=city_wall, historic=citywalls and historic=city_gate) with every (s,w,n,e) filter
+replaced by (poly:"...") with the polygon below, [timeout:180]. Overpass returns every way that
+touches the polygon whole; the file has no bounds element.
+Polygon (lat lon): 53.9655 -1.0835 53.9634 -1.0872 53.9628 -1.0895 53.9614 -1.0908 53.9604 -1.0945
+53.9592 -1.0975 53.9556 -1.0968 53.9543 -1.0925 53.9522 -1.0885 53.9514 -1.0842 53.952 -1.0808
+53.9521 -1.078 53.9533 -1.0737 53.9555 -1.0718 53.9577 -1.0713 53.9611 -1.0724 53.9633 -1.0754
+53.9647 -1.0775
+BBox of the polygon: -1.0975, 53.9514, -1.0713, 53.9655
+4,189,077 bytes, SHA-256 7e9ba136abe8141171154e09f99c89ccf41e8e1814ecbf821f33529c978524c7
+It replaces TASK-259's query-10 fetch of 2026-11-21 (york-walls.osm, never committed, 4,171,757
+bytes, SHA-256 762dc47387d41ed9425fc902638a93d407e0a5fc7189d8deec6aa826ab21f057).
+
+london-city-airport.osm — London City Airport between the Royal Albert and King George V Docks,
+with Hartmann Road, the Connaught Bridge, North Woolwich Road and the DLR, Newham, London
+(the airports batch's first airport, docs/decisions/2026-11-22-airports.md; TASK-295 bundles it)
+Source: https://overpass-api.de/api/interpreter, requested 2026-11-22T09:53:28Z, finished
+09:55:04Z
+OSM snapshot: 2026-11-22T09:52:21Z
+Query: the app's Overpass query (buildQuery in src/importers/overpass.ts, queryVersion 12) with
+every (s,w,n,e) filter replaced by (poly:"...") with the polygon below, [timeout:300], plus
+nwr[aeroway] and nwr[building~"^(terminal|hangar)$"] over the same polygon inside the union (what
+queryVersion 13 adds). Overpass returns every way that touches the polygon whole; the file has no
+bounds element.
+Polygon (lat lon): 51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356
+BBox of the polygon: 0.0356, 51.4995, 0.0724, 51.509
+3,097,022 bytes, SHA-256 ef33c9b404602eb0a2acf880788cda128808592d2890367dc26edfa5ac739ea6
+
+TASK-309 airport extracts — © OpenStreetMap contributors, ODbL 1.0
+Source: https://overpass-api.de/api/interpreter, client cityflows-scout/1.0.
+Query: the same query-12 polygon recipe as London City above, including both aviation filters
+and [timeout:300]. Each rectangle below is the query polygon in Overpass lat lon order.
+
+zurich-airport.osm — Zurich Airport (ZRH)
+Requested 2026-11-22T09:55:34Z, finished 09:57:31Z. OSM snapshot: 2026-11-22T09:54:21Z.
+Polygon: 47.438 8.5307 47.438 8.5802 47.4858 8.5802 47.4858 8.5307
+8,822,125 bytes, SHA-256 d726b96bab387a4c650a0712229bb647499f002927eaa3eea99586a0c35c0d27
+
+boston-logan.osm — Boston Logan International Airport (BOS)
+Requested 2026-11-22T09:59:32Z, finished 10:01:39Z. OSM snapshot: 2026-11-22T09:58:17Z.
+Polygon: 42.3439 -71.0368 42.3439 -70.9817 42.3823 -70.9817 42.3823 -71.0368
+8,335,953 bytes, SHA-256 15b11627ced268c937947f15e9b187e81e8f6e1d2b2f113009049f31bb9fe2c5
+
+heathrow.osm — London Heathrow Airport (LHR)
+Requested 2026-11-22T10:03:40Z, finished 10:05:39Z. OSM snapshot: 2026-11-22T10:02:30Z.
+Polygon: 51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948
+7,187,396 bytes, SHA-256 c167961a5ff5f4d89af662e1d2bc1c7026c6c28857b914c5e1fb97bb01d524c1

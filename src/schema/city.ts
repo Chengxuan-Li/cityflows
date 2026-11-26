@@ -1,5 +1,6 @@
 import type { GeoReference } from '../geo/projection';
 import type { Vec2 } from '../geo/vec2';
+import type { Airport } from './airport';
 import type { RailNetwork } from './rail';
 
 export type NodeId = string; // "n:12"
@@ -209,6 +210,8 @@ export interface ParkingFacility {
 /** Phase 2 format (lead, 2026-11-08), used by TASK-110 to TASK-112. Mapped pedestrian ways
  * only; sidewalks along streets and walk links over crossings are derived at compile. */
 export type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 'crossing';
+export type CrossingMarking = 'zebra' | 'lines' | 'none';
+export type HandrailSide = 'left' | 'right' | 'center';
 
 export interface WalkNode {
   id: WalkNodeId;
@@ -225,6 +228,17 @@ export interface WalkLink {
   to: WalkNodeId;
   line: Vec2[]; // >= 2 points; first and last equal the nodes' positions
   kind: WalkKind;
+  /** TASK-257: a crossing's paint as OSM maps it (`crossingMarking` in the importer): zebra
+   * stripes, two lines along its edges, or none. Absent = not stated: painted as before (zebra,
+   * or a signalised crossing's lines near a signal). */
+  marking?: CrossingMarking;
+  /** TASK-275: a roof over the way as OSM maps it (`covered`, `bridge=covered`). Absent = not
+   * stated: drawn open as before. */
+  covered?: boolean;
+  /** TASK-275: the handrails OSM maps on the way, left and right in the link's direction
+   * (`handrail`, `handrail:left|right|center`); empty = none. Absent = not stated: railings as
+   * before. */
+  handrail?: HandrailSide[];
   widthM: number | null;
   provenance: Provenance;
 }
@@ -238,8 +252,9 @@ export interface GeoSource {
 }
 
 export type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-export type ContextPoint = 'tree' | 'street_lamp';
-export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+/** TASK-274: `elevator` is a `highway=elevator` node outside every building outline. */
+export type ContextPoint = 'tree' | 'street_lamp' | 'elevator';
+export type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row' | 'city_wall' | 'city_gate';
 export type RoofShape =
   | 'flat'
   | 'gabled'
@@ -271,8 +286,10 @@ export interface ContextAreaFeature {
   colour?: string;
   material?: string;
   minHeightM?: number;
-  /** TASK-201: a building's `building:part` areas (`sub` is the part's value). 3D draws these
-   * instead of the outline; 2D draws the outline. Absent for a building without parts. */
+  /** TASK-201: a building's `building:part` areas (`sub` is the part's value). 3D draws these,
+   * and (TASK-272) the outline's area no part covers when the outline is a body of its own rather
+   * than a wrapper as tall as its tallest part; 2D draws the outline. Absent for a building without
+   * parts. */
   parts?: BuildingPart[];
 }
 export type BuildingPart = Omit<ContextAreaFeature, 'kind' | 'class' | 'parts'>;
@@ -285,6 +302,12 @@ export type ContextFeature =
       widthM?: number;
       layer?: number;
       spacingM?: number;
+      /** TASK-273, walls and gate arches: the tagged `height`. */
+      heightM?: number;
+      /** TASK-273: a wall that carries a mapped footway on its top. */
+      walkway?: true;
+      /** TASK-273: a wall tagged `bridge`, spanning an opening (a road, a river) below its top. */
+      bridge?: true;
     }
   | {
       kind: 'point';
@@ -299,6 +322,8 @@ export type MarkingThemeId = 'de' | 'us' | 'uk';
 
 export interface City {
   rail?: RailNetwork;
+  /** TASK-295: the airside of an imported or generated airport. */
+  airport?: Airport;
   schemaVersion: 3;
   version: number; // bumps on every committed edit; caches key on it
   name: string;

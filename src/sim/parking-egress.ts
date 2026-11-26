@@ -2,6 +2,8 @@ import type { CompiledCity } from '../network';
 import { createGraphCache } from '../routing/graph';
 import { vehicleClasses, type VehicleClass } from '../schema';
 import { parkingConnectorPermitted } from '../network/parking';
+import { circulationCore } from '../network/parking-egress';
+import { zoneReach } from '../network/zones';
 
 const graphFor = createGraphCache();
 const cache = new WeakMap<CompiledCity, Map<string, ReturnType<typeof derive>>>();
@@ -36,54 +38,13 @@ function derive(
   const incoming = city.lanes.map((): number[] => []);
   for (let from = 0; from < outgoing.length; from++)
     for (const to of outgoing[from]!) incoming[to]!.push(from);
-  const coreFor = (allowed: boolean[]) => {
-    // Iterative Kosaraju: movements only. A lane needing a change is not itself a core seed.
-    const seen = new Uint8Array(city.lanes.length),
-      order: number[] = [];
-    for (const lane of city.lanes) {
-      if (!allowed[lane.idx] || seen[lane.idx]) continue;
-      const stack = [lane.idx];
-      while (stack.length) {
-        const at = stack.pop()!;
-        if (at < 0) {
-          order.push(~at);
-          continue;
-        }
-        if (seen[at]) continue;
-        seen[at] = 1;
-        stack.push(~at);
-        for (const to of outgoing[at]!) if (allowed[to] && !seen[to]) stack.push(to);
-      }
-    }
-    seen.fill(0);
-    let core: number[] = [];
-    let largest = 0;
-    for (const at of order.reverse()) {
-      if (seen[at]) continue;
-      const component: number[] = [],
-        stack = [at];
-      seen[at] = 1;
-      while (stack.length) {
-        const to = stack.pop()!;
-        component.push(to);
-        for (const from of incoming[to]!)
-          if (allowed[from] && !seen[from]) {
-            seen[from] = 1;
-            stack.push(from);
-          }
-      }
-      if (component.length > largest) {
-        largest = component.length;
-        core = component;
-      } else if (component.length === largest) core.push(...component);
-    }
-    return core;
-  };
+  const coreFor = (allowed: boolean[]) => circulationCore(city, outgoing, incoming, allowed);
 
   const byZone = new Map<number, Float64Array>();
   function latest(zone: number) {
     let result = byZone.get(zone);
     if (result) return result;
+    const near = zoneReach(city, kind)[zone] ?? [];
     const allowed = city.lanes.map((lane) => {
       if (!lane.allowed.includes(vehicleClass)) return false;
       const road = city.roads[lane.road]!,
@@ -91,7 +52,7 @@ function derive(
       return (
         access === 'yes' ||
         (access === 'delivery' && delivery) ||
-        ((access === 'private' || access === 'destination') && road.zone[kind] === zone)
+        ((access === 'private' || access === 'destination') && near.includes(road.zone[kind]!))
       );
     });
     // Classes/zones with identical permissions have the same movement graph and thresholds.

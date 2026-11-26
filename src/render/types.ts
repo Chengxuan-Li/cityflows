@@ -4,6 +4,8 @@ import type { Camera } from './camera';
 import type { EditOverlay } from './layers/edit-overlay';
 import type { Vec2 } from '../geo/vec2';
 import type { TrainPose } from '../network/trains';
+import type { AircraftVisualPose } from '../sim/aircraft-motion';
+import type { GroundVehiclePose } from '../sim/ground-vehicles';
 
 export interface RoadDifference {
   id: string;
@@ -28,6 +30,43 @@ export interface VehicleSnapshot {
   walkers?: WalkerSnapshot;
   rail?: { crossings: Uint8Array; railReady: Uint8Array; trains: TrainPose[] };
   signals?: SignalStates;
+  aircraft?: AircraftPose[];
+  airfield?: AirfieldState;
+  /** TASK-316: airside ground vehicles (`sim/ground-vehicles.ts`). */
+  groundVehicles?: GroundVehiclePose[];
+}
+
+/** TASK-301: the airfield's light state as the sim gives it (`sim/aircraft.ts`), by compiled
+ * index: per runway the end (0 or 1) arrivals and departures use (-1: none), the holding
+ * positions whose stop bars are off, and the glide slope. */
+export interface AirfieldState {
+  arrivalEnds: number[];
+  departureEnds: number[];
+  clearedHolds: number[];
+  glideSlopeDeg: number;
+}
+
+/** TASK-298: an aircraft as the sim's snapshot gives it (`sim/aircraft.ts`). */
+export interface AircraftPose {
+  id: number;
+  registration: string;
+  typeId: string;
+  x: number;
+  y: number;
+  heightM: number;
+  heading: number;
+  speedMps: number;
+  state: string;
+  pushbackReadySinceS?: number;
+  enginesRunning: boolean;
+  onRunway: boolean;
+  airborne: boolean;
+  gearDown: boolean;
+  visual?: AircraftVisualPose;
+  stand: string | null;
+  runwayEnd: string | null;
+  /** Airside edges ahead on its legs. */
+  route: number[];
 }
 
 /** TASK-170: the signals as the run drives them: each node's phase (-1 without a signal) and
@@ -60,6 +99,12 @@ export interface ParkedCarsSnapshot {
 
 export type Pick =
   | { kind: 'train'; id: string; route: number }
+  | { kind: 'aircraft'; id: number }
+  | { kind: 'stand'; stand: number }
+  // TASK-305: a taxiway or taxilane edge and a holding position, by compiled airside index.
+  | { kind: 'taxiway'; edge: number }
+  | { kind: 'hold'; hold: number }
+  | { kind: 'flight-board' }
   | { kind: 'track'; track: number }
   | { kind: 'platform'; platform: number }
   | { kind: 'vehicle'; id: number }
@@ -143,6 +188,7 @@ export const defaultLayers: LayerVisibility = {
 };
 
 export interface Scene {
+  aircraftPosition(id: number): Vec2 | undefined;
   readonly ready: Promise<void>;
   readonly camera: Camera;
   setActive(active: boolean): void;
@@ -153,7 +199,7 @@ export interface Scene {
   setCity(compiled: CompiledCity, source?: CityGeometry, deferDetails?: boolean): void;
   drawDetails(): void;
   setTiles(enabled: boolean): void;
-  setSnapshot(snapshot: VehicleSnapshot): void;
+  setSnapshot(snapshot: VehicleSnapshot, playbackSpeed?: number): void;
   setParkedCars(snapshot: ParkedCarsSnapshot | null): void;
   /** `states`: the snapshot's signal states, in the loaded city's node order (TASK-170). */
   setSignalPreview(loaded: CompiledCity | null, timeS: number, states?: SignalStates): void;
@@ -175,6 +221,7 @@ export interface Scene {
 
 export type CityGeometry = {
   rail?: City['rail'];
+  airport?: City['airport'];
   parking?: City['parking'];
   markingTheme?: City['markingTheme'];
   nodes: City['nodes'];

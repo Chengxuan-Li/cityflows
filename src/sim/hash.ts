@@ -19,6 +19,7 @@ export function stateHash(
   parking?: number,
   walkers?: Walkers,
   persons?: ReturnType<typeof createPersons>,
+  aircraft?: { hash(word: (hash: number, value: number) => number, hash: number): number },
 ): number {
   let hash = word(0x811c9dc5, Math.round(timeS * 10));
   for (let id = 0; id < vehicles.count; id++) {
@@ -42,6 +43,8 @@ export function stateHash(
   // TASK-111: walkers enter the hash only once one has spawned.
   if (walkers?.spawned) hash = walkers.hash(word, hash);
   if (persons) hash = persons.hash(word, hash);
+  // TASK-298: aircraft only where the city has an airport section.
+  if (aircraft) hash = aircraft.hash(word, hash);
   return hash >>> 0;
 }
 

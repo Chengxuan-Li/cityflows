@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { generatePopulation } from '../src/demand';
 import { defaultScenario } from '../src/fixtures/scenarios';
-import { parseOsm, type OsmData } from '../src/importers/osm/parse';
 import type { ImportOptions } from '../src/importers/types';
 import { openProject } from '../src/project/open';
 import { saveProjectJson } from '../src/project/save';
@@ -14,7 +13,8 @@ import { importOsmCached } from './city-cache';
 // the rail line, the rings and the Dreisam: the polygon TASK-197 scouted
 // (docs/decisions/2026-11-17-landing-city.md), fetched as fixtures/osm/freiburg-altstadt.osm
 // (TASK-201: again on 2026-11-18, with building parts).
-// Rebuild the bundled project on purpose with
+// Rebuild the bundled project on purpose with `bench/bundled-cities.ts` (every real place), or
+// alone with
 //   node --experimental-strip-types --import ./bench/register.ts bench/freiburg.ts
 
 export const freiburgExtract = 'fixtures/osm/freiburg-altstadt.osm';
@@ -89,7 +89,7 @@ function removeRoads(city: City, ids: string[]) {
 
 /** TASK-198: the edits that make the polygon import the showcase, each keyed to OSM ids so it
  * fails loudly if a rebuilt import moves. */
-export function curateFreiburg(city: City, data: OsmData): void {
+export function curateFreiburg(city: City): void {
   city.name = 'Freiburg im Breisgau';
   // Stefan-Meier-Straße widens from one lane to five in the last 40 m before the Bismarckallee
   // junctions, over OSM ways too short to change lanes on: the single lane feeds them all.
@@ -110,38 +110,6 @@ export function curateFreiburg(city: City, data: OsmData): void {
   const boundary = osmNode(city, 2427358469);
   const before = osmRoad(city, 309990768, boundary.id, 'to');
   boundary.turnRules = boundary.turnRules.filter((rule) => rule.from !== before.id);
-
-  // Building passages and covered streets (the Bismarckallee under the Hauptbahnhof's
-  // concourse, Schwabentorplatz, Raustraße) run at grade under a roof, as rail already reads
-  // them; the importer puts them a level down. Their nodes and walk links come up with them.
-  const atGrade = new Set(
-    data.way
-      .filter(
-        ({ tag }) =>
-          tag.layer === undefined &&
-          (tag.tunnel === 'building_passage' || (tag.covered === 'yes' && !tag.tunnel)),
-      )
-      .map(({ id }) => id),
-  );
-  const raised = new Set<string>();
-  for (const road of Object.values(city.roads))
-    if ((road.layer ?? 0) < 0 && road.provenance.osmIds?.some((id) => atGrade.has(id))) {
-      road.layer = 0;
-      raised.add(road.from).add(road.to);
-    }
-  for (const id of raised)
-    if (Object.values(city.roads).every((r) => (r.from !== id && r.to !== id) || !r.layer))
-      city.nodes[id]!.layer = 0;
-  const walk = city.walk!;
-  const walkNodes = new Set<string>();
-  for (const link of Object.values(walk.links))
-    if ((link.layer ?? 0) < 0 && link.provenance.osmIds?.some((id) => atGrade.has(id))) {
-      link.layer = 0;
-      walkNodes.add(link.from).add(link.to);
-    }
-  for (const id of walkNodes)
-    if (Object.values(walk.links).every((l) => (l.from !== id && l.to !== id) || !l.layer))
-      walk.nodes[id]!.layer = 0;
 
   // TASK-201: the Münster, St. Martin, the gates and the Kaufhaus stand in 3D on their
   // `building:part` areas (the Münster's openwork spire is its 37 to 116 m part), so TASK-198's
@@ -177,18 +145,8 @@ export function curateFreiburg(city: City, data: OsmData): void {
     gateway.jobs = Math.round(gateway.jobs * 0.3);
   }
 
-  // TASK-207: three lots whose only access the polygon cut prunes (a bbox import reaches the two
-  // by the west edge from Haslacher Straße, way 51729602, and Farben-Thon's from the service way
-  // 1198950930): no car reaches them, and each showed as stalls without a path and a facility
-  // without an exit. Their areas stay on the map among the surroundings.
-  for (const osmId of [3078479, 124266993, 526598839]) {
-    const lot = Object.values(city.parking ?? {}).find(
-      (p) => p.kind === 'lot' && p.provenance.osmIds?.[0] === osmId,
-    );
-    if (!lot || lot.connectors.length) throw new Error(`Freiburg curation: lot ${osmId} moved`);
-    removeRoads(city, lot.aisles ?? []);
-    delete city.parking![lot.id];
-  }
+  // TASK-207 removed three lots here whose only access the polygon cut prunes; since TASK-281 the
+  // importer leaves out every lot no car reaches (ways 3078479, 124266993, 526598839 among them).
   // TASK-207: Schwabentorplatz's bus road and the Schlossbergring's service road go on only into
   // the pedestrian Schwabentor (ways 41455468 and 242280648: trams, buses and bicycles), which
   // the import does not drive, so each was a one-way dead end that a car could enter.
@@ -211,28 +169,36 @@ export function curateFreiburg(city: City, data: OsmData): void {
   });
 }
 
-/** The bundled project, as the app opens it: the curated city, the showcase demand (0.15
- * persons per resident, mode choice on) and its population, paused at 07:00. */
-export async function buildFreiburgProject(): Promise<string> {
-  const xml = readFileSync(freiburgExtract, 'utf8');
-  const data = parseOsm(xml);
-  if (typeof data === 'string') throw new Error(data);
-  const city = importFreiburg();
-  curateFreiburg(city, data);
+/** A bundled real place as the app opens it: the city, the showcase demand (0.15 persons per
+ * resident, mode choice on) and its population, paused at 07:00, saved with a fixed date so a
+ * rebuild of the same city is byte-identical. */
+export async function showcaseProject(
+  city: City,
+  id: string,
+  savedAt: string,
+  view?: Project['view'],
+): Promise<string> {
   const scenario = defaultScenario('grid5x5');
-  scenario.id = 'freiburg';
+  scenario.id = id;
   scenario.name = city.name;
   scenario.demand.personsPerResident = 0.15;
   // The population ships with the project: generating it took 1.3 s of the landing load.
   const population = generatePopulation(city, scenario.demand);
+  const project: Project = { city, population, scenarios: [scenario], ...(view && { view }) };
+  return saveProjectJson(project, { projectId: id, savedAt });
+}
+
+/** The bundled project: the curated city with the showcase 3D camera. */
+export async function buildFreiburgProject(): Promise<string> {
+  const city = importFreiburg();
+  curateFreiburg(city);
   // The showcase 3D camera: from over the Dreisam towards the Münster and the Schlossberg.
   const view = {
     camera: { '3d': { centre: { x: -300, y: 220 }, scale: 1.18, pitch: 50, bearing: -60 } },
     layers: null,
     selection: null,
   };
-  const project: Project = { city, population, scenarios: [scenario], view };
-  return saveProjectJson(project, { projectId: 'freiburg', savedAt: '2026-11-17T00:00:00.000Z' });
+  return showcaseProject(city, 'freiburg', '2026-11-17T00:00:00.000Z', view);
 }
 
 /** The committed bundled project, opened as the app opens it. */

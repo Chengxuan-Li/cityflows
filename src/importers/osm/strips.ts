@@ -188,7 +188,11 @@ function addMappedAreas(
       });
   }
   if (fallback.length) {
-    addLots(city, data, positions, bounds, diagnostics, fallback, false, compiled);
+    addLots(city, data, positions, bounds, diagnostics, {
+      sources: fallback,
+      includeAisles: false,
+      compiled,
+    });
     for (const p of Object.values(city.parking ?? {}))
       if (p.kind === 'lot' && fallback.some((s) => p.provenance.osmIds?.includes(s.id)))
         p.provenance.inferred!.push('streetSideLot');
@@ -239,9 +243,16 @@ export function addStrips(
     ...polygonSources(data, streetSide).map((s) => s.id),
     ...data.way.filter((w) => streetSide(w.tag)).map((w) => w.id),
   ]);
+  const removed = new Set<string>();
   for (const p of Object.values(city.places))
-    if (p.kind === 'parking' && p.provenance.osmIds?.some((id) => areaIds.has(id)))
+    if (p.kind === 'parking' && p.provenance.osmIds?.some((id) => areaIds.has(id))) {
       delete city.places[p.id];
+      removed.add(p.id);
+    }
+  // TASK-267: a lot that took a removed area as its owner (Cambridge's Trinity College lot,
+  // relation 2214067, touching the one-bay `parking=lane` area 681099117) serves no place.
+  for (const facility of Object.values(city.parking ?? {}))
+    if (facility.placeId !== null && removed.has(facility.placeId)) facility.placeId = null;
   const result = compile(city);
   if (!result.ok) return;
   addMappedAreas(city, data, positions, bounds, result.compiled, diagnostics);
@@ -259,6 +270,12 @@ export function addStrips(
   for (const { box } of buildings) buildingIndex.add(box.minX, box.minY, box.maxX, box.maxY);
   if (!buildings.length) buildingIndex.add(0, 0, 0, 0);
   buildingIndex.finish();
+  const directed = new Map<string, string[]>();
+  for (const road of Object.values(city.roads))
+    if (road.streetGroupId !== null) {
+      const key = `${road.streetGroupId}|${road.from}|${road.to}`;
+      directed.set(key, [...(directed.get(key) ?? []), road.id]);
+    }
   for (const road of Object.values(city.roads).sort((a, b) => a.id.localeCompare(b.id))) {
     const way = road.provenance.osmIds?.map((id) => ways.get(id)).find(Boolean);
     if (!way) continue;
@@ -279,13 +296,9 @@ export function addStrips(
       const tag = parkingSide(way.tag, originalSide);
       const paired =
         road.streetGroupId !== null &&
-        Object.values(city.roads).some(
-          (other) =>
-            other.id !== road.id &&
-            other.streetGroupId === road.streetGroupId &&
-            other.from === road.to &&
-            other.to === road.from,
-        );
+        !!directed
+          .get(`${road.streetGroupId}|${road.to}|${road.from}`)
+          ?.some((id) => id !== road.id);
       const inferSide = paired || side === 'right';
       if (tag.mapped ? !tag.enabled : !(inferred && inferSide)) continue;
       const padding =

@@ -185,7 +185,8 @@ const stage2 = {
  *     and n:194, where its push eases to zero.
  *   - r:735/r:925 7.13, r:196/r:259 4.75, r:259/r:261 2.5, r:685/r:997 0.63: a ramp beside a
  *     trunk within 20 m of their merge or diverge node (n:924, n:195, n:675). */
-const keptOverlapM2: Partial<Record<AuditCity, number>> = { sindelfingen: 240.88, munich: 106.58 };
+// TASK-271: Sindelfingen 240.88 to 241.01, passage roads at grade overlapping by 0.13 m².
+const keptOverlapM2: Partial<Record<AuditCity, number>> = { sindelfingen: 241.01, munich: 106.58 };
 
 test.each(tierCities(auditCities))(
   'T38.2: %s bulge is at most a quarter of stage 2’s and no unrelated overlap is added',

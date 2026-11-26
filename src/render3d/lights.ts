@@ -2,6 +2,7 @@ import {
   AdditiveBlending,
   Color,
   DataTexture,
+  InstancedBufferAttribute,
   InstancedMesh,
   LinearFilter,
   MeshBasicMaterial,
@@ -80,7 +81,12 @@ export function buildHalos(points: readonly LightPoint[]) {
       varying vec3 vTint;
       void main() {
         vUv = uv;
-        vTint = instanceColor;
+        // TASK-336: three declares instanceColor only while the mesh has one.
+        #ifdef USE_INSTANCING_COLOR
+          vTint = instanceColor;
+        #else
+          vTint = vec3(1.0);
+        #endif
         vec4 centre = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
         centre.xy += position.xy * length(instanceMatrix[0].xyz);
         gl_Position = projectionMatrix * centre;
@@ -100,7 +106,11 @@ export function buildHalos(points: readonly LightPoint[]) {
     blending: AdditiveBlending,
   });
   material.userData.lit = true;
-  const mesh = new InstancedMesh(new PlaneGeometry(1, 1), material, Math.max(1, points.length));
+  const capacity = Math.max(1, points.length);
+  const mesh = new InstancedMesh(new PlaneGeometry(1, 1), material, capacity);
+  // TASK-336: a city without halos (no lamps or signals) still compiles the shader, which reads
+  // instanceColor; setColorAt never runs then, so give the mesh its colour buffer up front.
+  mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3);
   const transform = new Object3D(),
     color = new Color();
   points.forEach((p, i) => {

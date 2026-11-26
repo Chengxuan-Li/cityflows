@@ -316,3 +316,32 @@ test('mapped private-spine portals preserve source mouths without splitting thro
   const join = Object.values(city.nodes).find((n) => n.provenance.osmIds?.includes(2))!;
   expect(lot.entries).not.toContain(join.id);
 });
+
+// TASK-281: a lot no car reaches (Lübeck's Am Güterbahnhof, OSM way 228636016, whose road the
+// polygon prunes) is left out with the aisles only it owns, and reported; its neighbour stays.
+test('a lot with no reachable aisle or road within 30 m is left out with its own aisles', () => {
+  const far = [
+    [20, 0.0015, 0.0005],
+    [21, 0.0015, 0.0015],
+    [22, 0.0019, 0.0015],
+    [23, 0.0019, 0.0005],
+  ]
+    .map(([id, lat, lon]) => `<node id="${id}" lat="${lat}" lon="${lon}"/>`)
+    .join('');
+  const xml = lotXml.replace(
+    '</osm>',
+    `${far}<way id="20"><nd ref="20"/><nd ref="21"/><nd ref="22"/><nd ref="23"/><nd ref="20"/><tag k="amenity" v="parking"/><tag k="parking" v="surface"/></way></osm>`,
+  );
+  const result = importOsm(xml, { importerVersion: 'test', terrain: false });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const lots = Object.values(result.city.parking ?? {}).filter((p) => p.kind === 'lot');
+  expect(lots.map((lot) => lot.provenance.osmIds)).toEqual([[12]]);
+  // Way 13, the far lot's aisle, reaches no public road (its driveway, way 14, is not imported).
+  expect(Object.values(result.city.roads).some((r) => r.provenance.osmIds?.includes(13))).toBe(
+    false,
+  );
+  const report = result.diagnostics.filter((d) => d.code === 'parking_unreachable');
+  expect(report).toHaveLength(1);
+  expect(report[0]!.message).toMatch(/left out$/);
+  expect(compile(result.city).ok).toBe(true);
+});

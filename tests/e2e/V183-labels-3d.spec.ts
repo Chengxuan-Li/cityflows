@@ -86,16 +86,24 @@ test('V183 Munich 3D labels place when the camera settles, stay still and follow
   await layers(page, (region) => toggle(region).check());
   await expect.poll(() => labelCounts(page)).toEqual(street);
 
-  // The labels keep their inks under every preset; the dark appearance swaps them.
-  const preset = (region: ReturnType<Page['getByRole']>, name: string) =>
-    region.getByRole('group', { name: 'Time of day' }).getByRole('button', { name }).click();
-  await layers(page, (region) => preset(region, 'Evening'));
+  // The labels keep their inks under every preset; the dark appearance swaps them. The light
+  // presets sit in Visual quality (TASK-341).
+  const preset = async (name: string) => {
+    await button(page, 'Visual quality').click();
+    await page
+      .getByRole('region', { name: 'Visual quality' })
+      .getByRole('group', { name: 'Light' })
+      .getByRole('button', { name, exact: true })
+      .click();
+    await button(page, 'Visual quality').click();
+  };
+  await preset('Evening');
   await expect(canvas).toHaveAttribute('data-lighting', /"mode":"evening"/);
   await shot('munich-3d-street-light-evening');
   await look(page, cameras.overview);
   await shot('munich-3d-overview-light-evening');
+  await preset('Night');
   await layers(page, async (region) => {
-    await preset(region, 'Night');
     await region.getByLabel('Appearance').selectOption('dark');
   });
   await expect(canvas).toHaveAttribute('data-map-palette', 'dark');

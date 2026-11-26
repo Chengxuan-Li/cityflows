@@ -30,7 +30,19 @@ export interface ContinuationEnd {
   /** A transition carried through plain nodes (TASK-221): it eases by `smootherstep`, so where
    * its hold or taper ends near one of those nodes the lanes do not bend across the joint. */
   carried?: boolean;
+  /** TASK-264: the widths, left and right of this road's block, that the road at the other side
+   * of the node adds (a lane gain) or drops (a lane drop) there, where this road is the mapped
+   * transition (`PLACEMENT_TRANSITION`): its surface takes them on over its window, so the gain's
+   * taper runs on it and the wider road's lanes start at their full width. */
+  widenM?: [number, number];
+  /** TASK-348: the length from the node over which the surface takes `widenM` on (the whole
+   * road when absent): a one-way road's lane taper onto a two-way street's other direction. */
+  widenOverM?: number;
 }
+
+/** TASK-264: `Provenance.inferred` of a one-way road from a way tagged `placement=transition`, which
+ * OSM uses for a stretch along which the lanes change between the ways at its two ends. */
+export const PLACEMENT_TRANSITION = 'placementTransition';
 
 export interface RoadContinuity {
   start?: ContinuationEnd;
@@ -228,6 +240,23 @@ function laneNormals(lane: CLane, roadLanes: CLane[]): Vec2[] {
   });
 }
 
+/** The lane a road keeps when its two cuts take more than its length (architecture 5.1): both
+ * cuts are scaled to leave this much. */
+export const MIN_LANE_M = 5;
+/** TASK-348 rule 1, off: an inner road of a junction group would keep `INNER_LANE_M_PENDING`
+ * (0.5 m), so that where it is shorter than its members' cuts it carries no lane block of its own
+ * (Freiburg r:1179, 13 m under 9.8 + 9.8 m cuts, keeps 5 m of lanes inside the group surface, J1's
+ * lane overlap) and the member movements on either side meet at its middle. Measured on, it
+ * gridlocked Freiburg's gate (16 trips, mean delay 62.8 to 74.5 s), so it waits for its follow-up;
+ * until then inner roads keep `MIN_LANE_M` and every inner-road path compiles as before. */
+export const INNER_LANE_M_PENDING = 0.5;
+export const INNER_LANE_M = MIN_LANE_M;
+
+/** The factor both cuts of a road are scaled by to leave `floorM` of lane. */
+export function trimScale(lengthM: number, trimM: number, floorM = MIN_LANE_M): number {
+  return trimM === 0 ? 1 : Math.min(1, Math.max(0, lengthM - floorM) / trimM);
+}
+
 /** Stations closer than this to a cut are left out of the road's stations. */
 const CUT_GAP_M = 0.05;
 const MIN_STEP_M = 0.1;
@@ -243,12 +272,13 @@ export function layoutRoad(
   diagnostics: Diagnostic[],
   continuation: { before?: Vec2; after?: Vec2 } = {},
   transition: RoadContinuity = {},
+  floorM = MIN_LANE_M,
 ): { jointDeviationM: number } {
   const width = roadWidth(road);
   const leftEdge = road.lateralOffsetM - width / 2;
   const trim = startSetback + endSetback;
   const length = polylineLength(road.centerline);
-  const scale = trim === 0 ? 1 : Math.min(1, Math.max(0, length - 5) / trim);
+  const scale = trimScale(length, trim, floorM);
   const shortened = scale < 1;
   // The road's stations on its reference line: its two cuts, the reference's vertices between
   // them and, over each transition, one every half metre.
@@ -272,7 +302,12 @@ export function layoutRoad(
     if (!end && !shifted) continue;
     const span = Math.min(
       total,
-      Math.max(0, end ? end.holdM + end.taperM : 0, shifted - (atEnd ? refLength - s1 : s0)),
+      Math.max(
+        0,
+        end ? end.holdM + end.taperM : 0,
+        end?.widenM ? Math.min(total, end.widenOverM ?? total) : 0,
+        shifted - (atEnd ? refLength - s1 : s0),
+      ),
     );
     grid.push(atEnd ? s1 - span : s0 + span);
     windowEnds.push(atEnd ? s1 - span : s0 + span);
@@ -418,6 +453,29 @@ export function layoutRoad(
   }
 
   compiled.surface = [...offset(leftEdge), ...offset(leftEdge + width).reverse()];
+  // TASK-264: a transition road's edges move out to the wider block at its node, from nothing at
+  // its other end, across the end's heading at the node and the road's own normal upstream.
+  for (const atEnd of [false, true]) {
+    const end = atEnd ? transition.end : transition.start;
+    const widen = end?.widenM;
+    if (!widen) continue;
+    const heading = end.heading;
+    const over = Math.max(Math.min(total, end.widenOverM ?? total), 1e-6);
+    const n = unique.length;
+    unique.forEach((s, k) => {
+      const w = 1 - smoothstep((atEnd ? s1 - s : s - s0) / over);
+      const x = -Math.sin(heading) * w + normal[k]!.x * (1 - w),
+        y = Math.cos(heading) * w + normal[k]!.y * (1 - w);
+      const d = Math.hypot(x, y);
+      for (const [i, out] of [
+        [k, -widen[0]],
+        [2 * n - 1 - k, widen[1]],
+      ] as const) {
+        const p = compiled.surface[i]!;
+        compiled.surface[i] = { x: p.x + (x / d) * out * w, y: p.y + (y / d) * out * w };
+      }
+    });
+  }
   const roadLanes = compiled.lanes.map((i) => lanes[i]!);
   for (const lane of roadLanes) {
     if (!lane.taperStartM) continue;

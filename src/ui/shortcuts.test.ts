@@ -54,8 +54,10 @@ describe('bindings', () => {
       ['playPause', 'step', 'restart', 'slower', 'faster'].map((id) => keyOf(id as CommandId)),
     ).toEqual(['space', '.', 'mod+r', '[', ']']);
     expect(
-      ['select', 'road', 'place', 'ramp', 'roundabout'].map((id) => keyOf(id as CommandId)),
-    ).toEqual(['1', '2', '3', '4', '5']);
+      ['select', 'road', 'place', 'ramp', 'roundabout', 'airside'].map((id) =>
+        keyOf(id as CommandId),
+      ),
+    ).toEqual(['1', '2', '3', '4', '5', '6']);
     expect(bindings.shortcuts).toEqual(['mod+/', '?']);
   });
 });

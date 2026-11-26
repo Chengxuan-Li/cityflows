@@ -33,7 +33,9 @@ const baseline = {
     // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
-    '7507ec00f16872f4ae59a32fd360dc0988ed257713b787f8cc4894d703ac09cc',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    // TASK-290: Munich's aisle-stripped city retains garage connector c:1911 on r:1070.
+    '8904122b302fd63ef0f53a62aa8eded7aca869e657c2a06efe2afc5bbc265f43',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
@@ -42,21 +44,32 @@ const baseline = {
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-    '62d1822415042049fd4df8e990d9b9b86d3235f3e7111ae301271fe8c43440c4',
+    // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+    // TASK-290: Munich's aisle-stripped compile places garage connector c:1911 on r:1070.
+    // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+    '0a8d7ac7b16fd3e461e4b89bf4c27d122af2d48f69f820616651f9a528136e06',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-    '79b62497821cc4f5218070a0469fa00f751d43288c7dd73b2d2a7db272a70fca',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    // TASK-290: Sindelfingen's aisle-stripped city retains garage connector c:1449 on r:954.
+    // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+    '45dfcd523e9e9f3155383a73dd339aeb683f124a2f79c8d61a9ca003e059c6ce',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-    '1fd427fa4725d3802e03e37e5d2ddd741f8873fbe5f81f9913b56a674c7d01c3',
+    // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+    // TASK-290: Sindelfingen's aisle-stripped compile places garage connector c:1449 on r:954.
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+    // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+    '1e9cd4f2600d9bc407309efef4a7c33571d19f0cc56c8960054979f7b1c76151',
   ],
 };
 

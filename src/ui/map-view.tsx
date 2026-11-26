@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Scene3D } from '../render3d/scene';
 import { lonLatToLocal } from '../geo/projection';
+import { distance, nearestOnPolyline } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import { boundsOf, type Bounds } from '../render/camera';
 import { createScene } from '../render/scene';
@@ -11,13 +12,14 @@ import type { LaneId } from '../schema';
 import { DEFAULT_SIM_PARAMS } from '../sim/params';
 import { useAppStore, type Session } from './store';
 import { createDrawRoadTool } from './tools/draw-road';
+import { createAirsideTool } from './tools/airside';
 import { createRampTool } from './tools/ramp';
 import { createRoundaboutTool } from './tools/roundabout';
 import { createSelectTool } from './tools/select';
 import type { MapTool } from './tools/pointer-tool';
 import { createPlacePaintTool } from './tools/place-paint';
 import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
-import { useLighting } from './lighting-store';
+import { useVisual } from './lighting-store';
 import { resolveAppearance, useAppearance } from './appearance-store';
 import { selectionAnchor } from './selection-anchor';
 
@@ -55,7 +57,25 @@ function snapshotForMap(
       ? (compiled.index.lane.get(loadedCompiled.lanes[movement.toLane]!.id) ?? 0)
       : -current - 1;
   });
-  return { ...presentation, lane, poseLane, signals };
+  // TASK-305: aircraft run on the loaded airside until a restart; their routes and the cleared
+  // stop bars are drawn on the edited one by id (runways are not edited).
+  const [before, after] = [loadedCompiled.airside, compiled.airside];
+  let { aircraft, airfield } = snapshot;
+  if (before && after && before !== after) {
+    const ids =
+      <T extends { id: string }>(items: T[], index: (id: string) => number | undefined) =>
+      (list: readonly number[]) =>
+        list.flatMap((i) => {
+          const mapped = index(items[i]!.id);
+          return mapped === undefined ? [] : [mapped];
+        });
+    const edges = ids(before.edges, (id) => after.index.edge.get(id));
+    const holdIndex = new Map(after.holds.map((h) => [h.id, h.idx]));
+    const holds = ids(before.holds, (id) => holdIndex.get(id));
+    aircraft = aircraft?.map((pose) => ({ ...pose, route: edges(pose.route) }));
+    if (airfield) airfield = { ...airfield, clearedHolds: holds(airfield.clearedHolds) };
+  }
+  return { ...presentation, lane, poseLane, signals, aircraft, airfield };
 }
 
 function routeForMap(route: Route, { compiled, loadedCompiled }: Session) {
@@ -107,9 +127,10 @@ function showcase3D(project: Session['project']) {
 /** TASK-203: what framing fits, in metres: the city's boundary ring when it has one (TASK-198),
  *  else the corners of everything it draws. */
 function cityOutline({ project, compiled }: Preview): Vec2[] {
-  const { geo } = project.city;
+  const { geo, airport } = project.city;
   if (geo?.boundary) return geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
   const points = [
+    ...(!geo ? (airport?.boundary?.[0] ?? []) : []),
     ...compiled.roads.flatMap(({ surface }) => surface),
     ...compiled.nodes.map(({ pos }) => pos),
     ...Object.values(project.city.places).flatMap(({ shape }) =>
@@ -160,6 +181,41 @@ function visibleArea(canvas: HTMLCanvasElement, sheetHeight: number | null, inse
 function fitCity(scene: Scene, area: Bounds, preview: Preview) {
   const outline = cityOutline(preview);
   if (outline.length) scene.camera.fitToBounds(boundsOf(outline), area);
+}
+
+function pickStand(screen: Vec2, project: (world: Vec2) => Vec2): Pick | null {
+  let best: Pick | null = null;
+  let nearest = 8;
+  for (const stand of useAppStore.getState().session?.compiled.airside?.stands ?? []) {
+    const point = project(stand.pos);
+    const distance = Math.hypot(point.x - screen.x, point.y - screen.y);
+    if (distance >= nearest) continue;
+    nearest = distance;
+    best = { kind: 'stand', stand: stand.idx };
+  }
+  return best;
+}
+
+/** TASK-305: the holding position within 8 px, else the taxiway or taxilane under the pointer
+ * (within its half width or 6 px). */
+function pickAirside(world: Vec2, zoom: number): Pick | null {
+  const graph = useAppStore.getState().session?.compiled.airside;
+  if (!graph) return null;
+  let nearest = 8 / zoom;
+  let hold = -1;
+  for (const h of graph.holds) {
+    const away = distance(graph.nodes[h.node]!.pos, world);
+    if (away < nearest) [nearest, hold] = [away, h.idx];
+  }
+  if (hold >= 0) return { kind: 'hold', hold };
+  let edge = -1;
+  nearest = Infinity;
+  for (const e of graph.edges) {
+    if (e.kind !== 'taxiway' && e.kind !== 'taxilane') continue;
+    const away = nearestOnPolyline(e.line, world).away;
+    if (away <= Math.max(e.widthM / 2, 6 / zoom) && away < nearest) [nearest, edge] = [away, e.idx];
+  }
+  return edge >= 0 ? { kind: 'taxiway', edge } : null;
 }
 
 function bindPointer(
@@ -264,7 +320,17 @@ function bindPointer(
       if (!drag.moved && drag.pick && canPick()) {
         const { world, screen } = point(event);
         useAppStore.setState({ selectionPoint: world });
-        getState().select(scene.pick(screen.x, screen.y));
+        const hit = scene.pick(screen.x, screen.y);
+        // An airside item under a place's tint or the bare map is picked before them.
+        const airside = (pick: Pick | null) =>
+          !pick || pick.kind === 'place' || pick.kind === 'flight-board'
+            ? (pickAirside(world, camera.zoom) ?? pick)
+            : pick;
+        getState().select(
+          hit?.kind === 'aircraft'
+            ? hit
+            : (pickStand(screen, (p) => camera.worldToScreen(p)) ?? airside(hit)),
+        );
       }
       drag = null;
       canvas.classList.remove('panning');
@@ -448,6 +514,7 @@ export function MapView() {
         window.cityflows.worldToScreen = (point) =>
           active3D ? three!.worldToScreen(point) : view.camera.worldToScreen(point);
         window.cityflows.vehicleToScreen = (id) => three?.vehicleToScreen(id) ?? null;
+        window.cityflows.aircraftToScreen = (id) => three?.aircraftToScreen(id) ?? null;
         window.cityflows.capture3D = () => three!.captureFrames();
         window.cityflows.view3D = () => three?.getView() ?? null;
         window.cityflows.setView3D = (centre, zoom, pitch, bearing) =>
@@ -548,8 +615,9 @@ export function MapView() {
         );
         if (snapshot.timeS !== snapshotTime) {
           const presentation = snapshotForMap(snapshot, session);
-          if (active3D) three!.setSnapshot(presentation);
-          else view.setSnapshot(presentation);
+          const playbackSpeed = current.run?.status === 'playing' ? current.run.speed : 0;
+          if (active3D) three!.setSnapshot(presentation, playbackSpeed);
+          else view.setSnapshot(presentation, playbackSpeed);
           if (window.cityflows) {
             drawnSnapshot = pausedSnapshot(
               snapshot,
@@ -611,8 +679,9 @@ export function MapView() {
             resolveAppearance(
               appearance.settings,
               appearance.systemDark,
-              useLighting.getState().lighting,
+              useVisual.getState().visual,
               preview.project.scenarios[0]!.startS,
+              preview.project.city.geo?.origin,
             ).darkMap
               ? mapPalettes.dark
               : mapPalettes.light,
@@ -661,13 +730,15 @@ export function MapView() {
           drawnLayers = layers;
         }
         // TASK-166: the map's dark variant in the chosen dark appearance.
-        const { lighting } = useLighting.getState();
+        const lighting = useVisual.getState().visual;
+        const origin = session.project.city.geo?.origin;
         const appearance = useAppearance.getState();
         const palette = resolveAppearance(
           appearance.settings,
           appearance.systemDark,
           lighting,
           getState().run?.timeS,
+          origin,
         ).darkMap
           ? mapPalettes.dark
           : mapPalettes.light;
@@ -815,9 +886,9 @@ export function MapView() {
             getState().run?.stale ? null : session.loadedCompiled,
           );
         }
-        // TASK-163: view-only lighting, from its own per-viewer store.
-        if (active3D) three!.setLighting(lighting, getState().run?.timeS ?? 0, layers.shadows);
-        else view.setLighting(lighting, getState().run?.timeS ?? 0);
+        // TASK-163, TASK-341: view-only lighting and quality, from their own per-viewer store.
+        if (active3D) three!.setVisual(lighting, getState().run?.timeS ?? 0, origin);
+        else view.setLighting(lighting, getState().run?.timeS ?? 0, origin);
         if (selection !== drawnSelection) {
           view.setSelection(selection);
           drawnSelection = selection;
@@ -847,8 +918,29 @@ export function MapView() {
         }
         const run = getState().run;
         snapshotAgeS = run?.status === 'playing' ? snapshotAgeS + elapsedS * run.speed : 0;
-        if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0);
-        else view.animateVehicles(snapshotAgeS, run?.status === 'playing');
+        // TASK-301: the camera follows the selected aircraft (in 2D, within the map).
+        const { followAircraft } = getState();
+        const followed =
+          followAircraft !== null &&
+          selection?.kind === 'aircraft' &&
+          selection.id === followAircraft
+            ? followAircraft
+            : null;
+        if (active3D) three!.follow(followed);
+        const playing = run?.status === 'playing';
+        if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0, playing);
+        else {
+          view.animateVehicles(snapshotAgeS, playing);
+          if (followed !== null) {
+            const pose = view.aircraftPosition(followed);
+            if (pose) {
+              const at = view.camera.worldToScreen(pose);
+              const dx = canvas.clientWidth / 2 - at.x,
+                dy = canvas.clientHeight / 2 - at.y;
+              if (Math.hypot(dx, dy) > 0.5) view.camera.pan(dx, dy);
+            }
+          }
+        }
         if (pulling || failed === session) return;
         pulling = true;
         void pull(session)
@@ -872,6 +964,7 @@ export function MapView() {
         ),
         ramp: createRampTool(view),
         roundabout: createRoundaboutTool(view),
+        airside: createAirsideTool(view, () => getState().airsideOptions),
       };
       const pointer = bindPointer(
         canvas,
@@ -935,7 +1028,13 @@ export function MapView() {
           }
           down = null;
           const rect = canvas3D.getBoundingClientRect();
-          getState().select(three!.pick(event.clientX - rect.left, event.clientY - rect.top));
+          const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+          const hit = three!.pick(screen.x, screen.y);
+          getState().select(
+            hit?.kind === 'aircraft'
+              ? hit
+              : (pickStand(screen, (p) => three!.worldToScreen(p)) ?? hit),
+          );
         },
         { signal },
       );

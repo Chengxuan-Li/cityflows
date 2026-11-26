@@ -90,12 +90,18 @@ test('T52 edit a roadside strip, undo, and select parked cars in both views @smo
   await expect
     .poll(async () => Number(await map3d.getAttribute('data-parked-cars')))
     .toBeGreaterThan(0);
-  const position = await page.evaluate(
-    (point) => window.cityflows!.worldToScreen!(point),
-    slot.position,
-  );
-  await map3d.click({ position });
-  await expect(inspector.getByRole('heading', { name: /^Parked vehicle / })).toBeVisible();
+  for (const zoom of [2, 10]) {
+    const position = await page.evaluate(
+      ({ point, zoom }) => {
+        window.cityflows!.setView3D!(point, zoom, 55);
+        return window.cityflows!.worldToScreen!(point);
+      },
+      { point: slot.position, zoom },
+    );
+    await map3d.click({ position });
+    await expect(inspector.getByRole('heading', { name: /^Parked vehicle / })).toBeVisible();
+    if (zoom === 2) await button(page, 'Close inspector').click();
+  }
   await map3d.screenshot({ path: info.outputPath('parking-3d.png') });
   await button(page, 'Layers').click();
   await toggle.uncheck();

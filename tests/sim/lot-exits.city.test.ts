@@ -66,13 +66,15 @@ test('TASK-164 Munich pk:2056: a bay whose departure reaches the west exits keep
   }
 });
 
-test('TASK-164 Sindelfingen pk:1487: an exit whose hold stands in an aisle lane is offered only when no other exit is', () => {
-  const bays = stocked('sindelfingen-a81', 'pk:1487');
+// TASK-271: the lot (OSM 1231649712), its aisles and c:2640 renumbered by 3 (pk:1487 to pk:1490,
+// c:2643): a works block split by a passage road at grade takes ids before them.
+test('TASK-164 Sindelfingen pk:1490: an exit whose hold stands in an aisle lane is offered only when no other exit is', () => {
+  const bays = stocked('sindelfingen-a81', 'pk:1490');
   expect(bays.length).toBeGreaterThan(60);
-  // c:2640's hold lands in an interior junction of the aisles (r:1515, r:1516, r:1518, r:1520);
+  // c:2643's hold lands in an interior junction of the aisles (r:1518, r:1519, r:1521, r:1523);
   // every bay has a street exit whose hold is clear.
   for (const bay of bays) {
     expect(bay.exits.length, `bay ${bay.bay}`).toBeGreaterThan(0);
-    expect(bay.exits, `bay ${bay.bay}`).not.toContain('c:2640');
+    expect(bay.exits, `bay ${bay.bay}`).not.toContain('c:2643');
   }
 });

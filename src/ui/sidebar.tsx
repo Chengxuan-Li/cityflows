@@ -2,20 +2,29 @@ import { DisclosureGroup } from './controls';
 import { groupDiagnostics } from './diagnostics';
 import { Diagnostics } from './inspector/diagnostics';
 import { Layers } from './layers';
+import { VisualQuality } from './visual-quality';
 import { ComparePanel } from './panels/compare';
 import { DemandPanel } from './panels/demand';
 import { MetricsPanel } from './panels/metrics';
 import { useAppStore } from './store';
 import { PlaceOptions } from './tools/place-options';
 import { RoadOptions } from './tools/road-options';
+import { AirsideToolOptions } from './tools/airside-options';
 
-const toolTitles = { road: 'Road', place: 'Place', ramp: 'Ramp', roundabout: 'Roundabout' };
+const toolTitles = {
+  road: 'Road',
+  place: 'Place',
+  ramp: 'Ramp',
+  roundabout: 'Roundabout',
+  airside: 'Airside',
+};
 
 function ToolOptions() {
   const tool = useAppStore((state) => state.tool);
   const roadOptions = useAppStore((state) => state.roadOptions);
   const placeKind = useAppStore((state) => state.placeKind);
   const placeHint = useAppStore((state) => state.placeHint);
+  const airsideOptions = useAppStore((state) => state.airsideOptions);
   if (tool === 'select') return null;
   return (
     <DisclosureGroup title={`${toolTitles[tool]} tool`}>
@@ -30,6 +39,12 @@ function ToolOptions() {
           value={placeKind}
           onChange={(placeKind) => useAppStore.setState({ placeKind })}
           hint={placeHint}
+        />
+      )}
+      {tool === 'airside' && (
+        <AirsideToolOptions
+          value={airsideOptions}
+          onChange={(airsideOptions) => useAppStore.setState({ airsideOptions })}
         />
       )}
       {tool === 'ramp' && (
@@ -110,6 +125,9 @@ export function Sidebar() {
         disabled={!run}
       >
         <Layers />
+      </DisclosureGroup>
+      <DisclosureGroup title="Visual quality" defaultOpen={false}>
+        <VisualQuality />
       </DisclosureGroup>
       <DisclosureGroup
         title="Chart"

@@ -2,7 +2,28 @@ import type { City, LaneId, MovementId, RoadId } from './city';
 
 export function allocateId(
   city: Pick<City, 'nextId'>,
-  prefix: 'n' | 'r' | 'p' | 'c' | 'pk' | 'wn' | 'wl' | 'rn' | 'rt' | 'rp' | 'ts' | 'jg',
+  prefix:
+    | 'n'
+    | 'r'
+    | 'p'
+    | 'c'
+    | 'pk'
+    | 'wn'
+    | 'wl'
+    | 'rn'
+    | 'rt'
+    | 'rp'
+    | 'ts'
+    | 'jg'
+    // TASK-295: the airside
+    | 'an'
+    | 'ae'
+    | 'rw'
+    | 'hp'
+    | 'st'
+    | 'gt'
+    | 'tm'
+    | 'hl',
 ): string {
   return `${prefix}:${city.nextId++}`;
 }

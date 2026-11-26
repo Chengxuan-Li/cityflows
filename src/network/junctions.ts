@@ -120,9 +120,25 @@ export const STOP_POSITION = 'stopPosition';
 /** TASK-255: a `STOP_POSITION` mapped on its signalised crossing (`crossing=traffic_signals`):
  * the stop line lies before the crossing (`populateStops`), not at the node. */
 export const STOP_POSITION_CROSSING = 'stopPositionCrossing';
+/** TASK-348: a signalised node whose roads lead to two other nodes (a signalised crossing between
+ * junctions, not a junction group's member) keeps its control but is laid out
+ * as a plain node, by TASK-255's rule for a stop position: no floor and no cuts (as a junction its
+ * 2.5 to 6.3 m cuts overlapped the lanes beside it, Freiburg r:1706/r:1821 at n:1705); its crossing
+ * is drawn from the node out (`placeCrossing`), the stop line before it. Compile marks these nodes
+ * (as `junctionCorners` keeps a polygon's corners). */
+const signalCrossings = new WeakSet<CNode>();
+export const markSignalCrossing = (node: CNode) => signalCrossings.add(node);
+export const isSignalCrossing = (node: CNode) => signalCrossings.has(node);
+/** TASK-269 (D4): `Provenance.inferred` of a node read from `highway=mini_roundabout`. With the
+ * importer's `yield` on every entry, it compiles as `CNode.miniRoundabout`. */
+export const MINI_ROUNDABOUT = 'miniRoundabout';
 
 function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boolean {
   if (node.control !== 'uncontrolled' && !stopPosition) return false;
+  // TASK-348: a signalised crossing runs through where the road's lanes run on within 30 degrees
+  // (owner: corners beyond stay drawing-only), whatever the ways' names and classes (Freiburg
+  // n:1511, Kronenstraße into the Lessingstraße ramp).
+  const crossing = isSignalCrossing(node);
   const arms = new Map<string, { road: Road; heading: number; width: number }[]>();
   for (const road of roads) {
     const outgoing = road.from === node.id;
@@ -143,13 +159,13 @@ function isThroughNode(node: CNode, roads: Road[], stopPosition: boolean): boole
       b.some(
         (other) =>
           (end.road.to === node.id) !== (other.road.to === node.id) &&
-          end.road.name === other.road.name &&
-          end.road.roadClass === other.road.roadClass &&
+          (crossing ||
+            (end.road.name === other.road.name && end.road.roadClass === other.road.roadClass)) &&
           end.road.lateralOffsetM === other.road.lateralOffsetM &&
           end.road.lanes.length === other.road.lanes.length &&
           end.road.lanes.every((lane, i) => lane.widthM === other.road.lanes[i]!.widthM) &&
           end.width === other.width &&
-          Math.cos(end.heading - other.heading) < -Math.cos(Math.PI / 36),
+          Math.cos(end.heading - other.heading) < -Math.cos(crossing ? Math.PI / 6 : Math.PI / 36),
       ),
     )
   );
@@ -1326,8 +1342,12 @@ function corner(a: PolygonEnd, b: PolygonEnd, surface: Vec2[] = []): JunctionCor
   // arc shrinks (bisection on the tangent length) until none does.
   const intrudes = (t: number) => {
     const o = centre(t),
-      r = t / perRadius;
-    return surface.some((q) => distance(q, o) < r - 0.05);
+      reach = t / perRadius - 0.05;
+    return surface.some((q) => {
+      const dx = q.x - o.x,
+        dy = q.y - o.y;
+      return Math.abs(dx) < reach && Math.abs(dy) < reach && Math.hypot(dx, dy) < reach;
+    });
   };
   if (intrudes(tangent)) {
     let low = 0,
@@ -1478,7 +1498,7 @@ function cutRegion(
   approaches: number[][],
   hidden: number[],
   through: ThroughPair[],
-  surface: Vec2[],
+  surfaces: Vec2[][],
   inner: ReadonlySet<string>,
 ) {
   const ends = roads.map((road, i) => polygonEnd(node, road, node.setbacks[i]!, inner));
@@ -1498,6 +1518,17 @@ function cutRegion(
       if (k + 1 < group.length) fan.push([centre, end.right[0]!, group[k + 1]!.left[0]!]);
     });
     return { fan, corners };
+  }
+  // The boundaries every half metre that a curb may not cut into.
+  const surface: Vec2[] = [];
+  for (const ring of surfaces) {
+    for (let k = 0; k < ring.length; k++) {
+      const q = ring[k]!,
+        r = ring[(k + 1) % ring.length]!;
+      const steps = Math.max(1, Math.ceil(distance(q, r) / SAMPLE_M));
+      for (let j = 0; j < steps; j++)
+        surface.push({ x: q.x + ((r.x - q.x) * j) / steps, y: q.y + ((r.y - q.y) * j) / steps });
+    }
   }
   // The far side of a through road: the two approaches' facing ends are a through pair, whose strip
   // runs along it (TASK-092: not where another end lies outside the pair, as a street's other
@@ -1558,28 +1589,23 @@ export function junctionCorners(node: CNode): JunctionCorner[] {
 /** Whether a closed ring has a proper crossing between two of its edges (a sweep along x). */
 function crossesItself(ring: PathD): boolean {
   const n = ring.length;
+  if (n < 4) return false;
   const side = (a: Vec2, b: Vec2, c: Vec2) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-  const edges = Array.from({ length: n }, (_, i) => i).sort(
-    (i, j) =>
-      Math.min(ring[i]!.x, ring[(i + 1) % n]!.x) - Math.min(ring[j]!.x, ring[(j + 1) % n]!.x),
-  );
-  const active: number[] = [];
-  for (const i of edges) {
-    const a = ring[i]!,
-      b = ring[(i + 1) % n]!;
-    const minX = Math.min(a.x, b.x);
-    for (let k = active.length - 1; k >= 0; k--) {
-      const j = active[k]!;
-      if (Math.max(ring[j]!.x, ring[(j + 1) % n]!.x) < minX) active.splice(k, 1);
-    }
-    for (const j of active) {
-      if (Math.abs(i - j) < 2 || Math.abs(i - j) === n - 1) continue;
-      const c = ring[j]!,
-        d = ring[(j + 1) % n]!;
+  const edges = ring.map((a, i) => {
+    const b = ring[(i + 1) % n]!;
+    return { a, b, i, minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x) };
+  });
+  edges.sort((a, b) => a.minX - b.minX);
+  for (let i = 0; i < n; i++) {
+    const { a, b, i: edge, maxX } = edges[i]!;
+    for (let j = i + 1; j < n; j++) {
+      const { a: c, b: d, i: other, minX } = edges[j]!;
+      if (minX > maxX) break;
+      const gap = Math.abs(edge - other);
+      if (gap < 2 || gap === n - 1) continue;
       if (side(a, b, c) * side(a, b, d) < -1e-12 && side(c, d, a) * side(c, d, b) < -1e-12)
         return true;
     }
-    active.push(i);
   }
   return false;
 }
@@ -1620,37 +1646,24 @@ export function junctionPolygon(
       to = lanes[m.toLane]!;
     const half = Math.min(from.widthM, to.widthM) / 2;
     const last = m.polyline.length - 1;
-    const sides = m.polyline.map((p, k) => {
-      const h = Math.atan2(
-        m.polyline[Math.min(last, k + 1)]!.y - m.polyline[Math.max(0, k - 1)]!.y,
-        m.polyline[Math.min(last, k + 1)]!.x - m.polyline[Math.max(0, k - 1)]!.x,
-      );
-      const n =
-        k === 0
-          ? across(from, true, half)
-          : k === last
-            ? across(to, false, half)
-            : { x: -Math.sin(h) * half, y: Math.cos(h) * half };
-      return [
-        { x: p.x - n.x, y: p.y - n.y },
-        { x: p.x + n.x, y: p.y + n.y },
-      ] as const;
-    });
-    const ring = [...sides.map(([l]) => l), ...sides.map(([, r]) => r).reverse()];
+    const ring = new Array<Vec2>(2 * (last + 1));
+    for (let k = 0; k <= last; k++) {
+      const p = m.polyline[k]!;
+      let n: Vec2;
+      if (k === 0) n = across(from, true, half);
+      else if (k === last) n = across(to, false, half);
+      else {
+        const prev = m.polyline[k - 1]!,
+          next = m.polyline[k + 1]!;
+        const h = Math.atan2(next.y - prev.y, next.x - prev.x);
+        n = { x: -Math.sin(h) * half, y: Math.cos(h) * half };
+      }
+      ring[k] = { x: p.x - n.x, y: p.y - n.y };
+      ring[ring.length - 1 - k] = { x: p.x + n.x, y: p.y + n.y };
+    }
     surfaces.push(ring);
   }
-  // The surfaces' boundaries every half metre, which no curb may cut into.
-  const samples = surfaces.flatMap((ring) =>
-    ring.flatMap((q, k) => {
-      const r = ring[(k + 1) % ring.length]!;
-      const steps = Math.max(1, Math.ceil(distance(q, r) / SAMPLE_M));
-      return Array.from({ length: steps }, (_, j) => ({
-        x: q.x + ((r.x - q.x) * j) / steps,
-        y: q.y + ((r.y - q.y) * j) / steps,
-      }));
-    }),
-  );
-  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, samples, inner);
+  const { fan, corners } = cutRegion(node, roads, approaches, hidden, through, surfaces, inner);
   cornersByNode.set(node, corners);
   // A curb or nose block is closed through the node's centre, as the fan is (TASK-092): closed by
   // the chord between its cut corners, an arc whose tangent points lie beyond the cuts crosses the
@@ -1680,13 +1693,17 @@ export function junctionPolygon(
   }
   // A piece crossing itself (a hairpin's folded surface, a curb or strip on a sharply curving
   // edge) is cleaned on its own first, so none of its lobes is wound against another piece.
-  const oriented = pieces
-    .filter((p) => p.length >= 3)
-    .flatMap((p) =>
-      crossesItself(p) ? booleanOpD(ClipType.Union, [p], null, FillRule.NonZero, PRECISION) : [p],
-    )
-    .filter((p) => Math.abs(areaD(p)) > 1e-6)
-    .map((p) => (areaD(p) < 0 ? [...p].reverse() : p));
+  const oriented: PathD[] = [];
+  for (const piece of pieces) {
+    if (piece.length < 3) continue;
+    const paths = crossesItself(piece)
+      ? booleanOpD(ClipType.Union, [piece], null, FillRule.NonZero, PRECISION)
+      : [piece];
+    for (const path of paths) {
+      const area = areaD(path);
+      if (Math.abs(area) > 1e-6) oriented.push(area < 0 ? [...path].reverse() : path);
+    }
+  }
   let union = booleanOpD(ClipType.Union, oriented, null, FillRule.NonZero, PRECISION);
   // Beyond a curb is the corner block: the fan's chord between deep cuts may reach into it, so
   // it is taken out (movement surfaces stay clear of the curb's disc, `corner`).

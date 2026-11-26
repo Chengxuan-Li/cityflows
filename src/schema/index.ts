@@ -7,3 +7,4 @@ export * from './history.schema';
 export * from './ids';
 export * from './migrate';
 export * from './sim';
+export * from './aircraft';

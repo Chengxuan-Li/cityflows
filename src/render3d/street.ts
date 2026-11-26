@@ -13,8 +13,8 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { parallelOffset } from '../geo/polyline';
+import { computeVertexNormals, mergeVertices } from './buffers';
+import { cumulativeLengths, parallelOffset } from '../geo/polyline';
 import type { CompiledCity } from '../network';
 import {
   themedSignLabels,
@@ -28,20 +28,17 @@ import { roadSurfaceAt, type cityHeights } from './heights';
 
 // Bound both final 3D edges against each replacement chord; keep every gap run separate.
 function curbStations(a: number[][], b: number[][]) {
-  const scale = [100, 1000, 100]; // 1cm in plan, 1mm vertically.
   const distanceSq = (p: number[], from: number[], to: number[]) => {
-    const d = to.map((v, i) => (v - from[i]!) * scale[i]!);
-    const lengthSq = d.reduce((sum, v) => sum + v * v, 0);
-    const t = lengthSq
-      ? Math.max(
-          0,
-          Math.min(
-            1,
-            d.reduce((sum, v, i) => sum + (p[i]! - from[i]!) * scale[i]! * v, 0) / lengthSq,
-          ),
-        )
-      : 0;
-    return p.reduce((sum, v, i) => sum + ((v - from[i]!) * scale[i]! - t * d[i]!) ** 2, 0);
+    // 1 cm in plan, 1 mm vertically.
+    const dx = (to[0]! - from[0]!) * 100;
+    const dy = (to[1]! - from[1]!) * 1000;
+    const dz = (to[2]! - from[2]!) * 100;
+    const px = (p[0]! - from[0]!) * 100;
+    const py = (p[1]! - from[1]!) * 1000;
+    const pz = (p[2]! - from[2]!) * 100;
+    const lengthSq = dx * dx + dy * dy + dz * dz;
+    const t = lengthSq ? Math.max(0, Math.min(1, (px * dx + py * dy + pz * dz) / lengthSq)) : 0;
+    return (px - t * dx) ** 2 + (py - t * dy) ** 2 + (pz - t * dz) ** 2;
   };
   const kept = new Set([0, a.length - 1]),
     spans = [[0, a.length - 1]];
@@ -78,6 +75,7 @@ export function buildCurbs(
     const half = curb.halfWidthM ?? 0.1;
     const a = parallelOffset(curb.points, -half),
       b = parallelOffset(curb.points, half);
+    if (!a.length || !b.length) continue;
     const road = city.roads[curb.road]!,
       profile = heights.roads[curb.road]!;
     const vertex = (p: { x: number; y: number }, up: number) => [
@@ -88,29 +86,57 @@ export function buildCurbs(
     const quad = (p: number[], q: number[], r: number[], s: number[]) =>
       positions.push(...p, ...q, ...r, ...p, ...r, ...s);
     const left = a.map((p) => vertex(p, 0)),
-      right = b.map((p) => vertex(p, 0)),
-      stations = curbStations(left, right);
+      right = b.map((p) => vertex(p, 0));
     const top = (p: number[]) => [p[0]!, p[1]! + 0.12, p[2]!];
-    for (let i = 1; i < stations.length; i++) {
-      const before = stations[i - 1]!,
-        after = stations[i]!;
-      const p = left[before]!,
-        q = left[after]!,
-        r = right[after]!,
-        s = right[before]!;
-      quad(top(p), top(s), top(r), top(q));
-      quad(p, top(p), top(q), q);
-      quad(r, top(r), top(s), s);
+    // Keep the original strip wherever each left station has a matching right vertex.
+    if (left.length <= right.length) {
+      const stations = curbStations(left, right);
+      for (let i = 1; i < stations.length; i++) {
+        const before = stations[i - 1]!,
+          after = stations[i]!;
+        const p = left[before]!,
+          q = left[after]!,
+          r = right[after]!,
+          s = right[before]!;
+        quad(top(p), top(s), top(r), top(q));
+        quad(p, top(p), top(q), q);
+        quad(r, top(r), top(s), s);
+      }
+    } else {
+      // Pruning can leave the inner side of a tight bend with fewer corners. Triangulate
+      // between the sides in distance order while keeping every surviving edge vertex.
+      const alongA = cumulativeLengths(a),
+        alongB = cumulativeLengths(b);
+      const endA = alongA.at(-1)! || 1,
+        endB = alongB.at(-1)! || 1;
+      let i = 0,
+        j = 0;
+      while (i + 1 < left.length || j + 1 < right.length) {
+        const p = left[i]!,
+          s = right[j]!;
+        const nextA = (alongA[i + 1] ?? Infinity) / endA;
+        const nextB = (alongB[j + 1] ?? Infinity) / endB;
+        if (nextA <= nextB) {
+          const q = left[++i]!;
+          positions.push(...top(p), ...top(s), ...top(q));
+          quad(p, top(p), top(q), q);
+        } else {
+          const r = right[++j]!;
+          positions.push(...top(p), ...top(s), ...top(r));
+          quad(r, top(r), top(s), s);
+        }
+      }
     }
     quad(left[0]!, right[0]!, top(right[0]!), top(left[0]!));
-    const last = a.length - 1;
-    quad(left[last]!, top(left[last]!), top(right[last]!), right[last]!);
+    const p = left.at(-1)!,
+      q = right[Math.min(left.length, right.length) - 1]!;
+    quad(p, top(p), top(q), q);
   }
   const geometry = new BufferGeometry().setAttribute(
     'position',
     new Float32BufferAttribute(positions, 3),
   );
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   const indexed = mergeVertices(geometry);
   geometry.dispose();
   return indexed;

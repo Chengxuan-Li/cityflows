@@ -327,12 +327,37 @@ export function createSignalControl(
   });
   const owner = new Int32Array(city.nodes.length).fill(-1);
   actuated.forEach((c, i) => c.nodes.forEach((n) => (owner[n] = i)));
+  // TASK-277: a movement's phase mask in a dense table with the controller it belongs to (a
+  // movement leaves one node, so one controller), for the per-car reads of `advance`.
+  const maskOf = new Int32Array(city.movements.length);
+  const maskOwner = new Int32Array(city.movements.length).fill(-1);
+  actuated.forEach((c, i) =>
+    c.phaseMask.forEach((mask, m) => {
+      if (maskOwner[m] !== -1) throw new Error(`Movement ${m} in two signal controllers`);
+      maskOf[m] = mask;
+      maskOwner[m] = i;
+    }),
+  );
+  const phaseMaskOf = (i: number, m: number) => (m >= 0 && maskOwner[m] === i ? maskOf[m]! : 0);
+  // TASK-277: the controllers each walk link calls, and per update each controller's calls as
+  // (link, need) pairs: `advance` read every walk call in the city once per controller
+  // (Philadelphia's 151 signals: a quarter of the signal pass).
+  const linkControllers = new Map<number, number[]>();
+  actuated.forEach((c, i) =>
+    c.walkMask.forEach((_, link) => {
+      const list = linkControllers.get(link);
+      if (list) list.push(i);
+      else linkControllers.set(link, [i]);
+    }),
+  );
+  const ownCalls = actuated.map(() => [] as number[]);
+  const signalNodes = city.nodes.filter((node) => signals[node.idx]);
   const windows = new Map<number, [number, number][]>();
   const eps = 1e-9;
   /** TASK-247: approach lanes whose queue a car waiting for another phase heads. */
   const blocked = new Set<number>();
 
-  function advance(c: (typeof actuated)[number], timeS: number) {
+  function advance(c: (typeof actuated)[number], ci: number, timeS: number) {
     const s = c.state;
     const { amberS, allRedS, phases } = c.members[0]!;
     if (s.stage === GREEN_STAGE) {
@@ -346,7 +371,7 @@ export function createSignalControl(
         const stopM = city.lanes[lane]!.stopM;
         for (let id = vehicles.first(lane); id !== -1; id = vehicles.next[id]!) {
           if (vehicles.position[id]! < stopM - DETECT_M) break;
-          const mask = c.phaseMask.get(vehicles.movement[id]!) ?? 0;
+          const mask = phaseMaskOf(ci, vehicles.movement[id]!);
           if (mask & own) {
             if (blocked.has(lane)) continue;
             extend = true;
@@ -365,7 +390,7 @@ export function createSignalControl(
           const step = vehicles.routeStep[id]! + hops;
           if (route?.roads[step] !== road) continue;
           const movement = route.movements[step]!;
-          const mask = c.phaseMask.get(movement) ?? 0;
+          const mask = phaseMaskOf(ci, movement);
           if (mask & own) {
             if (blocked.has(city.movements[movement]!.fromLane)) continue;
             extend = true;
@@ -376,9 +401,10 @@ export function createSignalControl(
           }
         }
       let walkNeedS = 0;
-      for (const [link, needS] of walkCalls() ?? []) {
-        const mask = c.walkMask.get(link);
-        if (mask === undefined) continue;
+      const pairs = ownCalls[ci]!;
+      for (let k = 0; k < pairs.length; k += 2) {
+        const mask = c.walkMask.get(pairs[k]!)!,
+          needS = pairs[k + 1]!;
         if (mask & own) walkNeedS = Math.max(walkNeedS, needS);
         else calls |= mask;
       }
@@ -486,10 +512,12 @@ export function createSignalControl(
   return {
     /** The movement colours at `timeS`, advancing actuated controllers to it. */
     update(timeS: number, colors: Uint8Array) {
-      for (const c of actuated) advance(c, timeS);
-      for (const node of city.nodes) {
-        const signal = signals[node.idx];
-        if (!signal) continue;
+      for (const pairs of ownCalls) pairs.length = 0;
+      for (const [link, needS] of walkCalls() ?? [])
+        for (const i of linkControllers.get(link) ?? []) ownCalls[i]!.push(link, needS);
+      for (let i = 0; i < actuated.length; i++) advance(actuated[i]!, i, timeS);
+      for (const node of signalNodes) {
+        const signal = signals[node.idx]!;
         for (const movement of node.movements) colors[movement] = RED;
         const { phase, state, next } = stateOf(node.idx, timeS);
         if (state === GREEN_STAGE) {

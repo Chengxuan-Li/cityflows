@@ -86,15 +86,12 @@ test('a new player following only the hints completes the loop once', async ({ p
   await button(page, 'Compare').click();
   await expect(page.getByRole('region', { name: 'Scenario comparison' })).toBeVisible();
 
-  await expect(hint(page)).toContainText(
-    'Open Layers for the time of day, the appearance and labels.',
-  );
+  await expect(hint(page)).toContainText('Open Layers for the appearance and labels.');
   await expect(hint(page)).toContainText('7 of 8');
   await ringed(page, button(page, 'Layers'));
   await shot(7);
   await button(page, 'Layers').click();
   const layers = page.getByRole('region', { name: 'Map layers' });
-  await expect(layers.getByRole('group', { name: 'Time of day' })).toBeVisible();
   await expect(layers.getByLabel('Appearance')).toBeVisible();
   await expect(layers.getByLabel('Labels')).toBeVisible();
 

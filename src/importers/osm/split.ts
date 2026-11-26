@@ -1,5 +1,5 @@
 import { distance, polylineLength } from '../../geo/polyline';
-import { STOP_POSITION } from '../../network/junctions';
+import { MINI_ROUNDABOUT, STOP_POSITION } from '../../network/junctions';
 import { allocateId, type City, type Road } from '../../schema';
 import { vehicleClasses } from '../../schema';
 import type { OsmWay } from './parse';
@@ -138,8 +138,16 @@ export function formJunctionGroups(
   const boundaries = new Set(
     Object.values(city.nodes)
       .filter((node) => {
-        if (node.control !== 'uncontrolled') return true;
+        if (node.control !== 'uncontrolled' || node.provenance.inferred?.includes(MINI_ROUNDABOUT))
+          return true;
         const here = incident.get(node.id) ?? [];
+        // A polygon cut is a potential gateway. An arm ending there must stay an entry or
+        // exit so the group can build a complete chain and give it a green.
+        if (
+          city.geo?.boundary &&
+          here.some(({ road, cutStart, cutEnd }) => (road.from === node.id ? cutStart : cutEnd))
+        )
+          return true;
         if (here.some(({ road }) => road.roadClass === 'motorway')) return true;
         const neighbors = new Set(
           here.map(({ road }) => (road.from === node.id ? road.to : road.from)),

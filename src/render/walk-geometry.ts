@@ -3,11 +3,16 @@ import { earcut } from 'pixi.js';
 import {
   areaD,
   booleanOpD,
+  Clipper64,
   ClipType,
   EndType,
   FillRule,
   inflatePathsD,
   JoinType,
+  PathType,
+  ReuseableDataContainer64,
+  scalePaths64,
+  type Paths64,
 } from 'clipper2-ts';
 import {
   distance,
@@ -30,6 +35,24 @@ export interface WalkShape {
   hatches: Vec2[][];
 }
 const positive = (ring: Vec2[]) => (areaD(ring) < 0 ? [...ring].reverse() : ring);
+/** TASK-261: the outer wedge of a round join at `p`, where a strip of half width `radius` arriving
+ * from `q` meets one leaving towards `r`; none when they run straight on within a degree. Arc
+ * steps of at most 30 degrees keep it within 4% of the radius of the circle. */
+function joinWedge(q: Vec2, p: Vec2, r: Vec2, radius: number): Vec2[] | undefined {
+  const a = Math.atan2(p.y - q.y, p.x - q.x);
+  let turn = Math.atan2(r.y - p.y, r.x - p.x) - a;
+  turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+  if (Math.abs(turn) < Math.PI / 180) return undefined;
+  // The outer side is opposite the turn; its normal swings by the turn across the gap.
+  const from = a - Math.sign(turn) * (Math.PI / 2);
+  const steps = Math.ceil(Math.abs(turn) / (Math.PI / 6));
+  const ring = [p];
+  for (let k = 0; k <= steps; k++) {
+    const angle = from + (turn * k) / steps;
+    ring.push({ x: p.x + radius * Math.cos(angle), y: p.y + radius * Math.sin(angle) });
+  }
+  return positive(ring);
+}
 /** One paving footprint for both renderers, with building holes and same-grade asphalt removed. */
 const walkShapes = new WeakMap<
   CompiledCity,
@@ -90,19 +113,67 @@ function buildWalkGeometry(city: CompiledCity, source?: CityGeometry): WalkShape
   for (const o of obstacles) tree.add(...box(o.rings[0]!));
   if (!obstacles.length) tree.add(0, 0, 0, 0);
   tree.finish();
+  const clipData: (ReuseableDataContainer64 | undefined)[] = [];
+  const scale = 1000;
+  const invScale = 1 / scale;
   const shapes: WalkShape[] = [];
+  const drawn = (link: CWalkLink) =>
+    link.kind !== 'access' && link.kind !== 'crossing' && link.kind !== 'living_street';
   for (const link of city.walk.links) {
-    if (link.kind === 'access' || link.kind === 'crossing' || link.kind === 'living_street')
-      continue;
+    if (!drawn(link)) continue;
     const sidewalk = link.kind === 'sidewalk' || link.kind === 'corner';
     const width = sidewalk ? 2 : Math.min(link.widthM, 3);
     let rings = inflatePathsD([link.line], width / 2, JoinType.Round, EndType.Butt, 2, 3);
     if (!rings.length) continue;
-    const clips = tree.search(...box(rings.flat())).flatMap((i) => {
+    // TASK-261: every OSM segment is its own link, so a curved walk is a chain of butt-ended
+    // strips whose outer corners left notches along curves and radial wedges round tight ends
+    // (owner's bug 3). Where another drawn link continues at an angle, a round join's wedge on
+    // the outer side of the bend closes the notch; dead ends stay square.
+    let joined = false;
+    for (const end of [false, true]) {
+      const node = end ? link.to : link.from;
+      const p = end ? link.line.at(-1)! : link.line[0]!;
+      const q = end ? link.line.at(-2)! : link.line[1]!;
+      for (const i of city.walk.nodes[node]!.links) {
+        const other = city.walk.links[i]!;
+        if (i === link.idx || !drawn(other)) continue;
+        const wedge = joinWedge(
+          q,
+          p,
+          other.from === node ? other.line[1]! : other.line.at(-2)!,
+          width / 2,
+        );
+        if (wedge) {
+          rings.push(wedge);
+          joined = true;
+        }
+      }
+    }
+    const clips = tree.search(...box(rings.flat())).filter((i) => {
       const o = obstacles[i];
-      return o && (o.layer === link.layer || (o.building && link.layer === 0)) ? o.rings : [];
+      return o && (o.layer === link.layer || (o.building && link.layer === 0));
     });
-    if (clips.length) rings = booleanOpD(ClipType.Difference, rings, clips, FillRule.NonZero, 3);
+    // The same road or building clips many links. Reuse its quantized vertices and local minima
+    // while keeping each link's original obstacle order and millimetre scale.
+    if (clips.length) {
+      const clipper = new Clipper64();
+      clipper.addSubject(scalePaths64(rings, scale));
+      for (const i of clips) {
+        let data = clipData[i];
+        if (!data) {
+          data = new ReuseableDataContainer64();
+          data.addPaths(scalePaths64(obstacles[i]!.rings, scale), PathType.Clip, false);
+          clipData[i] = data;
+        }
+        clipper.addReuseableData(data);
+      }
+      const solution: Paths64 = [];
+      rings = clipper.execute(ClipType.Difference, FillRule.NonZero, solution)
+        ? solution.map((path) =>
+            path.map((p) => ({ x: p.x * invScale, y: p.y * invScale, z: p.z || 0 })),
+          )
+        : [];
+    } else if (joined) rings = booleanOpD(ClipType.Union, rings, null, FillRule.NonZero, 3);
     // Millimetre clipping can leave collinear slivers too small to triangulate or display.
     rings = rings.filter((ring) => Math.abs(areaD(ring)) > 0.005);
     if (!rings.length) continue;

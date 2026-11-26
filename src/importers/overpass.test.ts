@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { areaError, buildQuery, fetchOverpass } from './overpass';
+import { areaError, buildQuery, fetchOverpass, queryVersion } from './overpass';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -52,4 +52,37 @@ test('T48 garage data is requested independently of decorative surroundings', ()
   expect(query).toContain('nwr[amenity=parking][parking~"^(underground|multi-storey)$"]');
   expect(query).toContain('node[entrance=garage]');
   expect(query).toContain('[service!~"^(parking_aisle|driveway)$"]');
+});
+
+test('TASK-290 requests parking entrance nodes with and without surroundings', () => {
+  const bbox: [number, number, number, number] = [-74.008, 40.711, -74.004, 40.715];
+  for (const context of [true, false]) {
+    const query = buildQuery(bbox, context);
+    expect(query).toContain(
+      'node[amenity=parking_entrance](40.711,-74.008,40.715,-74.004)->.parkingEntrances;',
+    );
+    expect(query).toContain('way(bn.parkingEntrances)[highway=service][service=driveway];');
+  }
+  expect(queryVersion).toBe(13);
+});
+
+test('TASK-273 fetches city walls and their gates with the surroundings', () => {
+  const bbox: [number, number, number, number] = [-1.0975, 53.9514, -1.0713, 53.9655];
+  const full = buildQuery(bbox);
+  for (const clause of [
+    'way[barrier=city_wall]',
+    'way[historic=citywalls]',
+    'nwr[historic=city_gate]',
+  ])
+    expect(full).toContain(clause + '(53.9514,-1.0975,53.9655,-1.0713);');
+  expect(buildQuery(bbox, false)).not.toContain('city_wall');
+});
+
+test('TASK-295 fetches the airside and terminal and hangar buildings, with or without surroundings', () => {
+  const bbox: [number, number, number, number] = [0.0356, 51.4995, 0.0724, 51.509];
+  for (const context of [true, false]) {
+    const query = buildQuery(bbox, context);
+    expect(query).toContain('nwr[aeroway](51.4995,0.0356,51.509,0.0724);');
+    expect(query).toContain('nwr[building~"^(terminal|hangar)$"](51.4995,0.0356,51.509,0.0724);');
+  }
 });

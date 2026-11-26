@@ -143,6 +143,6 @@ working on the code.
 
 ## License and data
 
-GPL-3.0-or-later; see `LICENSE` and `NOTICE`. Imported map data is from OpenStreetMap
+GPL-2.0-or-later; see `LICENSE` and `NOTICE`. Imported map data is from OpenStreetMap
 contributors under the ODbL (https://www.openstreetmap.org/copyright); every imported project
 carries that attribution.
