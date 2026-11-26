@@ -801,3 +801,90 @@ test('T75 a crossing near an extract exit keeps its full tail guard after the se
   for (let i = 1; i < 20; i++) control.step(start + i * 0.1);
   expect(control.snapshot().crossings[0]).toBe(CROSSING_OPEN);
 });
+
+// TASK-349: a route that crosses one facility twice, down one track of a pair and, after a loop,
+// back up the other (Zurich's trams over Flughafenstrasse), closes it for each pass on its own:
+// it opens between them. Before, both passes made one event and the crossing stayed closed in
+// between (145 s here).
+test('T75 a route crossing a facility twice opens it between the passes', () => {
+  const city = operatingCrossing('tram');
+  const node = (id: string, x: number, y: number, crossing = false) => ({
+    id,
+    pos: { x, y },
+    kind: crossing ? ('level_crossing' as const) : ('plain' as const),
+    layer: 0,
+    ...(crossing ? { crossing: { kind: 'tram' as const, roadOsmIds: [10] } } : {}),
+  });
+  const track = (id: string, from: string, to: string, line: { x: number; y: number }[]) => ({
+    id,
+    from,
+    to,
+    line,
+    layer: 0,
+    kind: 'tram' as const,
+    maxSpeedMps: 10,
+    preferredDirection: 'forward' as const,
+  });
+  city.rail = {
+    nodes: Object.fromEntries(
+      [
+        node('rn:1', -5, -1000),
+        node('rn:2', -5, 0, true),
+        node('rn:3', -5, 600),
+        node('rn:4', 5, 600),
+        node('rn:5', 5, 0, true),
+        node('rn:6', 5, -1000),
+      ].map((n) => [n.id, n]),
+    ),
+    tracks: Object.fromEntries(
+      [
+        track('rt:1', 'rn:1', 'rn:2', [
+          { x: -5, y: -1000 },
+          { x: -5, y: 0 },
+        ]),
+        track('rt:2', 'rn:2', 'rn:3', [
+          { x: -5, y: 0 },
+          { x: -5, y: 600 },
+        ]),
+        track('rt:3', 'rn:3', 'rn:4', [
+          { x: -5, y: 600 },
+          { x: 0, y: 640 },
+          { x: 5, y: 600 },
+        ]),
+        track('rt:4', 'rn:4', 'rn:5', [
+          { x: 5, y: 600 },
+          { x: 5, y: 0 },
+        ]),
+        track('rt:5', 'rn:5', 'rn:6', [
+          { x: 5, y: 0 },
+          { x: 5, y: -1000 },
+        ]),
+      ].map((t) => [t.id, t]),
+    ),
+    platforms: {},
+  };
+  const compiled = setup(city);
+  expect(compiled.rail!.facilities!.map((f) => f.nodes)).toEqual([['rn:2', 'rn:5']]);
+  const table = railTimetable(compiled.rail!);
+  expect(table.routes.map((r) => r.id)).toEqual(['tram:rn:1>rn:6']);
+  const control = createRailCrossings(
+    compiled,
+    createVehicles(0, compiled.lanes.length, compiled.movements.length),
+    DEFAULT_SIM_PARAMS,
+    200,
+    () => false,
+  )!;
+  // The service that departs at 206 s: down past the crossing, around the loop, back up.
+  const closures: [number, number][] = [];
+  for (let i = 0; i < 2500; i++) {
+    const timeS = 200 + i * 0.1;
+    control.step(timeS);
+    const closed = control.snapshot().crossings[0] !== CROSSING_OPEN;
+    const last = closures.at(-1);
+    if (closed && last && last[1] >= timeS - 0.15) last[1] = timeS;
+    else if (closed) closures.push([timeS, timeS]);
+  }
+  expect(closures).toHaveLength(2);
+  for (const [from, to] of closures) expect(to - from).toBeLessThan(25);
+  expect(closures[1]![0] - closures[0]![1]).toBeGreaterThan(90);
+});
