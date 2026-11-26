@@ -77,7 +77,8 @@ const baselines = {
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
   // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
   // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-  'sindelfingen-a81': '77e7e4d6914567427d1dbfaecb1dd941a25fb1bb5f6a4a8fec78707911297e05',
+  // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
+  'sindelfingen-a81': '5ee3dbca6648f4e47147c0fab8c55a7c3c413e53682191517f26125f633b66e8',
 };
 
 unitTest(

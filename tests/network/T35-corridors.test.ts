@@ -440,6 +440,9 @@ const sharpStations: Record<string, number> = {
   'sindelfingen r:176#0 0.25': 0.15,
   'sindelfingen r:29#0 0.25': 0.12,
   'sindelfingen r:863#0 0.25': 0.14,
+  // TASK-348: r:597, a one-way road continuing a two-way street at n:493, eases onto the
+  // direction it continues, so its lane runs 0.8 m shorter than its reference (0.19 m).
+  'sindelfingen r:597#0 0.75': 0.2,
 };
 
 test.each(tierCities(auditCities))(

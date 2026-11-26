@@ -73,9 +73,10 @@ const baseline = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-    compile: '1eabb11037dd65d58032c7702bf906bdd22545a5232fd1d06bfe2e78363e9c82',
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
+    compile: '2b6649385d3a5238975736962bf3b47b962eabf9489710c09bd61de828188998',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
+    arrows: '78bd3d5f5e2a2129c8d014a2bfd5b4e08f6352d15ffb02a3d0e9ddc42cecf314',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.

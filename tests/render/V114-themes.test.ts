@@ -74,7 +74,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's garage entrance changes keep-clear paint on r:97 and r:954.
           // TASK-347: lines run on across nodes drawn as road (`roadStrip`).
-          '17291e421227304c25080595225b9113c4e497dd065d46b059aac1c8fa70a454',
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes, its one-way to two-way nodes n:375 and n:493 as continuations.
+          'f63fec6e10ac15e96ea188aa3fee2907881988ea6447b8b670cdbb7da51aaf66',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
