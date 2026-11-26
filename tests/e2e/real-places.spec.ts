@@ -47,7 +47,8 @@ for (const [width, height] of [
   test(`the New city panel groups real places and test layouts at ${width} px, and opens each place`, async ({
     page,
   }, info) => {
-    test.setTimeout(240_000);
+    // TASK-357: Heathrow opens twice here, in up to 180 s each on a loaded machine.
+    test.setTimeout(600_000);
     const errors = pageErrors(page);
     await page.setViewportSize({ width, height });
     await page.goto('/?city=grid5x5');
@@ -74,10 +75,12 @@ for (const [width, height] of [
         );
         await page.screenshot({ path: info.outputPath(`new-city-${width}.png`) });
       }
+      // Heathrow's 180 s to open, as in its render check below.
+      const timeout = id === 'heathrow' ? 180_000 : undefined;
       await place.click();
-      await opened(page, name);
+      await opened(page, name, timeout);
       await page.goto(`/?city=${id}`);
-      await opened(page, name);
+      await opened(page, name, timeout);
     }
     expect(errors).toEqual([]);
   });
