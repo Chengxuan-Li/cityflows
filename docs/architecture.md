@@ -2005,7 +2005,13 @@ carry no persons and generate no road trips.
   then forward, and hover-taxi between helipads. The flight operations give the heading of the
   helicopter runway's end with the most headwind where the airport has one (a runway with no
   fixed-wing code, Zurich's H01/H19; TASK-302), else the fixed-wing flow's; helicopter runways
-  are not in the fixed-wing configurations.
+  are not in the fixed-wing configurations. TASK-358: a helicopter on a pad, or below 20 m on
+  its way onto or off one (the low part of its landing or departure, a hover-taxi's whole way:
+  its footprint), is in the fixed-wing order as an aircraft parked in the way: they wait short
+  of its footprint until it has climbed clear. A helicopter does not start a departure or
+  hover-taxi, and on a landing hovers at the point where it would come below 20 m, while a
+  fixed-wing body stands in its footprint or one moving there cannot stop short of it (those
+  that can are ordered to wait for it; those already waiting for it do not hold it).
 - **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
   `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
   parked, off-block, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
