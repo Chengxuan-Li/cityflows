@@ -58,8 +58,10 @@ overlaps on both); Boston 06:00–10:00 223 → 223, identical. Full days, main 
 729/727/746 (carried-in readiness 23,247/12,727/5,892 → 24/463/29 s); Boston 991/971/996 → 992/968/996
 (go-arounds 27/38/27 → 17/35/49, overlaps 22/0/11 on both).
 
-Heathrow full days (`--checks`, 1,306 movements; main 766/668/725): seed 1 is behind main from 07:00 (completed at
-08:00 125 → 94, at 16:00 450 → 428, the gap narrowing) and seed 2 ahead (at 18:00 434 → 525, diversions 140 → 94).
+Heathrow full days (`--checks`, 1,306 movements; main 766/668/725) were still running at report time. Completed by
+hour, main → branch: seed 1 at 08:00 125 → 94, 13:00 332 → 312, 19:00 572 → 550 (diverted 105 → 111); seed 2 at
+13:00 274 → 329, 22:00 599 → 686 (diverted 206 → 155; main's whole day is 668); seed 3 at 13:00 317 → 303. Their
+JSON lands as `fo-lhr-d1/2/3.json`.
 Seed 1's loss is a stall of one arrival end, not a tow: from 05:30 an arrival queued for remote stand st:31169 waits
 for the parked aircraft at TE3 and then for one that parked at st:31168 across its way in (a larger aircraft passing
 one parked there waits for it, TASK-312), and as the head of its end's queue it holds every later arrival to that end
