@@ -157,6 +157,8 @@ export function defaultSlice(
 
 /** TASK-348: the most a one-way road may turn into the two-way street it continues. */
 const ONE_WAY_TURN = Math.PI / 18;
+/** TASK-348: the shortest one-way road that takes the street's lanes on (TASK-080's 15 m taper). */
+const MIN_TAPER_ROAD_M = 15;
 
 /** Movement topology determines eligibility; road geometry orders physical branch slices. */
 export function continuationLayout(
@@ -229,6 +231,8 @@ export function continuationLayout(
         sources[oneWay.idx]!.streetGroupId === null &&
         !sources[oneWay.idx]!.corridorId &&
         oneWay.lanes.length === opposite.lanes.length &&
+        // Room for TASK-080's shortest taper: Freiburg's 7.4 m r:1751 bent its end at n:1747.
+        polylineLength(sources[oneWay.idx]!.centerline) >= MIN_TAPER_ROAD_M &&
         (oneWay.to === node.idx) !== (opposite.to === node.idx) &&
         Math.cos(heading(oneWay) - heading(opposite)) >= Math.cos(ONE_WAY_TURN)
       ) {
