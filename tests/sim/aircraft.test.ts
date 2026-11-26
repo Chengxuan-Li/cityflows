@@ -257,11 +257,11 @@ test('a departure pushes back, taxis, holds for a landing, lines up and climbs o
 });
 
 test.each([
-  { code: 'E', roller: 'B77W', departureAt: 1400 },
-  { code: 'C', roller: 'E175', departureAt: 1670 },
+  { code: 'E', roller: 'B77W', towAt: 400 },
+  { code: 'C', roller: 'E175', towAt: 150 },
 ] as const)(
   'a crossing hold clears a rolling aircraft on a code $code runway',
-  ({ code, roller, departureAt }) => {
+  ({ code, roller, towAt }) => {
     const holdX = -900;
     const holdY = 25;
     const target = 'an:9000';
@@ -292,13 +292,18 @@ test.each([
     const crossing = fleet.spawnParked({ typeId: crossingType.id, stand: stands.C1 });
     if (!departure.ok) throw new Error(departure.reason);
     if (!crossing.ok) throw new Error(crossing.reason);
-    expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(true);
+    // TASK-346: a departure holds the runway from its line-up, not while it taxis, so the tow is
+    // asked for once the departure is on its way, to reach the hold while it rolls past.
+    expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
     const { poses } = run(
       fleet,
       900,
       () => fleet.metrics().departed === 1 && fleet.metrics().towed === 1,
       (step) => {
-        if (step === departureAt) expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
+        if (step === towAt)
+          expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(
+            true,
+          );
       },
     );
     const pass = poses.get(departure.id)!.find((p) => p.state === 'takeoff-roll' && p.x >= holdX)!;
