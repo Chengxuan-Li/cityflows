@@ -246,7 +246,7 @@ function createRun({
     scenario.startS,
     () => walkers?.walkCalls(),
     undefined,
-    (id) => railCrossings?.holdRed(id) ?? -1,
+    (id, stopM) => railCrossings?.holdRed(id, stopM) ?? -1,
   );
   let merges = createMerges(compiled, vehicles, params, (id, ramp, movement) =>
     intersections.blocksEntry(id, ramp, movement),
@@ -1760,7 +1760,7 @@ function createRun({
       time(),
       () => walkers?.walkCalls(),
       signalControl.states(),
-      (id) => railCrossings?.holdRed(id) ?? -1,
+      (id, stopM) => railCrossings?.holdRed(id, stopM) ?? -1,
     );
     persons.patch(signalled);
     walkers?.patch(signalled, time());
