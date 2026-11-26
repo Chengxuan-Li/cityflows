@@ -1,0 +1,170 @@
+/* Capture panel (cinematic-captures branch only). It takes the inspector's place; the 3D canvas
+   takes the shot's canvas size and is scaled into the map view. */
+.app.capture-open .inspector-column,
+.app.capture-open .inspector-edge {
+  display: none;
+}
+
+.app.capture-framed .map-view {
+  background: rgb(20, 22, 26);
+}
+
+.app.capture-framed .map-view > canvas[aria-label='3D city view'] {
+  inset: auto !important;
+  left: var(--capture-left) !important;
+  top: var(--capture-top) !important;
+  width: var(--capture-w) !important;
+  height: var(--capture-h) !important;
+  transform: scale(var(--capture-scale));
+  transform-origin: 0 0;
+}
+
+.capture-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.capture-panel {
+  grid-area: inspector;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 340px;
+  padding: 8px 10px;
+  overflow: auto;
+  border-left: 1px solid var(--separator);
+  background: var(--inspector);
+}
+
+.capture-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.capture-head h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.capture-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capture-body .disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.capture-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.capture-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.capture-file input {
+  display: none;
+}
+
+.capture-file {
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  background: var(--control);
+  box-shadow: var(--shadow-control);
+  line-height: 18px;
+}
+
+.capture-status,
+.capture-hint {
+  margin: 0;
+  color: var(--label-secondary);
+  font-size: 11px;
+}
+
+.capture-readout {
+  margin: 0;
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-keys {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.capture-keys th {
+  color: var(--label-secondary);
+  font-weight: 400;
+  text-align: left;
+}
+
+.capture-keys input {
+  width: 100%;
+  appearance: textfield;
+}
+
+.capture-keys input::-webkit-inner-spin-button,
+.capture-keys input::-webkit-outer-spin-button {
+  appearance: none;
+}
+
+.capture-keys tr.current td {
+  background: var(--hover);
+}
+
+.capture-key-actions {
+  white-space: nowrap;
+}
+
+.capture-key-actions button {
+  padding: 3px 6px;
+}
+
+.capture-layer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.capture-params {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.capture-params .edit-field,
+.capture-panel .edit-field {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.capture-panel input[aria-invalid='true'] {
+  border-color: var(--danger-edge);
+}
+
+.capture-command {
+  display: flex;
+  align-items: start;
+  gap: 6px;
+}
+
+.capture-command code {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

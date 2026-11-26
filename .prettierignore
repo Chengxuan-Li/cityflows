@@ -20,3 +20,5 @@ fixtures/projects/london-city-airport.cityflows.json
 fixtures/projects/boston-logan.cityflows.json
 fixtures/projects/heathrow.cityflows.json
 fixtures/projects/zurich-airport.cityflows.json
+# Capture shot files: written by the Capture panel (cinematic-captures branch only).
+capture/locations/*/*.json

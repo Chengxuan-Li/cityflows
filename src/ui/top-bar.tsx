@@ -113,6 +113,14 @@ export function TopBar() {
       </div>
       <Toolbox />
       <RunControls />
+      {(import.meta.env.DEV || import.meta.env.MODE === 'test') && (
+        // The Capture panel (cinematic-captures branch only; capture/panel).
+        <ToolbarButton
+          label="Capture"
+          tooltip="Edit and preview a video shot"
+          onClick={() => dispatchEvent(new Event('cityflows:capture'))}
+        />
+      )}
       <ToolbarButton
         icon="sidebarRight"
         className={`sidebar-toggle${waiting ? ' waiting' : ''}`}

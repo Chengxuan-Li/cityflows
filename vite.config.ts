@@ -2,6 +2,7 @@ import { globSync, readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { captureEndpoints } from './capture/core/dev-server.ts';
 
 // Test tiers (TASK-090): `npm test` (unit) runs the unit tests, the synthetic cities and
 // Sindelfingen; `test:city` Munich's geometry and import; `test:traffic` the Munich mornings.
@@ -24,7 +25,8 @@ const workers = Number(
 
 export default defineConfig({
   base: process.env.CITYFLOWS_BASE_PATH ?? '/',
-  plugins: [react()],
+  // The Capture panel's dev-server endpoints (cinematic-captures branch only).
+  plugins: [react(), captureEndpoints()],
   worker: { format: 'es' },
   test: {
     environment: 'node',
