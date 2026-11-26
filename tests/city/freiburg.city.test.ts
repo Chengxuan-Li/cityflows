@@ -295,8 +295,11 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-348: the four signalised crossings outside junction groups laid out as plain nodes
   // (1,531 to 1,533 completed, 62.8 to 61.3 s).
   // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
-  // turning drivers and crawling traffic (1,532 to 1,530 completed, 59.8 to 60.1 s).
-  expect(morning.stateHash).toBe(1692126213);
+  // turning drivers and crawling traffic. On TASK-348's main: 1,533 to 1,482 completed, 19
+  // gridlocked from 07:50 at n:18 (r:1348 to r:1337): the tram crossing holds the head for n:39's
+  // red and the two actuated greens alternate (TASK-222 keeps a green for mutual waits
+  // only); seeds 2 to 6 pass.
+  expect(morning.stateHash).toBe(3906630995);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -206,7 +206,7 @@ const pins = {
     // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-    compile: 'a218755f4870a1591d2611861e6bc21634470999700d34655cdf6a466b62ac97',
+    compile: '4e5020e454f3bf741d286c87c7d102884dcc1410d638f9ef28e6f403442fb394',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
@@ -245,7 +245,7 @@ const pins = {
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-    compile: '8ac9b6b0eb1388038c26b5c079731d9aefd2ea999fd5812d513b077a4846f0a2',
+    compile: 'eedb3f36653f2a96cef3a456443ea485fbe6a2830002823b2ca4dd7cc2890c19',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     lamps: 'd5f3e9ae1e639f91faa762c4a067992c08d3ffcc96750b590323086650e62ff0',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
