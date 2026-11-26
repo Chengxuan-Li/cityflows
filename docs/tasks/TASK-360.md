@@ -226,3 +226,23 @@ Zurich 731/727 (main 729/727), go-arounds 10/4 (7/7), mean delay 402/449 s (372/
 go-arounds 37/43 (17/35), overlaps 22/1 (22/0), mean delay 559/877 s (489/770 s). At Boston the rule moved only 11–14
 PC24 take-offs a day to intersections, yet the day lost on two seeds by arrival-side holds (landing commitments refused
 by an arrival standing on the way off: 32 and 28); that is the reason for the restriction, not a mechanism we found.
+
+**Picture.** A multiple line-up at Heathrow, seed 1, 06:29:57: B77W G-ZBMY lined up at A4 (404 m in), A21N G-CQRY
+lined up behind it at A1/A2, an A20N holding (`D:\cityflows-wt\330-pilot\R\t360\multi-lhr-p1-ep1.png`, SVG beside
+it; the trace of the first three episodes is `multi-lhr-p1.json`, made by `trace-multi.ts`).
+
+**Verdict.** Peak rung passes (take-offs up on every seed, completed 617 → 676, go-arounds 21 → 18,
+`runwayConflictsReal` 0, no gridlock; the three overlaps are the helipad/tow pair above). Full days: Heathrow seeds 1
+and 2 better, seed 3 worse (−20 completed, mean delay +14 %, an arrival-side admission hold); Zurich, Boston and
+London City not worse (identical or same outcome). Strictly, "not worse" fails on Heathrow seed 3; the lead decides.
+The rules are on by default; `T360=` restores main exactly.
+
+Tiers: `npm run check` (305 files, 2,183 tests passed, 3 skipped), `test:city` (76 files passed; the Zurich showcase
+drain timed out at 900 s on the loaded machine and passed alone with `CITYFLOWS_TEST_TIMEOUT_MS=180000`; Zurich's
+airside is main's), `test:traffic:light` (5 passed, 1 expected fail), `test:e2e:light` (63 passed, ports 5396/5397).
+
+Other files: `bench/airside-delay.ts` (take-offs per runway end, `departureCounts`, TASK-352's `arrivalCauses` by end
+and `OVERLAP` log lines), `tests/sim/aircraft-checks.ts`, `tests/sim/airside-fixture.ts` (`withRules`),
+`tests/sim/runway-exemptions.test.ts`, `tests/sim/runway-pavement.test.ts`, `tests/editor/airport-editing.test.ts`.
+Outputs: `D:\cityflows-wt\330-pilot\R\t360\` (`irm-*` branch, `off-*` main-equivalent, `irma-*` rule 1 on every
+runway, `v1\` superseded runs).
