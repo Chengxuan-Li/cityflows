@@ -1136,8 +1136,9 @@ routing, demand, the timetable or simulation state.
   (a signalised crossing between junctions, or a signalised group's member between two others)
   keeps its control but is laid out as TASK-255's stop position is: a through node (setback 0, no
   outline) where its two arms run on within 30 degrees with the same lanes, whatever the ways'
-  names and classes, else a continuation by TASK-071's rule; its crossing is placed from the node
-  out on the approach (`placeCrossing`), the stop line before it, the walk link at its stripes.
+  names and classes, else a continuation by TASK-071's rule; its crossing stays where the
+  junction's floor put it (half the road plus 1 m from the node, over the mapped walkway), the
+  stop line before it, so the approach's storage is unchanged.
   (3) A continuation node also covers a one-way road continuing one direction of a two-way street
   straight on (within 10 degrees) at a node of their own, where the street's other direction has
   no movement: that direction starts or ends at the node outside the layout; the one-way road's

@@ -353,7 +353,10 @@ export function crossingPlacement(city: CompiledCity, road: CRoad, atEnd: boolea
     servedSignal(city, road) &&
     road.lanes.some((i) => {
       const lane = city.lanes[i]!;
-      return lane.lengthM - placement.farM - STOP_CLEAR_M < lane.lengthM / 2;
+      // TASK-348: at a plain signalised crossing, half of the lane before its stripes' floor.
+      const before =
+        lane.lengthM - (city.nodes[road.to]!.outline.length ? 0 : placement.nearM - 0.25);
+      return lane.lengthM - placement.farM - STOP_CLEAR_M < before / 2;
     });
   return clamped && placement.stripes.length ? { ...placement, stripes: [] } : placement;
 }
@@ -369,14 +372,18 @@ const placements = new WeakMap<CRoad, Placement[]>();
 
 function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
   const node = city.nodes[atEnd ? road.to : road.from]!;
-  // TASK-348: a signalised crossing laid out as a plain node keeps its crossing, from the node out.
+  // TASK-348: a signalised crossing laid out as a plain node keeps its crossing.
   if (!node.outline.length && !isSignalCrossing(node)) return { stripes: [], nearM: 0, farM: 0 };
   const arm = crossingArms(city, node).find((a) =>
     a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
   )!;
   const lanes = road.lanes.map((index) => city.lanes[index]!);
   const curbs = junctionCorners(node).filter((c) => c.kind === 'curb' && c.curve);
-  let near = 0.25;
+  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
+  // TASK-348: at a signalised crossing laid out as a plain node the stripes stay where its junction
+  // floor (half the road plus 1 m) put them, over the mapped walkway (Freiburg n:31's stood 4.5 m
+  // past them when they started at the node).
+  let near = node.outline.length ? 0.25 : width / 2 + 1.25;
   for (const corner of curbs)
     corner.roads.forEach((index, k) => {
       if (!arm.some((e) => e.road.idx === index)) return;
@@ -387,7 +394,6 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
       const fromCut = atEnd ? nearest.lane.lengthM - nearest.on.along : nearest.on.along;
       near = Math.max(near, fromCut + CURB_CLEAR_M);
     });
-  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
   const local = (d: number, side: number): Vec2 => {
     let edge = 0;
     const lane = lanes.find((lane) => {

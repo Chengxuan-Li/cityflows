@@ -71,7 +71,7 @@ describe('TASK-348 junction lanes', () => {
     expect(node).toBeDefined();
     expect(node.setbacks.every((s) => s === 0)).toBe(true);
     expect(node.outline).toEqual([]);
-    // The approaches keep their crossing, drawn from the node out, and stop before it.
+    // The approaches keep their crossing and stop before it.
     const approaches = net.roads.filter((r) => r.to === node.idx);
     expect(approaches).toHaveLength(2);
     for (const road of approaches) {
@@ -79,7 +79,8 @@ describe('TASK-348 junction lanes', () => {
       const span = crossingSpan(net, lane, true);
       expect(span).not.toBeNull();
       expect(lane.stopM).toBeLessThan(span!.farM);
-      expect(lane.lengthM - span!.nearM).toBeLessThan(1);
+      // Where the junction's floor (half the road plus 1 m) put it, over the mapped walkway.
+      expect(lane.lengthM - span!.nearM).toBeCloseTo(lane.widthM / 2 + 1.25, 6);
     }
   });
 
