@@ -84,6 +84,9 @@ import type { RunwayConfiguration } from './runway-configuration';
 //   A ring of waits that still closes (through those parked in the way) is broken after 60 s.
 //   TASK-330: a queued arrival that cannot reach where it meets a departure or tow before that
 //   aircraft is past does not hold it at its stand: the starter goes before it.
+//   TASK-363: a queued arrival whose way to its stand passes an aircraft parked across it steps
+//   out of the landing order until the way is clear; queued arrivals to one end keep the order
+//   in which they were first sequenced.
 //   TASK-330: arrivals are spaced on final (2.5 NM or the wake pair); one appears behind an
 //   arrival ahead to the same runway when that one will be clear of its way off the runway by its
 //   landing commitment, not only once it is.
@@ -156,18 +159,15 @@ function t360Rules() {
     T360A: rules.includes('a'),
   };
 }
-/** TASK-363 rule switches (the gate ladder's variants): the env T363=<letters>, p a queued arrival
- * whose way in passes an aircraft parked across it steps out of the landing order. */
+/** TASK-363 rule switches, read when a fleet is created (the gate ladder's variants): the env
+ * T363=<letters>, p a queued arrival that cannot reach its stand past an aircraft parked across
+ * its way steps out of the landing order, k queued arrivals to one end keep their places in the
+ * approach sequence; both by default, T363=off (no p or k) for the order before them. */
 function t363Rules() {
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
-  const rules = env?.T363 ?? '';
-  return {
-    T363P: rules.includes('p'),
-    T363R: rules.includes('r'),
-    T363S: rules.includes('s'),
-    T363K: rules.includes('k'),
-  };
+  const rules = env?.T363 ?? 'pk';
+  return { T363P: rules.includes('p'), T363K: rules.includes('k') };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
@@ -786,7 +786,7 @@ function alignStart(
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const { T360I, T360R, T360M, T360A } = t360Rules();
-  const { T363P, T363R, T363S, T363K } = t363Rules();
+  const { T363P, T363K } = t363Rules();
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -2029,27 +2029,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       );
       // A re-routed aircraft, moving, goes before those not started.
       const first = craft.mode === 'ground' && unstarted(other);
-      // TASK-363 (`T363S`): two queued arrivals to one runway end are ordered in their approach
-      // sequence (the queue's order), not in the order they were admitted.
+      // TASK-363 (`T363K`): two queued arrivals to one runway end go in their approach sequence
+      // (`seqRank`), which an arrival keeps while it steps out of the landing order.
       const sequenced =
-        T363S &&
-        craft.mode === 'queued' &&
-        other.mode === 'queued' &&
-        craft.request?.kind === 'arrival' &&
-        other.request?.kind === 'arrival' &&
-        craft.runway === other.runway &&
-        craft.request.end === other.request.end;
-      // TASK-363 (`T363K`): or in their approach sequence (`seqRank`).
-      const kept =
         T363K &&
         craft.mode === 'queued' &&
         other.mode === 'queued' &&
+        craft.seqRank !== undefined &&
+        other.seqRank !== undefined &&
+        craft.runway === other.runway &&
         craft.request?.kind === 'arrival' &&
         other.request?.kind === 'arrival' &&
-        craft.runway === other.runway &&
-        craft.request.end === other.request.end &&
-        craft.seqRank !== undefined &&
-        other.seqRank !== undefined;
+        craft.request.end === other.request.end;
       let parker: Craft | null | undefined;
       for (const c of conflicts(craft, own, other)) {
         if (!nearEnough(own, c, otherSpans)) {
@@ -2057,10 +2048,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           continue;
         }
         const byRank = sequenced
-          ? queue.indexOf(other.id) < queue.indexOf(craft.id)
-          : kept
-            ? other.seqRank! < craft.seqRank!
-            : other.rank < craft.rank && !yields && !first;
+          ? other.seqRank! < craft.seqRank!
+          : other.rank < craft.rank && !yields && !first;
         const otherCanWait =
           !inside(other, c.otherLeg, c.x1 - SAMPLE_M) &&
           canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
@@ -3404,13 +3393,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return refuse('closed');
     if (standOccupant[request.stand] !== -1) return refuse('stand');
     if (pushBlocksStand(craft, request.stand)) return refuse('push');
-    // TASK-363: an arrival that cannot reach its stand while an aircraft stands parked across its
-    // way in, with no movement admitted, steps out of the landing order: it is not ordered (or
-    // its order is dropped), so the arrivals behind it are not ordered to wait for it and land
-    // first; it keeps its place at the top of the queue and is ordered once the way is clear.
-    // ICAO Doc 4444, 6.5.6.1.1 (the approach sequence facilitates the arrival of the maximum
-    // number of aircraft with the least average delay) and 6.5.6.1.4 (an aircraft that holds
-    // for its own reasons is placed at the top of the sequence so that others may land).
+    // TASK-363 (`T363P`): an arrival that cannot reach its stand while an aircraft stands parked
+    // across its way in, with no movement admitted or requested, steps out of the landing order:
+    // it is not ordered (or its order is dropped), so the arrivals behind it are not ordered to
+    // wait for it and land first; it keeps its place in the approach sequence (`T363K`) and is
+    // ordered once the way is clear. ICAO Doc 4444, 6.5.6.1.1 (the approach sequence facilitates
+    // the arrival of the maximum number of aircraft with the least average delay) and 6.5.6.1.4
+    // (an aircraft that holds for reasons of its own is re-sequenced so that others may land).
     if (T363P && craft.admission && behindParked(craft.waits)) {
       stepOut(craft);
       return refuse('behindParked');
@@ -4095,14 +4084,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     for (const o of crafts) if (o.waits.length) o.waits = o.waits.filter((w) => w.pred !== craft);
   }
   /** TASK-363: whether a queued arrival would wait for an aircraft parked or at rest across its
-   * way with no movement admitted (`T363R`: one with a departure or tow requested too). */
+   * way with no movement admitted or requested. */
   function behindParked(waits: Wait[]) {
     return waits.some(
       (w) =>
         w.predM === Infinity &&
         w.pred.mode === 'parked' &&
         !w.pred.admission &&
-        (T363R || !w.pred.request) &&
+        !w.pred.request &&
         !passed(w),
     );
   }
