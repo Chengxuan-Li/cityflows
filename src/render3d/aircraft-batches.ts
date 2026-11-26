@@ -111,16 +111,22 @@ export class AircraftBatches {
           new InstancedBufferAttribute(new Float32Array(capacity * value.length), value.length),
         );
     }
+    // Only what changed is sent again: parked aircraft keep their instances frame after frame.
     const matrices = meshes[0]!.instanceMatrix;
-    batch.matrices.forEach((matrix, i) => matrix.toArray(matrices.array, i * 16));
-    batch.parts.forEach(({ values }, i) => {
-      for (const name in values) {
-        const attribute = batch.geometry.getAttribute(name) as InstancedBufferAttribute;
-        (attribute.array as Float32Array).set(values[name]!, i * attribute.itemSize);
-        attribute.needsUpdate = true;
-      }
+    let moved = false;
+    batch.matrices.forEach((matrix, i) => {
+      moved = write(matrices.array as Float32Array, i * 16, matrix.elements) || moved;
     });
-    if (count) matrices.needsUpdate = true;
+    if (moved) matrices.needsUpdate = true;
+    for (const name in batch.parts[0]?.values) {
+      const attribute = batch.geometry.getAttribute(name) as InstancedBufferAttribute;
+      let changed = false;
+      batch.parts.forEach(({ values }, i) => {
+        changed =
+          write(attribute.array as Float32Array, i * attribute.itemSize, values![name]!) || changed;
+      });
+      if (changed) attribute.needsUpdate = true;
+    }
     for (const mesh of meshes) {
       mesh.count = count;
       mesh.visible = count > 0;
@@ -143,4 +149,15 @@ function place(mesh: Mesh, frame: Object3D, matrix: Matrix4) {
     matrix.premultiply(object.matrix);
   }
   return matrix;
+}
+
+/** Writes `values` into `array` at `offset`; whether any element changed. */
+function write(array: Float32Array, offset: number, values: ArrayLike<number>) {
+  let changed = false;
+  for (let i = 0; i < values.length; i++)
+    if (array[offset + i] !== Math.fround(values[i]!)) {
+      array[offset + i] = values[i]!;
+      changed = true;
+    }
+  return changed;
 }
