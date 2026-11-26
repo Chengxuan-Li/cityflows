@@ -80,28 +80,37 @@ export function createRailCrossings(
   const profiles = createVehicleProfiles(params);
   const maxLength = Math.max(...profiles.map((p) => p.lengthM));
   const length = (id: number) => profiles[vehicles.vclass[id]!]!.lengthM;
+  // TASK-349: a route's passes over a facility, each closing it on its own. The route positions
+  // its train covers on the facility's rail spans (half its length either side), joined where
+  // they overlap: one pass. A route that crosses again after turning back at a terminal (Zurich's
+  // trams over Flughafenstrasse, 306 s apart) made one event of both passes before, so the
+  // crossing stayed closed between them and, with a tram every few minutes, never opened.
+  const passes = (route: (typeof table.routes)[number], facility: (typeof facilities)[number]) => {
+    const half = trainDefaults[route.kind].lengthM / 2;
+    const covered: [number, number][] = [];
+    for (const span of facility.railSpans ?? [])
+      for (const section of route.sections) {
+        if (section.track !== span.track) continue;
+        const track = rail.tracks[span.track]!;
+        covered.push([
+          section.startM + (section.forward ? span.fromM : track.lengthM - span.toM) - half,
+          section.startM + (section.forward ? span.toM : track.lengthM - span.fromM) + half,
+        ]);
+      }
+    covered.sort((a, b) => a[0] - b[0]);
+    const joined: [number, number][] = [];
+    for (const [from, to] of covered) {
+      const last = joined.at(-1);
+      if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+      else joined.push([from, to]);
+    }
+    return joined;
+  };
   const events = table.routes.map((route) => {
     const result: Event[] = [];
     facilities.forEach((facility, index) => {
-      let lo = Infinity,
-        hi = -Infinity;
-      for (const span of facility.railSpans ?? [])
-        for (const section of route.sections) {
-          if (section.track !== span.track) continue;
-          const track = rail.tracks[span.track]!;
-          lo = Math.min(
-            lo,
-            section.startM + (section.forward ? span.fromM : track.lengthM - span.toM),
-          );
-          hi = Math.max(
-            hi,
-            section.startM + (section.forward ? span.toM : track.lengthM - span.fromM),
-          );
-        }
-      if (lo > hi) return;
-      const half = trainDefaults[route.kind].lengthM / 2;
-      lo -= half;
-      hi += half;
+      const joined = passes(route, facility);
+      if (!joined.length) return;
       // Enough warning for the fastest legal road approach, including long-vehicle clearance.
       const speed = Math.max(
         0,
@@ -110,28 +119,29 @@ export function createRailCrossings(
           .map((l) => l.speedLimitMps),
       );
       const warningS = Math.max(12, speed / Math.min(...profiles.map((p) => p.idm.bMps2)) + 6);
-      for (const phase of route.phases) {
-        const end =
-          phase.positionM +
-          phase.speedMps * phase.durationS +
-          (phase.acceleration * phase.durationS ** 2) / 2;
-        const low = Math.max(lo, Math.min(phase.positionM, end));
-        const high = Math.min(hi, Math.max(phase.positionM, end));
-        if (low > high) continue;
-        const forward = end >= phase.positionM;
-        const enterS =
-          Math.abs(end - phase.positionM) < 1e-9
-            ? phase.timeS
-            : phaseTime(phase, forward ? low : high);
-        const exitS =
-          Math.abs(end - phase.positionM) < 1e-9
-            ? phase.timeS + phase.durationS
-            : phaseTime(phase, forward ? high : low);
-        const previous = result.at(-1);
-        if (previous?.facility === index && enterS <= previous.exitS + 1e-6)
-          previous.exitS = Math.max(previous.exitS, exitS);
-        else result.push({ facility: index, enterS, exitS, warningS });
-      }
+      for (const [lo, hi] of joined)
+        for (const phase of route.phases) {
+          const end =
+            phase.positionM +
+            phase.speedMps * phase.durationS +
+            (phase.acceleration * phase.durationS ** 2) / 2;
+          const low = Math.max(lo, Math.min(phase.positionM, end));
+          const high = Math.min(hi, Math.max(phase.positionM, end));
+          if (low > high) continue;
+          const forward = end >= phase.positionM;
+          const enterS =
+            Math.abs(end - phase.positionM) < 1e-9
+              ? phase.timeS
+              : phaseTime(phase, forward ? low : high);
+          const exitS =
+            Math.abs(end - phase.positionM) < 1e-9
+              ? phase.timeS + phase.durationS
+              : phaseTime(phase, forward ? high : low);
+          const previous = result.at(-1);
+          if (previous?.facility === index && enterS <= previous.exitS + 1e-6)
+            previous.exitS = Math.max(previous.exitS, exitS);
+          else result.push({ facility: index, enterS, exitS, warningS });
+        }
     });
     return result.sort((a, b) => a.enterS - b.enterS || a.facility - b.facility);
   });

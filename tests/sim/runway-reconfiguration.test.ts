@@ -5,7 +5,7 @@ import { compile } from '../../src/network';
 import { createAircraftFleet } from '../../src/sim/aircraft';
 import { createFlightOperations } from '../../src/sim/flight-operations';
 import { windComponents, type AirportWind } from '../../src/sim/runway-configuration';
-import { onRunway, overlaps } from './aircraft-checks';
+import { exemptRunwayPair, overlaps } from './aircraft-checks';
 
 // TASK-300: a wind reversal mid-morning on the synthetic one-runway airport. Departures leave
 // from 09:50 toward 09; the wind turns at 10:00, so the airport changes to 27 while some taxi.
@@ -68,7 +68,12 @@ function run() {
     fleet.step(timeS);
     const aircraft = fleet.snapshot();
     overlapCount += overlaps(aircraft).length;
-    runwayConflicts += Number(onRunway(aircraft).length > 1);
+    // TASK-330: one aircraft on the runway at a time, but for the sharing the owner approved
+    // (TASK-345: crossings together or behind a landing roll, a line-up behind a roll).
+    const on = aircraft.filter((a) => a.onRunway);
+    runwayConflicts += Number(
+      on.some((a, i) => on.slice(i + 1).some((b) => !exemptRunwayPair(a, b))),
+    );
     peakStuck = Math.max(peakStuck, fleet.metrics().stuck);
     for (const a of aircraft) {
       if (a.state === 'takeoff-roll') takeoffEnd.set(a.id, a.runwayEnd!);

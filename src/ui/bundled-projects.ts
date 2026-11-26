@@ -66,6 +66,11 @@ export const realPlaces = [
     name: 'London City Airport',
     note: 'One runway between the docks: taxiways, stands, the DLR',
   },
+  {
+    id: 'heathrow',
+    name: 'London Heathrow Airport',
+    note: 'Two runways, five terminals, the Piccadilly line: about 1,300 movements a day',
+  },
 ];
 
 async function readBundle(id: string): Promise<OpenResult> {

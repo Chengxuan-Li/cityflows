@@ -3,8 +3,10 @@ import { openBundled } from '../../bench/bundled-cities';
 import { compile } from '../../src/network';
 import { createAircraftFleet } from '../../src/sim/aircraft';
 import { createFlightOperations } from '../../src/sim/flight-operations';
+import { createGroundVehicles } from '../../src/sim/ground-vehicles';
+import { groundOverlaps } from '../sim/ground-vehicle-checks';
 import type { AirportWind } from '../../src/sim/runway-configuration';
-import { onRunway, overlaps } from '../sim/aircraft-checks';
+import { overlaps, runwayConflictCheck } from '../sim/aircraft-checks';
 import { limit } from '../timeouts';
 
 async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind }[] = []) {
@@ -13,6 +15,16 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
   if (!result.ok || !result.compiled.airside) throw new Error('London City must compile');
   const fleet = createAircraftFleet(result.compiled.airside, seed);
   const operations = createFlightOperations(fleet, seed, 0);
+  // TASK-346: runway conflicts without the sharing the owner approved (TASK-345).
+  const checkRunways = runwayConflictCheck(result.compiled.airside);
+  // TASK-316: with its ground vehicles, which the aircraft never see.
+  const ground = createGroundVehicles(result.compiled, {
+    snapshot: () => fleet.snapshot(),
+    movementSpace: () => fleet.movementSpace(),
+    drainTurnarounds: () => operations.drainTurnarounds(),
+  });
+  let vehicleOverlaps = 0;
+  let vehicleAircraftOverlaps = 0;
   let overlapCount = 0;
   let runwayConflicts = 0;
   let peakStuck = 0;
@@ -23,10 +35,14 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
     for (const change of winds) if (change.timeS * 10 === step) operations.setWind(change.wind);
     operations.step(timeS);
     fleet.step(timeS);
+    ground.step(timeS);
     if (step % 10 !== 0) continue;
     const aircraft = fleet.snapshot();
+    const vehicles = groundOverlaps(ground.snapshot(), aircraft);
+    vehicleOverlaps += vehicles.withVehicles.length;
+    vehicleAircraftOverlaps += vehicles.withAircraft.length;
     overlapCount += overlaps(aircraft).length;
-    runwayConflicts += Number(onRunway(aircraft).length > 1);
+    runwayConflicts += Number(checkRunways(aircraft) > 0);
     peakStuck = Math.max(peakStuck, fleet.metrics().stuck);
     const moving = aircraft.filter(
       ({ state, speedMps, onRunway }) =>
@@ -47,6 +63,9 @@ async function flightDay(seed: number, winds: { timeS: number; wind: AirportWind
     peakStuck,
     peakMovingOnApron,
     concurrentApronSamples,
+    vehicles: ground.metrics(),
+    vehicleOverlaps,
+    vehicleAircraftOverlaps,
   };
 }
 
@@ -66,6 +85,14 @@ test.for([1, 2, 3])(
     expect(aircraft.goArounds).toBe(0);
     expect(metrics.meanDelayS).toBeLessThanOrEqual(300);
     expect(metrics.worstDelayS).toBeLessThanOrEqual(1800);
+    expect(day.vehicleOverlaps).toBe(0);
+    expect(day.vehicleAircraftOverlaps).toBe(0);
+    // TASK-316 / TASK-350: visits served and pushes with a vehicle tug (seeds 1 to 3: 91 to 93%
+    // and 78 to 81%; before TASK-350 64 to 73% and 54 to 59%, with vehicles holding one another
+    // off where parked tails cover the apron road).
+    expect(day.vehicles.served).toBeGreaterThanOrEqual(0.85 * day.vehicles.visits);
+    const { pushbacks, tugsMissing } = day.vehicles;
+    expect(pushbacks - tugsMissing).toBeGreaterThanOrEqual(0.75 * pushbacks);
   },
 );
 

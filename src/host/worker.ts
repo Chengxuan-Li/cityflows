@@ -140,6 +140,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         signals,
         aircraft,
         airfield,
+        groundVehicles,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
@@ -193,6 +194,7 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           signals,
           aircraft,
           airfield,
+          groundVehicles,
         },
       };
       self.postMessage(reply, { transfer });
