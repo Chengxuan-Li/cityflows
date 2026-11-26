@@ -117,16 +117,17 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // south on Günterstalstraße, and the line from Kronenstraße; then (TASK-202) the Rotteckring
   // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
   // east and back. TASK-214's rebuild of the project renumbers the rail nodes by one; TASK-270's
-  // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one.
+  // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one;
+  // TASK-351's (two car parks' split exits become one connector each) by two.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
-    'rn:12240>rn:12223',
-    'rn:12881>rn:12223',
-    'rn:12225>rn:12558',
-    'rn:12514>rn:12574',
-    'rn:12046>rn:12512',
-    'rn:12514>rn:12879',
-    'rn:12881>rn:12512',
-    'rn:12225>rn:12223',
+    'rn:12238>rn:12221',
+    'rn:12879>rn:12221',
+    'rn:12223>rn:12556',
+    'rn:12512>rn:12572',
+    'rn:12044>rn:12510',
+    'rn:12512>rn:12877',
+    'rn:12879>rn:12510',
+    'rn:12223>rn:12221',
   ]);
   for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12881'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
@@ -245,7 +246,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-290: nine mapped entrances link five garages, and Bahnhofsgarage keeps its old entry.
     // TASK-294: rebuilt; three places and their garages keep their driveways in pockets behind
     // destination streets (the place repair no longer moves them out).
-    '380c013e05a158bb723ac14e5ba0846abff97cd682498ccd11a93baa2cba5b29',
+    // TASK-351: rebuilt; the Schwabentorring's part, fed by a map entry and drained by an exit, is
+    // circulation, so three car parks on it (pk:2627, pk:2647, pk:2831) leave by their own streets.
+    'e80ca097f05c15908d65981c37c83e38b1eb7b3f61a9c10e5e4733b5fbadb034',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -292,7 +295,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-290: nine mapped garage entrances move the morning to 1,533 completed and 62.7 s delay.
   // TASK-294: pockets behind destination streets are served from them (1,533 to 1,531
   // completed, 62.7 to 62.8 s).
-  expect(morning.stateHash).toBe(1710089250);
+  // TASK-351: three car parks on the Schwabentorring leave by their own streets (1,528 completed,
+  // 62.3 s).
+  expect(morning.stateHash).toBe(2442797869);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

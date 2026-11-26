@@ -72,7 +72,8 @@ const baseline = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
     // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
-    compile: '1eabb11037dd65d58032c7702bf906bdd22545a5232fd1d06bfe2e78363e9c82',
+    // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+    compile: 'a32861f0730d07b557082c47bd5226102a280517c51d38e720572ca4fe52db85',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
   },

@@ -1,5 +1,6 @@
 import { vehicleClasses } from '../schema';
 import { isLaneDrop } from './lane-drop';
+import { reachableLanes } from './lane-reach';
 import type { CompiledCity, CPlace } from './types';
 import { zoneReach } from './zones';
 
@@ -11,9 +12,9 @@ const cache = new WeakMap<CompiledCity, ReturnType<typeof derive>>();
  * served at all. A gateway's component is what its departure lanes reach (or what reaches its
  * arrival lanes), following movements and adjacent-lane changes along legal car lanes: public
  * roads and the trip end's own private/destination zone, entering another zone only to end in
- * it or in a zone on its chain (TASK-294), as the router allows. Lane-change distances and
- * stations are ignored, so this only rules out trips no route can serve, such as those from a
- * motorway piece the crop cut off.
+ * it or in a zone on its chain (TASK-294), as the router allows. Lane changes are made as the
+ * router makes them (TASK-351), but stations are ignored, so this only rules out trips no route can
+ * serve, such as those from a motorway piece the crop cut off.
  * A non-gateway end counts its own connectors and every facility it could park at, where a car
  * arriving there may park and leave again. TASK-283: a trip leaving the person's home is judged by
  * their own car, which stands in a facility the home owns, not by every facility the home could
@@ -43,16 +44,28 @@ function derive(city: CompiledCity) {
   const nested = (a: number, b: number) =>
     a === b || zones[a]!.includes(b) || zones[b]!.includes(a);
   const forward = city.lanes.map((): number[] => []);
-  const backward = city.lanes.map((): number[] => []);
-  const link = (from: number, to: number) => {
-    forward[from]!.push(to);
-    backward[to]!.push(from);
-  };
+  const link = (from: number, to: number) => forward[from]!.push(to);
+  const moves = city.lanes.map((): number[] => []);
   for (const movement of city.movements)
-    if (!movement.neverGreen && !isLaneDrop(city, movement))
+    if (!movement.neverGreen && !isLaneDrop(city, movement)) {
       link(movement.fromLane, movement.toLane);
-  for (const lane of city.lanes)
+      moves[movement.fromLane]!.push(movement.toLane);
+    }
+  // TASK-351: trips are judged with lane changes as the router makes them (`reachableLanes`, as
+  // TASK-286's gateways): Zurich's terminal loop on Flughafenstrasse reaches the rest of the
+  // landside only by changes on roads too short for them, and its cars failed `no_route`.
+  const routed = city.lanes.map((): number[] => []),
+    routedBack = city.lanes.map((): number[] => []);
+  const open = city.lanes.map((lane) => zone[lane.idx] !== CLOSED);
+  for (const lane of city.lanes) {
     for (const side of [lane.left, lane.right]) if (side !== -1) link(lane.idx, side);
+    const endM = Math.max(0, city.roads[lane.road]!.lengthM - 10);
+    for (const { lane: from } of reachableLanes(city, open, lane.idx, endM, 30))
+      for (const to of [from, ...moves[from]!]) {
+        routed[lane.idx]!.push(to);
+        routedBack[to]!.push(lane.idx);
+      }
+  }
 
   function reach(seeds: number[], edges: number[][]) {
     const reached = new Uint8Array(city.lanes.length);
@@ -123,24 +136,49 @@ function derive(city: CompiledCity) {
     return own.length ? own.map((f) => lanes(f.connectorsOut)) : [lanes(place.connectorsOut)];
   });
   const departures = new Map<number, Uint8Array>(),
-    arrivals = new Map<number, Uint8Array>();
+    arrivals = new Map<number, Uint8Array>(),
+    onward = new Map<string, Uint8Array>(),
+    fromFacility = new Map<number, Uint8Array>();
   const memo = (map: Map<number, Uint8Array>, place: number, make: () => Uint8Array) => {
     let result = map.get(place);
     if (!result) map.set(place, (result = make()));
     return result;
   };
   return {
-    /** Place indices; a pair without a gateway is not judged. `fromHome`: the trip leaves the
-     * person's home, where their own car stands. */
+    /** Place indices. `fromHome`: the trip leaves the person's home, where their own car
+     * stands. */
     served(from: number, to: number, fromHome = false) {
       if (gateway(city.places[from]!)) {
-        const reached = memo(departures, from, () => reach(exits[from]!, forward));
+        const reached = memo(departures, from, () => reach(exits[from]!, routed));
         return entries[to]!.some((lane) => reached[lane]);
       }
-      if (!gateway(city.places[to]!)) return true;
-      const reached = memo(arrivals, to, () => reach(entries[to]!, backward));
+      // TASK-351: when the public network splits inside the map (Zurich: Kloten and the airport
+      // landside meet only on airport roads), a car between two places may find no road at all,
+      // which the engine fails as `no_route`: it must reach the destination or any facility it
+      // could park at, as `reachesParking` judges it there.
+      if (!gateway(city.places[to]!)) {
+        const reaches = (lanes: number[], key: string) => {
+          let reached = onward.get(key);
+          if (!reached) onward.set(key, (reached = reach(lanes, routed)));
+          return entries[to]!.some((lane) => reached[lane]);
+        };
+        if (fromHome) return homeStands[from]!.every((stand, i) => reaches(stand, `${from}:${i}`));
+        return reaches(exits[from]!, `${from}`);
+      }
+      const reached = memo(arrivals, to, () => reach(entries[to]!, routedBack));
       if (fromHome) return homeStands[from]!.every((stand) => stand.some((lane) => reached[lane]));
       return exits[from]!.some((lane) => reached[lane]);
+    },
+    /** TASK-351: whether a car leaving `facility` can reach the place or a facility it could
+     * park at (where the public network splits, a street space near home may not). */
+    leaves(facility: number, place: number) {
+      let reached = fromFacility.get(facility);
+      if (!reached)
+        fromFacility.set(
+          facility,
+          (reached = reach(lanes(city.parking[facility]!.connectorsOut), forward)),
+        );
+      return entries[place]!.some((lane) => reached[lane]);
     },
     /** Whether a car on any of `lanes` can reach a facility the place's cars could park at. */
     reachesParking(lanes: number[], place: number) {

@@ -26,7 +26,8 @@ const hashes = {
   grid: '3a74fb63b9fba6d71be7dab68e27d2276175882a33d1a2d0b042ca1cfd5e340d',
   town: '8b09549bd8dd063e313b1c58f408cb177c22de591b20b6dc9c75bd7ee61be80d',
   // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-  Sindelfingen: 'db253d9647e7aefa62acbb18fa8dacc60a16e2381004882c09bcd160e0680272',
+  // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+  Sindelfingen: '2da0a2dece795efe5298658f258e53c8be8059d2cc46bb371072629d3effa4b6',
   Munich: '4fc743e04e2f39c2105c779f1b5019a3674f1b9f5a025f13afd32379a5387040',
 };
 

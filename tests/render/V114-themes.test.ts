@@ -72,7 +72,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-241: no hatch at lane gains (5 roads).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's garage entrance changes keep-clear paint on r:97 and r:954.
-          'a103451dfb8631354af06ae883031fd029c49097f6ae53380d5efe0a315a570e',
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          '6e7b9433c243fe16c3e58050cf220d37059b074074eb8395d8bfbdb10286b4bf',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
