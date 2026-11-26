@@ -3389,13 +3389,16 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       ) {
         if (lineUp && (T360R || T360M)) {
           // TASK-360: every aircraft holding the runway is rolling away beyond the line-up
-          // (rule 2) or lined up ahead of it (rule 3), not only the last to claim it.
+          // (rule 2) or lined up ahead of it (rule 3), not only the last to claim it. TASK-365:
+          // at most two lined up at once (one ahead of this one): CAP 493's multiple line-ups
+          // are a pair at two points, and a third behind them stood in the second's way.
+          let ahead = 0;
           for (const o of crafts) {
             if (o.id === except || !o.runwayClaims.some((u) => u.resource === resource)) continue;
             if (rollingAway(o, lineUp)) {
               const fromU = graph.runways[o.runway]!.lengthM - o.air!.clearM;
               if (lineUp.lineUpU > fromU + 1 && sharedBy !== 'multi') sharedBy = 'roll';
-            } else if (linedUpAhead(o, lineUp)) sharedBy = 'multi';
+            } else if (linedUpAhead(o, lineUp) && ++ahead < 2) sharedBy = 'multi';
             else return false;
           }
         } else if (!behind(occupant)) return false;
