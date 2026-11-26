@@ -1,8 +1,9 @@
 # TASK-362 — Debug views: overlays and shading for developers
 
-Status: proposed 2026-11-26 (owner: "write up and start a session"). Proposed owner: Codex CLI (gpt-6.2-astra, high), run
-from the lead chat; the lead reviews. Branch `task/362-debug-views`, its own worktree, ports 5562 / 5662. Base:
-`origin/main` at `3c8f9d01` or later.
+Status: open 2026-11-26, unassigned (owner: "write up and start a session"; a first Codex run was stopped by the
+owner). Any agent, local or remote, may take it: work on `task/362-debug-views` (this contract is its first commit),
+merge `origin/main` into it before starting, use ports 5562 / 5662 locally, and the lead reviews. The stopped run's
+unreviewed partial work is on `wip/362-debug-views-codex`: read it if useful, do not assume it is correct.
 
 ## Why
 
