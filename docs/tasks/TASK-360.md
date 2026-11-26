@@ -113,12 +113,13 @@ Report:
 
 ## Result (2026-11-26)
 
-**Rules** (`src/sim/aircraft.ts`; all three on by default, the env `T360=<i|r|m letters>` picks them for the ladder,
-`T360=` is the line-up choice before them).
+**Rules** (`src/sim/aircraft.ts`; all three on by default, on runways that cross no other (the IND rule, as TASK-330's
+line-up behind a roll). The env `T360=<letters>` picks them for the ladder: `i`, `r`, `m`, and `a` for rule 1 on every
+runway; `T360=` is the line-up choice before them.)
 
-1. **Intersection take-off by performance** (`lineUps`, `departurePlan`). Full-length entries and intersection
-   entries whose remaining runway covers the take-off run with 15 % to spare are one choice, made before any
-   backtrack. The run (`need`, roll plus 3 s at rotation speed) is about the distance to 35 ft; certification's
+1. **Intersection take-off by performance** (`lineUps`, `departurePlan`). Where an intersection entry's remaining
+   runway covers the take-off run with 15 % to spare, it and the full-length entries are one choice, made before any
+   backtrack; where none fits, the full-length entry (or a backtrack) is taken as before. The run (`need`, roll plus 3 s at rotation speed) is about the distance to 35 ft; certification's
    all-engines take-off distance is 115 % of it (CS-25.113(a)(2), 14 CFR 25.113(a)(2)), and the declared distance from
    an intermediate holding position must cover it (ICAO Doc 7030, 6.5.4: intersection take-off criteria shall be
    complied with). Of those, the departure takes the entry nearest its taxi route (route cost without the runway arc it
@@ -132,8 +133,8 @@ Report:
    fetches; the TASK-352 citation stands.
 2. **Line-up behind a passing roll** (`rollingAway`). On a runway that crosses no other (the IND rule), a departure may
    line up at an entry ahead of a rolling departure's start once that one's tail is `margin` (half the widest span +
-   12 m) past the nose of the line-up and its entry, rolling away from it (CAP 493, Section 2, Chapter 1, 13.3 and 14:
-   conditional line-up behind departing traffic).
+   12 m) past the nose of the line-up and its entry, rolling away from it (CAP 493, Section 2, Chapter 1, 13.3: a
+   conditional clearance may be given in respect of an aircraft ahead in the departure sequence; and 14).
 3. **Multiple line-ups** (`linedUpAhead`, `takeoffHeld`). On such a runway a departure may line up while another stands
    lined up (or is lining up) ahead of it from the same end, its nose 200 m behind that one's tail (CAP 493, Section 2,
    Chapter 1, 14.1: line-up instructions may be issued to more than one aircraft at different points on the same
@@ -178,7 +179,10 @@ tow (G-TXFW) passes 36 m from it: the helipad-to-tow separation TASK-358 is work
 no departure is involved.
 
 Take-offs from an intersection (entry more than 150 m past the threshold; Heathrow 27R's A1/A2, 86 and 103 m from its
-dead end, count as full length), seeds 2–5 (seed 1 ran before the counter split them): INTSHARE. No backtracks.
+dead end, count as full length), seeds 1–5 (seed 1 from a re-run of the final code, identical to the ladder's run but
+for the counter): 273 of 409 (67 %); A20N 70 %, A21N 65 %, B738 79 %, BCS3 78 %, E190 67 %, A333 100 %, A359 86 %,
+B789 81 %, B748 60 %, B77W 43 %, A388 40 %. No
+backtracks (main, seeds 1 and 2: every departure backtracked from A1/A2 to the dead end).
 
 Multiple line-ups: 75 in the five windows (18/12/13/11/21), typically a heavy lined up at A4 (404 m in) with a
 narrowbody behind it at A1/A2 (the owner's case at the east end of the north runway), or one lined up far down the
@@ -193,3 +197,27 @@ taken (tows, parked aircraft: seed 5's 1,880 s waiting for a parked aircraft not
 aircraft crossing 27L (seed 2: departures waiting to cross 27L from the south 385 → 575 s, more departures). All 18
 go-arounds are landing commitments refused by a ground aircraft on the way off: arrivals (13), tows (3), and a
 departure taxiing across it (2, seeds 1 and 4); none is a departure on 27R.
+
+**Rung 3: full days, `--checks`, main (after TASK-353) → branch.**
+
+| airport, seed | completed | landed/departed | go-arounds | overlaps | rwyConflictsReal | gridlock | mean delay s |
+|---|---|---|---|---|---|---|---|
+| Heathrow 1 | 752 → 849 | 381/372 → 427/423 | 20 → 21 | 0 → 0 | 0 → 0 | none | 16,869 → 14,350 |
+| Heathrow 2 | 758 → 813 | 385/376 → 415/399 | 24 → 15 | 0 → 0 | 0 → 0 | none | 13,926 → 14,185 |
+| Heathrow 3 | LHR3 |
+| Zurich 730, 1–3 | 729/727/746 → identical | | 7/7/8 → identical | 0 | 0 | none | 371.9/440.0/337.2 → identical |
+| Boston 1–3 | BOS |
+| London City 1 | 150 → 150 | 75/75 | 0 → 0 | 0 | 0 | none | 11.6 → 11.6 |
+
+Heathrow days: 27R take-offs 17.5/h (median gap 106 s) and 16.6/h (112 s) over the day; 62 and 51 multiple line-ups,
+none delaying a landing. Diverted 160 → 112 and 158 → 145, cancelled 143 → 98 and 142 → 132. Seed 2's mean delay is 1.9 % higher
+with 55 more movements completed.
+
+Zurich, Boston and London City: with rule 1 on runways that cross no other, Zurich and Boston do not change (their
+departure runways cross others; their JSON matches main's field for field but for wall time, Zurich seeds 1–3 and Boston
+seed 1), and London City
+changes 8 line-ups a day for the same outcome. Rule 1 on every runway (`T360=irma`), run before the restriction:
+Zurich 731/727 (main 729/727), go-arounds 10/4 (7/7), mean delay 402/449 s (372/440 s); Boston 993/968 (992/968),
+go-arounds 37/43 (17/35), overlaps 22/1 (22/0), mean delay 559/877 s (489/770 s). At Boston the rule moved only 11–14
+PC24 take-offs a day to intersections, yet the day lost on two seeds by arrival-side holds (landing commitments refused
+by an arrival standing on the way off: 32 and 28); that is the reason for the restriction, not a mechanism we found.

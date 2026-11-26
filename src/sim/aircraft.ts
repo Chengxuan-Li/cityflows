@@ -3142,8 +3142,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
    * same end as a line-up at `lineUp` and no further down the runway than that line-up (so it
    * rolls away from it, not toward it). TASK-360 rule 2: or one further down the runway whose
    * tail is already `margin` past the nose of the line-up and its entry (a following aircraft
-   * may line up behind a departing aircraft once it has passed the entry: ICAO Doc 4444, 7.9.3,
-   * conditional line-up behind departing traffic; CAP 493, Section 2, Chapter 1, 13.3 and 14). */
+   * may line up behind a departing aircraft once it has passed the entry: a conditional clearance
+   * in respect of the aircraft ahead in the departure sequence, CAP 493, Section 2, Chapter 1,
+   * 13.3 and 14). */
   function rollingAway(o: Craft, lineUp: LineUp) {
     if (o.mode !== 'air' || o.air?.kind !== 'takeoff' || o.end !== lineUp.end) return false;
     const fromU = graph.runways[o.runway]!.lengthM - o.air.clearM;
