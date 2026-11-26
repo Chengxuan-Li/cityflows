@@ -194,7 +194,6 @@ async function main() {
       ['Basemap', false],
       ['Labels', false],
       ['Places', false],
-      ['Shadows', true],
       ['Building details', true],
     ] as const)
       await layers.getByLabel(name, { exact: true }).setChecked(on);
