@@ -14,7 +14,8 @@ import {
   ShapeUtils,
   Vector2,
 } from 'three';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices } from './merge-vertices';
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import Flatbush from 'flatbush';
 import { parallelOffset, pointInPolygon } from '../geo/polyline';

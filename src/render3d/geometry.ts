@@ -1,5 +1,6 @@
 import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices } from './merge-vertices';
 import { areaD } from 'clipper2-ts';
 import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';

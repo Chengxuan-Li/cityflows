@@ -13,7 +13,7 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices } from './merge-vertices';
 import { cumulativeLengths, parallelOffset } from '../geo/polyline';
 import type { CompiledCity } from '../network';
 import {

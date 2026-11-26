@@ -1,6 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { booleanOpD, ClipType, FillRule, areaD, simplifyPathD } from 'clipper2-ts';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices } from './merge-vertices';
 import Flatbush from 'flatbush';
 import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
