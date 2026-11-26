@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { importOsm } from '../../src/importers/osm';
 import { compile } from '../../src/network';
+import { createRouteProvider, freeFlowLinkCosts } from '../../src/routing';
 
 // TASK-270: polygon gateways that route (TASK-259's D7).
 
@@ -11,26 +12,33 @@ const square: [number, number][] = [
   [-0.001, 0.001],
 ];
 
-test('a polygon gateway is made only where its lanes reach the public network', () => {
+test('a polygon gateway is made only where a car lane reaches the network, destination streets included', () => {
   // Main crosses the ring both sides round a block of public streets. Pocket enters from the
-  // north and joins the block only through Gate, a destination street: no car may drive through
-  // it, so Pocket's cut end would be a gateway no route reaches (Lübeck's Wallstraße).
+  // north and joins the block only through Gate, a destination street (Lübeck's Wallstraße):
+  // TASK-283 keeps its gateway, and demand gives it only the trips a car can drive. Busway joins
+  // the block on a bus-only road: no car lane of it reaches the network, so it gets no gateway
+  // (TASK-270).
   const osm = `<osm>
     <node id="1" lat="0" lon="-0.003"/><node id="2" lat="0" lon="-0.0005"/>
     <node id="3" lat="0" lon="0.0005"/><node id="4" lat="0" lon="0.003"/>
     <node id="5" lat="0.0005" lon="-0.0005"/><node id="6" lat="0.0005" lon="0.0005"/>
     <node id="7" lat="0.003" lon="0.0005"/><node id="8" lat="0.0008" lon="0.0005"/>
+    <node id="15" lat="0.003" lon="-0.0005"/>
     <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><tag k="highway" v="primary"/><tag k="name" v="Main"/></way>
     <way id="11"><nd ref="2"/><nd ref="5"/><nd ref="6"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Block"/></way>
     <way id="12"><nd ref="7"/><nd ref="8"/><tag k="highway" v="secondary"/><tag k="name" v="Pocket"/></way>
     <way id="13"><nd ref="8"/><nd ref="6"/><tag k="highway" v="residential"/><tag k="name" v="Gate"/><tag k="access" v="destination"/></way>
+    <way id="17"><nd ref="15"/><nd ref="5"/><tag k="highway" v="secondary"/><tag k="access" v="no"/><tag k="bus" v="yes"/><tag k="name" v="Busway"/></way>
   </osm>`;
   const result = importOsm(osm, { importerVersion: 'test', polygon: square });
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
   const { city } = result;
-  expect(Object.values(city.roads).some((r) => r.name === 'Pocket')).toBe(true);
+  for (const name of ['Pocket', 'Busway'])
+    expect(Object.values(city.roads).some((r) => r.name === name)).toBe(true);
   const gateways = Object.values(city.places).filter((p) => p.kind === 'gateway');
-  expect(gateways.map((g) => g.provenance.osmIds)).toEqual([[10], [10]]);
+  expect(gateways.map((g) => g.provenance.osmIds)).toEqual([[10], [10], [12]]);
+  const pocket = gateways.find((g) => g.provenance.osmIds![0] === 12)!;
+  expect(pocket.connectors.map((c) => c.direction).sort()).toEqual(['in', 'out']);
   expect(compile(city).ok).toBe(true);
 });
 
@@ -124,4 +132,56 @@ test('a roundabout that goes on outside the extract is cut where its ways stop',
   const gateways = Object.values(result.city.places).filter((p) => p.kind === 'gateway');
   const circus = gateways.filter((g) => g.provenance.osmIds!.includes(20));
   expect(circus.flatMap((g) => g.connectors.map((c) => c.direction)).sort()).toEqual(['in', 'out']);
+});
+
+test('a polygon gateway leaves on a lane the router can leave, judged by its lane-change rule', () => {
+  // TASK-286 (York's Layerthorpe): Layer, two lanes one way, is cut 9 m before it narrows into
+  // Link. Its right lane leads on only by the lane drop, which the router does not take, or by a
+  // change to the left lane, which needs 30 m: every route from it would be `lane_infeasible`.
+  const osm = `<osm>
+    <node id="1" lat="0" lon="-0.003"/><node id="2" lat="0" lon="-0.0005"/>
+    <node id="3" lat="0" lon="0.0005"/><node id="4" lat="0" lon="0.003"/>
+    <node id="5" lat="0.0005" lon="-0.0005"/><node id="6" lat="0.0005" lon="0.0005"/>
+    <node id="9" lat="0.0005" lon="0.0002"/>
+    <node id="7" lat="0.003" lon="0.0002"/><node id="8" lat="0.00092" lon="0.0002"/>
+    <way id="10"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><tag k="highway" v="primary"/><tag k="name" v="Main"/></way>
+    <way id="11"><nd ref="2"/><nd ref="5"/><nd ref="9"/><nd ref="6"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Block"/></way>
+    <way id="12"><nd ref="7"/><nd ref="8"/><tag k="highway" v="secondary"/><tag k="name" v="Layer"/><tag k="oneway" v="yes"/><tag k="lanes" v="2"/></way>
+    <way id="13"><nd ref="8"/><nd ref="9"/><tag k="highway" v="residential"/><tag k="name" v="Link"/><tag k="oneway" v="yes"/></way>
+  </osm>`;
+  const result = importOsm(osm, { importerVersion: 'test', polygon: square });
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const { city } = result;
+  expect(city.drivingSide).toBe('right');
+  const layer = Object.values(city.roads).find((r) => r.name === 'Layer')!;
+  const connectors = Object.values(city.places)
+    .filter((p) => p.kind === 'gateway')
+    .flatMap((p) => p.connectors.map((c) => ({ ...c, place: p.id })));
+  // The right lane is the driving side's choice when both could be left; here only the left can.
+  expect(connectors.filter((c) => c.roadId === layer.id).map((c) => [c.direction, c.lane])).toEqual(
+    [['out', 0]],
+  );
+  const compiled = compile(city);
+  if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+  const c = compiled.compiled;
+  const provider = createRouteProvider();
+  const costs = freeFlowLinkCosts(c);
+  for (const origin of connectors.filter((k) => k.direction === 'out')) {
+    const from = c.connectors[c.index.connector.get(origin.id)!]!;
+    const routed = connectors
+      .filter((k) => k.direction === 'in' && k.place !== origin.place)
+      .some(
+        (k) =>
+          provider.route(c, costs, {
+            fromLane: from.lane,
+            fromPosM: from.positionM,
+            toConnector: c.index.connector.get(k.id)!,
+            vehicleClass: 'car',
+            desiredSpeedFactor: 1,
+            noise: 0,
+            seed: 1,
+          }).ok,
+      );
+    expect(routed, `${origin.roadId}#${origin.lane}`).toBe(true);
+  }
 });

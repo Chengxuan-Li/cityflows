@@ -95,15 +95,42 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
        -1.0754 53.9647 -1.0775`,
       'York city centre',
     ),
+  // TASK-295: the aerodrome between the Royal Albert and King George V Docks, with Hartmann
+  // Road, the Connaught Bridge, North Woolwich Road and the DLR (the lead's query-12 polygon).
+  'london-city-airport': () =>
+    polygonImport(
+      'london-city-airport',
+      'london-city-airport.osm',
+      '51.4995 0.0356 51.4995 0.0724 51.509 0.0724 51.509 0.0356',
+      'London City Airport',
+    ),
+  heathrow: () =>
+    polygonImport(
+      'heathrow',
+      'heathrow.osm',
+      '51.454 -0.4948 51.454 -0.4115 51.4804 -0.4115 51.4804 -0.4948',
+      'London Heathrow Airport',
+    ),
+  // TASK-302: the aerodrome with Kloten, Rümlang and Oberglatt's edges, the A51 and the rail
+  // station under the terminal (TASK-309's extract polygon, fixtures/osm/ATTRIBUTION.txt).
+  'zurich-airport': () =>
+    polygonImport(
+      'zurich-airport',
+      'zurich-airport.osm',
+      '47.438 8.5307 47.438 8.5802 47.4858 8.5802 47.4858 8.5307',
+      'Zurich Airport',
+    ),
 };
 
-/** TASK-284: places built, staleness-checked and opened by `?city=<id>`, but kept out of the New
- * city panel because they fail the showcase gate or the load budget (the gate test expects the
- * failure, so a fix shows); each with why. */
+/** TASK-284: bundles available by `?city=<id>` while their showcase gates are pending.
+ * TASK-354: Heathrow joined the panel on the owner's word (2026-11-25), improved in parallel.
+ * Boston is byte-pinned to TASK-303's apron-rule archive until that importer rule lands. */
 export const heldOutOfPanel: Record<string, string> = {
-  york:
-    'no_route at the Layerthorpe gateway (its exit lane needs lane changes on roads under 30 m); ' +
-    'first frame 1.6x Freiburg',
+  'boston-logan': 'Airport throughput gate',
+  // TASK-302: its showcase morning (0.15, mode choice on) ends with 2 trips gridlocked, a stalled
+  // head and a 10,260 s visit on Flughafenstrasse (r:3407, landside, no airside crossing), and the
+  // morning takes 172 s against the city tier's 60 s per airport; ready 31 to 42 s after the click.
+  'zurich-airport': 'showcase gate: gridlock on Flughafenstrasse; load over budget',
 };
 
 /** The committed bundled project, opened as the app opens it. */

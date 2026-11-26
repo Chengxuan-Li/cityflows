@@ -1,6 +1,7 @@
 import { vehicleClasses } from '../schema';
 import { isLaneDrop } from './lane-drop';
 import type { CompiledCity, CPlace } from './types';
+import { zoneReach } from './zones';
 
 const CLOSED = -2;
 const cache = new WeakMap<CompiledCity, ReturnType<typeof derive>>();
@@ -10,9 +11,16 @@ const cache = new WeakMap<CompiledCity, ReturnType<typeof derive>>();
  * served at all. A gateway's component is what its departure lanes reach (or what reaches its
  * arrival lanes), following movements and adjacent-lane changes along legal car lanes: public
  * roads and the trip end's own private/destination zone, entering another zone only to end in
- * it, as the router allows. Lane-change distances and stations are ignored, so this only rules
- * out trips no route can serve, such as those from a motorway piece the crop cut off. A
- * non-gateway end counts its own connectors and every facility it could park at.
+ * it or in a zone on its chain (TASK-294), as the router allows. Lane-change distances and
+ * stations are ignored, so this only rules out trips no route can serve, such as those from a
+ * motorway piece the crop cut off.
+ * A non-gateway end counts its own connectors and every facility it could park at, where a car
+ * arriving there may park and leave again. TASK-283: a trip leaving the person's home is judged by
+ * their own car, which stands in a facility the home owns, not by every facility the home could
+ * use: a public car park in a pocket behind destination streets made every home look served by
+ * the pocket's gateway, and those trips failed `no_route` (TASK-270). The car may stand in any
+ * facility the home owns, so each needs a route (Cambridge's block of 1,696 residents owns a
+ * garage of 4 that reaches its north-east and one of 1,692 that does not).
  */
 export function carService(city: CompiledCity) {
   let service = cache.get(city);
@@ -26,9 +34,14 @@ function derive(city: CompiledCity) {
     const road = city.roads[lane.road]!,
       access = road.access[car];
     if (!lane.allowed.includes('car')) return CLOSED;
-    if (access === 'yes') return -1;
+    // TASK-294: an open road in a pocket carries the pocket's zone.
+    if (access === 'yes') return road.zone[car]!;
     return access === 'private' || access === 'destination' ? road.zone[car]! : CLOSED;
   });
+  const zones = zoneReach(city, car);
+  // Zones on one chain from the outside: a trip ending in one may use the other (TASK-294).
+  const nested = (a: number, b: number) =>
+    a === b || zones[a]!.includes(b) || zones[b]!.includes(a);
   const forward = city.lanes.map((): number[] => []);
   const backward = city.lanes.map((): number[] => []);
   const link = (from: number, to: number) => {
@@ -43,7 +56,7 @@ function derive(city: CompiledCity) {
 
   function reach(seeds: number[], edges: number[][]) {
     const reached = new Uint8Array(city.lanes.length);
-    const own = new Set(seeds.map((lane) => zone[lane]!));
+    const own = new Set(seeds.flatMap((lane) => zones[zone[lane]!] ?? [zone[lane]!]));
     const queue: number[] = [];
     for (const lane of seeds)
       if (zone[lane] !== CLOSED && !reached[lane]) {
@@ -66,7 +79,7 @@ function derive(city: CompiledCity) {
     for (let head = 0; head < zoned.length; head++) {
       const at = zoned[head]!;
       for (const next of edges[at]!)
-        if (!reached[next] && zone[next] === zone[at]) {
+        if (!reached[next] && zone[next]! >= 0 && nested(zone[next]!, zone[at]!)) {
           reached[next] = 1;
           zoned.push(next);
         }
@@ -103,6 +116,12 @@ function derive(city: CompiledCity) {
       ...(gateway(place) ? [] : facilities[place.idx]!.flatMap((f) => f.connectorsOut)),
     ]),
   );
+  // TASK-283: where a resident's car stands at home: in any facility the home owns with an exit
+  // (the engine stocks its cars there), else at its own connectors.
+  const homeStands = city.places.map((place) => {
+    const own = city.parking.filter((f) => f.place === place.idx && f.connectorsOut.length);
+    return own.length ? own.map((f) => lanes(f.connectorsOut)) : [lanes(place.connectorsOut)];
+  });
   const departures = new Map<number, Uint8Array>(),
     arrivals = new Map<number, Uint8Array>();
   const memo = (map: Map<number, Uint8Array>, place: number, make: () => Uint8Array) => {
@@ -111,14 +130,16 @@ function derive(city: CompiledCity) {
     return result;
   };
   return {
-    /** Place indices; a pair without a gateway is not judged. */
-    served(from: number, to: number) {
+    /** Place indices; a pair without a gateway is not judged. `fromHome`: the trip leaves the
+     * person's home, where their own car stands. */
+    served(from: number, to: number, fromHome = false) {
       if (gateway(city.places[from]!)) {
         const reached = memo(departures, from, () => reach(exits[from]!, forward));
         return entries[to]!.some((lane) => reached[lane]);
       }
       if (!gateway(city.places[to]!)) return true;
       const reached = memo(arrivals, to, () => reach(entries[to]!, backward));
+      if (fromHome) return homeStands[from]!.every((stand) => stand.some((lane) => reached[lane]));
       return exits[from]!.some((lane) => reached[lane]);
     },
     /** Whether a car on any of `lanes` can reach a facility the place's cars could park at. */

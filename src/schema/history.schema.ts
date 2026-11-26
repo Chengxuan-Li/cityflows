@@ -6,6 +6,7 @@ import {
   placeSchema,
   roadSchema,
 } from './city.schema';
+import { airportSchema, runwayOperationsSchema } from './airport.schema';
 import type { HistoryEntry } from './history';
 
 const nodeId = z.string().regex(/^n:\d+$/);
@@ -13,6 +14,25 @@ const roadId = z.string().regex(/^r:\d+$/);
 const placeId = z.string().regex(/^p:\d+$/);
 const parkingId = z.string().regex(/^pk:\d+$/);
 const junctionGroupId = z.string().regex(/^jg:\d+$/);
+const { nodes, edges, runways, holdingPositions, stands, roadCrossings } = airportSchema.shape;
+const airportPatchSchema = z.object({
+  set: z.object({
+    nodes: nodes.optional(),
+    edges: edges.optional(),
+    runways: runways.optional(),
+    holdingPositions: holdingPositions.optional(),
+    stands: stands.optional(),
+  }),
+  remove: z.object({
+    nodes: z.array(nodes.keyType).optional(),
+    edges: z.array(edges.keyType).optional(),
+    runways: z.array(runways.keyType).optional(),
+    holdingPositions: z.array(holdingPositions.keyType).optional(),
+    stands: z.array(stands.keyType).optional(),
+  }),
+  roadCrossings: roadCrossings.optional(),
+  runwayOperations: runwayOperationsSchema.nullable().optional(),
+});
 
 export const patchSchema = z.object({
   markingTheme: citySchema.shape.markingTheme.nullable(),
@@ -37,6 +57,7 @@ export const patchSchema = z.object({
     parking: z.array(parkingId).optional(),
     junctionGroups: z.array(junctionGroupId).optional(),
   }),
+  airport: airportPatchSchema.optional(),
   nextId: z.int().nonnegative().optional(),
 });
 

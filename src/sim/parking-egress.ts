@@ -2,6 +2,7 @@ import type { CompiledCity } from '../network';
 import { createGraphCache } from '../routing/graph';
 import { vehicleClasses, type VehicleClass } from '../schema';
 import { parkingConnectorPermitted } from '../network/parking';
+import { zoneReach } from '../network/zones';
 
 const graphFor = createGraphCache();
 const cache = new WeakMap<CompiledCity, Map<string, ReturnType<typeof derive>>>();
@@ -84,6 +85,7 @@ function derive(
   function latest(zone: number) {
     let result = byZone.get(zone);
     if (result) return result;
+    const near = zoneReach(city, kind)[zone] ?? [];
     const allowed = city.lanes.map((lane) => {
       if (!lane.allowed.includes(vehicleClass)) return false;
       const road = city.roads[lane.road]!,
@@ -91,7 +93,7 @@ function derive(
       return (
         access === 'yes' ||
         (access === 'delivery' && delivery) ||
-        ((access === 'private' || access === 'destination') && road.zone[kind] === zone)
+        ((access === 'private' || access === 'destination') && near.includes(road.zone[kind]!))
       );
     });
     // Classes/zones with identical permissions have the same movement graph and thresholds.

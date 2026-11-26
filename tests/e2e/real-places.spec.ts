@@ -3,11 +3,12 @@ import { writeFile } from 'node:fs/promises';
 import { button, pageErrors, toolbarAction } from './helpers';
 import { railFrameTiming, railTimingEnvironment } from './rail-frame-timing';
 
-// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck). Each opens from the
+// TASK-258: the real places of the New city panel (TASK-284 adds Lübeck; TASK-286 York; TASK-295
+// London City Airport). Each opens from the
 // panel and by `?city=<id>`, paused at 07:00, and every place but Freiburg reports its frame
 // figures as the Freiburg landing spec measures them (render CPU p95 in 2D and 3D while the
-// morning plays, and the 3D build). York is bundled but held out of the panel (`heldOutOfPanel`
-// in bench/bundled-cities.ts): it opens by `?city=york` and reports its figures too.
+// morning plays, and the 3D build).
+// Places held out of the panel (`heldOutOfPanel` in bench/bundled-cities.ts) open by `?city=`.
 
 test.use({ trace: 'off' });
 if (process.platform === 'win32')
@@ -23,15 +24,19 @@ const realPlaces = [
   { id: 'sindelfingen', name: 'Sindelfingen A81' },
   { id: 'philadelphia', name: 'Philadelphia Center City' },
   { id: 'luebeck', name: 'Lübeck Altstadt' },
+  { id: 'york', name: 'York city centre' },
+  { id: 'london-city-airport', name: 'London City Airport' },
+  { id: 'heathrow', name: 'London Heathrow Airport' },
 ];
-/** Bundled, opened by `?city=`, not in the panel. */
-const heldOut = [{ id: 'york', name: 'York city centre' }];
+/** Boston has scene-load checks while its throughput gate is pending. */
+const heldOut = [{ id: 'boston-logan', name: 'Boston Logan Airport' }];
+const zurich = { id: 'zurich-airport', name: 'Zurich Airport' };
 
-const opened = async (page: Page, name: string) => {
+const opened = async (page: Page, name: string, timeout = 60_000) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
   // the 20 s default once another city is drawn and the machine is loaded.
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 60_000 });
-  await expect(button(page, 'Play')).toBeEnabled();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout });
+  await expect(button(page, 'Play')).toBeEnabled({ timeout: 120_000 });
   await expect(page.getByLabel('Simulation clock', { exact: true })).toHaveText('07:00:00.0');
 };
 
@@ -42,7 +47,8 @@ for (const [width, height] of [
   test(`the New city panel groups real places and test layouts at ${width} px, and opens each place`, async ({
     page,
   }, info) => {
-    test.setTimeout(240_000);
+    // TASK-357: Heathrow opens twice here, in up to 180 s each on a loaded machine.
+    test.setTimeout(600_000);
     const errors = pageErrors(page);
     await page.setViewportSize({ width, height });
     await page.goto('/?city=grid5x5');
@@ -69,15 +75,35 @@ for (const [width, height] of [
         );
         await page.screenshot({ path: info.outputPath(`new-city-${width}.png`) });
       }
+      // Heathrow's 180 s to open, as in its render check below.
+      const timeout = id === 'heathrow' ? 180_000 : undefined;
       await place.click();
-      await opened(page, name);
+      await opened(page, name, timeout);
       await page.goto(`/?city=${id}`);
-      await opened(page, name);
+      await opened(page, name, timeout);
     }
     expect(errors).toEqual([]);
   });
 
-for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), ...heldOut])
+for (const { id, name } of heldOut)
+  test(`${name} opens by URL and builds its 2D and 3D scenes`, async ({ page }) => {
+    test.setTimeout(240_000);
+    const errors = pageErrors(page);
+    await page.goto(`/?city=${id}`);
+    await opened(page, name, 180_000);
+    const canvas = page.locator('canvas[data-airside-areas]');
+    await expect(canvas).toHaveAttribute('data-airside-areas', /^[1-9]\d*$/);
+    await button(page, '3D').click();
+    await page.waitForFunction(
+      () => performance.getEntriesByName('cityflows:first-frame-3d').length > 0,
+      null,
+      { timeout: 120_000 },
+    );
+    await expect(page.locator('canvas[data-view="3d"]')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), zurich])
   test(`${name} renders in 2D and 3D while its morning plays`, async ({ page }, info) => {
     test.setTimeout(240_000);
     const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 180, warm: 30 };
@@ -88,7 +114,13 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     const errors = pageErrors(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/?city=${id}`);
-    await opened(page, name);
+    // Zurich is held out of the panel for its load time (TASK-302); CI runners need longer.
+    await opened(page, name, id === 'zurich-airport' || id === 'heathrow' ? 180_000 : undefined);
+    // TASK-295: an airport's airside is drawn as paving (aprons, taxiways, the runway).
+    if (id === 'london-city-airport' || id === 'zurich-airport')
+      expect(
+        Number(await page.locator('canvas[data-airside-areas]').getAttribute('data-airside-areas')),
+      ).toBeGreaterThan(2);
     await page.screenshot({ path: info.outputPath(`${id}-2d.png`) });
     await button(page, 'Play').click();
     await expect
@@ -128,8 +160,11 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     await writeFile(info.outputPath(`${id}-frames.json`), JSON.stringify(report, null, 2));
     // Freiburg's frame budgets (freiburg-landing.spec.ts); CI's software GPU skips them.
     if (!process.env.CI) {
+      // TASK-357: Heathrow is held to Freiburg's 4 ms too (4.9 ms when it joined the panel; its
+      // aircraft are no longer triangulated every frame).
       expect(report['2d'].renderP95Ms, '2D render CPU p95').toBeLessThanOrEqual(4);
-      expect(report['3d'].renderP95Ms, '3D render CPU p95').toBeLessThanOrEqual(6);
+      const threeDBudget = id === 'london-city-airport' ? 4 : 6;
+      expect(report['3d'].renderP95Ms, '3D render CPU p95').toBeLessThanOrEqual(threeDBudget);
     }
     expect(errors).toEqual([]);
   });

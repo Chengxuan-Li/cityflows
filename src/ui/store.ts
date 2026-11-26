@@ -19,6 +19,7 @@ import { placeHue } from '../render/style';
 import type { Command, ModeChoiceConfig, Person, Scenario } from '../schema';
 import type { DrawRoadOptions } from '../editor/commands/topology';
 import type { PaintKind } from './tools/place-paint';
+import type { AirsideOptions } from './tools/airside';
 import type { RoadId } from '../schema';
 import type {
   Metrics,
@@ -48,6 +49,11 @@ function demandKey(city: Project['city']) {
       .sort(),
   );
 }
+
+/** TASK-305: the flight day is built from the airside at load (stands, routes, runway table), so
+ * an airport edit waits for a restart, as a scheduling change does. */
+const airportChanged = (before: Project['city'], after: Project['city']) =>
+  before.airport !== after.airport;
 
 /** Trip scheduling inputs: a change here needs a restart, which reschedules the same population. */
 function scheduleKey(city: Project['city']) {
@@ -132,9 +138,10 @@ interface AppState {
   roadOptions: DrawRoadOptions;
   placeKind: PaintKind;
   placeHint: string;
+  airsideOptions: AirsideOptions;
   /** The onboarding hint on screen, or null (onboarding.tsx). */
   hintStep: number | null;
-  tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout';
+  tool: 'select' | 'road' | 'place' | 'ramp' | 'roundabout' | 'airside';
   setTool: (tool: AppState['tool']) => void;
   selectionPoint: Vec2 | null;
   /** TASK-196: the phone inspector sheet's height in px once it has settled, null while it is
@@ -152,6 +159,9 @@ interface AppState {
   previewShown: () => void;
   run: Run | null;
   selection: MapPick | null;
+  /** TASK-301: the aircraft the camera follows while it stays selected. */
+  followAircraft: number | null;
+  setFollowAircraft: (id: number | null) => void;
   selectedRoads: RoadId[];
   selectRoads: (roads: RoadId[]) => void;
   vehicle: VehicleDetail | null;
@@ -259,7 +269,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const stale =
         run.stale ||
         session.populationKey !== demandKey(city) ||
-        scheduleKey(project.city) !== scheduleKey(city);
+        scheduleKey(project.city) !== scheduleKey(city) ||
+        airportChanged(project.city, city);
       set({
         session: {
           ...session,
@@ -464,6 +475,11 @@ export const useAppStore = create<AppState>((set, get) => {
           selection?.kind === 'walker' ||
           selection?.kind === 'track' ||
           selection?.kind === 'train' ||
+          selection?.kind === 'aircraft' ||
+          selection?.kind === 'stand' ||
+          selection?.kind === 'taxiway' ||
+          selection?.kind === 'hold' ||
+          selection?.kind === 'flight-board' ||
           selection?.kind === 'platform' ||
           (selection?.kind === 'place' &&
             Boolean(
@@ -622,6 +638,7 @@ export const useAppStore = create<AppState>((set, get) => {
     roadOptions: { twoWay: true, lanes: 1, roadClass: 'residential', speedKph: 30 },
     placeKind: 'residential',
     placeHint: '',
+    airsideOptions: { mode: 'stand', standKind: 'remote' },
     hintStep: null,
     tool: 'select',
     setTool: (tool) => {
@@ -645,6 +662,8 @@ export const useAppStore = create<AppState>((set, get) => {
     session: null,
     run: null,
     selection: null,
+    followAircraft: null,
+    setFollowAircraft: (followAircraft) => set({ followAircraft }),
     selectedRoads: [],
     selectRoads: (roads) => {
       const compiled = get().session?.compiled;
@@ -932,6 +951,8 @@ declare global {
       drawnSnapshot?: () => VehicleSnapshot | null;
       parkedCars?: () => ParkedCarsSnapshot | null;
       vehicleToScreen?: (id: number) => Vec2 | null;
+      /** TASK-301: where an aircraft is drawn in 3D, in CSS pixels. */
+      aircraftToScreen?: (id: number) => Vec2 | null;
       capture3D?: () => Promise<string[]>;
       view3D?: () => { centre: Vec2; zoom: number; pitch: number; bearing: number } | null;
       setView3D?: (centre: Vec2, zoom: number, pitch?: number, bearing?: number) => void;

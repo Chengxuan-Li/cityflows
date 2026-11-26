@@ -2,6 +2,7 @@ import type { CompiledCity } from './types';
 import { isLaneDrop } from './lane-drop';
 import { vehicleClasses, type VehicleClass } from '../schema';
 import { parkingConnectorPermitted } from './parking';
+import { zoneReach } from './zones';
 
 const cache = new WeakMap<CompiledCity, Map<string, ReturnType<typeof derive>>>();
 const reachability = new WeakMap<CompiledCity, Map<string, Float64Array>>();
@@ -81,7 +82,7 @@ function derive(
     return core;
   };
 
-  const allowedFor = (zone: number) =>
+  const allowedFor = (zone: number, near = zoneReach(city, kind)[zone] ?? []) =>
     city.lanes.map((lane) => {
       if (!lane.allowed.includes(vehicleClass)) return false;
       const road = city.roads[lane.road]!,
@@ -89,7 +90,7 @@ function derive(
       return (
         access === 'yes' ||
         (access === 'delivery' && delivery) ||
-        ((access === 'private' || access === 'destination') && road.zone[kind] === zone)
+        ((access === 'private' || access === 'destination') && near.includes(road.zone[kind]!))
       );
     });
   const byZone = new Map<number, Float64Array>();

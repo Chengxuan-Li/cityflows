@@ -7,6 +7,7 @@ import { mapPalettes, style, type MapPalette } from '../style';
 export function drawContext(
   features: readonly ContextFeature[],
   palette: MapPalette = mapPalettes.light,
+  aerodrome = false,
 ) {
   const container = new Container();
   container.eventMode = 'none';
@@ -32,6 +33,9 @@ export function drawContext(
   });
   const shapes = new Graphics();
   const ties = new Graphics();
+  const land = aerodrome ? new Graphics() : shapes;
+  const aerodromeTint = aerodrome ? new Graphics() : undefined;
+  if (aerodromeTint) container.addChild(land, aerodromeTint);
   container.addChild(shapes, ties);
   // TASK-273: walls are drawn above the place tints (the scene puts this layer there), so a wall
   // through a tinted place still reads; it stays under the roads and the walk on the wall.
@@ -60,12 +64,13 @@ export function drawContext(
   for (const feature of [...features].sort((a, b) => rank(a) - rank(b))) {
     if (feature.kind === 'point' || feature.class === 'tree_row') continue;
     if (feature.kind === 'area') {
+      const target = rank(feature) < order.water ? land : shapes;
       const color =
         feature.class === 'landuse'
           ? (palette.context.landuseSub[feature.sub ?? ''] ?? palette.context.landuse)
           : palette.context[feature.class];
       const surface = groundSurface(feature);
-      shapes.poly(feature.rings[0]!).fill(
+      target.poly(feature.rings[0]!).fill(
         surface
           ? {
               texture: pattern(surface).texture,
@@ -75,8 +80,8 @@ export function drawContext(
             }
           : color,
       );
-      for (const hole of feature.rings.slice(1)) shapes.poly(hole);
-      if (feature.rings.length > 1) shapes.cut();
+      for (const hole of feature.rings.slice(1)) target.poly(hole);
+      if (feature.rings.length > 1) target.cut();
       if (feature.class === 'building')
         for (const ring of feature.rings)
           shapes.poly(ring).stroke({ color: palette.context.buildingEdge, width: 0.2 });
@@ -126,6 +131,17 @@ export function drawContext(
     }
   }
   ties.stroke({ color: style.context.rail, width: 0.35 });
-  const bounds = shapes.getLocalBounds();
-  return { container, ties, walls, size: Math.max(bounds.width, bounds.height) };
+  const bounds = (aerodrome ? container : shapes).getLocalBounds();
+  return {
+    container,
+    ties,
+    walls,
+    aerodromeTint,
+    size: Math.max(bounds.width, bounds.height),
+    setVisible(visible: boolean) {
+      if (aerodromeTint) land.visible = shapes.visible = visible;
+      else container.visible = visible;
+      walls.visible = visible;
+    },
+  };
 }

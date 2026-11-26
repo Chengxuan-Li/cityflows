@@ -12,6 +12,7 @@ import type { Graphics } from 'pixi.js';
 import { buildLine, GraphicsContext } from 'pixi.js';
 import { drawRoad, drawMovementArrow } from '../../src/render/layers/roads';
 import { drawTransitions } from '../../src/render/layers/transitions';
+import { roadStrip } from '../../src/render/layers/nodes';
 import { drawJunctionMarkings } from '../../src/render/layers/junction-markings';
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
@@ -70,9 +71,12 @@ const baseline = {
     // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
     // TASK-240: r:1057 and r:821, before roads too short for arrows, show the junction's ahead.
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    compile: '22cf3bbaf19e10864793fd34dcf797fb2c503c4559da9d222531bd784aaeb06a',
+    // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+    // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+    // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+    compile: 'af8868c18de9281c68ec6c3b52161fa59cc92727fb6a82c2b8133aeb0ff7ffdf',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-    arrows: '8808b8b1230b47e4fb36526e145fdf335021a2cf38b5096242c6cfb1ef4618ac',
+    arrows: '903940e28f151203a0c7088933826075b826e0b44ab49edf415b47ea861570a8',
   },
   munich: {
     // TASK-103 appends parking entries/spaces; the independent arrow hash stays pinned.
@@ -90,7 +94,9 @@ const baseline = {
     // tram `form` stripped the city equals b3bcde6's.
     // TASK-217: an entry lane shows its turns through the whole junction group (M1).
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-    compile: 'b526b9643db0da013ce7d4a0f4d2e3c0fb64c52271426700fc7ede7367937c07',
+    // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+    // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+    compile: '97941451fe25e95587e1380378ec210400c74357908628c7299dfff0c773f90c',
     arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
   },
 } as const;
@@ -183,7 +189,8 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
       .concat(
         city.nodes.flatMap((node) => [
           ...nodeMarkingGeometry(city, node),
-          ...(node.outline.length
+          // TASK-347: a node drawn as road has no junction arrows.
+          ...(node.outline.length && !roadStrip(city, node)
             ? node.movements.flatMap((i) =>
                 city.movements[i]!.neverGreen ? [] : movementMarkings(city.movements[i]!),
               )
@@ -240,7 +247,11 @@ unitTest.each(['grid', 'sindelfingen'] as const)(
     }
     for (const node of city.nodes) drawJunctionMarkings(pen, city, node);
     for (const movement of city.movements)
-      if (!movement.neverGreen && city.nodes[movement.node]!.outline.length)
+      if (
+        !movement.neverGreen &&
+        city.nodes[movement.node]!.outline.length &&
+        !roadStrip(city, city.nodes[movement.node]!)
+      )
         drawMovementArrow(pen, movement);
     expect(lineCount).toBe(shapes.filter((s) => s.kind === 'line').length);
     expect(polygonCount).toBe(shapes.filter((s) => s.kind === 'polygon').length);

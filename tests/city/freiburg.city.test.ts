@@ -242,7 +242,10 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-271: rebuilt; building passages and covered ways read at grade by the importer, not
     // by curation: the same roads and walk links, with 3 road nodes and 21 walk nodes where a
     // passage meets a tagged layer -1 way at grade (the importer's portal rule).
-    'b9b2611e35f9b03890d6f4210dfadf7af579f4c8696bb50bba6ae5afb5f993a3',
+    // TASK-290: nine mapped entrances link five garages, and Bahnhofsgarage keeps its old entry.
+    // TASK-294: rebuilt; three places and their garages keep their driveways in pockets behind
+    // destination streets (the place repair no longer moves them out).
+    '380c013e05a158bb723ac14e5ba0846abff97cd682498ccd11a93baa2cba5b29',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -286,9 +289,14 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-271: passages read at grade by the importer; 3 road nodes and 21 walk nodes at the
   // portals to tagged layer -1 ways come up with them (1,518 completed, 65.8 to 66.7 s).
   // Lead merge: TASK-277 and 271 on main, 1,532 completed, 59.8 s.
+  // TASK-290: nine mapped garage entrances move the morning to 1,533 completed and 62.7 s delay.
+  // TASK-294: pockets behind destination streets are served from them (1,533 to 1,531
+  // completed, 62.7 to 62.8 s).
+  // TASK-348: the four signalised crossings outside junction groups laid out as plain nodes
+  // (1,531 to 1,533 completed, 62.8 to 61.3 s).
   // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
   // turning drivers and crawling traffic (1,532 to 1,530 completed, 59.8 to 60.1 s).
-  expect(morning.stateHash).toBe(699806056);
+  expect(morning.stateHash).toBe(1692126213);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

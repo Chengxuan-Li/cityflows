@@ -3,6 +3,7 @@ import { booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { nearestOnPolyline } from '../geo/polyline';
 import {
   BufferGeometry,
+  Color,
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
@@ -26,11 +27,14 @@ import {
   type GoreSurface,
   type PaintedGore,
 } from '../render/marking-geometry';
+import { roadStrip } from '../render/layers/nodes';
+import { airsideMarkings } from '../render/airside-markings';
 import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, levelRoad, roadStation, roadSurfaceAt, type cityHeights } from './heights';
+import { heightAt, levelRoad, once, roadStation, roadSurfaceAt, type cityHeights } from './heights';
 import { drape } from './terrain';
+import { computeVertexNormals } from './buffers';
 
 export function goreHeight(
   city: CompiledCity,
@@ -122,8 +126,10 @@ export function buildMarkings(
   const raised = { positions: [] as number[], colors: [] as number[] };
   const land = { positions: [] as number[], colors: [] as number[] };
   let target = raised;
+  let airside = false;
   const emit = (polygon: Vec2[], color: number, height: (p: Vec2) => number) => {
     const { positions, colors } = target;
+    const rgb = airside ? new Color(color) : undefined;
     for (const triangle of ShapeUtils.triangulateShape(
       polygon.map((p) => new Vector2(p.x, p.y)),
       [],
@@ -131,7 +137,9 @@ export function buildMarkings(
       for (const index of [triangle[2]!, triangle[1]!, triangle[0]!]) {
         const p = polygon[index]!;
         positions.push(p.x, height(p) + 0.025, p.y);
-        colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
+        if (rgb) colors.push(rgb.r, rgb.g, rgb.b);
+        else
+          colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
       }
   };
   const counts = { line: 0, polygon: 0 };
@@ -196,7 +204,8 @@ export function buildMarkings(
     target = terrain && profile.crossfall ? land : raised;
     add(
       [...geometry.below, ...geometry.above, ...transitionMarkings(city, road, markingTheme)],
-      (p) => roadSurfaceAt(road, profile, p),
+      // A line's 0.5 m pieces share their ends.
+      once((p) => roadSurfaceAt(road, profile, p)),
       !terrain && profile.fromM === profile.toM && profile.fromM === profile.deckM,
     );
   }
@@ -207,13 +216,19 @@ export function buildMarkings(
     const nodeZ = (p: Vec2) => (followsGround ? z + terrain.surfaceAt(p.x, p.y) - ground : z);
     target = followsGround ? land : raised;
     add(nodeMarkingGeometry(city, node, markingTheme), nodeZ, true);
-    if (node.outline.length)
+    if (node.outline.length && !roadStrip(city, node))
       for (const index of node.movements) {
         const movement = city.movements[index]!;
         // Pixi draws movement paths before the junction fill; retain that occlusion in 3D.
         if (!movement.neverGreen)
           add(movementMarkings(movement, markingTheme), (p) => nodeZ(p) - 0.05, true);
       }
+  }
+  if (source.airport) {
+    // Between TASK-295's runway surface (-10 mm) and ground-level service roads.
+    airside = true;
+    target = terrain ? land : raised;
+    add(airsideMarkings(source.airport), () => -0.027, true);
   }
   const buffer = ({ positions, colors }: typeof raised) => {
     const geometry = new BufferGeometry();
@@ -231,7 +246,7 @@ export function buildMarkings(
     draped.dispose();
   }
   geometry.userData.markingCounts = counts;
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
 }
 

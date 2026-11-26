@@ -49,6 +49,75 @@
       canvas:active {
         cursor: grabbing;
       }
+      .aircraft-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem 1rem;
+        align-items: center;
+      }
+      .aircraft-scroll {
+        overflow: auto;
+        background: var(--aircraft-ground);
+      }
+      .aircraft-preview {
+        position: relative;
+        display: grid;
+        min-width: 1036px;
+        grid-template-columns: repeat(7, minmax(148px, 1fr));
+        grid-auto-rows: clamp(205px, calc((100dvh - 87px) / 3), 290px);
+        color: #202a32;
+      }
+      .aircraft-scroll[data-lighting='night'] .aircraft-preview {
+        color: #e3e9f4;
+      }
+      .aircraft-preview canvas {
+        position: absolute;
+        inset: 0;
+        cursor: default;
+        pointer-events: none;
+      }
+      .aircraft-preview canvas[hidden] {
+        display: none;
+      }
+      .aircraft-entry {
+        display: grid;
+        align-content: end;
+        gap: 3px;
+        border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+        padding-bottom: 12px;
+        text-align: center;
+      }
+      .aircraft-entry span {
+        font-size: 11px;
+        opacity: 0.8;
+      }
+      .aircraft-scale {
+        position: relative;
+        margin: 16px;
+        border-top: 1px solid currentColor;
+        color: #202a32;
+        font-size: 11px;
+        line-height: 19px;
+        text-align: center;
+      }
+      .aircraft-scroll[data-lighting='night'] .aircraft-scale {
+        color: #e3e9f4;
+      }
+      .aircraft-scale::before,
+      .aircraft-scale::after {
+        position: absolute;
+        top: 0;
+        width: 1px;
+        height: 4px;
+        background: currentColor;
+        content: '';
+      }
+      .aircraft-scale::before {
+        left: 0;
+      }
+      .aircraft-scale::after {
+        right: 0;
+      }
     </style>
   </head>
   <body>

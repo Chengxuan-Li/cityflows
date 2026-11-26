@@ -1,5 +1,15 @@
 import Flatbush from 'flatbush';
-import { booleanOpD, ClipType, EndType, FillRule, inflatePathsD, JoinType } from 'clipper2-ts';
+import {
+  areaD,
+  booleanOpD,
+  Clipper64,
+  ClipType,
+  EndType,
+  FillRule,
+  inflatePathsD,
+  JoinType,
+  scalePath64,
+} from 'clipper2-ts';
 import { earcut } from 'pixi.js';
 import {
   BufferGeometry,
@@ -11,17 +21,37 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
 } from 'three';
-import type { CompiledCity } from '../network';
+import type { CompiledCity, CRoad } from '../network';
 import { railHeightAt, railHeights, type RailGraph, type RailHeights } from '../network/rail';
 import { cityGrades } from '../render/grades';
 import { bedWidthM, railGeometry, type RailShape } from '../render/rail-geometry';
+import { walkGeometry } from '../render/walk-geometry';
 import type { CityGeometry, Pick } from '../render/types';
 import { style } from '../render/style';
 import { surfaceTexture } from './vegetation';
 import type { Vec2 } from '../geo/vec2';
-import type { cityHeights } from './heights';
+import {
+  once,
+  railSheetReachM,
+  raiseRailProfiles,
+  roadSurfaceAt,
+  type cityHeights,
+  type RailClearanceFloor,
+} from './heights';
 import { RailPaintCache } from './rail-paint-cache';
-import { distance, headingAtDistance, nearestOnPolyline, pointAtDistance } from '../geo/polyline';
+import {
+  boxOf,
+  boxesMeet,
+  distance,
+  headingAtDistance,
+  nearestOnPolyline,
+  pointAtDistance,
+  polylineNearest,
+  preparePolygon,
+  prepareRing,
+  segmentIntersection,
+} from '../geo/polyline';
+import { walkHeight } from './walk';
 
 type Track = RailGraph['tracks'][number];
 
@@ -69,7 +99,12 @@ const structure = {
   },
 };
 
-const trackAt = (track: Track, p: Vec2) => nearestOnPolyline(track.line, p).along;
+const trackStations = new WeakMap<Track, ReturnType<typeof polylineNearest>>();
+const trackAt = (track: Track, p: Vec2) => {
+  let find = trackStations.get(track);
+  if (!find) trackStations.set(track, (find = polylineNearest(track.line)));
+  return find(p).along;
+};
 
 /** The rail top above the terrain at `p` on `track`, in the 3D frame. */
 export function railElevation(
@@ -307,11 +342,12 @@ function heightField(rail: RailHeights, points: Sample[]) {
   return (p: Vec2) => {
     // Each track's nearest sample within reach.
     nearest.clear();
-    for (const i of spatial.search(p.x - 5, p.y - 5, p.x + 5, p.y + 5)) {
+    const reach = railSheetReachM;
+    for (const i of spatial.search(p.x - reach, p.y - reach, p.x + reach, p.y + reach)) {
       const q = points[i]!,
         d = (q.p.x - p.x) ** 2 + (q.p.y - p.y) ** 2,
         best = nearest.get(q.track);
-      if (d <= 25 && (!best || d < best.d)) nearest.set(q.track, { q, d });
+      if (d <= reach * reach && (!best || d < best.d)) nearest.set(q.track, { q, d });
     }
     let sum = 0,
       weights = 0,
@@ -334,7 +370,9 @@ function heightField(rail: RailHeights, points: Sample[]) {
     // On overlapping beds the lowest bed's height, so the sheet never covers a bed (TASK-280: the
     // network gives tracks that share a bed one profile, so their heights agree to a few cm).
     if (onBed < Infinity) return onBed;
-    return weights ? sum / weights : points[spatial.neighbors(p.x, p.y, 1)[0]!]!.h;
+    if (weights) return sum / weights;
+    const q = points[spatial.neighbors(p.x, p.y, 1)[0]!]!;
+    return railHeightAt(rail, q.track, q.s);
   };
 }
 
@@ -384,6 +422,232 @@ function cellTriangles(
   );
 }
 
+function bridgeDeck(graph: RailGraph, rail: RailHeights) {
+  const bridges = samples(graph, rail, (t) => rail.grades[t.idx] === 'bridge');
+  const outline = band(bridges, structure.deckM, structure.closeM);
+  const triangles = cellTriangles(
+    outline.rings,
+    band(bridges, 0).rings,
+    bridges,
+    structure.deckM + structure.closeM,
+  );
+  return { bridges, outline, triangles };
+}
+
+const bounds = (ring: Vec2[]) => {
+  const { minX, minY, maxX, maxY } = boxOf(ring);
+  return [minX, minY, maxX, maxY] as const;
+};
+
+const passageScale = 1000;
+function preparePassage(ring: Vec2[]) {
+  const path = scalePath64(ring, passageScale);
+  const outline = prepareRing([...path, path[0]!]);
+  return (subject: Vec2[], box: ReturnType<typeof boxOf>) => {
+    if (!outline.runs.some((run) => boxesMeet(run.box, box))) {
+      // Without a boundary in the subject's box, the whole subject has one winding number.
+      const { x, y } = subject[0]!;
+      let winding = 0;
+      for (const run of outline.runs) {
+        if (run.box.maxX < x || run.box.minY > y || run.box.maxY < y) continue;
+        for (let i = run.from; i < run.to; i++) {
+          const a = outline.ring[i - 1]!,
+            b = outline.ring[i]!;
+          if (a.y > y !== b.y > y && x < a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y))
+            winding += b.y > a.y ? 1 : -1;
+        }
+      }
+      return winding ? [subject] : [];
+    }
+    // Replace runs outside one side of the box with their chord. No edge entering the
+    // subject changes, and the chord preserves the winding inside the box.
+    const local = [path[0]!];
+    const outcode = (p: Vec2) =>
+      (p.x < box.minX ? 1 : p.x > box.maxX ? 2 : 0) | (p.y < box.minY ? 4 : p.y > box.maxY ? 8 : 0);
+    let previous = 0,
+      last = outcode(path[0]!);
+    const append = (p: Vec2) => {
+      const outside = outcode(p);
+      if (previous & last & outside) local[local.length - 1] = p;
+      else {
+        local.push(p);
+        previous = last;
+      }
+      last = outside;
+    };
+    for (const run of outline.runs) {
+      const b = run.box;
+      if (boxesMeet(b, box)) for (let i = run.from; i < run.to; i++) append(outline.ring[i]!);
+      else append(outline.ring[run.to - 1]!);
+    }
+    const clipper = new Clipper64();
+    clipper.addSubject([subject]);
+    clipper.addClip([local]);
+    const clipped: Vec2[][] = [];
+    clipper.execute(ClipType.Intersection, FillRule.NonZero, clipped);
+    return clipped;
+  };
+}
+
+/** Paved footprints and surface heights, indexed once for the deck cells and pier feet. */
+export function railPassages(
+  city: CompiledCity,
+  source: CityGeometry,
+  heights: ReturnType<typeof cityHeights>,
+) {
+  const surfaces: {
+    id: string;
+    layer: number;
+    clearance: number;
+    ring: Vec2[];
+    height: (p: Vec2) => number;
+    road?: CRoad;
+    inside?: (p: Vec2) => boolean;
+    clip?: ReturnType<typeof preparePassage>;
+  }[] = [];
+  for (const r of city.roads)
+    if (r.surface.length >= 3)
+      surfaces.push({
+        id: r.id,
+        layer: r.grade,
+        clearance: 4.5,
+        ring: r.surface,
+        road: r,
+        height: (p) => roadSurfaceAt(r, heights.roads[r.idx]!, p),
+      });
+  for (const n of city.nodes)
+    if (n.outline.length >= 3)
+      surfaces.push({
+        id: n.id,
+        layer: n.grade,
+        clearance: 4.5,
+        ring: n.outline,
+        height: (p) =>
+          heights.nodes[n.idx]! +
+          (n.grade === 0
+            ? heights.terrain.surfaceAt(p.x, p.y) - heights.terrain.groundAt(n.pos.x, n.pos.y)
+            : 0),
+      });
+  for (const { link, layer, polygons } of walkGeometry(city, source)) {
+    const pitch = walkHeight(city, heights, link);
+    const rise =
+      link.kind === 'steps' ? Math.abs(pitch(link.line[0]!) - pitch(link.line.at(-1)!)) : 0;
+    // A tread can stand a full riser above the pitch line returned by walkHeight.
+    const riser = rise >= 0.3 ? rise / Math.max(2, Math.round(rise / 0.17)) : 0;
+    const height = riser ? (p: Vec2) => pitch(p) + riser : pitch;
+    for (const ring of polygons)
+      surfaces.push({
+        id: link.id,
+        layer,
+        clearance: 2.5,
+        ring,
+        height,
+      });
+  }
+  const index = new Flatbush(Math.max(1, surfaces.length));
+  for (const { ring } of surfaces) index.add(...bounds(ring));
+  if (!surfaces.length) index.add(0, 0, 0, 0);
+  index.finish();
+  const contains = (s: (typeof surfaces)[number], p: Vec2) =>
+    (s.inside ??= preparePolygon([...s.ring, s.ring[0]!]))(p);
+  const shared = new Map<number, boolean>();
+  const sharedRoadDeck = (t: Track) => {
+    if (t.kind !== 'tram' || (t.form ?? 'embedded') !== 'embedded') return false;
+    let carriesRoad = shared.get(t.idx);
+    if (carriesRoad !== undefined) return carriesRoad;
+    const s = t.lengthM / 2;
+    const p = pointAtDistance(t.line, t.cumulative, s);
+    const heading = headingAtDistance(t.line, t.cumulative, s);
+    const half = bedWidthM(t) / 2 + structure.deckM;
+    const x = Math.sin(heading) * half,
+      y = Math.cos(heading) * half;
+    const a = { x: p.x - x, y: p.y + y },
+      b = { x: p.x + x, y: p.y - y };
+    // The street and its embedded tram are on one deck if they run abreast on the same layer.
+    // Lifting just the track would split the two surfaces and break the street-running tram.
+    carriesRoad = index.search(...bounds([a, b])).some((i) => {
+      const surface = surfaces[i];
+      if (!surface?.road || surface.layer !== t.layer) return false;
+      const q = nearestOnPolyline(surface.road.reference, p);
+      return (
+        Math.abs(q.direction.x * Math.cos(heading) + q.direction.y * Math.sin(heading)) >
+          Math.cos(Math.PI / 6) &&
+        (contains(surface, p) ||
+          surface.ring.some((v, k) =>
+            segmentIntersection(a, b, v, surface.ring[(k + 1) % surface.ring.length]!),
+          ))
+      );
+    });
+    shared.set(t.idx, carriesRoad);
+    return carriesRoad;
+  };
+  const candidates = (ring: Vec2[]) => index.search(...bounds(ring));
+  const overlaps = (ring: Vec2[], track: Track, nearby = candidates(ring)) => {
+    let subject: Vec2[] | undefined;
+    let box: ReturnType<typeof boxOf>;
+    const unscale = 1 / passageScale;
+    return nearby.flatMap((i) => {
+      const s = surfaces[i];
+      if (!s || s.layer >= Math.max(1, track.layer)) return [];
+      if (!subject) {
+        subject = scalePath64(ring, passageScale);
+        box = boxOf(subject);
+      }
+      return (s.clip ??= preparePassage(s.ring))(subject, box)
+        .map((path) => path.map(({ x, y }) => ({ x: x * unscale, y: y * unscale })))
+        .filter((overlap) => Math.abs(areaD(overlap)) > 1e-6)
+        .map((points) => ({ surface: s, points }));
+    });
+  };
+  const atPavement = (t: Track, p: Vec2, h: number) => {
+    const z = heights.terrain.groundAt(p.x, p.y) + h;
+    return index.search(p.x, p.y, p.x, p.y).some((i) => {
+      const s = surfaces[i];
+      return !!s && s.layer === t.layer && contains(s, p) && Math.abs(s.height(p) - z) < 0.2;
+    });
+  };
+  return { sharedRoadDeck, candidates, overlaps, atPavement };
+}
+
+function clearanceFloors(
+  rail: RailHeights,
+  heights: ReturnType<typeof cityHeights>,
+  deck: ReturnType<typeof bridgeDeck>,
+  passages: ReturnType<typeof railPassages>,
+  raised: Sample[],
+) {
+  const field = heightField(rail, [...deck.bridges, ...raised]);
+  const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
+  const floors: RailClearanceFloor[] = [];
+  const known = new Map<Vec2, number>();
+  for (const triangle of deck.triangles) {
+    const nearby = passages.candidates(triangle);
+    if (!nearby.length) continue;
+    const middle = {
+      x: (triangle[0]!.x + triangle[1]!.x + triangle[2]!.x) / 3,
+      y: (triangle[0]!.y + triangle[1]!.y + triangle[2]!.y) / 3,
+    };
+    const track = deck.outline.nearest(middle).track;
+    if (passages.sharedRoadDeck(track)) continue;
+    const hits = passages.overlaps(triangle, track, nearby);
+    if (!hits.length) continue;
+    // Bound the whole cell by its highest pavement point. Allow for mesh coordinates rounded
+    // to millimetres and for the chord used to draw the pavement between height samples.
+    const required = Math.max(
+      ...hits.flatMap(({ surface, points }) =>
+        points.map((p) => surface.height(p) + surface.clearance + structure.deckDepthM + 0.03),
+      ),
+    );
+    for (const p of triangle) {
+      const height = required - ground(p);
+      let base = known.get(p);
+      if (base === undefined) known.set(p, (base = field(p)));
+      if (height > base) floors.push({ p, layer: track.layer, height });
+    }
+  }
+  return floors;
+}
+
 /**
  * TASK-132: tunnel tubes, portals and cutting walls, bridge decks with parapets and piers, and
  * embankments under raised ground track. The translucent tube shows, with the tunnel's track and
@@ -393,6 +657,10 @@ function buildStructures(
   city: CompiledCity,
   rail: RailHeights,
   heights: ReturnType<typeof cityHeights>,
+  bridge: ReturnType<typeof bridgeDeck>,
+  passages: ReturnType<typeof railPassages> | undefined,
+  deckRaised: Sample[],
+  lifted: boolean,
 ) {
   const graph = city.rail!;
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
@@ -476,11 +744,14 @@ function buildStructures(
   // tracks closed; one height sheet through every track on either, so the deck surface, the
   // embankment top and the walls between them meet. Parapets and slopes stand on outer edges
   // only; where an embankment meets a deck or ends, a wall stands from the ground to its top.
-  const bridges = samples(graph, rail, (t) => rail.grades[t.idx] === 'bridge');
+  const { triangles: deckTriangles, outline: decks } = bridge;
+  const { bridges } = bridge;
   const raised = samples(graph, rail, (t, h) => rail.grades[t.idx] === 'ground' && h > 0.2);
-  const decks = band(bridges, structure.deckM, structure.closeM);
   const banks = band(raised, structure.deckM, structure.closeM, decks.rings);
   const field = heightField(rail, [...bridges, ...raised]);
+  // Ground track that joins an embankment after the lift can be lower than the neighbouring
+  // deck. Keep the deck's original contributors so raising a profile cannot lower its sheet.
+  const deckField = lifted ? heightField(rail, [...bridges, ...deckRaised]) : field;
   // Triangles share their corner objects: each corner's height once.
   const memo = new Map<Vec2, number>();
   const sheet = (p: Vec2) => {
@@ -489,16 +760,16 @@ function buildStructures(
     return h;
   };
   const top = (p: Vec2) => ground(p) + sheet(p);
+  const deckMemo = new Map<Vec2, number>();
+  const deckTop = (p: Vec2) => {
+    let z = deckMemo.get(p);
+    if (z === undefined) deckMemo.set(p, (z = ground(p) + deckField(p)));
+    return z;
+  };
   const onDeck = alongRings(decks.rings),
     onBank = alongRings(banks.rings);
-  const deckTriangles = cellTriangles(
-    decks.rings,
-    band(bridges, 0).rings,
-    bridges,
-    structure.deckM + structure.closeM,
-  );
   for (const [a, b, c] of deckTriangles) {
-    const [za, zb, zc] = [top(a!), top(b!), top(c!)],
+    const [za, zb, zc] = [deckTop(a!), deckTop(b!), deckTop(c!)],
       depth = structure.deckDepthM;
     solid.triangle([a!.x, za, a!.y], [b!.x, zb, b!.y], [c!.x, zc, c!.y], deck);
     solid.triangle(
@@ -515,8 +786,8 @@ function buildStructures(
         b = ring[(i + 1) % ring.length]!;
       // The embankment's wall closes the deck's side where the two meet.
       if (onBank(a, b)) continue;
-      const za = top(a),
-        zb = top(b);
+      const za = deckTop(a),
+        zb = deckTop(b);
       solid.wall(a, b, za - structure.deckDepthM, za, zb - structure.deckDepthM, zb, concrete);
       if (!isAcross(a, b, decks)) {
         solid.wall(a, b, za, za + structure.parapetM, zb, zb + structure.parapetM, concrete);
@@ -528,23 +799,34 @@ function buildStructures(
       const p = pointAtDistance(t.line, t.cumulative, s),
         h = railHeightAt(rail, t, s) - structure.deckDepthM;
       const heading = headingAtDistance(t.line, t.cumulative, s);
-      if (h > 0.5)
-        solid.box(
-          p,
-          { x: Math.cos(heading), y: Math.sin(heading) },
-          structure.pierM / 2,
-          structure.pierM / 2,
-          ground(p),
-          ground(p) + h,
-          pier,
-        );
+      const u = { x: Math.cos(heading), y: Math.sin(heading) },
+        half = structure.pierM / 2;
+      const foot = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ].map(([x, y]) => ({
+        x: p.x + half * (x! * u.x - y! * u.y),
+        y: p.y + half * (x! * u.y + y! * u.x),
+      }));
+      const base = ground(p);
+      const obstructs = passages?.overlaps(foot, t).some(({ surface, points }) =>
+        points.some((q) => {
+          const z = surface.height(q);
+          return z <= base + h && z + surface.clearance >= base;
+        }),
+      );
+      if (h > 0.5 && !obstructs) solid.box(p, u, half, half, base, base + h, pier);
     }
   const bankTriangles = cellTriangles(
     banks.rings,
     band(raised, 0).rings,
     raised,
     structure.deckM + structure.closeM,
-    4,
+    // The corrected ramps meet both an existing slope and a clearance floor. Sample their
+    // embankment tops at the deck's resolution so a chord does not cut across a rail bed.
+    lifted ? 2 : 4,
   );
   for (const [a, b, c] of bankTriangles)
     solid.triangle([a!.x, top(a!), a!.y], [b!.x, top(b!), b!.y], [c!.x, top(c!), c!.y], bank);
@@ -636,7 +918,28 @@ export function buildRail(
 ) {
   const group = new Group();
   const { roadGrades, nodeGrades } = cityGrades(city);
-  const rail = city.rail ? railHeights(city, roadGrades, nodeGrades) : undefined;
+  const base = city.rail ? railHeights(city, roadGrades, nodeGrades) : undefined;
+  let rail = base;
+  const bridge = rail && bridgeDeck(city.rail!, rail);
+  const passages = bridge?.triangles.length ? railPassages(city, source, heights) : undefined;
+  const deckRaised =
+    base && passages
+      ? samples(city.rail!, base, (t, h) => base.grades[t.idx] === 'ground' && h > 0.2)
+      : [];
+  if (rail && bridge && passages) {
+    const sharedRoadDecks = new Set(
+      city
+        .rail!.tracks.filter((t) => rail!.grades[t.idx] === 'bridge' && passages.sharedRoadDeck(t))
+        .map((t) => t.idx),
+    );
+    rail = raiseRailProfiles(
+      city.rail!,
+      rail,
+      clearanceFloors(rail, heights, bridge, passages, deckRaised),
+      sharedRoadDecks,
+      passages.atPavement,
+    );
+  }
   // Tracks above ground in one batch; tunnel track in another shown with "See below ground".
   const batches = [0, 1].map(() => ({
     positions: [] as number[],
@@ -660,15 +963,16 @@ export function buildRail(
     ).map((h) => (shape.onWalk ? h + onWalkM : h)) as [number, number];
     // TASK-260: on ramps and bridges triangles split to 4 m, so the paint follows the profile (and
     // the terrain) as closely as the structures' sheet under it.
-    const ramp =
-      track && (rail!.profiles[track.idx]!.length > 1 || rail!.grades[track.idx] === 'bridge');
+    const profile = track ? rail!.profiles[track.idx]! : undefined;
+    const ramp = track && (profile!.length > 1 || rail!.grades[track.idx] === 'bridge');
     const node = shape.node === undefined ? undefined : city.rail!.nodes[shape.node]!;
     const nodeTrack = node && city.rail!.tracks[node.tracks[0]!]!;
-    const z = (p: Vec2, offset: number) =>
-      (shape.crossing
+    // TASK-357: each corner's height once; a ramp's split triangles share most corners.
+    const ground = once((p: Vec2) =>
+      shape.crossing
         ? heights.terrain.surfaceAt(p.x, p.y)
         : track
-          ? railElevation(heights, rail!, track, trackAt(track, p), p)
+          ? railElevation(heights, rail!, track, profile!.length === 1 ? 0 : trackAt(track, p), p)
           : nodeTrack
             ? railElevation(
                 heights,
@@ -677,22 +981,24 @@ export function buildRail(
                 nodeTrack.fromNode === node.idx ? 0 : nodeTrack.lengthM,
                 p,
               )
-            : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5) + offset;
-    const emit = (tri: Vec2[]) => {
+            : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5,
+    );
+    const z = (p: Vec2, offset: number) => ground(p) + offset;
+    const emit = (a: Vec2, b: Vec2, c: Vec2) => {
       if (ramp) {
-        const lengths = tri.map((p, i) => distance(p, tri[(i + 1) % 3]!));
-        const edge = lengths.indexOf(Math.max(...lengths));
-        if (lengths[edge]! > 4) {
-          const a = tri[edge]!,
-            b = tri[(edge + 1) % 3]!,
-            c = tri[(edge + 2) % 3]!,
-            mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          emit([a, mid, c]);
-          emit([mid, b, c]);
+        const ab = distance(a, b),
+          bc = distance(b, c),
+          ca = distance(c, a);
+        if (Math.max(ab, bc, ca) > 4) {
+          if (bc > ab && bc >= ca) [a, b, c] = [b, c, a];
+          else if (ca > ab && ca > bc) [a, b, c] = [c, a, b];
+          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          emit(a, mid, c);
+          emit(mid, b, c);
           return;
         }
       }
-      for (const p of [...tri].reverse()) {
+      for (const p of [c, b, a]) {
         positions.push(p.x, z(p, top), p.y);
         if (shape.tram === 'paving') paving.uvs.push(p.x / 2.56, p.y / 2.56);
         if (shape.grass) {
@@ -701,11 +1007,10 @@ export function buildRail(
         } else colors.push(color.r, color.g, color.b);
       }
     };
-    for (const polygon of shape.polygons)
-      if (polygon.length === 4) {
-        emit([polygon[0]!, polygon[1]!, polygon[2]!]);
-        emit([polygon[0]!, polygon[2]!, polygon[3]!]);
-      } else emit(polygon);
+    for (const [a, b, c, d] of shape.polygons) {
+      emit(a!, b!, c!);
+      if (d) emit(a!, c!, d);
+    }
     // Sides of raised tram parts, a shade darker than their tops.
     if (top > foot)
       for (const ring of shape.outline ?? [])
@@ -734,7 +1039,10 @@ export function buildRail(
   const below = meshes[1]!;
   below.name = 'rail-below';
   below.visible = false;
-  const structures = rail && buildStructures(city, rail, heights);
+  const structures =
+    rail &&
+    bridge &&
+    buildStructures(city, rail, heights, bridge, passages, deckRaised, rail !== base);
   if (structures) group.add(structures.solidMesh, structures.tubeMesh);
   const paintCache = new RailPaintCache(meshes[0]!);
   group.add(paintCache.mesh);

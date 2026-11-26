@@ -101,6 +101,24 @@ const box = (points: Vec2[]) =>
 /** Both views consume the same triangles, clipped clear of same-grade roads except trams. */
 export function railGeometry(city: CompiledCity, source?: CityGeometry): RailShape[] {
   if (!city.rail) return [];
+  const places = source?.places;
+  const cached = railShapes.get(city);
+  if (cached && cached.rail === city.rail && cached.places === places) return cached.shapes;
+  const shapes = buildRailGeometry(city, city.rail, places);
+  railShapes.set(city, { rail: city.rail, places, shapes });
+  return shapes;
+}
+
+const railShapes = new WeakMap<
+  CompiledCity,
+  { rail: CompiledCity['rail']; places: CityGeometry['places'] | undefined; shapes: RailShape[] }
+>();
+
+function buildRailGeometry(
+  city: CompiledCity,
+  rail: NonNullable<CompiledCity['rail']>,
+  places: CityGeometry['places'] | undefined,
+): RailShape[] {
   const { roadGrades, nodeGrades } = cityGrades(city);
   const obstacles = [
     ...city.roads.map((r) => ({ ring: positive(r.surface), layer: roadGrades[r.idx]! })),
@@ -187,10 +205,10 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       detail,
     );
   const stationWays = new Set(
-    city.rail.platforms
+    rail.platforms
       .filter((p) => p.station !== null && p.mode === 'rail')
       .flatMap((p) => p.tracks)
-      .map((id) => city.rail!.tracks.find((t) => t.id === id)!)
+      .map((id) => rail.tracks.find((t) => t.id === id)!)
       .filter(Boolean)
       .map((t) => t.osmId ?? t.id),
   );
@@ -199,11 +217,11 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
   const tramBand = (t: { line: Vec2[] }) =>
     inflatePathsD([t.line], style.tram.bedWidthM / 2, JoinType.Round, EndType.Butt, 2, 3);
   const parts = [
-    ...city.rail.platforms.flatMap((p) => {
+    ...rail.platforms.flatMap((p) => {
       const ring = p.shape.kind === 'point' ? null : platformRing(p.shape);
       return ring ? [{ rings: [ring], layer: p.layer, track: -1, platform: true }] : [];
     }),
-    ...city.rail.tracks
+    ...rail.tracks
       .filter((t) => t.kind === 'tram' && (t.form ?? 'embedded') === 'embedded')
       .map((t) => ({ rings: tramBand(t), layer: t.layer, track: t.idx, platform: false })),
   ].map((part) => ({ ...part, box: box(part.rings.flat()) }));
@@ -254,11 +272,11 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
   const heights = railHeights(city, roadGrades, nodeGrades);
   // Bridge decks below their beds, one union per grade, with their outline.
   for (const layer of new Set(
-    city.rail.tracks.filter((t) => heights.grades[t.idx] === 'bridge').map((t) => t.layer),
+    rail.tracks.filter((t) => heights.grades[t.idx] === 'bridge').map((t) => t.layer),
   )) {
     const deck = booleanOpD(
       ClipType.Union,
-      city.rail.tracks
+      rail.tracks
         .filter((t) => heights.grades[t.idx] === 'bridge' && t.layer === layer)
         .flatMap((t) =>
           inflatePathsD([t.line], bedWidthM(t) / 2 + 1, JoinType.Round, EndType.Butt, 2, 3),
@@ -279,7 +297,7 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       { only2d: true },
     );
   }
-  for (const t of city.rail.tracks) {
+  for (const t of rail.tracks) {
     const grade = heights.grades[t.idx]!;
     const alpha = grade === 'tunnel' || grade === 'covered' ? 0.4 : 1;
     // Tunnel and covered track also show a dashed outline above the ground's roads and beds.
@@ -501,7 +519,7 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
     for (const side of [-0.72, 0.72])
       stroke(offsetPolyline(t.line, side), 0.18, t.layer, 0x777b78, alpha, false, pick, true);
     if (grade === 'ground') {
-      const mapped = city.rail.nodes.filter(
+      const mapped = rail.nodes.filter(
         (n) => (n.id === t.from || n.id === t.to) && n.crossing?.kind === 'rail',
       );
       for (const n of mapped) {
@@ -531,8 +549,8 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
   }
   // A portal: a bar across the track at the tunnel's mouth, its ends turned out to the ground.
   for (const portal of heights.portals.filter((p) => p.kind === 'tunnel')) {
-    const t = city.rail.tracks[portal.track]!,
-      p = city.rail.nodes[portal.node]!.pos;
+    const t = rail.tracks[portal.track]!,
+      p = rail.nodes[portal.node]!.pos;
     const inward =
       headingAtDistance(t.line, t.cumulative, portal.atEnd ? t.lengthM : 0) +
       (portal.atEnd ? Math.PI : 0);
@@ -558,9 +576,9 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       { only2d: true, over: true },
     );
   }
-  for (const n of city.rail.nodes.filter((n) => n.kind === 'switch'))
+  for (const n of rail.nodes.filter((n) => n.kind === 'switch'))
     add([circle(n.pos, 1.3)], n.layer, 0x77857d, 1, false, undefined, false, { node: n.idx });
-  for (const [platform, p] of city.rail.platforms.entries()) {
+  for (const [platform, p] of rail.platforms.entries()) {
     const paths =
       p.shape.kind === 'polygon'
         ? [p.shape.ring]
@@ -572,7 +590,7 @@ export function railGeometry(city: CompiledCity, source?: CityGeometry): RailSha
       platform,
     });
   }
-  for (const p of city.places.filter((p) => source?.places[p.id]?.station)) {
+  for (const p of city.places.filter((p) => places?.[p.id]?.station)) {
     add([circle(p.centroid, 5)], 0, 0x587f77, 1, false, { kind: 'place', place: p.idx });
     add([circle(p.centroid, 2.4)], 0, 0xf8f6ef, 1, false, { kind: 'place', place: p.idx });
   }

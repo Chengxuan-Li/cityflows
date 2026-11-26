@@ -9,6 +9,8 @@ import {
   triangulateD,
 } from 'clipper2-ts';
 import {
+  boxOf,
+  boxesMeet,
   clipOutside,
   cumulativeLengths,
   distance,
@@ -18,6 +20,7 @@ import {
   pointAtDistance,
   pointInPolygon,
   polylineCrossings,
+  polylineNearest,
   segmentDistance,
   segmentIntersection,
   trimPolyline,
@@ -34,10 +37,12 @@ import {
   endEdges,
   MAPPED_M,
   nearSignal,
+  nodeRoads,
   type CrossingSource,
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
-import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
+import { roadStrip } from './layers/nodes';
+import { SETBACK_CAP_M, isSignalCrossing, junctionCorners } from '../network/junctions';
 import { keepClearZones, type KeepClearZone } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
@@ -451,7 +456,7 @@ function buildRoadMarkings(
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
           .filter((r) => r !== road && r.corridorId === road.corridorId && r.streetGroupId === null)
-          .map((r) => [...r.surface, r.surface[0]!])
+          .map((r) => polylineNearest([...r.surface, r.surface[0]!]))
       : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
@@ -506,9 +511,7 @@ function buildRoadMarkings(
       for (const run of runs) {
         const facing = run.map(
           (p) =>
-            partners
-              .map((ring) => nearestOnPolyline(ring, p))
-              .reduce((a, b) => (b.away < a.away ? b : a)).point,
+            partners.map((nearest) => nearest(p)).reduce((a, b) => (b.away < a.away ? b : a)).point,
         );
         pavement.push([...run, ...facing.reverse()]);
       }
@@ -555,9 +558,10 @@ function buildRoadMarkings(
           let sections = [edge];
           if (median && partners.length) {
             // Nearby opposing carriageways already carry the shared centre paint.
+            const nearestBoundary = polylineNearest(boundary);
             const kerb = (p: Vec2) => {
-              const boundaryPoint = nearestOnPolyline(boundary, p).point;
-              return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
+              const boundaryPoint = nearestBoundary(p).point;
+              return partners.every((nearest) => nearest(boundaryPoint).away > 1.5);
             };
             // Separation can change between the vertices of a straight boundary.
             sections = keepInside(edge, kerb, true);
@@ -1021,11 +1025,11 @@ export function markingPolygons(shape: MarkingShape): Vec2[][] {
   return left.slice(1).map((p, i) => [left[i]!, p, right[i + 1]!, right[i]!]);
 }
 /** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */
-function besidePartners(line: Vec2[], rings: Vec2[][]): Vec2[][] {
+function besidePartners(line: Vec2[], partners: ReturnType<typeof polylineNearest>[]): Vec2[][] {
   const runs: Vec2[][] = [];
   let run: Vec2[] = [];
   for (const p of line) {
-    if (rings.some((ring) => nearestOnPolyline(ring, p).away <= 1.5)) run.push(p);
+    if (partners.some((nearest) => nearest(p).away <= 1.5)) run.push(p);
     else if (run.length) {
       if (run.length > 1) runs.push(run);
       run = [];
@@ -1049,8 +1053,8 @@ function nodeClips(city: CompiledCity, road: CRoad, node: number, withOutline: b
   if (!outline.length) return [];
   const rings = withOutline ? [outline] : [];
   const own = endDirection(road, road.to === node);
-  for (const other of city.roads) {
-    if (other === road || (other.from !== node && other.to !== node)) continue;
+  for (const other of nodeRoads(city, city.nodes[node]!)) {
+    if (other === road) continue;
     if (other.streetGroupId !== null && other.streetGroupId === road.streetGroupId) continue;
     const atEnd = other.to === node;
     const d = endDirection(other, atEnd);
@@ -1065,21 +1069,34 @@ function splitAtRing(line: Vec2[], ring: Vec2[]) {
   const inside: Vec2[][] = [],
     outside: Vec2[][] = [];
   if (!ring.length) return { inside, outside: [line] };
+  const box = boxOf(ring);
   let current: Vec2[] = [],
     within = false;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
     const ts = [0, 1];
-    for (let j = 1; j < ring.length; j++) {
-      const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
-      if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+    // Keep the endpoint tolerance of segmentIntersection when rejecting the ring.
+    const pad =
+      2e-9 *
+      Math.max(box.maxX - box.minX, box.maxY - box.minY, Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+    const meets = boxesMeet(box, {
+      minX: Math.min(a.x, b.x) - pad,
+      minY: Math.min(a.y, b.y) - pad,
+      maxX: Math.max(a.x, b.x) + pad,
+      maxY: Math.max(a.y, b.y) + pad,
+    });
+    if (meets) {
+      for (let j = 1; j < ring.length; j++) {
+        const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
+        if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+      }
     }
     ts.sort((x, y) => x - y);
     for (let k = 1; k < ts.length; k++) {
       if (ts[k]! - ts[k - 1]! < 1e-9) continue;
       const at = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      const side = pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
+      const side = meets && pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
       if (current.length && side !== within) {
         (within ? inside : outside).push(current);
         current = [];
@@ -1209,6 +1226,8 @@ const arrowMovements = (city: CompiledCity, lane: CLane) =>
  * where no two movements cross (`innerCarriageway`'s crossing; movements to or from service roads
  * aside, so a median crossover's end is none, Freiburg `n:1147`). */
 function noJunction(city: CompiledCity, node: CNode): boolean {
+  // TASK-348: a signalised crossing laid out as a plain node is no junction for the arrows.
+  if (node.group === undefined && isSignalCrossing(node)) return true;
   if (node.group !== undefined || node.signal || node.control !== 'uncontrolled') return false;
   const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
   const counted = (m: CMovement) =>
@@ -2069,19 +2088,35 @@ function segmentLanes(city: CompiledCity): Int32Array {
   return lanes;
 }
 
-function lineDistance(p: Vec2, line: Vec2[]): number {
-  let best = Infinity;
+function seamSegmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
+function withinSeam(p: Vec2, line: Vec2[], distanceM: number): boolean {
+  // The padded box only rejects distant segments. The distance test still decides the threshold.
+  const pad = distanceM + 1e-6;
+  const minX = p.x - pad,
+    maxX = p.x + pad,
+    minY = p.y - pad,
+    maxY = p.y + pad;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const length2 = dx * dx + dy * dy;
-    const t =
-      length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
-    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+    if (
+      (a.x < minX && b.x < minX) ||
+      (a.x > maxX && b.x > maxX) ||
+      (a.y < minY && b.y < minY) ||
+      (a.y > maxY && b.y > maxY)
+    )
+      continue;
+    if (seamSegmentDistance(p, a, b) <= distanceM) return true;
   }
-  return best;
+  return false;
 }
 
 const seamCache = new WeakMap<CompiledCity, Map<number, Vec2[][]>>();
@@ -2099,13 +2134,14 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
   const lengths = cumulativeLengths(edge);
   const owner = segmentLanes(city);
   const candidates = new Set<number>();
-  for (let s = 0; ; s = Math.min(lengths.at(-1)!, s + 4)) {
+  const total = lengths.at(-1)!;
+  for (let s = 0; ; s = Math.min(total, s + 4)) {
     const p = pointAtDistance(edge, lengths, s);
     for (const k of city.laneSpatial.search(p.x - 3, p.y - 3, p.x + 3, p.y + 3)) {
       const lane = city.lanes[owner[k]!]!;
       if (lane.road !== road.idx && lane.left < 0) candidates.add(lane.idx);
     }
-    if (s === lengths.at(-1)!) break;
+    if (s === total) break;
   }
   const found: Vec2[][] = [];
   for (const index of candidates) {
@@ -2122,8 +2158,7 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
       run = [];
     };
     for (const q of edge) {
-      const d = lineDistance(q, left);
-      if (d <= (run.length ? 0.25 : 0.1)) run.push(q);
+      if (withinSeam(q, left, run.length ? 0.25 : 0.1)) run.push(q);
       else close();
     }
     close();
@@ -2137,12 +2172,14 @@ function sameWay(run: Vec2[], left: Vec2[]): boolean {
   const a = run[0]!,
     b = run[1]!;
   let closest = 1;
-  for (let i = 2; i < left.length; i++)
-    if (
-      lineDistance(a, [left[i - 1]!, left[i]!]) <
-      lineDistance(a, [left[closest - 1]!, left[closest]!])
-    )
+  let best = seamSegmentDistance(a, left[0]!, left[1]!);
+  for (let i = 2; i < left.length; i++) {
+    const distance = seamSegmentDistance(a, left[i - 1]!, left[i]!);
+    if (distance < best) {
       closest = i;
+      best = distance;
+    }
+  }
   const c = left[closest - 1]!,
     d = left[closest]!;
   return (b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y) > 0;
@@ -2492,6 +2529,7 @@ function buildNodeMarkings(
   );
   return [
     ...guides,
+    ...stripLines(city, node, markingTheme),
     ...paintedGores(city, node).flatMap((g) =>
       hatchGeometry(g.ring, g.heading, g.road, g.holes, markingTheme).map((shape) => ({
         ...shape,
@@ -2500,6 +2538,86 @@ function buildNodeMarkings(
     ),
     ...miniRoundaboutMarkings(city, node, markingTheme),
   ];
+}
+
+/**
+ * TASK-347: across an uncontrolled node drawn as road (`roadStrip`) without a crossing, the lines
+ * of its roads run on along the movements: dividers midway between neighbouring paths of one road
+ * pair (dashed on in the road's phase, a gap first after the dash its approach ends with), the
+ * centre midway between the two directions' median-side paths, and outside the German theme the
+ * edges along the outermost paths, as `buildRoadMarkings` draws them on the roads.
+ */
+function stripLines(city: CompiledCity, node: CNode, markingTheme: MarkingTheme): MarkingShape[] {
+  if (node.control !== 'uncontrolled' || !roadStrip(city, node)) return [];
+  const roads = nodeRoads(city, node);
+  if (
+    roads.some((r) =>
+      [false, true].some(
+        (end) => (end ? r.to : r.from) === node.idx && crossingEnabled(city, r, end),
+      ),
+    )
+  )
+    return [];
+  const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
+  const movements = node.movements
+    .map((i) => city.movements[i]!)
+    .filter((m) => !m.neverGreen && m.turn !== 'uturn');
+  const pairs = new Map<string, CMovement[]>();
+  for (const m of movements) {
+    const key = `${city.lanes[m.fromLane]!.road}>${city.lanes[m.toLane]!.road}`;
+    pairs.set(key, [...(pairs.get(key) ?? []), m]);
+  }
+  // From the median side to the curb.
+  const curb = city.drivingSide === 'right' ? 1 : -1;
+  const key = (lane: number) => curb * city.lanes[lane]!.lane;
+  const shapes: MarkingShape[] = [];
+  const inners: CMovement[] = [];
+  for (const group of pairs.values()) {
+    group.sort((a, b) => key(a.fromLane) - key(b.fromLane) || key(a.toLane) - key(b.toLane));
+    const road = roadOf(group[0]!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].lane.dash!;
+    for (let i = 1; i < group.length; i++) {
+      const [a, b] = [group[i - 1]!, group[i]!];
+      if (a.fromLane === b.fromLane || a.toLane === b.toLane) continue;
+      for (const line of midway(a, b, false)) {
+        const total = cumulativeLengths(line).at(-1)!;
+        if (total <= pattern[1]) continue;
+        for (const dash of roadDashes(trimPolyline(line, pattern[1], 0), false, pattern))
+          shapes.push(lineShape(road, 'lane', dash, 0.78, markingTheme));
+      }
+    }
+    if (road.streetGroupId !== null) inners.push(group[0]!);
+    const ends = road.streetGroupId === null ? [group[0]!, group.at(-1)!] : [group.at(-1)!];
+    if (markingTheme.id === 'de' || (markingTheme.id === 'uk' && ukTownRoad(road))) continue;
+    for (const m of ends) {
+      const side = m === group.at(-1)! ? curb : -curb;
+      const line = parallelOffset(edge(city, m, side), -side * 0.15);
+      shapes.push({
+        ...lineShape(road, 'edge', line, 0.85, markingTheme),
+        ...(markingTheme.id === 'uk' ? { color: markingTheme.colors.lane } : {}),
+      });
+    }
+  }
+  // The two directions of one street: their median-side paths run opposite.
+  const [a, b] = inners;
+  const paired = (x: CMovement, y: CMovement) => {
+    const [from, to] = [roadOf(x.fromLane), roadOf(y.toLane)];
+    return from.streetGroupId !== null && from.streetGroupId === to.streetGroupId;
+  };
+  if (inners.length === 2 && paired(a!, b!) && paired(b!, a!)) {
+    const road = roadOf(a!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].centre.dash;
+    for (const line of midway(a!, b!, true)) {
+      const lines =
+        markingTheme.id === 'us'
+          ? [parallelOffset(line, 0.15), parallelOffset(line, -0.15)]
+          : pattern
+            ? roadDashes(trimPolyline(line, pattern[1], 0), false, pattern)
+            : [line];
+      shapes.push(...lines.map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)));
+    }
+  }
+  return shapes;
 }
 
 /**

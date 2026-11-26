@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import {
@@ -24,6 +25,18 @@ test('the panel lists every bundled real place not held out of it, and each has 
   );
 });
 
+// TASK-348: Heathrow's archive rebuilt on its layout (signalised crossings between nodes laid out
+// as plain nodes in its landside roads).
+test.for([
+  ['london-city-airport', '19bab63b0627b1e367191fadfd2cfd7e8232af397a677c7cf7d49efac57dc3c3'],
+  ['zurich-airport', '4ccf6ed18192886f1087ab4dbd90a6f6f612a3ff4c15a3ec8e36f2dcc577a85d'],
+  ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
+  ['heathrow', '0ba8c273fcd341f7bd11cf2be1c37d61d192b32f79dbcfa0288fbab9a2b5cfc8'],
+] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
+  const archive = readFileSync(projectFile(id));
+  expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
+});
+
 // TASK-284: the driving side is the importer's inference from the location (TASK-268), not an
 // option of the build: York, the first left-hand place, drives on the left with UK markings.
 test.for([
@@ -42,7 +55,8 @@ test.for([
 //   node --experimental-strip-types --import ./bench/register.ts bench/bundled-cities.ts
 test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
   '%s: the bundled archive is a fresh build of its extract',
-  { timeout: limit(120_000) },
+  // Heathrow's fresh build takes 10 to 26 s here and over 120 s on a CI runner (Full 45064837109).
+  { timeout: limit(600_000) },
   async (id) => {
     const archive = readFileSync(projectFile(id), 'utf8');
     expect(
@@ -56,8 +70,12 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // per resident, mode choice on, the bundled population), 07:00 to 10:00. A place that fails it
 // leaves the panel; it is not curated (owner, 2026-11-20). The state hash is reported, not pinned:
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
-// gate (`heldOutOfPanel`, TASK-284: York) is expected to fail, so the fix that lets it pass shows.
-describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york'])(
+// gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
+// since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
+// TASK-302: Zurich Airport, held out, is not run here: its morning takes 172 s (2 gridlocked).
+// TASK-354: Heathrow joined the panel on the owner's word (2026-11-25) without this gate; its landside
+// morning is to be measured and improved in parallel.
+describe.for(['munich', 'sindelfingen', 'philadelphia', 'luebeck', 'york', 'london-city-airport'])(
   '%s at the showcase demand',
   (id) => {
     (id in heldOutOfPanel ? test.fails : test)(

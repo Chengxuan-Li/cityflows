@@ -121,3 +121,93 @@ test('demo B, terminal access: the 08:05 arrival wave queues cars; a dedicated a
   });
   expect(errors).toEqual([]);
 });
+
+test('both synthetic airports open from Test layouts and fit the runway on the map', async ({
+  page,
+}, info) => {
+  const errors = pageErrors(page);
+  await page.goto('/?city=grid5x5');
+  await expect(button(page, 'Play')).toBeEnabled();
+  for (const { id, name, pads } of [
+    { id: 'syntheticAirport', name: 'Synthetic airport', pads: 0 },
+    { id: 'syntheticAirportBacktrack', name: 'Synthetic airport (backtrack)', pads: 2 },
+  ]) {
+    await button(page, 'New').click();
+    const layouts = page.getByRole('region', { name: 'Test layouts', exact: true });
+    await layouts.getByRole('button', { name, exact: true }).click();
+    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
+    await expect(button(page, 'Play')).toBeEnabled();
+
+    const source = await city(page);
+    await expect(page.getByRole('table', { name: 'Departures' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Arrivals' })).toBeVisible();
+    expect(source.airport?.turnPads).toHaveLength(pads);
+    const ends = Object.values(source.airport!.runways)[0]!.ends.map(({ pos }) => pos);
+    const canvas = page.locator('canvas[data-airside-areas]');
+    await expect(canvas).toHaveAttribute('data-airside-areas', /^[1-9]\d*$/);
+    await expect
+      .poll(() =>
+        canvas.evaluate((element, ends) => {
+          const { width, height } = element.getBoundingClientRect();
+          return ends.every((pos) => {
+            const { x, y } = window.cityflows!.worldToScreen!(pos);
+            return x >= 0 && y >= 0 && x < width && y < height;
+          });
+        }, ends),
+      )
+      .toBe(true);
+    const stand = Object.values(source.airport!.stands).find(({ ref }) => ref === 'M1')!;
+    const point = await canvas.evaluate((element, pos) => {
+      const { left, top } = element.getBoundingClientRect();
+      const { x, y } = window.cityflows!.worldToScreen!(pos);
+      return { x: left + x, y: top + y };
+    }, stand.pos);
+    await page.mouse.click(point.x, point.y);
+    const inspector = page.getByRole('region', { name: 'Stand inspector' });
+    await expect(inspector.getByRole('heading', { name: 'Stand M1' })).toBeVisible();
+    await expect(inspector).toContainText('Maintenance');
+    await expect(inspector).toContainText('Occupancy');
+    await button(page, 'Open flight board').click();
+    const departures = page.getByRole('table', { name: 'Departures' });
+    await expect(departures).toBeVisible();
+    const firstFlight = await departures.locator('tbody tr').first().innerText();
+    await page
+      .getByRole('region', { name: 'Departures' })
+      .getByRole('button', { name: 'Later' })
+      .click();
+    await expect(departures.locator('tbody tr').first()).not.toHaveText(firstFlight);
+    await page.screenshot({ path: info.outputPath(`${id}.png`) });
+
+    await page.goto(`/?city=${id}`);
+    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
+    await expect(button(page, 'Play')).toBeEnabled();
+    expect((await city(page)).airport).toEqual(source.airport);
+  }
+  expect(errors).toEqual([]);
+});
+
+// TASK-300: the wind control in the flight board turns the synthetic airport from 27 to 09.
+test('the wind control changes the runway configuration of the synthetic airport', async ({
+  page,
+}, info) => {
+  const errors = pageErrors(page);
+  await page.goto('/?city=syntheticAirport');
+  await expect(button(page, 'Play')).toBeEnabled();
+  const runways = page.getByRole('region', { name: 'Runways' });
+  await expect(runways).toContainText('In use27');
+  await page.getByLabel('Wind from (°)').fill('70');
+  await page.getByLabel('Wind speed (kt)').fill('12');
+  await page.screenshot({ path: info.outputPath('wind-set.png') });
+  // A minute at a time until the change has opened 09.
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => window.cityflows!.step(600));
+        return runways.innerText();
+      },
+      { timeout: 60_000, intervals: [100] },
+    )
+    .toMatch(/In use\s*09[\s\S]*Last change\s*27 to 09/);
+  await page.screenshot({ path: info.outputPath('runway-09.png') });
+  expect(errors).toEqual([]);
+});

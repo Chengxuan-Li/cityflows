@@ -21,7 +21,8 @@ import type { OsmData, OsmTags } from './parse';
 import { createRoads, roadSpecs } from './roads';
 import { junctions, splitWay } from './split';
 import { joinLotAisles } from './lot-junctions';
-import { connectCarExits } from './places';
+import { matchParkingEntrances, type ParkingFootprint } from './parking';
+import { connectCarExits, parkingEntranceConnector } from './places';
 
 export const surfaceLot = (tag: OsmTags) =>
   tag.amenity === 'parking' &&
@@ -34,9 +35,17 @@ export function addLots(
   positions: Map<number, Vec2>,
   bounds: Bounds,
   diagnostics: Diagnostic[],
-  sources = polygonSources(data, surfaceLot),
-  includeAisles = true,
-  compiled?: CompiledCity,
+  {
+    sources = polygonSources(data, surfaceLot),
+    includeAisles = true,
+    compiled,
+    garageFootprints,
+  }: {
+    sources?: ReturnType<typeof polygonSources>;
+    includeAisles?: boolean;
+    compiled?: CompiledCity;
+    garageFootprints?: ReadonlyMap<string, ParkingFootprint>;
+  } = {},
 ) {
   const close = (ring: Vec2[]) => [...ring, ring[0]!];
   const shapes = sources.flatMap((source) => {
@@ -56,15 +65,16 @@ export function addLots(
           .map((r) => r.ring),
       }));
   });
-  if (!shapes.length) return;
-  const buildings = polygonSources(data, (tag) => !!tag.building && tag.building !== 'no').flatMap(
-    (source) =>
-      source.rings
-        .filter((r) => r.role === 'outer')
-        .flatMap(({ ids }) => {
-          const ring = ids.slice(0, -1).map((id) => positions.get(id));
-          return ring.every((p): p is Vec2 => !!p) ? [ring] : [];
-        }),
+  const footprints = new Map(garageFootprints);
+  const buildings = (
+    shapes.length ? polygonSources(data, (tag) => !!tag.building && tag.building !== 'no') : []
+  ).flatMap((source) =>
+    source.rings
+      .filter((r) => r.role === 'outer')
+      .flatMap(({ ids }) => {
+        const ring = ids.slice(0, -1).map((id) => positions.get(id));
+        return ring.every((p): p is Vec2 => !!p) ? [ring] : [];
+      }),
   );
   const lots = shapes.map(({ id: osmId, tag, ring, holes }) => {
     const id = allocateId(city, 'pk');
@@ -114,8 +124,13 @@ export function addLots(
       },
     };
     (city.parking ??= {})[id] = lot;
+    footprints.set(id, { rings: [ring], holes, parking: 'surface' });
     return lot;
   });
+  const entrances =
+    garageFootprints &&
+    matchParkingEntrances(city, data, positions, bounds, footprints, diagnostics);
+  if (!lots.length) return { entrances };
   const touchesLot = (line: Vec2[], lot: ParkingFacility) =>
     lot.shape?.kind === 'polygon' &&
     (line.some((p) =>
@@ -258,8 +273,9 @@ export function addLots(
   }
   // Entry reachability propagates through the mapped aisle network, including one-way direction.
   const withAisles = attached.ok ? attached : compile(city);
-  if (!withAisles.ok) return;
+  if (!withAisles.ok) return { entrances };
   const unreachable: ParkingFacility[] = [];
+  let snapEntrance: ReturnType<typeof parkingEntranceConnector> | undefined;
   for (const lot of lots) {
     const aisleNodes = new Set(
       lot.aisles!.flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to]),
@@ -293,9 +309,28 @@ export function addLots(
     }
     if (!lot.aisles!.some((id) => traversed.has(id))) {
       const ring = lot.shape!.kind === 'polygon' ? close(lot.shape!.ring) : [];
+      const box = (points: Vec2[]) => ({
+        minX: Math.min(...points.map((p) => p.x)),
+        minY: Math.min(...points.map((p) => p.y)),
+        maxX: Math.max(...points.map((p) => p.x)),
+        maxY: Math.max(...points.map((p) => p.y)),
+      });
+      const near = box(ring);
       const candidates = withAisles.compiled.lanes
         .flatMap((lane) => {
           const road = city.roads[withAisles.compiled.roads[lane.road]!.id]!;
+          // Every candidate measure below is a distance between the ring and the lane, so a lane
+          // whose box lies over 30 m from the ring's box cannot come within 30 m.
+          if (ring.length) {
+            const own = box(lane.polyline);
+            if (
+              own.minX > near.maxX + 30 ||
+              own.maxX < near.minX - 30 ||
+              own.minY > near.maxY + 30 ||
+              own.maxY < near.minY - 30
+            )
+              return [];
+          }
           if (
             aisleIds.has(road.id) ||
             !lane.allowed.includes('car') ||
@@ -329,6 +364,16 @@ export function addLots(
         });
         lot.provenance.inferred!.push('driveway');
       } else {
+        const mapped = entrances?.get(lot);
+        if (mapped?.length) {
+          snapEntrance ??= parkingEntranceConnector(city, withAisles.compiled);
+          const usable = mapped.filter((entry) => snapEntrance!(entry, aisleIds));
+          if (
+            usable.some((entry) => entry.direction !== 'out') &&
+            usable.some((entry) => entry.direction !== 'in')
+          )
+            continue;
+        }
         unreachable.push(lot);
         diagnostics.push({
           severity: 'warning',
@@ -343,11 +388,11 @@ export function addLots(
   // and a facility without an exit (Lübeck's Am Güterbahnhof, whose road the polygon prunes). It
   // is left out with the aisles only it owns; its place stays. TASK-207 curated three such lots
   // out of Freiburg by id.
-  if (!unreachable.length) return withAisles.compiled;
+  if (!unreachable.length) return { compiled: withAisles.compiled, entrances };
   const kept = new Set(lots.filter((lot) => !unreachable.includes(lot)).flatMap((l) => l.aisles!));
   const removed = new Set(unreachable.flatMap((lot) => lot.aisles!).filter((id) => !kept.has(id)));
   for (const lot of unreachable) delete city.parking![lot.id];
-  if (!removed.size) return withAisles.compiled;
+  if (!removed.size) return { compiled: withAisles.compiled, entrances };
   const ends = [...removed].flatMap((id) => [city.roads[id]!.from, city.roads[id]!.to]);
   for (const id of removed) delete city.roads[id];
   const used = new Set(Object.values(city.roads).flatMap((road) => [road.from, road.to]));
@@ -357,7 +402,7 @@ export function addLots(
     node.minorRoads = node.minorRoads.filter((id) => !removed.has(id));
   }
   const result = compile(city);
-  return result.ok ? result.compiled : undefined;
+  return { compiled: result.ok ? result.compiled : undefined, entrances };
 }
 
 /** Apply source-proven joins last, so parking access cannot renumber unrelated walk/rail data. */

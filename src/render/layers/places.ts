@@ -25,6 +25,7 @@ export function drawPlaces(
   connectorGraphics: Graphics = graphics,
   fillGraphics: Graphics = graphics,
   placeBase?: number,
+  aerodromeTint?: Graphics,
 ): (zoom: number) => void {
   for (const connector of city.connectors) {
     const { centroid } =
@@ -42,7 +43,12 @@ export function drawPlaces(
   for (const { idx, id, kind } of city.places) {
     if (kind === 'station' && city.rail?.platforms.some((p) => p.station === id)) continue;
     const shape = shapes[idx]!;
-    let target = shape.kind === 'polygon' && kind !== 'parking' ? fillGraphics : graphics;
+    let target =
+      shape.kind === 'polygon' && kind !== 'parking'
+        ? kind === 'airport' && aerodromeTint
+          ? aerodromeTint
+          : fillGraphics
+        : graphics;
     let local = shape;
     if (shape.kind === 'point') {
       target = new Graphics();

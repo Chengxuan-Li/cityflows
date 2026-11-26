@@ -37,10 +37,14 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-          '215fe0b224b0fee4c6d4efed30dd38324202da43fffb9c8de42ea2e1c61537ec'
+          // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+          '78e8401f3bd38a01a2d724d7909eafbd1692445a33a75f6f1d9f7c16a4f25325'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-          '46b2e2620fc3cf7440d650d009ccb9b3d4cf3083effb224619d6afa24b74a57b',
+          // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+          // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+          '2525c2f43e916f9c5aea21511d344c7bd6480c9f35baa14dba4722ec36c8165d',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

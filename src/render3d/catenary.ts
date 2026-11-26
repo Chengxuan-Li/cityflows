@@ -12,8 +12,10 @@ import {
   Vector3,
 } from 'three';
 import type { Vec2 } from '../geo/vec2';
+import { polylineNearest } from '../geo/polyline';
 import type { CompiledCity } from '../network';
 import { catenary, catenaryRule, type Catenary } from '../network/catenary';
+import { railHeightAt, railHeights, type RailHeights } from '../network/rail';
 import { cityGrades } from '../render/grades';
 import { catenaryColors, catenaryZooms } from '../render/layers/catenary';
 import type { cityHeights } from './heights';
@@ -49,12 +51,45 @@ interface Box {
  * messenger wires as line segments (open track, and tunnel track shown only with "See below
  * ground"): four draw calls.
  */
-export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cityHeights>) {
+export function buildCatenary(
+  city: CompiledCity,
+  heights: ReturnType<typeof cityHeights>,
+  raisedRail?: RailHeights,
+) {
   const group = new Group();
   const { roadGrades, nodeGrades } = cityGrades(city);
   const lines: Catenary | undefined = city.rail
     ? catenary(city, roadGrades, nodeGrades)
     : undefined;
+  const base = raisedRail && railHeights(city, roadGrades, nodeGrades);
+  const tracks = city.rail?.tracks;
+  const elevation = (track: number, s: number, h: number) =>
+    base && raisedRail && base.profiles[track] !== raisedRail.profiles[track]
+      ? railHeightAt(raisedRail, tracks![track]!, s)
+      : h;
+  const nearest = new Map<number, ReturnType<typeof polylineNearest>>();
+  const lift = (p: Vec2, indices: readonly number[]) => {
+    if (
+      !base ||
+      !raisedRail ||
+      base === raisedRail ||
+      !indices.some((i) => base.profiles[i] !== raisedRail.profiles[i])
+    )
+      return 0;
+    let best = Infinity,
+      delta = 0;
+    for (const i of indices) {
+      const t = tracks![i]!;
+      let find = nearest.get(i);
+      if (!find) nearest.set(i, (find = polylineNearest(t.line)));
+      const { along, away } = find(p);
+      if (away < best) {
+        best = away;
+        delta = railHeightAt(raisedRail, t, along) - railHeightAt(base, t, along);
+      }
+    }
+    return delta;
+  };
   const ground = (p: Vec2) => heights.terrain.groundAt(p.x, p.y);
   const { contactM, messengerM } = catenaryRule;
   const masts: Box[] = [],
@@ -85,7 +120,7 @@ export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cit
   };
   for (const s of lines?.supports ?? []) {
     // Heights from the highest rail the support spans, so every wire passes under its beam.
-    const base = Math.max(...s.drops.map((d) => ground(d.pos) + d.h));
+    const base = Math.max(...s.drops.map((d) => ground(d.pos) + elevation(d.track, d.s, d.h)));
     const messenger = base + contactM + messengerM;
     const portal = s.kind === 'portal';
     const beamZ = messenger + (portal ? size.beamGapM : size.armGapM);
@@ -94,7 +129,7 @@ export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cit
       masts.push(
         vertical(
           m.pos,
-          ground(m.pos) + m.h,
+          ground(m.pos) + m.h + lift(m.pos, s.spans),
           beamTop + (portal ? 0 : 0.3),
           s.tram ? size.tramMast : size.mast,
         ),
@@ -109,7 +144,7 @@ export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cit
     }
     // Hangers from the beam or arm to the wire at each drop, drawn with the wires as lines.
     for (const d of s.drops) {
-      const z = ground(d.pos) + d.h + contactM + (portal ? messengerM : 0);
+      const z = ground(d.pos) + elevation(d.track, d.s, d.h) + contactM + (portal ? messengerM : 0);
       hangers.push(d.pos.x, z, d.pos.y, d.pos.x, beamZ, d.pos.y);
     }
   }
@@ -156,8 +191,8 @@ export function buildCatenary(city: CompiledCity, heights: ReturnType<typeof cit
         const a = w.points[k - 1]!,
           b = w.points[k]!;
         const length = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y);
-        const za = ground(a.pos) + a.h + contactM,
-          zb = ground(b.pos) + b.h + contactM;
+        const za = ground(a.pos) + a.h + lift(a.pos, w.tracks) + contactM,
+          zb = ground(b.pos) + b.h + lift(b.pos, w.tracks) + contactM;
         const k2 = Math.min(1, (length / sag.spanM) ** 2);
         const pieces = Math.max(1, Math.min(4, Math.ceil(length / 15)));
         const point = (f: number, lift: number, drop: number) => [

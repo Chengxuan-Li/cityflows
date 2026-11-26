@@ -1,6 +1,10 @@
 import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { computeVertexNormals, mergeVertices } from './buffers';
+import { areaD } from 'clipper2-ts';
+import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+import { drawnRings, nodeSurface } from '../render/layers/nodes';
 import type { CompiledCity, CRoad } from '../network';
 import { crossingStripes } from '../render/layers/roads';
 import { signalLayout } from './signals';
@@ -13,6 +17,8 @@ import { buildContext } from './context';
 import { liftCanopies } from './footbridges';
 import { drape, indexTerrain, terrainAreas } from './terrain';
 import { paintedCity } from '../render/road-paint';
+import { airsideAreas } from '../render/airside-geometry';
+import { style } from '../render/style';
 
 type Vertex = [number, number, number];
 const vertex = (p: Vec2, z: number): Vertex => [p.x, z, p.y];
@@ -30,6 +36,21 @@ function polygon(target: number[], ring: Vec2[], z: (p: Vec2) => number) {
   }
 }
 
+/** Rings with holes (`drawnRings`) as triangles; a single ring stays whole. */
+function triangulateRings(rings: Vec2[][]): Vec2[][] {
+  if (rings.length <= 1) return rings;
+  const outers = rings.filter((ring) => areaD(ring) > 0);
+  const holes = rings.filter((ring) => areaD(ring) < 0);
+  return outers.flatMap((outer) => {
+    const inner = holes.filter((hole) => pointInPolygon(hole[0]!, [...outer, outer[0]!]));
+    const points = [outer, ...inner].flat();
+    return ShapeUtils.triangulateShape(
+      outer.map((p) => new Vector2(p.x, p.y)),
+      inner.map((hole) => hole.map((p) => new Vector2(p.x, p.y))),
+    ).map((t) => t.map((i) => points[i]!));
+  });
+}
+
 function quad(target: number[], a: Vertex, b: Vertex, c: Vertex, d: Vertex) {
   target.push(...a, ...b, ...c, ...a, ...c, ...d);
 }
@@ -38,7 +59,7 @@ export function buffer(positions: number[], smooth = false) {
   let geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   if (smooth) geometry = mergeVertices(geometry);
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
 }
 
@@ -125,14 +146,14 @@ export function buildGeometry(
       for (const stripe of crossingStripes(city, road, atEnd, source))
         polygon(crossingTarget, stripe, z);
     if (Math.max(height.fromM, height.toM, height.deckM) > 0) {
+      // Midpoint between the two compiled surface edges, including carriageway shifts.
+      const left = road.surface.slice(0, road.surface.length / 2);
+      const right = road.surface.slice(road.surface.length / 2).reverse();
+      let i = 1;
       for (let s = 15; s < height.lengthM; s += 30) {
         const top = heightAt(height, s) - 0.8;
         if (top <= 0) continue;
-        // Midpoint between the two compiled surface edges, including carriageway shifts.
-        const left = road.surface.slice(0, road.surface.length / 2);
-        const right = road.surface.slice(road.surface.length / 2).reverse();
         const station = s + road.stations[0]!;
-        let i = 1;
         while (i < road.stations.length - 1 && road.stations[i]! < station) i++;
         const t = (station - road.stations[i - 1]!) / (road.stations[i]! - road.stations[i - 1]!);
         const a = mix(left[i - 1]!, left[i]!, t),
@@ -144,22 +165,44 @@ export function buildGeometry(
       }
     }
   }
+  const followsGround = (node: number) =>
+    !!source.terrain && source.nodes[city.nodes[node]!.id]!.layer === 0;
   for (const node of city.nodes) {
     const z = heights.nodes[node.idx]!;
     const ground = heights.terrain.groundAt(node.pos.x, node.pos.y);
-    const followsGround = source.terrain && source.nodes[node.id]!.layer === 0;
-    if (followsGround) {
-      if (node.outline.length >= 3) flatAreas.push(node.outline);
-    } else polygon(surfaces, node.outline, () => z);
+    // TASK-347: a node drawn as road draws its strip, a junction group its one surface at its
+    // first member, at its members' heights (inverse-distance weighted) or on the ground; a group
+    // whose members do not all follow the ground or all stand free draws each member's own.
+    const members = node.group === undefined ? [node.idx] : city.groups![node.group]!.nodes;
+    const mixed = members.some((m) => followsGround(m) !== followsGround(node.idx));
+    const rings = mixed ? [nodeSurface(city, node)] : drawnRings(city, node);
+    const height = (p: Vec2) => {
+      if (members.length === 1 || mixed) return z;
+      let weight = 0,
+        total = 0;
+      for (const m of members) {
+        const w =
+          1 /
+          Math.max(1e-6, Math.hypot(p.x - city.nodes[m]!.pos.x, p.y - city.nodes[m]!.pos.y) ** 2);
+        weight += w;
+        total += w * heights.nodes[m]!;
+      }
+      return total / weight;
+    };
+    for (const piece of triangulateRings(rings.filter((ring) => ring.length >= 3)))
+      if (followsGround(node.idx)) flatAreas.push(piece);
+      else polygon(surfaces, piece, height);
     for (const gore of paintedGores(city, node))
       for (const triangle of goreTriangles(city, heights, gore))
         polygon(surfaces, triangle.points, (p) => triangleHeight(triangle, p));
     if (z - ground > 0)
-      for (let i = 0; i < node.outline.length; i++) {
-        const a = node.outline[i]!,
-          b = node.outline[(i + 1) % node.outline.length]!;
-        quad(slabs, vertex(a, z), vertex(b, z), vertex(b, z - 0.8), vertex(a, z - 0.8));
-      }
+      for (const ring of rings)
+        for (let i = 0; i < ring.length; i++) {
+          const a = ring[i]!,
+            b = ring[(i + 1) % ring.length]!;
+          const [za, zb] = [height(a), height(b)];
+          quad(slabs, vertex(a, za), vertex(b, zb), vertex(b, zb - 0.8), vertex(a, za - 0.8));
+        }
   }
   const placeGeometry = buildPlaces(city, source, heights, palette);
   const { heads, supports } = signalLayout(city, heights);
@@ -200,6 +243,7 @@ export function buildGeometry(
     markings: buildMarkings(city, source, heights),
     crossings: terrainBuffer(crossings, landCrossings),
     places: placeGeometry,
+    airside: source.airport ? buildAirside(source, heights) : undefined,
     piers,
     heads,
     supports,
@@ -242,6 +286,38 @@ export function buildPlaces(
     : geometry;
 }
 
+/** TASK-295: the airside's paving (`airsideAreas`) over the place tints, under the roads. */
+export function buildAirside(source: CityGeometry, heights: Heights) {
+  // Overlapping kinds a few millimetres apart, so a runway never fights its taxiways for depth.
+  const lift = { apron: -0.016, taxiway: -0.013, runway: -0.01 };
+  const areas = airsideAreas(source.airport!);
+  const parts = (['apron', 'taxiway', 'runway'] as const).map((kind) => {
+    const positions: number[] = [];
+    for (const area of areas) {
+      if (area.kind !== kind) continue;
+      const vectors = area.rings.map((ring) => ring.map((p) => new Vector2(p.x, p.y)));
+      const points = area.rings.flat();
+      for (const triangle of ShapeUtils.triangulateShape(vectors[0]!, vectors.slice(1)))
+        for (const i of [triangle[2]!, triangle[1]!, triangle[0]!])
+          positions.push(...vertex(points[i]!, lift[kind]));
+    }
+    const geometry = buffer(positions);
+    const { r, g, b } = new Color(style.airside[kind]);
+    const colors = new Float32Array(positions.length);
+    for (let i = 0; i < colors.length; i += 3) {
+      colors[i] = r;
+      colors[i + 1] = g;
+      colors[i + 2] = b;
+    }
+    geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    return source.terrain ? drape(geometry, heights.terrain, lift[kind], false, true) : geometry;
+  });
+  const drawn = parts.filter((part) => part.getAttribute('position').count);
+  const geometry = drawn.length ? mergeGeometries(drawn)! : parts[0]!.clone();
+  for (const part of parts) part.dispose();
+  return source.terrain ? indexTerrain(geometry) : geometry;
+}
+
 /** Buildings and the context ground (land use, water, green), in the map palette. */
 export function buildMapContext(
   city: CompiledCity,
@@ -258,6 +334,7 @@ export function buildMapContext(
     !omitContextGround,
     palette,
     city.walk,
+    !!source.airport,
   );
   if (source.terrain) context.ground = indexTerrain(context.ground);
   return context;

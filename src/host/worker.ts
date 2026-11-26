@@ -89,6 +89,10 @@ function handle(request: Exclude<HostWireRequest, { type: 'snapshot' }>) {
       return load(inputs);
     case 'metrics':
       return { ...engine.metrics(), stepsPerSecond: loadedLoop().stepsPerSecond };
+    case 'flightBoard':
+      return engine.flightBoard();
+    case 'setWind':
+      return engine.setAirportWind(request.wind);
     case 'metricsSeries':
       return loadedLoop().metricsSeries();
     case 'runHeadless':
@@ -134,6 +138,9 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
         rail,
         transit,
         signals,
+        aircraft,
+        airfield,
+        groundVehicles,
         ...arrays
       } = engine.snapshot();
       const transfer = Object.values(arrays).map((array) => array.buffer);
@@ -185,6 +192,9 @@ self.addEventListener('message', ({ data: request }: MessageEvent<HostWireReques
           rail,
           transit,
           signals,
+          aircraft,
+          airfield,
+          groundVehicles,
         },
       };
       self.postMessage(reply, { transfer });

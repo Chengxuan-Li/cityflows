@@ -273,7 +273,6 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
   expect(keepClearMarkings(net, road('r:225'), markingThemes.de, city)).toEqual([]);
   // Without the canonical city (no `sharedLane` known) the box is drawn, as on any street.
   expect(keepClearBoxes(net, promenade, markingThemes.de)).toHaveLength(1);
-  // Every other street keeps its boxes: 137 in Freiburg.
   const boxes = net.lanes.reduce(
     (sum, l) =>
       sum +
@@ -282,7 +281,9 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
         : 0),
     0,
   );
-  expect(boxes).toBe(137);
+  // TASK-290: nine mapped garage entrances bring Freiburg's keep-clear box count from 137 to 139.
+  // TASK-294: two Freiburg places' driveways back in the pocket behind Anlieger streets: 141.
+  expect(boxes).toBe(141);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
@@ -540,8 +541,10 @@ test('TASK-257: crossings paint as OSM marks them; a project without the field p
   for (const link of Object.values(old.links)) delete link.marking;
   // Lead merge on TASK-255: its stop positions draw no crossing paint, so both counts drop
   // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
-  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1939 });
-  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2023 });
+  // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
+  // 1,939 to 1,959 dashes; with it 2,023 to 2,043).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1959 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2043 });
   // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
   // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
   // junction's broken lines: now broken lines only.
