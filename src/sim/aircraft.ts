@@ -443,6 +443,9 @@ interface Craft {
   request: Request | null;
   requestedS: number;
   pushbackReadySinceS?: number;
+  /** TASK-344: the reason its latest start try was refused, and when. */
+  startWhy?: string;
+  startWhyS?: number;
   admission: Admission | null;
   /** Its place in the order of admission (0: none yet). */
   rank: number;
@@ -1987,6 +1990,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return { mine, theirs };
   }
 
+  /** TASK-344: start refusals by reason: tries refused and the seconds until the next try. */
+  const startRefusals: Record<string, { n: number; s: number }> = {};
+  function chargeStart(craft: Craft, timeS: number) {
+    if (craft.startWhy === undefined) return;
+    startRefusals[craft.startWhy]!.s += timeS - craft.startWhyS!;
+    craft.startWhy = undefined;
+  }
+  function refuseStart(craft: Craft, why: string, timeS: number) {
+    (startRefusals[why] ??= { n: 0, s: 0 }).n++;
+    craft.startWhy = why;
+    craft.startWhyS = timeS;
+  }
   /** TASK-330 Phase 1d / TASK-339: counters of the progressive order and the parked-blocker rules. */
   const late = {
     deferred: 0,
@@ -3702,9 +3717,23 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (timeS - craft.pushbackReadySinceS < pushbackPreparationS[craft.type.class]) return;
     if (timeS - craft.retryS < RETRY_S) return;
     craft.retryS = timeS;
+    chargeStart(craft, timeS);
+    const why = startOnce(craft, timeS);
+    if (why) refuseStart(craft, craft.request?.kind === 'tow' ? `tow ${why}` : why, timeS);
+  }
+  /** TASK-344: what the first unpassed wait matching `test` waits for (a refusal's detail). */
+  function blockerKind(craft: Craft, test: (w: Wait) => boolean) {
+    const w = craft.waits.find((v) => test(v) && !passed(v));
+    if (!w) return 'none';
+    const p = w.pred;
+    const what = p.mode === 'parked' ? (p.request?.kind ?? 'idle') : p.mode;
+    return `${what}${w.predM === Infinity ? ':body' : ''}`;
+  }
+  /** One start try: null once started, else the reason it was refused (TASK-344). */
+  function startOnce(craft: Craft, timeS: number): string | null {
     if (craft.request!.kind === 'departure' && runways.restricted) {
       retargetDeparture(craft);
-      if (!runways.departures.has(endKey(craft.runway, craft.end))) return;
+      if (!runways.departures.has(endKey(craft.runway, craft.end))) return 'runwayClosed';
     }
     const request = craft.request!;
     if (!craft.admission) {
@@ -3724,7 +3753,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         avoiding = [];
         avoidHits.clear();
       }
-      if (!planned) return;
+      if (!planned) return 'noPlan';
       const { legs } = planned;
       for (const leg of legs.slice(0, -1)) addGates(craft, leg, -1);
       craft.rank = ++admitted;
@@ -3734,10 +3763,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         legs.map((leg) => ({ leg, fromM: 0 })),
         stop,
       );
-      if (!decided) return;
+      if (!decided) return 'order';
       // TASK-339: not while its way passes an aircraft parked or at rest across it with no
       // movement planned; it plans again on a later try.
-      if (refuseBehindParked(decided.mine, legs)) return;
+      if (refuseBehindParked(decided.mine, legs)) return 'behindParked';
       commitOrder(craft, decided);
       craft.admission = { legs, next: planned.next };
     }
@@ -3772,10 +3801,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // way: its movement is dropped and planned again on a later try.
     if (refuseBehindParked(craft.waits, legs)) {
       dropAdmission(craft);
-      return;
+      return 'behindParkedDropped';
     }
     // Nor while one still moving is to come to rest across its way: it waits at its stand.
-    if (restingAcross(craft, legs)) return;
+    if (restingAcross(craft, legs)) return 'restingAcross';
     const first = legs[0]!;
     const half = craft.lengthM / 2;
     const pass = passing(craft);
@@ -3788,17 +3817,19 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         ? waitCap(craft, first, pass) < Infinity
         : waitCap(craft, first, pass) <= half + 1
     )
-      return;
-    if (waitsForUnstarted(craft, pass)) return;
+      return `firstLegWait:${blockerKind(craft, (w) => w.leg === first && !pass.has(w.pred))}`;
+    if (waitsForUnstarted(craft, pass))
+      return `unstarted:${blockerKind(craft, (w) => unstarted(w.pred) && !pass.has(w.pred))}`;
     // TASK-330 (5): a tow keeps its stand while an arrival on final, or the next to appear, would
     // meet its way before that arrival's tail is off the runway.
-    if (request.kind === 'tow' && towWaitsForArrival(craft, legs)) return;
+    if (request.kind === 'tow' && towWaitsForArrival(craft, legs)) return 'towArrival';
     // The first leg must be claimable from where the aircraft stands.
-    if (firstConflict(craft, first, half, half + craft.lengthM / 2 + margin) < Infinity) return;
+    if (firstConflict(craft, first, half, half + craft.lengthM / 2 + margin) < Infinity)
+      return 'firstConflict';
     const push = first.mode === 'pushback' ? sweep(craft, first) : undefined;
-    if (push && !sweepClear(craft, push)) return;
+    if (push && !sweepClear(craft, push)) return 'sweep';
     const given = yieldsTo(craft, pass);
-    if (!given) return;
+    if (!given) return 'yield';
     craft.pushSweep = push;
     for (const [other, waits] of given) giveWay(craft, other, waits);
     for (const leg of legs) lock(craft, leg, 0, leg.pieces.length);
@@ -3816,6 +3847,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     craft.admission = null;
     setLeg(craft, first, timeS);
     if (request.kind === 'departure') events.push({ timeS, id: craft.id, kind: 'off-block' });
+    return null;
   }
 
   // ----- Helicopters.
@@ -5103,6 +5135,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     runwayOccupant: (runway: number) => runwayOccupant[runway]!,
     /** TASK-339: seconds aircraft have stood waiting on a parked aircraft with no admission. */
     parkedBlockS: () => parkedBlockS,
+    /** TASK-344: start refusals by reason (tries, seconds), counting refusals still standing. */
+    startRefusals() {
+      const out = structuredClone(startRefusals);
+      for (const craft of crafts)
+        if (craft.startWhy !== undefined && craft.mode === 'parked' && craft.request)
+          out[craft.startWhy]!.s += nowS - craft.startWhyS!;
+      return out;
+    },
     /** TASK-330 / TASK-339: counters of the progressive order and the parked-blocker rules. */
     orderCounters: () =>
       Object.fromEntries(Object.entries(late).filter(([, value]) => typeof value === 'number')),

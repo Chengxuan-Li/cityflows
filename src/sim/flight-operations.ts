@@ -513,7 +513,6 @@ export function createFlightOperations(
           (graph.stands[idx]!.kind === 'remote' || maintenanceStands(turn).includes(idx))
         ) {
           turn.service = 'away';
-          turn.leftStand = regular[0];
           turn.returnS = flight.departureS - returnLeadS;
           planTow(turn, turn.returnS);
         }
@@ -539,6 +538,19 @@ export function createFlightOperations(
     worstDelayS = Math.max(worstDelayS, delayS);
   }
 
+  /** TASK-353: stands by their distance from the turn's stand, nearest first. */
+  function nearest(turn: Turn, stands: number[]) {
+    const from = graph.stands[turn.stand]!.pos;
+    const away = (idx: number) => {
+      const { pos } = graph.stands[idx]!;
+      return Math.hypot(pos.x - from.x, pos.y - from.y);
+    };
+    return stands
+      .map((idx) => ({ idx, m: away(idx) }))
+      .sort((a, b) => a.m - b.m)
+      .map(({ idx }) => idx);
+  }
+
   function tow(turn: Turn, targets: number[]) {
     for (const idx of targets) {
       if (idx === turn.stand || !standAvailable(turn, idx)) continue;
@@ -554,8 +566,17 @@ export function createFlightOperations(
     const { flight } = turn;
     if (turn.towAtS !== undefined && timeS < turn.towAtS) return;
     if (turn.service === 'away' && timeS >= turn.returnS) {
+      // TASK-353: back to the stand it left (none for one parked away at the run's start), else
+      // to the nearest free stand of its own kind. With none free, it departs from where it
+      // stands if its flight may use that stand (a contact flight from a remote stand), else it
+      // goes to the nearest free stand its flight may use.
       const first = turn.leftStand === undefined ? [] : [turn.leftStand];
-      if (tow(turn, [...first, ...arrivalStands(turn)])) turn.service = 'back';
+      const own = nearest(turn, findStands(turn, [flight.standKind as StandKind]));
+      if (tow(turn, [...first, ...own])) turn.service = 'back';
+      else if (arrivalStands(turn).includes(turn.stand)) {
+        turn.service = 'done';
+        onBlock(turn, timeS, false);
+      } else if (tow(turn, nearest(turn, arrivalStands(turn)))) turn.service = 'back';
       else if (!flight.overnight) turn.service = 'done';
     } else if (turn.service === 'out' && turn.stand >= 0) {
       const remote = findStands(turn, ['remote']);

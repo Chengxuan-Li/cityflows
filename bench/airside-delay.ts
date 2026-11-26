@@ -85,6 +85,9 @@ interface Track {
   wheelsOffS?: number;
   departedS?: number;
   goArounds: number;
+  /** TASK-353: parked at the run's start, and its tows (request, end). */
+  carriedIn?: boolean;
+  tows?: { requestS: number; towedS?: number }[];
 }
 const tracks = new Map<number, Track>();
 function track(id: number) {
@@ -115,6 +118,18 @@ const requestHelicopterArrival = fleet.requestHelicopterArrival;
 fleet.requestHelicopterArrival = (...args) => {
   const result = requestHelicopterArrival(...args);
   if (result.ok) track(result.id).arrivalRequestS = timeS;
+  return result;
+};
+const spawnParked = fleet.spawnParked;
+fleet.spawnParked = (...args) => {
+  const result = spawnParked(...args);
+  if (result.ok && timeS <= startS) track(result.id).carriedIn = true;
+  return result;
+};
+const requestTow = fleet.requestTow;
+fleet.requestTow = (...args) => {
+  const result = requestTow(...args);
+  if (result.ok) (track(result.id).tows ??= []).push({ requestS: timeS });
   return result;
 };
 const requestDeparture = fleet.requestDeparture;
@@ -149,6 +164,11 @@ fleet.drainEvents = () => {
         lastCompletionS = event.timeS;
         row.departedS = event.timeS;
         break;
+      case 'towed': {
+        const tow = row.tows?.at(-1);
+        if (tow) tow.towedS = event.timeS;
+        break;
+      }
       case 'go-around':
         row.goArounds++;
         break;
@@ -300,6 +320,8 @@ const departures = board.departures.filter(inWindow).map((movement) => {
     ...movement,
     ...(row?.departure ?? newTiming()),
     readinessS: movement.state === 'cancelled' ? 0 : Math.max(0, readyEndS - movement.timeS),
+    carriedIn: row?.carriedIn ?? false,
+    tows: row?.tows ?? [],
     taxiS:
       row?.wheelsOffS !== undefined && row.offBlockS !== undefined
         ? row.wheelsOffS - row.offBlockS
@@ -378,6 +400,29 @@ const summary = {
     'runwayS',
     'airborneS',
   ]),
+  // TASK-353: readiness wait of departures parked at the run's start (carried in) and of the
+  // rest, summed (s), and the tows of those carried in: requested to towed (s).
+  readiness: {
+    carriedIn: Math.round(
+      departures.filter((d) => d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    carriedInN: departures.filter((d) => d.carriedIn).length,
+    others: Math.round(
+      departures.filter((d) => !d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    othersN: departures.filter((d) => !d.carriedIn).length,
+    carriedInTowS: Math.round(
+      departures
+        .filter((d) => d.carriedIn)
+        .flatMap((d) => d.tows)
+        .reduce((n, t) => n + (t.towedS ?? endS) - t.requestS, 0),
+    ),
+  },
+  startRefusals: Object.fromEntries(
+    Object.entries(fleet.startRefusals())
+      .sort((a, b) => b[1].s - a[1].s)
+      .map(([why, { n, s }]) => [why, { n, s: Math.round(s) }]),
+  ),
   taxiIn: moving(arrivals),
   taxiOut: moving(departures),
   landings: Object.fromEntries(
