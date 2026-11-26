@@ -140,6 +140,10 @@ fleet.requestDeparture = (...args) => {
 };
 /** TASK-330: touchdowns by runway end, for landings per hour and the gap between them. */
 const touchdowns: { timeS: number; end: string }[] = [];
+/** TASK-360: take-off roll starts by runway end (sampled each second), for take-offs per hour
+ * and the gap between them. */
+const rollStarts: { timeS: number; end: string }[] = [];
+const rolling = new Set<number>();
 const drainEvents = fleet.drainEvents;
 fleet.drainEvents = () => {
   const events = drainEvents();
@@ -237,6 +241,10 @@ for (let step = startS * 10; step < endS * 10; step++) {
   const seen = new Set<number>();
   for (const pose of poses) {
     seen.add(pose.id);
+    if (pose.state === 'takeoff-roll' && !rolling.has(pose.id)) {
+      rolling.add(pose.id);
+      rollStarts.push({ timeS, end: pose.runwayEnd ?? '?' });
+    }
     const row = track(pose.id);
     if (row.arrivalRequestS !== undefined && row.parkedS === undefined) sample(row.arrival, pose);
     if (row.offBlockS !== undefined && row.departedS === undefined) {
@@ -270,7 +278,10 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    overlapCount += overlaps(poses).length;
+    // TASK-352: which aircraft overlap, and when (the log).
+    const found = overlaps(poses);
+    if (found.length) console.error('OVERLAP', timeS, JSON.stringify(found));
+    overlapCount += found.length;
     runwayConflicts += checkRunwayConflicts(poses);
     runwayConflictsReal += checkRunwayConflictsReal(poses);
   }
@@ -313,6 +324,24 @@ for (const [id, row] of tracks) {
   byRegistration.set(registration, row);
 }
 const inWindow = ({ timeS }: { timeS: number }) => timeS >= startS && timeS < windowEndS;
+/** Events per hour by runway end in the window, and the median gap between them (s). */
+const perEnd = (events: { timeS: number; end: string }[]) =>
+  Object.fromEntries(
+    [...new Set(events.map((t) => t.end))].sort().map((end) => {
+      const times = events.filter((t) => t.end === end && inWindow(t)).map((t) => t.timeS);
+      const gaps = times
+        .slice(1)
+        .map((t, i) => t - times[i]!)
+        .sort((a, b) => a - b);
+      return [
+        end,
+        {
+          perHour: round(times.length / ((windowEndS - startS) / 3600)),
+          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
+        },
+      ];
+    }),
+  );
 const arrivals = board.arrivals.filter(inWindow).map((movement) => {
   const row = movement.registration ? byRegistration.get(movement.registration) : undefined;
   const dispatchS = Math.max(0, Math.ceil(movement.timeS - fleet.arrivalLeadS(movement.typeId)));
@@ -397,6 +426,17 @@ const summary = {
   }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
+  // TASK-352: go-arounds by cause, and seconds the head of each end's arrival queue was held.
+  arrivalCauses: (() => {
+    const { goAround, release } = fleet.arrivalCauses();
+    const sorted = (r: Record<string, number>) =>
+      Object.fromEntries(
+        Object.entries(r)
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => [k, Math.round(v)]),
+      );
+    return { goAround: sorted(goAround), release: sorted(release) };
+  })(),
   arrivalStages: stages(arrivals, [
     'standWaitS',
     'sequencingS',
@@ -442,24 +482,9 @@ const summary = {
   ),
   taxiIn: moving(arrivals),
   taxiOut: moving(departures),
-  landings: Object.fromEntries(
-    [...new Set(touchdowns.map((t) => t.end))].sort().map((end) => {
-      const times = touchdowns
-        .filter((t) => t.end === end && t.timeS >= startS && t.timeS < windowEndS)
-        .map((t) => t.timeS);
-      const gaps = times
-        .slice(1)
-        .map((t, i) => t - times[i]!)
-        .sort((a, b) => a - b);
-      return [
-        end,
-        {
-          perHour: round(times.length / ((windowEndS - startS) / 3600)),
-          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
-        },
-      ];
-    }),
-  ),
+  landings: perEnd(touchdowns),
+  takeoffs: perEnd(rollStarts),
+  departureCounts: fleet.departureCounts(),
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));

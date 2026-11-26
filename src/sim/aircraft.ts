@@ -122,8 +122,40 @@ const pushbackPreparationS: Record<AircraftClass, number> = {
 };
 const LINEUP_S = 5;
 const FULL_LENGTH_M = 60;
-/** A departure backtracks at most this far along the runway before an intersection departure. */
+/** With no full-length entry or intersection departure, a backtrack of at most this far along the
+ * runway is taken before a longer one. */
 const BACKTRACK_M = 1000;
+/** TASK-352: a departure lining up this far past where the one ahead of it started its roll
+ * departs from an intermediate part of the runway (ICAO Doc 4444, 5.8.3.2). */
+const INTERMEDIATE_M = 150;
+/** TASK-360 rule 1: an intersection take-off leaves 15 % of its take-off run spare in the runway
+ * ahead. The run (`need`: the roll and 3 s at rotation speed) is about the distance to 35 ft, and
+ * certification's all-engines take-off distance is 115 % of it (CS-25.113(a)(2), 14 CFR
+ * 25.113(a)(2)); the declared distance from an intermediate holding position must cover it. */
+const INTERSECTION_FACTOR = 1.15;
+/** TASK-360 rule 1: picking its entry, a departure counts this many metres of taxi route for each
+ * other departure planned to that entry and not yet lined up (the controller assigns another
+ * intermediate holding position when one is queued: CAP 493, Section 2, Chapter 1, 14.2). */
+const ENTRY_QUEUE_M = 300;
+/** TASK-360 rule 3: in a multiple line-up the rear aircraft's nose stays this far behind the front
+ * aircraft's tail. CAP 493 (Section 2, Chapter 1, 10F) asks for particular care with the jet blast
+ * of preceding departures in multiple line-ups and sets no distance; 200 m is our choice. */
+const MULTI_LINEUP_M = 200;
+/** TASK-360 rule switches, read when a fleet is created (the gate ladder's variants): the env
+ * T360=<letters>, i intersection take-offs by performance, r line-up behind a passing roll, m
+ * multiple line-ups, a rule 1 also on runways that cross others; i, r and m by default, T360=
+ * (empty) for the line-up choice before them. */
+function t360Rules() {
+  const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
+    ?.env;
+  const rules = env?.T360 ?? 'irm';
+  return {
+    T360I: rules.includes('i'),
+    T360R: rules.includes('r'),
+    T360M: rules.includes('m'),
+    T360A: rules.includes('a'),
+  };
+}
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
 /** Spare time around runway bookings and grants. */
@@ -410,7 +442,16 @@ type Next =
   | { kind: 'return'; stand: number }
   | { kind: 'rest' }
   | { kind: 'taxi'; leg: Leg; pauseS: number }
-  | { kind: 'takeoff'; end: number; lineUpU: number; pauseS: number };
+  | {
+      kind: 'takeoff';
+      end: number;
+      lineUpU: number;
+      pauseS: number;
+      /** TASK-360: where it enters the runway (station from `end`), and how it departs. */
+      entryU: number;
+      how: LineUpKind;
+    };
+type LineUpKind = 'full' | 'intersection' | 'backtrack';
 
 interface Craft {
   id: number;
@@ -459,6 +500,12 @@ interface Craft {
   pushSweep?: Body[];
   /** Waiting at a hold for a runway window, since when, and the occupancy asked for. */
   runwayWait?: { gate: Gate; sinceS: number; checkedAtS: number; uses: BookedUse[] };
+  /** TASK-360: a granted departure's take-off roll and its tail off the runway (predicted, then
+   * actual), and, lined up behind another lined-up departure (rule 3), that one's id. */
+  departRollS?: number;
+  departClearS?: number;
+  multiFront?: number;
+  departHow?: LineUpKind;
 }
 
 interface Body {
@@ -720,6 +767,7 @@ function alignStart(
 }
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
+  const { T360I, T360R, T360M, T360A } = t360Rules();
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -1184,6 +1232,36 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!bodiesTouch(body, bodyAt(roller, near.point, heading))) return m;
     }
     return holdM;
+  }
+
+  /** TASK-360 rule 1: whether an aircraft holding short of its line-up on `runway` at the end of
+   * `leg` (at the mapped hold or the fallback, moved back as `clearHold` does) still stands in the
+   * way of the widest type rolling on the centreline: a shallow entry (Heathrow 27R's A5, drawn
+   * 16 degrees off the runway) whose hold is too close is not an entry for an intersection
+   * take-off. */
+  function lineUpHoldTouches(craft: Craft, leg: Leg, runway: number) {
+    const range = leg.runwayRanges.findLast((r) => r[2] === runway);
+    const roller = widestOfCode(graph.runways[runway]!.maxCode);
+    if (!range || !roller) return false;
+    const [entryM] = range;
+    const half = craft.lengthM / 2;
+    const before = leg.pieces.findLast(
+      ({ endM, endNode }) =>
+        endM < entryM && endM >= entryM - 300 && holdAt.get(endNode)?.runway === runway,
+    );
+    const m = clearHold(
+      craft,
+      leg,
+      runway,
+      Math.max(half, (before?.endM ?? entryM - HOLD_FALLBACK_M) - half),
+    );
+    const r = graph.runways[runway]!;
+    const pose = poseAt(leg, m);
+    const near = nearestOnPolyline(r.line, pose.position);
+    return bodiesTouch(
+      bodyAt(craft, pose.position, pose.headingRad),
+      bodyAt(roller, near.point, r.ends[0]!.heading),
+    );
   }
 
   function addGates(craft: Craft, leg: Leg, departureRunway: number, arrivalRunway = -1) {
@@ -2025,6 +2103,56 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     ringKeys: new Set<string>(),
     deadKeys: new Set<string>(),
   };
+  /** TASK-352: go-arounds by cause, and seconds the head of each end's arrival queue is held, by
+   * cause (behaviour-neutral counters the bench reports). */
+  const arrivalWhy = {
+    goAround: {} as Record<string, number>,
+    release: {} as Record<string, number>,
+  };
+  let releaseWhy = '';
+  let commitWhy = '';
+  /** TASK-360 counters: take-offs by type and how they lined up; line-ups granted ahead of a
+   * rolling departure's start (rule 2) and behind a lined-up one (rule 3); and arrivals held
+   * while a multiple line-up holds their runway: seconds the head of an end's queue was refused
+   * its window, and landing commitments that found the runway held. */
+  const departureCounts = {
+    takeoffsByType: {} as Record<string, Record<LineUpKind, number>>,
+    lineUpsAheadOfRoll: 0,
+    multiLineUps: 0,
+    arrivalHeldByMultiS: 0,
+    landingsHeldByMulti: 0,
+  };
+  const multiOn = (runway: number) =>
+    crafts.some(
+      (c) =>
+        c.runway === runway &&
+        c.multiFront !== undefined &&
+        c.mode !== 'air' &&
+        c.runwayClaims.length > 0,
+    );
+  let gapBy = '';
+  /** What an aircraft is doing, for those counters. */
+  function roleOf(p: Craft) {
+    if (p.mode === 'queued') return 'queued';
+    if (p.mode === 'air') return p.air?.kind ?? 'air';
+    if (p.mode === 'parked') return p.request ? `parked-${p.request.kind}` : 'parked';
+    if (p.mode === 'waiting') return 'lined-up';
+    const role = p.towing
+      ? 'tow'
+      : p.next.some((n) => n.kind === 'takeoff')
+        ? 'departure'
+        : 'arrival';
+    return `${role}-${p.speedMps > 0.3 ? 'moving' : 'still'}`;
+  }
+  /** TASK-352: what a ground aircraft standing still waits for (for those counters). */
+  function holdOf(p: Craft) {
+    if (p.mode !== 'ground' || p.speedMps > 0.3) return '';
+    const w = p.waits.find((v) => v.leg === p.leg && p.stationM >= v.atM - 2 && !passed(v));
+    if (w) return `<${roleOf(w.pred)}${w.predM === Infinity ? ':body' : ''}`;
+    if (p.leg!.gates.some((g) => !g.granted && g.holdM > -Infinity && g.holdM <= p.stationM + 40))
+      return '<gate';
+    return '<claim';
+  }
   /** Whether `from` waits, directly or through others, for `to`. */
   function waitsOn(from: Craft, to: Craft) {
     const seen = new Set<Craft>([from]);
@@ -2696,20 +2824,41 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const towardEnd1 = end === 0;
     const reach = balloonReach(p.minTurnRadiusM);
     const need = p.takeoffRollM + p.rotationSpeedMps * 3;
+    // On a runway that crosses no other, as rules 2 and 3 (and TASK-330's line-up behind a roll):
+    // on Boston's crossing runways the rule changed a dozen take-offs a day and the day lost
+    // (mean delay +14 % on two seeds, more go-arounds by arrival-side holds); `a` lifts it.
+    const idep = T360I && (T360A || independent(runway.idx));
     // Full-length entries first; then backtracks of up to BACKTRACK_M along the runway; then
     // intersection departures with a quarter of the take-off run to spare (TASK-312), before a
-    // longer backtrack would hold the runway for minutes.
-    const ranked: { rank: number; goal: number; after: () => Segment[]; lineUpU: number }[] = [];
+    // longer backtrack would hold the runway for minutes. TASK-360 rule 1: intersection
+    // take-offs with INTERSECTION_FACTOR of the run to spare, and with them the full-length
+    // entries, are one choice made by the route (`departurePlan`), before any backtrack, which
+    // holds the runway for the whole line-up (TASK-352: intersections make the most of runway
+    // capacity, SKYbrary "Intersection Take-off"; Heathrow 27R's end is a dead end, and its
+    // backtracks set the gap between take-offs at about 110 s).
+    const ranked: {
+      rank: number;
+      goal: number;
+      after: () => Segment[];
+      lineUpU: number;
+      entryU: number;
+      how: LineUpKind;
+    }[] = [];
     for (const { node, u, i } of nodes) {
       const full = u <= thresholdU + 1e-6;
       const goal = runwayArc(runway, i, towardEnd1);
       const lineUpU = u + Math.max(craft.lengthM / 2, p.minTurnRadiusM) + 5;
-      if (goal < 0 || runway.lengthM - lineUpU < need * (full ? 1 : 1.25)) continue;
+      const spare = full ? 1 : idep ? INTERSECTION_FACTOR : 1.25;
+      if (goal < 0 || runway.lengthM - lineUpU < need * spare) continue;
       if (arcsFrom(graph, node).length < 2) continue;
       ranked.push({
-        rank: full ? 0 : 2,
+        rank: full ? 0 : idep ? 1 : 2,
         goal,
         lineUpU,
+        entryU: u,
+        // Counted as an intersection take-off past INTERMEDIATE_M from the threshold (Heathrow
+        // 27R's first entry, 86 m from its dead end, is its full-length one).
+        how: u <= thresholdU + INTERMEDIATE_M ? 'full' : 'intersection',
         after: () => [runwaySegment(runway, end, u, lineUpU)],
       });
     }
@@ -2721,18 +2870,42 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const q = pointAtDistance(line, cumulative, reach);
       const heading = (runway.ends[end]!.heading + Math.PI) % (2 * Math.PI);
       ranked.push({
-        rank: u - reach <= BACKTRACK_M ? 1 : 3,
+        rank: u - reach <= BACKTRACK_M ? (idep ? 2 : 1) : 3,
         goal,
         lineUpU: reach,
+        entryU: u,
+        how: 'backtrack',
         after: () => [
           runwaySegment(runway, end, u, reach),
           freeSegment([q, ...balloon(q, heading, p.minTurnRadiusM)], runway.idx),
         ],
       });
     }
+    // TASK-360 rule 1: where an intersection take-off fits, the full-length entries join that
+    // choice; where none fits, the full-length entry is taken as before.
+    if (idep && ranked.some((o) => o.rank === 1))
+      for (const o of ranked) if (o.rank === 0) o.rank = 1;
     // A stable sort keeps the station order within a rank.
     const options = ranked.sort((a, b) => a.rank - b.rank);
     return options;
+  }
+
+  /** TASK-360 rule 1: other departures planned to enter `runway` from `end` at `entryU` that have
+   * not lined up yet. */
+  function queuedAtEntry(craft: Craft, runway: number, end: number, entryU: number) {
+    let n = 0;
+    for (const o of crafts) {
+      if (o === craft || o.runway !== runway || (o.mode !== 'ground' && o.mode !== 'parked'))
+        continue;
+      const t = (o.mode === 'parked' ? (o.admission?.next ?? []) : o.next).find(
+        (x) => x.kind === 'takeoff',
+      );
+      if (t?.kind !== 'takeoff' || t.end !== end || Math.abs(t.entryU - entryU) > 1) continue;
+      if (o.mode === 'ground' && o.leg!.gates.some((g) => g.vacateM === Infinity && g.granted))
+        continue;
+      n++;
+    }
+    return n;
   }
 
   function takeoffAir(craft: Craft, end: number, lineUpU: number, timeS: number): Air {
@@ -2962,38 +3135,92 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   // ----- TASK-330 departure flow.
+  /** A line-up on a runway end: where it enters and where it stands (stations from `end`), and
+   * half the length of the aircraft lining up. */
+  type LineUp = { end: number; lineUpU: number; entryU: number; halfM: number };
   /** A departure that has started its roll, its tail well clear of its line-up point, from the
    * same end as a line-up at `lineUp` and no further down the runway than that line-up (so it
-   * rolls away from it, not toward it). */
-  function rollingAway(o: Craft, lineUp: { end: number; lineUpU: number }) {
-    if (o.mode !== 'air' || o.air?.kind !== 'takeoff' || o.stationM < o.lengthM + margin)
-      return false;
+   * rolls away from it, not toward it). TASK-360 rule 2: or one further down the runway whose
+   * tail is already `margin` past the nose of the line-up and its entry (a following aircraft
+   * may line up behind a departing aircraft once it has passed the entry: a conditional clearance
+   * in respect of the aircraft ahead in the departure sequence, CAP 493, Section 2, Chapter 1,
+   * 13.3 and 14). */
+  function rollingAway(o: Craft, lineUp: LineUp) {
+    if (o.mode !== 'air' || o.air?.kind !== 'takeoff' || o.end !== lineUp.end) return false;
     const fromU = graph.runways[o.runway]!.lengthM - o.air.clearM;
-    return o.end === lineUp.end && lineUp.lineUpU <= fromU + 1;
+    if (o.stationM >= o.lengthM + margin && lineUp.lineUpU <= fromU + 1) return true;
+    return T360R && fromU + o.stationM - o.lengthM / 2 > noseU(lineUp) + margin;
   }
-  const lastTakeoff: ({ craft: Craft; startS: number } | undefined)[] = [];
+  /** TASK-360: the furthest station from its end a line-up reaches (its nose lined up, or its
+   * entry for a backtrack). */
+  const noseU = (lineUp: LineUp) => Math.max(lineUp.lineUpU, lineUp.entryU) + lineUp.halfM;
+  /** TASK-360: where a departure holding its runway stands or will stand lined up: lined up, or
+   * lining up with its grant. Null for any other aircraft. */
+  function lineUpOf(o: Craft): LineUp | null {
+    const halfM = o.lengthM / 2;
+    if (o.mode === 'waiting') {
+      const u = graph.runways[o.runway]!.lengthM - o.air!.clearM;
+      return { end: o.end, lineUpU: u, entryU: u, halfM };
+    }
+    if (o.mode !== 'ground') return null;
+    const next = o.next.find((n) => n.kind === 'takeoff');
+    if (next?.kind !== 'takeoff') return null;
+    if (!o.leg!.gates.some((g) => g.vacateM === Infinity && g.granted)) return null;
+    return { end: next.end, lineUpU: next.lineUpU, entryU: next.entryU, halfM };
+  }
+  /** TASK-360 rule 3, multiple line-ups: a line-up whose nose stays MULTI_LINEUP_M behind the
+   * tail of a departure lined up (or lining up) ahead of it from the same end (line-up
+   * instructions may be issued to more than one aircraft at different points on the same runway:
+   * CAP 493, Section 2, Chapter 1, 14.1; ICAO Doc 7030, 6.5.4; the front one takes off first). */
+  function linedUpAhead(o: Craft, lineUp: LineUp) {
+    const front = lineUpOf(o);
+    return (
+      T360M &&
+      !!front &&
+      front.end === lineUp.end &&
+      noseU(lineUp) + MULTI_LINEUP_M <= front.lineUpU - front.halfM
+    );
+  }
+  /** The last take-off roll on each runway: who, when, and the runway it had ahead (`clearM`). */
+  const lastTakeoff: ({ craft: Craft; startS: number; clearM: number } | undefined)[] = [];
   const wakeRank = { light: 0, medium: 1, heavy: 2, super: 3 };
-  /** Seconds between the take-off rolls of `leader` and `follower` on one runway. */
-  function departureGapS(leader: Craft, follower: Craft) {
+  /** Seconds between the take-off rolls of `leader` (with `leaderClearM` of runway ahead) and
+   * `follower` (with `followerClearM`) on one runway. TASK-352 / TASK-360 rule 1: a follower with
+   * a wake interval behind its leader that lines up more than INTERMEDIATE_M past where the
+   * leader started its roll keeps a minute more (ICAO Doc 4444, 5.8.3.2: 3 minutes instead of 2
+   * from an intermediate part of the same runway). */
+  function departureGapS(
+    leader: Craft,
+    leaderClearM: number,
+    follower: Craft,
+    followerClearM: number,
+  ) {
     const a = wakeRank[wakeOf(leader.type)];
     const b = wakeRank[wakeOf(follower.type)];
-    return a === 3 && b < 3 ? 180 : a > b ? 120 : DEP_SEP_S;
+    const intermediate = T360I && a > b && leaderClearM - followerClearM > INTERMEDIATE_M;
+    return (a === 3 && b < 3 ? 180 : a > b ? 120 : DEP_SEP_S) + (intermediate ? 60 : 0);
   }
   /** A lined-up departure waits while another departure on its runway still holds it (not yet
-   * past the far end) and for the wake time behind the last take-off roll. */
+   * past the far end) and for the wake time behind the last take-off roll. TASK-360 rule 3: and
+   * while one lined up (or lining up) ahead of it from the same end has not taken off. */
   function takeoffHeld(craft: Craft, timeS: number) {
-    for (const o of crafts)
-      if (
-        o !== craft &&
-        o.mode === 'air' &&
-        o.air?.kind === 'takeoff' &&
-        o.runway === craft.runway &&
-        o.runwayClaims.length
-      )
-        return true;
+    const myU = graph.runways[craft.runway]!.lengthM - craft.air!.clearM;
+    for (const o of crafts) {
+      if (o === craft || o.runway !== craft.runway || !o.runwayClaims.length) continue;
+      if (o.mode === 'air' && o.air?.kind === 'takeoff') return true;
+      if (T360M) {
+        const ahead = lineUpOf(o);
+        if (ahead && ahead.end === craft.end && ahead.lineUpU > myU) return true;
+      }
+    }
     const last = lastTakeoff[craft.runway];
-    return !!last && timeS - last.startS < departureGapS(last.craft, craft);
+    return (
+      !!last &&
+      timeS - last.startS < departureGapS(last.craft, last.clearM, craft, craft.air!.clearM)
+    );
   }
+  /** TASK-360: which rule let the last fitting line-up share its runway (counters). */
+  let sharedBy: 'roll' | 'multi' | '' = '';
 
   /** Whether holders and arrivals' bookings leave all these resources free for the movement. */
   function bookingFits(
@@ -3002,8 +3229,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     bufferS: number,
     except: number,
     crossing?: { at: Vec2; halfM: number },
-    lineUp?: { end: number; lineUpU: number },
+    lineUp?: LineUp,
   ) {
+    sharedBy = '';
     for (const use of uses) {
       const { resource, clearS } = use;
       const occupant = runwayOccupant[resource]!;
@@ -3017,10 +3245,21 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (
         occupant !== -1 &&
         occupant !== except &&
-        (fromS <= nowS || runwayClearS[resource]! > fromS) &&
-        !behind(occupant)
-      )
-        return false;
+        (fromS <= nowS || runwayClearS[resource]! > fromS)
+      ) {
+        if (lineUp && (T360R || T360M)) {
+          // TASK-360: every aircraft holding the runway is rolling away beyond the line-up
+          // (rule 2) or lined up ahead of it (rule 3), not only the last to claim it.
+          for (const o of crafts) {
+            if (o.id === except || !o.runwayClaims.some((u) => u.resource === resource)) continue;
+            if (rollingAway(o, lineUp)) {
+              const fromU = graph.runways[o.runway]!.lengthM - o.air!.clearM;
+              if (lineUp.lineUpU > fromU + 1 && sharedBy !== 'multi') sharedBy = 'roll';
+            } else if (linedUpAhead(o, lineUp)) sharedBy = 'multi';
+            else return false;
+          }
+        } else if (!behind(occupant)) return false;
+      }
       for (const other of crafts) {
         const booking = other.arrivalBooking;
         if (
@@ -3063,11 +3302,16 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   function leavesGap(uses: BookedUse[], fromS: number) {
     for (const { resource } of uses) {
       let needS = 0;
+      let by: Craft | null = null;
       for (const other of crafts) {
         const wait = other.runwayWait;
         if (!wait || other.mode !== 'ground' || nowS - wait.sinceS < RUNWAY_GAP_WAIT_S) continue;
         const use = wait.uses.find((use) => use.resource === resource);
-        if (use) needS = Math.max(needS, use.clearS - wait.checkedAtS + 2 * RUNWAY_BUFFER_S);
+        const bufS = 2 * RUNWAY_BUFFER_S;
+        if (use && use.clearS - wait.checkedAtS + bufS > needS) {
+          needS = use.clearS - wait.checkedAtS + bufS;
+          by = other;
+        }
       }
       if (!needS) continue;
       let lastS = runwayOccupant[resource] === -1 ? nowS : Math.max(nowS, runwayClearS[resource]!);
@@ -3075,9 +3319,29 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const use = other.arrivalBooking?.uses.find((use) => use.resource === resource);
         if (use) lastS = Math.max(lastS, use.clearS);
       }
-      if (fromS < lastS + needS) return false;
+      if (fromS < lastS + needS) {
+        gapBy = `${by ? roleOf(by) : '?'}:${Math.round(needS / 10) * 10}s`;
+        return false;
+      }
     }
     return true;
+  }
+
+  /** An aircraft on the ground in the way off the runway of `craft` by `leg` (before its tail is
+   * off) that cannot give way to it there; `standing`: only one standing still. */
+  function exitBlocker(craft: Craft, leg: Leg, standing: boolean) {
+    const safeM = safeOf(craft, leg);
+    for (const o of crafts) {
+      if (o === craft || o.mode !== 'ground') continue;
+      if (standing && o.speedMps > 0.5) continue;
+      // A landed aircraft moving off by its exit is judged at commitment; one standing is not.
+      const landed = o.leg!.gates[0]?.holdM === -Infinity && o.runway === craft.runway;
+      if (landed && o.speedMps > 0.5) continue;
+      if (o.waits.some((w) => w.pred === craft && !passed(w))) continue;
+      const meets = conflicts(craft, [{ leg, fromM: 0 }], o).some((c) => c.b1 - SAMPLE_M < safeM);
+      if (meets && !yieldWaits(craft, o)) return o;
+    }
+    return null;
   }
 
   function trySpawnArrival(
@@ -3086,9 +3350,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     timeS: number,
   ) {
     const runway = graph.runways[craft.runway]!;
-    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)]) return false;
-    if (standOccupant[request.stand] !== -1) return false;
-    if (pushBlocksStand(craft, request.stand)) return false;
+    const refuse = (why: string) => {
+      releaseWhy = why;
+      return false;
+    };
+    if (runways.restricted && !arrivalOpen[endKey(runway.idx, request.end)])
+      return refuse('closed');
+    if (standOccupant[request.stand] !== -1) return refuse('stand');
+    if (pushBlocksStand(craft, request.stand)) return refuse('push');
     if (!craft.admission) {
       for (const option of landings(craft, runway, request.end, request.stand)) {
         const landing = option();
@@ -3111,19 +3380,30 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const safeM = safeOf(craft, leg);
     // TASK-330 Phase 1e step 1: the way off the runway is ordered at landing commitment. It does
     // not appear while an aircraft stands in its way off that could not give way there.
-    for (const o of crafts) {
-      if (o === craft || o.mode !== 'ground') continue;
-      // A landed aircraft moving off by its exit is judged at commitment; one standing is not.
-      const landed = o.leg!.gates[0]?.holdM === -Infinity && o.runway === craft.runway;
-      if (landed && o.speedMps > 0.5) continue;
-      if (o.waits.some((w) => w.pred === craft && !passed(w))) continue;
-      const meets = conflicts(craft, [{ leg, fromM: 0 }], o).some((c) => c.b1 - SAMPLE_M < safeM);
-      if (meets && !yieldWaits(craft, o)) return false;
+    const blocker = exitBlocker(craft, leg, false);
+    if (blocker) {
+      return refuse(`exit:${roleOf(blocker)}${holdOf(blocker)}`);
     }
-    if (craft.waits.some((w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w))) return false;
+    const unstartedWait = craft.waits.find(
+      (w) => unstarted(w.pred) && !pass.has(w.pred) && !passed(w),
+    );
+    if (unstartedWait) {
+      const p = unstartedWait.pred;
+      const sameEnd =
+        p.request?.kind === 'arrival' && p.runway === craft.runway && p.request.end === request.end;
+      const where =
+        p.mode !== 'queued'
+          ? ''
+          : !sameEnd
+            ? ':otherEnd'
+            : queue.indexOf(p.id) < queue.indexOf(craft.id)
+              ? ':ahead'
+              : `:behind${p.admission ? '' : ':unadmitted'}${p.rank < craft.rank ? ':lowerRank' : ''}`;
+      return refuse(`unstarted:${roleOf(p)}${where}`);
+    }
     const air = approachAir(craft, landing, timeS);
     const thresholdS = timeS + air.thresholdM / fixedWing(craft).approachSpeedMps;
-    if (!spacedOnFinal(craft, thresholdS)) return false;
+    if (!spacedOnFinal(craft, thresholdS)) return refuse('spacing');
 
     const exitS = timeS + air.profile.durationS;
     const taxi = taxiProfile(landing.leg.path, fixedWing(craft), {
@@ -3147,10 +3427,39 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           ? timeS + timeTo(air.profile, use.clearM)
           : exitS + timeTo(taxi, use.clearM - offsetM)),
     }));
-    if (!bookingFits(booking, fromS, 0, craft.id)) return false;
-    if (!leavesGap(booking, fromS)) return false;
+    if (!bookingFits(booking, fromS, 0, craft.id)) {
+      // TASK-352 (counters): who holds or books a resource in its window.
+      let who = '?';
+      for (const use of booking) {
+        const occ = runwayOccupant[use.resource]!;
+        if (
+          occ !== -1 &&
+          occ !== craft.id &&
+          (fromS <= nowS || runwayClearS[use.resource]! > fromS)
+        ) {
+          who = `occ:${roleOf(crafts[occ - 1]!)}`;
+          break;
+        }
+        const other = crafts.find(
+          (o) =>
+            o.id !== craft.id &&
+            o.arrivalBooking?.uses.some(
+              (u) =>
+                u.resource === use.resource &&
+                o.arrivalBooking!.fromS < use.clearS &&
+                u.clearS > fromS,
+            ),
+        );
+        if (other) {
+          who = `booked:${roleOf(other)}`;
+          break;
+        }
+      }
+      return refuse(`booking:${who}`);
+    }
+    if (!leavesGap(booking, fromS)) return refuse(`gap:${gapBy}`);
     const given = yieldsTo(craft, pass);
-    if (!given) return false;
+    if (!given) return refuse('yield');
     // TASK-330 Phase 1e: ground aircraft about to enter its way off the runway (within
     // EXIT_NEAR_M of where they would meet it, before its tail is off) wait for it from now; those
     // further off are ordered as they come near.
@@ -3171,7 +3480,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // TASK-340 (as TASK-339 for a departure at its stand): nor while one moving on the ground is
     // to come to rest with its body across its way in (it would park in its way after it
     // appears, and could give way to it no more).
-    if (restersAcross(craft, [leg]).some((o) => o.mode === 'ground')) return false;
+    if (restersAcross(craft, [leg]).some((o) => o.mode === 'ground')) return refuse('resters');
     // Nor while it is to park with its body across the way of one moving on the ground that has
     // not yet passed there (TASK-339: that one would wait there until it leaves again).
     const stopped = stopBody(craft, leg);
@@ -3181,14 +3490,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         !o.waits.some((w) => w.pred === craft && w.predM === Infinity) &&
         bodyConflict(o, remaining(o), stopped)
       )
-        return false;
+        return refuse(`parksAcross:${roleOf(o)}`);
     for (const [other] of given) {
       if (other.mode !== 'ground') continue;
-      if (bodyConflict(other, remaining(other), stopBody(craft, leg))) return false;
+      if (bodyConflict(other, remaining(other), stopBody(craft, leg)))
+        return refuse(`parksAcross:${roleOf(other)}`);
       const direct = (c: Craft, p: Craft) => c === craft && p === other;
       if (chainOf(craft, other, direct) && !openChain(craft, other, direct)) {
         late.releaseHeld++;
-        return false;
+        return refuse(`chain:${roleOf(other)}`);
       }
     }
     for (const [other, waits] of given) giveWay(craft, other, waits);
@@ -3311,7 +3621,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         continue;
       }
       const waits = p.mode === 'ground' ? yieldWaits(craft, p, false) : null;
-      if (!waits) return false;
+      if (!waits) {
+        commitWhy = `wait:${roleOf(p)}${holdOf(p)}`;
+        return false;
+      }
       yielding.set(p, waits);
     }
     // Ground aircraft whose way meets this stretch and that are not ordered with it yet (their
@@ -3323,10 +3636,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const near = conflicts(craft, own, o).filter((c) => c.b1 - SAMPLE_M < safeM);
       if (!near.length) continue;
       const waits = yieldWaits(craft, o);
-      if (!waits) return false;
+      if (!waits) {
+        commitWhy = `late:${roleOf(o)}`;
+        return false;
+      }
       yielding.set(o, waits);
     }
     let cap = Infinity;
+    let capBy: Craft | null = null;
     for (const w of craft.waits)
       if (
         w.leg === leg &&
@@ -3334,9 +3651,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         !passed(w) &&
         !yielding.has(w.pred) &&
         !leaving.has(w.pred)
-      )
+      ) {
         cap = w.atM;
-    if (cap < safeM) return false;
+        capBy = w.pred;
+      }
+    if (cap < safeM) {
+      commitWhy = `cap:${capBy ? roleOf(capBy) : '?'}`;
+      return false;
+    }
     // Room to stop with its tail off the runway (its safe point and its nose beyond).
     const want = Math.min(leg.path.lengthM, safeM + craft.lengthM / 2, cap + craft.lengthM / 2);
     // Arrivals ahead leaving by the same way off in time: their claims there do not count.
@@ -3376,8 +3698,20 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       }
       if (!moved) break;
     }
-    if (firstConflict(craft, leg, 0, want, ignore) < Infinity) return false;
-    if (pushBlocksStand(craft, craft.stand)) return false;
+    if (firstConflict(craft, leg, 0, want, ignore) < Infinity) {
+      const holder = crafts.find(
+        (o) =>
+          o !== craft &&
+          !ignore.has(o) &&
+          o.claimed.some((k) => leg.pieces.some((q) => q.edge === k.edge && q.startM <= want)),
+      );
+      commitWhy = `claim:${holder ? roleOf(holder) : '?'}`;
+      return false;
+    }
+    if (pushBlocksStand(craft, craft.stand)) {
+      commitWhy = 'push';
+      return false;
+    }
     for (const [other, waits] of yielding) giveWay(craft, other, waits);
     lock(craft, leg, 0, leg.pieces.length);
     craft.leg = leg;
@@ -3576,8 +3910,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   function departurePlan(craft: Craft, runway: AirsideRunwayC, end: number, findRoute = route) {
-    let best: { legs: Leg[]; cost: number; lineUpU: number } | null = null;
+    type Plan = { legs: Leg[]; cost: number; lineUpU: number; entryU: number; how: LineUpKind };
+    let best: Plan | null = null;
+    // TASK-360 rule 1: of the entries its run fits (full length or intersection), the one
+    // nearest its taxi route (the route's cost without the runway arc it lines up on), counting
+    // ENTRY_QUEUE_M for each other departure planned there and not lined up yet. An aircraft
+    // whose route passes an intermediate entry does not taxi on to the end.
+    let nearest: (Plan & { score: number }) | null = null;
     for (const option of lineUps(craft, runway, end)) {
+      if (nearest && option.rank > 1) break;
       const legs = legsFromStand(
         craft,
         'taxi',
@@ -3587,14 +3928,24 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         findRoute,
       );
       if (!legs) continue;
-      const plan = { ...legs, lineUpU: option.lineUpU };
+      const plan = { ...legs, lineUpU: option.lineUpU, entryU: option.entryU, how: option.how };
       // TASK-312: a way to the line-up that taxis along a runway holds it for minutes; a later
       // option (an intersection departure, say) that reaches the runway by taxiways is better.
       const last = legs.legs.at(-1)!;
-      if (!last.pieces.some((p) => graph.edges[p.edge]!.kind === 'runway')) return plan;
+      const alongRunway = last.pieces.some((p) => graph.edges[p.edge]!.kind === 'runway');
+      if (option.rank === 1 && T360I && findRoute === route && !alongRunway) {
+        if (lineUpHoldTouches(craft, last, runway.idx)) continue;
+        const score =
+          legs.cost -
+          graph.edges[arcEdge(option.goal)]!.lengthM * 4 * oppositeFactor(craft, option.goal) +
+          ENTRY_QUEUE_M * queuedAtEntry(craft, runway.idx, end, option.entryU);
+        if (!nearest || score < nearest.score) nearest = { ...plan, score };
+        continue;
+      }
+      if (!alongRunway) return plan;
       best ??= plan;
     }
-    return best;
+    return nearest ?? best;
   }
 
   /** TASK-312: whether a type parked at a stand would stand in the way of one like it taxiing
@@ -3780,7 +4131,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           planned = {
             legs: departure.legs,
             next: [
-              { kind: 'takeoff', end: request.end, lineUpU: departure.lineUpU, pauseS: LINEUP_S },
+              {
+                kind: 'takeoff',
+                end: request.end,
+                lineUpU: departure.lineUpU,
+                pauseS: LINEUP_S,
+                entryU: departure.entryU,
+                how: departure.how,
+              },
             ],
           };
         }
@@ -4279,6 +4637,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
               end: key & 1,
               lineUpU: option.lineUpU,
               pauseS: LINEUP_S,
+              entryU: option.entryU,
+              how: option.how,
             };
             craft.runway = runway.idx;
             craft.end = key & 1;
@@ -4434,7 +4794,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           booking.uses.every(
             (use) => !foreign(use) || runwayClearS[use.resource]! <= thresholdS - CLEAR_BEFORE_S,
           );
-        if ((held && !clearsInTime) || !commitLanding(craft)) return goAround(craft, timeS);
+        if (held && T360M && multiOn(craft.runway)) departureCounts.landingsHeldByMulti++;
+        commitWhy = '';
+        if ((held && !clearsInTime) || !commitLanding(craft)) {
+          const by = booking.uses.find(foreign);
+          const why =
+            held && !clearsInTime
+              ? `runwayHeld:${by ? roleOf(crafts[runwayOccupant[by.resource]! - 1]!) : '?'}`
+              : `commit:${commitWhy}`;
+          arrivalWhy.goAround[why] = (arrivalWhy.goAround[why] ?? 0) + 1;
+          return goAround(craft, timeS);
+        }
         if (held) air.claimPending = true;
         else claimRunways(craft, booking.uses);
       } else if (air.claimPending) {
@@ -4446,7 +4816,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         if (!held) {
           air.claimPending = false;
           claimRunways(craft, booking.uses);
-        } else if (timeS >= thresholdS - CLEAR_BEFORE_S) return goAround(craft, timeS);
+        } else if (timeS >= thresholdS - CLEAR_BEFORE_S) {
+          const by = booking.uses.find(
+            ({ resource }) =>
+              runwayOccupant[resource] !== -1 && runwayOccupant[resource] !== craft.id,
+          );
+          const why = `lateClear:${by ? roleOf(crafts[runwayOccupant[by.resource]! - 1]!) : '?'}`;
+          arrivalWhy.goAround[why] = (arrivalWhy.goAround[why] ?? 0) + 1;
+          return goAround(craft, timeS);
+        }
       }
       if (!air.touched && pose.stationM >= air.touchdownM) {
         air.touched = true;
@@ -4621,7 +4999,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       // TASK-330 departure flow: a departure lines up behind one that has started its roll.
       const lineUp =
         independent(craft.runway) && gate.vacateM === Infinity && next?.kind === 'takeoff'
-          ? next
+          ? { ...next, halfM: craft.lengthM / 2 }
           : undefined;
       if (!bookingFits(booking, timeS, RUNWAY_BUFFER_S, craft.id, crossingAt, lineUp)) {
         const sinceS = craft.runwayWait?.gate === gate ? craft.runwayWait.sinceS : timeS;
@@ -4632,6 +5010,16 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         craft.claimHi = Math.max(through, craft.claimHi);
         publish(craft);
         claimRunways(craft, booking);
+        if (gate.vacateM === Infinity && next?.kind === 'takeoff') {
+          craft.departRollS = bookedRoll.rollS;
+          craft.departClearS = bookedRoll.clearS;
+          if (lineUp && sharedBy === 'multi') {
+            departureCounts.multiLineUps++;
+            craft.multiFront = crafts.find(
+              (o) => o.id !== craft.id && o.runway === craft.runway && linedUpAhead(o, lineUp),
+            )?.id;
+          } else if (lineUp && sharedBy === 'roll') departureCounts.lineUpsAheadOfRoll++;
+        }
       }
       break;
     }
@@ -4680,6 +5068,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (craft.stationM >= leg.endM - 1e-6 && craft.speedMps === 0) finishLeg(craft, timeS);
   }
 
+  /** TASK-360: the take-off roll and runway clear time of the last departure booking. */
+  let bookedRoll = { rollS: 0, clearS: 0 };
   function departureBooking(
     craft: Craft,
     leg: Leg,
@@ -4695,13 +5085,44 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       clearM: use.clearM === Infinity ? leg.endM + air.clearM : use.clearM,
     }));
     addAirUses(uses, air, leg.endM, craft.lengthM / 2);
+    const readyS = timeS + taxiS(leg.endM) + next.pauseS;
+    let rollS = readyS;
+    if ((T360R || T360M) && independent(craft.runway)) {
+      // TASK-360: lined up behind a departure (rolling or lined up ahead), it rolls once that one
+      // is off the runway and the gap behind its roll has run; so too after the last take-off
+      // (`takeoffHeld`, on a runway that crosses no other).
+      const last = lastTakeoff[craft.runway];
+      if (last && last.craft !== craft)
+        rollS = Math.max(
+          rollS,
+          last.startS + departureGapS(last.craft, last.clearM, craft, air.clearM),
+        );
+      const runway = graph.runways[craft.runway]!;
+      for (const o of crafts) {
+        if (o === craft || o.runway !== craft.runway || !o.runwayClaims.length) continue;
+        const ahead =
+          o.mode === 'air' && o.air?.kind === 'takeoff'
+            ? o.air.clearM
+            : lineUpOf(o)?.end === next.end && lineUpOf(o)!.lineUpU > next.lineUpU
+              ? runway.lengthM - lineUpOf(o)!.lineUpU
+              : -1;
+        if (ahead < 0 || o.departRollS === undefined) continue;
+        rollS = Math.max(
+          rollS,
+          o.departClearS ?? timeS,
+          o.departRollS + departureGapS(o, ahead, craft, air.clearM),
+        );
+      }
+    }
+    bookedRoll = { rollS, clearS: rollS + timeTo(air.profile, air.clearM) };
+    const extraS = rollS - readyS;
     return uses.map((use) => ({
       ...use,
       clearS:
         timeS +
         (use.clearM <= leg.endM
           ? taxiS(use.clearM)
-          : taxiS(leg.endM) + next.pauseS + timeTo(air.profile, use.clearM - leg.endM)) +
+          : taxiS(leg.endM) + next.pauseS + extraS + timeTo(air.profile, use.clearM - leg.endM)) +
         5,
     }));
   }
@@ -4737,6 +5158,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       craft.next = [];
       craft.mode = 'waiting';
       craft.air = takeoffAir(craft, next.end, next.lineUpU, timeS + next.pauseS);
+      craft.departHow = next.how;
       craft.stand = -1;
     }
   }
@@ -4774,6 +5196,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     // Queued arrivals appear in request order when their runway window is free; one that cannot
     // be ordered yet keeps those behind it to the same runway end waiting this step.
     const unordered = new Set<number>();
+    const heads = new Set<number>();
+    const headOf = new Map<number, number>();
+    for (const id of queue) {
+      const q = crafts[id - 1]!;
+      if (q.request?.kind !== 'arrival') continue;
+      const key = endKey(q.runway, q.request.end);
+      if (!headOf.has(key)) headOf.set(key, id);
+    }
     for (let i = 0; i < queue.length; i++) {
       const craft = crafts[queue[i]! - 1]!;
       const request = craft.request;
@@ -4781,7 +5211,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         const key = endKey(craft.runway, request.end);
         if (unordered.has(key)) continue;
         craft.retryS = timeS;
-        if (trySpawnArrival(craft, request, timeS) === 'unordered') unordered.add(key);
+        releaseWhy = '';
+        const tried = trySpawnArrival(craft, request, timeS);
+        if (tried === 'unordered') unordered.add(key);
+        // TASK-352: the head of its end's queue, held: RETRY_S to the cause.
+        if (tried !== true && !heads.has(key) && headOf.get(key) === craft.id) {
+          const why = `${endName(key)} ${tried === 'unordered' ? 'unordered' : releaseWhy || '?'}`;
+          arrivalWhy.release[why] = (arrivalWhy.release[why] ?? 0) + RETRY_S;
+          if (T360M && releaseWhy.startsWith('booking') && multiOn(craft.runway))
+            departureCounts.arrivalHeldByMultiS += RETRY_S;
+        }
+        heads.add(key);
       } else if (request?.kind === 'helicopter-arrival') helicopterStep(craft, timeS);
       if (craft.mode !== 'queued') queue.splice(i--, 1);
     }
@@ -4799,7 +5239,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           timeS >= craft.pauseUntilS &&
           !(independent(craft.runway) && takeoffHeld(craft, timeS))
         ) {
-          lastTakeoff[craft.runway] = { craft, startS: timeS };
+          lastTakeoff[craft.runway] = { craft, startS: timeS, clearM: craft.air!.clearM };
+          craft.departRollS = timeS;
+          craft.departClearS = timeS + timeTo(craft.air!.profile, craft.air!.clearM);
+          craft.multiFront = undefined;
+          const how = craft.departHow ?? 'full';
+          const byType = (departureCounts.takeoffsByType[craft.type.id] ??= {
+            full: 0,
+            intersection: 0,
+            backtrack: 0,
+          });
+          byType[how]++;
           craft.mode = 'air';
           craft.air!.startS = timeS;
           stepAir(craft, timeS);
@@ -5146,6 +5596,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     /** TASK-330 / TASK-339: counters of the progressive order and the parked-blocker rules. */
     orderCounters: () =>
       Object.fromEntries(Object.entries(late).filter(([, value]) => typeof value === 'number')),
+    /** TASK-352: go-arounds by cause; seconds the head of each end's arrival queue was held, by
+     * cause. */
+    arrivalCauses: () => structuredClone(arrivalWhy),
+    /** TASK-360: departure counters (take-offs by type and line-up, shared line-ups). */
+    departureCounts: () => structuredClone(departureCounts),
     hash(word: (hash: number, value: number) => number, hash: number) {
       hash = word(hash, crafts.length);
       for (const craft of crafts) {
