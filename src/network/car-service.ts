@@ -138,7 +138,8 @@ function derive(city: CompiledCity) {
   const departures = new Map<number, Uint8Array>(),
     arrivals = new Map<number, Uint8Array>(),
     onward = new Map<string, Uint8Array>(),
-    fromFacility = new Map<number, Uint8Array>();
+    fromFacility = new Map<number, Uint8Array>(),
+    fromLane = new Map<number, Uint8Array>();
   const memo = (map: Map<number, Uint8Array>, place: number, make: () => Uint8Array) => {
     let result = map.get(place);
     if (!result) map.set(place, (result = make()));
@@ -179,6 +180,13 @@ function derive(city: CompiledCity) {
           (reached = reach(lanes(city.parking[facility]!.connectorsOut), forward)),
         );
       return entries[place]!.some((lane) => reached[lane]);
+    },
+    /** TASK-351: the `connectors` a car leaving from `lane` can reach (a map exit's connectors
+     * in another part of a split network cannot be). */
+    reachable(lane: number, connectors: number[]) {
+      let reached = fromLane.get(lane);
+      if (!reached) fromLane.set(lane, (reached = reach([lane], forward)));
+      return connectors.filter((c) => reached[city.connectors[c]!.lane]);
     },
     /** Whether a car on any of `lanes` can reach a facility the place's cars could park at. */
     reachesParking(lanes: number[], place: number) {

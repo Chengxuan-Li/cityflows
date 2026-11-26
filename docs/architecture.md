@@ -3133,7 +3133,8 @@ of a trapped place entrance moves it at most 1 km from the place's outline or po
 a lot's aisle. A car trip between two places is served only if the origin's car (at home: each
 facility the home owns) reaches the destination or a facility it could park at; a first trip's car
 starts only in a facility that reaches its destination, and, bound for a gateway, from which the
-router finds a route.
+router finds a route. A gateway trip leaves the map by one of the gateway's connectors its car can
+reach (Zurich's `p:6241` has connectors in Kloten and on the landside).
 
 Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
 virtual garages need a usable exit too. Assigned cars stay in their garages or use the next

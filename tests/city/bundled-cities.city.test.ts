@@ -74,8 +74,8 @@ test.for(Object.keys(realPlaceBuilds).filter((id) => id !== 'freiburg'))(
 // Munich's and Sindelfingen's own traffic tests pin theirs. A place held out of the panel for its
 // gate (`heldOutOfPanel`) is expected to fail, so the fix that lets it pass shows. TASK-286: York passes
 // since its Layerthorpe gateway leaves on a lane the router can leave, and it joins the panel.
-// TASK-351: Zurich Airport, held out, is run here and expected to fail: no gridlock since a public
-// part a map entry feeds and an exit drains is circulation, but 11 trips find no route.
+// TASK-351: Zurich Airport passes since a public part a map entry feeds and an exit drains is
+// circulation (Kloten and the airport landside meet only on airport roads), and joins the panel.
 // TASK-354: Heathrow joined the panel on the owner's word (2026-11-25) without this gate; its landside
 // morning is to be measured and improved in parallel.
 describe.for([

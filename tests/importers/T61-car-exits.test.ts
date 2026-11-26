@@ -503,5 +503,11 @@ test.each([false, true])(
     ]);
     const garage = net.parking.find((f) => f.place === home)!;
     expect(service.leaves(garage.idx, work!)).toBe(joined);
+    // A trip to the map exit leaves by a connector its car can reach.
+    const edge = net.places.find((p) => p.kind === 'gateway')!;
+    const exit = net.connectors[garage.connectorsOut[0]!]!.lane;
+    expect(service.reachable(exit, edge.connectorsIn)).toHaveLength(Number(joined));
+    const townExit = net.connectors[net.places[work!]!.connectorsOut[0]!]!.lane;
+    expect(service.reachable(townExit, edge.connectorsIn)).toEqual(edge.connectorsIn);
   },
 );
