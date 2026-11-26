@@ -18,7 +18,7 @@ import type { CLane, CompiledCity, CNode, CRoad } from './types';
 // the span it covers along each lane, shared by the renderer and the stop positions.
 
 /** The canonical roads, which carry the crossing overrides (TASK-091), and the mapped walk
- * network, whose crossing ways choose a crossing's paint (TASK-217, `crossingStyle`). */
+ * network, whose crossing links guide placement (TASK-265) and paint (TASK-217). */
 export type CrossingSource = { roads?: City['roads']; walk?: City['walk'] };
 
 /** The surface edges of a road end, outward from the node. */
@@ -397,8 +397,9 @@ const MOVE_OUT_M = 6;
  * storage and a longer start at green: Munich at 0.15 gridlocked 75 times with the move-out, 41
  * without); their stop line lies behind the crossing (`populateStops`), and where it would fall
  * in a lane's first half the end has no stripes and keeps TASK-072's stop. TASK-265: where OSM
- * maps a crossing node on an outlined junction's end (`mappedCentreM`), the band is centred on
- * it instead (no nearer than 0.25 m from the cut, no move-out), so the stripes, walk link
+ * maps a crossing node within the curb clearance of an outlined junction's end
+ * (`mappedCentreM`), the band is centred on that node (no nearer than 0.25 m from the cut,
+ * no move-out), so the stripes, walk link
  * (`crossingCentreM`), walker conflict zone and stop line stand where it is mapped. A node inside
  * the drawn curb returns keeps the band there, its stripes only 0.2 m clear of the curb. Where
  * that leaves no stripe, or a served signal's stop line in a lane's first half, the curb rule
@@ -538,8 +539,9 @@ function placeCrossing(
   };
   // Keep TASK-348's crossing floor and approach storage at a plain signalised crossing.
   const mapped = node.outline.length ? mappedCentreM(city, road, atEnd, source) : null;
-  if (mapped !== null) {
-    const from = Math.max(0.25, mapped - CROSSING_M / 2);
+  const from = mapped === null ? near : Math.max(0.25, mapped - CROSSING_M / 2);
+  // Only correct crossings that the curb-clearance rule would push away from the junction.
+  if (from < near) {
     const stripes = at(from, MAPPED_CURB_CLEAR_M);
     if (stripes.length && !stopInFirstHalf(city, road, atEnd, from, from + CROSSING_M))
       return { stripes, nearM: from, farM: from + CROSSING_M };

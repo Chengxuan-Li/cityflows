@@ -284,8 +284,7 @@ test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenad
   // TASK-290: nine mapped garage entrances bring Freiburg's keep-clear box count from 137 to 139.
   // TASK-294: two Freiburg places' driveways back in the pocket behind Anlieger streets: 141.
   // TASK-351: three car parks on the Schwabentorring leave by their own streets: 144.
-  // TASK-265: n:7's zebra moves onto its crossing node and splits r:10#0's box.
-  expect(boxes).toBe(145);
+  expect(boxes).toBe(144);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {

@@ -326,6 +326,9 @@ describe('T71 crossing walk links at the stripes', () => {
     for (const p of link.flatMap((l) => l.line)) expect(Math.abs(p.y - 9)).toBeLessThan(0.1);
     // The crossing way of T71.4 at the same place keeps the curb rule's stripes.
     for (const y of centreY(signalJunction()).ys) expect(y).toBeCloseTo(14.25, 1);
+    // A node farther out than the curb-based band does not move that band's placement.
+    for (const n of Object.values(city.walk.nodes)) n.pos.y = 16;
+    for (const y of centreY(city).ys) expect(y).toBeCloseTo(14.25, 1);
   });
 
   test.each(cases)('T71.5 %s: the same city compiles to the same walk graph', (_, build) => {
