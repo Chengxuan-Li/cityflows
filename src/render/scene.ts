@@ -19,8 +19,8 @@ import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
-import { drawAircraft, pickAircraft } from './layers/aircraft';
-import { drawGroundVehicles } from './layers/ground-vehicles';
+import { Aircraft2D, pickAircraft } from './layers/aircraft';
+import { GroundVehicles2D } from './layers/ground-vehicles';
 import { GroundVehicleTracks, shownVehicle } from './ground-vehicles';
 import { AircraftPoseTrack } from './aircraft-pose';
 import { apronLayout, JetBridgeStates } from './apron';
@@ -243,7 +243,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let light = sceneLight(defaultVisual, 0);
   let drawnLight = '';
   // TASK-298: aircraft over the map, under the evening tint.
-  const aircraft = new Graphics();
+  const aircraft = new Aircraft2D();
   let aircraftPoses: AircraftPose[] = [];
   let aircraftTracks = new Map<number, AircraftPoseTrack>();
   let aircraftPlaying = false;
@@ -252,18 +252,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let jetBridges: JetBridgeStates | null = null;
   let aircraftTimeS = 0;
   // TASK-316: airside ground vehicles, under the aircraft.
-  const groundVehicles = new Graphics();
+  const groundVehicles = new GroundVehicles2D();
   const groundTracks = new GroundVehicleTracks();
   const redrawGroundVehicles = () => {
     const byId = new Map(aircraftPoses.map((p) => [p.id, p]));
     const shown = groundTracks.poses.filter((p) => shownVehicle(p, byId));
-    drawGroundVehicles(groundVehicles, shown, mapBounds);
+    groundVehicles.draw(shown, mapBounds);
     canvas.dataset.groundVehicles = String(shown.length);
   };
   const redrawAircraft = () => {
     redrawGroundVehicles();
-    drawAircraft(
-      aircraft,
+    aircraft.draw(
       aircraftPoses,
       mapBounds,
       selection?.kind === 'aircraft' ? selection.id : null,
@@ -283,8 +282,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   };
   world.addChild(
     map,
-    groundVehicles,
-    aircraft,
+    groundVehicles.container,
+    aircraft.container,
     night.container,
     labels.container,
     routeOverlay,

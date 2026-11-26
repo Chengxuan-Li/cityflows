@@ -25,6 +25,22 @@ export function roadStation(road: CRoad, point: Vec2): number {
   return find(point).along - road.stations[0]!;
 }
 
+/** TASK-278: `height` once per distinct point. A shape's triangles split to 2 m on a ramp share
+ * most of their corners (Sindelfingen: 1.22 million lookups at about 0.26 million points). */
+export function once(height: (p: Vec2) => number) {
+  // By x, the points' y and height pairs: a row seldom holds more than one point (TASK-357: a
+  // short array per x rather than a map).
+  const known = new Map<number, number[]>();
+  return (p: Vec2) => {
+    const row = known.get(p.x);
+    if (row) for (let i = 0; i < row.length; i += 2) if (row[i] === p.y) return row[i + 1]!;
+    const z = height(p);
+    if (row) row.push(p.y, z);
+    else known.set(p.x, [p.y, z]);
+    return z;
+  };
+}
+
 export interface RoadHeight extends RoadProfile {
   ground?: (s: number) => number;
   crossfall?: (s: number, p: Vec2) => number;

@@ -31,6 +31,7 @@ import { style } from '../render/style';
 import { surfaceTexture } from './vegetation';
 import type { Vec2 } from '../geo/vec2';
 import {
+  once,
   railSheetReachM,
   raiseRailProfiles,
   roadSurfaceAt,
@@ -966,8 +967,9 @@ export function buildRail(
     const ramp = track && (profile!.length > 1 || rail!.grades[track.idx] === 'bridge');
     const node = shape.node === undefined ? undefined : city.rail!.nodes[shape.node]!;
     const nodeTrack = node && city.rail!.tracks[node.tracks[0]!]!;
-    const z = (p: Vec2, offset: number) =>
-      (shape.crossing
+    // TASK-357: each corner's height once; a ramp's split triangles share most corners.
+    const ground = once((p: Vec2) =>
+      shape.crossing
         ? heights.terrain.surfaceAt(p.x, p.y)
         : track
           ? railElevation(heights, rail!, track, profile!.length === 1 ? 0 : trackAt(track, p), p)
@@ -979,7 +981,9 @@ export function buildRail(
                 nodeTrack.fromNode === node.idx ? 0 : nodeTrack.lengthM,
                 p,
               )
-            : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5) + offset;
+            : heights.terrain.groundAt(p.x, p.y) + shape.layer * 5,
+    );
+    const z = (p: Vec2, offset: number) => ground(p) + offset;
     const emit = (a: Vec2, b: Vec2, c: Vec2) => {
       if (ramp) {
         const ab = distance(a, b),

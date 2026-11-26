@@ -11,7 +11,7 @@ import {
   MeshLambertMaterial,
   Object3D,
 } from 'three';
-import { pointInPolygon } from '../geo/polyline';
+import { boxOf, pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
 import type { AirsideGraph } from '../network/airside';
 import {
@@ -60,14 +60,30 @@ export function terminalGlazing(
   context: City['context'],
   groundAt: (x: number, y: number) => number,
 ) {
-  const terminals = Object.values(airport.terminals).map((t) => closed(t.rings[0]!));
+  // TASK-357: a corner off a terminal's box (grown by the half metre) is off the terminal too.
+  const terminals = Object.values(airport.terminals).map((t) => {
+    const ring = closed(t.rings[0]!);
+    const { minX, minY, maxX, maxY } = boxOf(ring);
+    return {
+      ring,
+      box: { minX: minX - 0.5, minY: minY - 0.5, maxX: maxX + 0.5, maxY: maxY + 0.5 },
+    };
+  });
   const positions: number[] = [];
   for (const feature of context?.features ?? []) {
     if (feature.kind !== 'area' || feature.class !== 'building') continue;
     const ring = feature.rings[0]!;
     // A terminal's building: most of its outline within half a metre of the terminal's.
-    const within = (t: Vec2[]) =>
-      ring.filter((p) => pointInPolygon(p, t, 0.5)).length >= ring.length * 0.8;
+    const within = ({ ring: t, box }: (typeof terminals)[number]) =>
+      ring.filter(
+        (p) =>
+          p.x >= box.minX &&
+          p.x <= box.maxX &&
+          p.y >= box.minY &&
+          p.y <= box.maxY &&
+          pointInPolygon(p, t, 0.5),
+      ).length >=
+      ring.length * 0.8;
     if (!terminals.some(within)) continue;
     const heightM = feature.heightM ?? (feature.levels === undefined ? 10 : feature.levels * 3);
     if (heightM < 4) continue;

@@ -2,12 +2,13 @@ import Flatbush from 'flatbush';
 import { BufferGeometry, Float32BufferAttribute } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { drape } from './terrain';
-import { heightAt, roadSurfaceAt, type cityHeights } from './heights';
+import { heightAt, once, roadSurfaceAt, type cityHeights } from './heights';
 import { walkGeometry } from '../render/walk-geometry';
 import type { CompiledCity, CWalkLink } from '../network';
 import type { CityGeometry } from '../render/types';
 import { cumulativeLengths, distance, nearestOnPolyline, pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+import { computeVertexNormals } from './buffers';
 
 type Heights = ReturnType<typeof cityHeights>;
 const paving = 0.14;
@@ -298,19 +299,6 @@ export function walkHeight(
   };
 }
 
-/** TASK-278: `height` once per distinct point. A shape's triangles split to 2 m on a ramp share
- * most of their corners (Sindelfingen: 1.22 million lookups at about 0.26 million points). */
-function once(height: (p: Vec2) => number) {
-  const known = new Map<number, Map<number, number>>();
-  return (p: Vec2) => {
-    let row = known.get(p.x);
-    if (!row) known.set(p.x, (row = new Map()));
-    let z = row.get(p.y);
-    if (z === undefined) row.set(p.y, (z = height(p)));
-    return z;
-  };
-}
-
 export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Heights) {
   const sidewalks: number[] = [],
     footways: number[] = [],
@@ -371,19 +359,30 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
     const curvedHeight = roadHeight
       ? roadHeight.fromM !== roadHeight.deckM || roadHeight.toM !== roadHeight.deckM
       : fromGrade !== deck || toGrade !== deck;
-    const emit = (points: Vec2[]) => {
-      const lengths = points.map((p, i) => distance(p, points[(i + 1) % 3]!));
-      const edge = lengths.indexOf(Math.max(...lengths));
-      if (curvedHeight && lengths[edge]! > 2) {
-        const a = points[edge]!,
-          b = points[(edge + 1) % 3]!,
-          c = points[(edge + 2) % 3]!;
-        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        emit([a, mid, c]);
-        emit([mid, b, c]);
-      } else for (const p of [...points].reverse()) target.push(p.x, z(p), p.y);
+    // The corners with their heights; on a ramp split at the longest edge (the first of equals)
+    // down to 2 m, each new corner's height looked up once and passed down.
+    const emit = (p: Vec2, q: Vec2, r: Vec2, zp: number, zq: number, zr: number) => {
+      if (curvedHeight) {
+        const pq = distance(p, q),
+          qr = distance(q, r),
+          rp = distance(r, p);
+        if (pq >= qr && pq >= rp ? pq > 2 : qr >= rp ? qr > 2 : rp > 2) {
+          const [a, b, c, za, zb, zc] =
+            pq >= qr && pq >= rp
+              ? [p, q, r, zp, zq, zr]
+              : qr >= rp
+                ? [q, r, p, zq, zr, zp]
+                : [r, p, q, zr, zp, zq];
+          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const zm = z(mid);
+          emit(a, mid, c, za, zm, zc);
+          emit(mid, b, c, zm, zb, zc);
+          return;
+        }
+      }
+      target.push(r.x, zr, r.y, q.x, zq, q.y, p.x, zp, p.y);
     };
-    for (const tri of shape.polygons) emit(tri);
+    for (const [p, q, r] of shape.polygons) emit(p!, q!, r!, z(p!), z(q!), z(r!));
     for (const [a, b] of shape.hatches) {
       const dx = b!.x - a!.x,
         dy = b!.y - a!.y,
@@ -403,7 +402,7 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
   }
   const buffer = (data: number[]) => {
     const g = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(data, 3));
-    g.computeVertexNormals();
+    computeVertexNormals(g);
     return g;
   };
   const surface = (raised: number[], land: number[], offset: number) => {

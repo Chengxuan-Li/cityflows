@@ -1097,7 +1097,9 @@ export class Scene3D {
       this.canvas.dataset.labels = JSON.stringify(this.labels.counts);
   }
   setPlaces(visible: boolean) {
-    if (this.placesVisible !== visible) this.invalidate();
+    // Called every frame; a build applies `placesVisible` itself (TASK-357: no tree search).
+    if (this.placesVisible === visible) return;
+    this.invalidate();
     this.placesVisible = visible;
     const places = this.content.getObjectByName('places');
     if (places) places.visible = visible;

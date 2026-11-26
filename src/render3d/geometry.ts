@@ -1,5 +1,6 @@
 import { BufferGeometry, Color, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { computeVertexNormals, mergeVertices } from './buffers';
 import { areaD } from 'clipper2-ts';
 import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
@@ -58,7 +59,7 @@ export function buffer(positions: number[], smooth = false) {
   let geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   if (smooth) geometry = mergeVertices(geometry);
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
 }
 
