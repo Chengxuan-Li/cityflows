@@ -1882,8 +1882,6 @@ carry no persons and generate no road trips.
   each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
   and the claims keep them apart from there. The order is the order of admission (tows included:
   putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew.
-  TASK-363: two queued arrivals to one runway end go in their approach sequence, the rank each had
-  when first ordered, which an arrival keeps while it steps out of the landing order (below).
   TASK-329: an aircraft that has started (left its stand, appeared on approach) never waits for one
   that has not. Starting, it goes before the departures and tows ordered before it that are still
   at their stands (they wait for it instead, unless their parked body is in its way); it does not
@@ -1918,11 +1916,7 @@ carry no persons and generate no road trips.
   remaining way goes second where it can still stop short. A departure or tow not started does not
   push back while it would wait, beyond its pushback, for an aircraft parked or at rest with no
   movement planned (a new admission is refused; an admitted one is dropped and planned again), nor
-  while an aircraft still moving is to come to rest across its way. TASK-363: a queued arrival
-  whose way to its stand passes such an aircraft (parked, no movement admitted or requested)
-  steps out of the landing order: it is not ordered (an admitted one's order, and the waits of
-  others on it, are dropped), so the arrivals behind it land; it keeps its place in the sequence
-  and is ordered again once the way is clear (ICAO Doc 4444, 6.5.6.1.1 and 6.5.6.1.4). A taxiing departure ordered to
+  while an aircraft still moving is to come to rest across its way. A taxiing departure ordered to
   wait for such an aircraft re-routes around it while a turn short of it is ahead; a parked
   aircraft that others stand waiting for plans its route off their bodies.
 - **Runways.** A grant covers the runway a movement uses and each intersection area its path

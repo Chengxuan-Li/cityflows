@@ -283,7 +283,14 @@ for (let step = startS * 10; step < endS * 10; step++) {
     if (found.length) console.error('OVERLAP', timeS, JSON.stringify(found));
     overlapCount += found.length;
     runwayConflicts += checkRunwayConflicts(poses);
-    runwayConflictsReal += checkRunwayConflictsReal(poses);
+    // TASK-363: which aircraft are in a real runway conflict, and when (the log).
+    const real = checkRunwayConflictsReal(poses);
+    if (real) {
+      const on = poses.filter((p) => p.onRunway);
+      const who = on.map((p) => `${p.registration}:${p.state}:${p.runwayEnd ?? '-'}`);
+      console.error('RUNWAY', timeS, real, JSON.stringify(who));
+    }
+    runwayConflictsReal += real;
   }
   if (timeS % 3600 === 0 && timeS > startS) {
     // TASK-330 / TASK-339: the order's counters, for the log.
