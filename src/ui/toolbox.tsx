@@ -10,7 +10,7 @@ const tip = (id: Tool, text: string) => {
   return [name, labels(id)[0], ...notes].join(' · ');
 };
 
-const tools: { value: Tool; label: string; tooltip: string }[] = [
+const allTools: { value: Tool; label: string; tooltip: string }[] = [
   { value: 'select', label: 'Select', tooltip: 'Select map items · Escape clears selection' },
   { value: 'road', label: 'Road', tooltip: 'Draw a street · Enter finishes · Escape cancels' },
   { value: 'place', label: 'Place', tooltip: 'Paint a place · Escape cancels' },
@@ -25,12 +25,20 @@ const tools: { value: Tool; label: string; tooltip: string }[] = [
     tooltip:
       'Drag from a junction to size a roundabout · Click its center to remove · Escape cancels',
   },
+  {
+    value: 'airside',
+    label: 'Airside',
+    tooltip: 'Add stands, taxiways and holding positions · Escape cancels',
+  },
 ];
 
 export function Toolbox() {
   const tool = useAppStore((state) => state.tool);
   const in3D = useAppStore((state) => state.viewMode === '3d');
   const disabled = useAppStore((state) => state.busy || !state.session || state.viewMode === '3d');
+  // TASK-305: the Airside tool where the city has an airport.
+  const airport = useAppStore((state) => state.session?.project.city.airport !== undefined);
+  const tools = airport ? allTools : allTools.filter(({ value }) => value !== 'airside');
   // Below 660 px the segmented control gives way to this pop-up menu (app.css).
   const popup = (
     <select

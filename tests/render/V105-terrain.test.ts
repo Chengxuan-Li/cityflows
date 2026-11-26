@@ -9,12 +9,8 @@ import { cumulativeLengths, pointAtDistance, pointInPolygon } from '../../src/ge
 import { cityGrades } from '../../src/render/grades';
 import { compile } from '../../src/network';
 import { citySchema } from '../../src/schema/city.schema';
-import {
-  cityHeights,
-  heightAt,
-  roadStation,
-  terrainVehicleOffset,
-} from '../../src/render3d/heights';
+import { cityHeights, heightAt, roadStation } from '../../src/render3d/heights';
+import { VehicleDetailView } from '../../src/render3d/vehicle-detail';
 import { Vehicles3D } from '../../src/render3d/vehicles';
 import { clipGround, createTerrain, groundMesh } from '../../src/render3d/terrain';
 import { buildContext, buildTerrainGround } from '../../src/render3d/context';
@@ -460,16 +456,12 @@ unitTest(
       vclass: new Uint8Array(2),
       fade: new Float32Array([1, 1]),
     });
-    vehicles.animate(0, city, geometry.heights);
+    vehicles.animate(0, city, geometry.heights, new VehicleDetailView());
     const surface = new Mesh(geometry.surfaces, new MeshBasicMaterial({ side: DoubleSide }));
     for (let i = 0; i < 2; i++) {
       const matrix = new Matrix4();
       vehicles.mesh.getMatrixAt(i, matrix);
       const position = new Vector3().setFromMatrixPosition(matrix);
-      position.y += terrainVehicleOffset(city, geometry.heights, i, {
-        x: position.x,
-        y: position.z,
-      });
       const hit = new Raycaster(
         position.clone().add(new Vector3(0, 1, 0)),
         new Vector3(0, -1, 0),

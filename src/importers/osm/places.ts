@@ -6,14 +6,19 @@ import {
   polylineCrossings,
 } from '../../geo/polyline';
 import { carService } from '../../network/car-service';
+import { isLaneDrop } from '../../network/lane-drop';
+import { reachableLanes } from '../../network/lane-reach';
 import { parkingEgress } from '../../network/parking-egress';
 import { compileVisibleParking } from '../../network/parking';
 import { lonLatToLocal } from '../../geo/projection';
-import type { CompiledCity, Diagnostic } from '../../network';
-import { allocateId, type City, type Place, type RoadClass } from '../../schema';
-import { contains, entryClasses, type Bounds } from './clip';
+import type { CLane, CompiledCity, Diagnostic } from '../../network';
+import { allocateId, vehicleClasses, type City, type Place, type RoadClass } from '../../schema';
+import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
 import type { OsmRoad } from './roads';
+
+/** The router's default `laneChangeDistanceM` (`SimParams`). */
+const laneChangeM = 30;
 
 const gatewayDemand: Record<RoadClass, number> = {
   motorway: 400,
@@ -29,24 +34,73 @@ const gatewayDemand: Record<RoadClass, number> = {
 // Place access uses actual movement paths, not a road-level approximation that can require
 // an impossible lane change on a short section. Keep disconnected roads, but do not seed
 // unreachable demand on them. Boundary lanes need only reach (or leave) the main component.
-export function networkAccess(compiled: CompiledCity, laneChanges = true) {
+// TASK-270: `carOnly` keeps only what some car trip may drive, as the router does: car lanes, no
+// lane drops. TASK-283: destination and private roads count too (a trip may start or end in
+// their zone), so a pocket of public streets behind them keeps its gateways (Lübeck's south loop
+// by Wallstraße; the exits of Cambridge's north-east, which cars enter past its bus gates but leave
+// only by them); demand then gives such a gateway only the trips a car can drive (`carService`).
+// `laneChanges`: `none`; `long` on roads whose every lane is long enough for all of them;
+// `every` on every road (TASK-270's polygon rule); `router` as the router makes them (TASK-286:
+// `reachableLanes`, the lane search's edges): a lane entered at its road's start leaves by the
+// movements of every lane it can change to within the road's length less 10 m, each change 30 m.
+// TASK-270 counted a change on every road, so York's Layerthorpe gateway left on a lane that
+// reaches the core only by changing lanes on roads of 5 to 22.6 m, and every route from it failed.
+// `leaves` and `arrives` judge a gateway's connector by the router's origin and destination
+// budgets.
+export function networkAccess(
+  compiled: CompiledCity,
+  laneChanges: 'none' | 'long' | 'every' | 'router',
+  carOnly = false,
+) {
+  const car = vehicleClasses.indexOf('car');
+  const open = compiled.lanes.map((lane) => {
+    const access = compiled.roads[lane.road]!.access[car];
+    return (
+      !carOnly ||
+      (lane.allowed.includes('car') &&
+        (access === 'yes' || access === 'destination' || access === 'private'))
+    );
+  });
   const out = compiled.lanes.map((): number[] => []);
   const incoming = compiled.lanes.map((): number[] => []);
   for (const m of compiled.movements) {
-    if (m.neverGreen) continue;
+    if (m.neverGreen || !open[m.fromLane] || !open[m.toLane]) continue;
+    if (carOnly && isLaneDrop(compiled, m)) continue;
     out[m.fromLane]!.push(m.toLane);
     incoming[m.toLane]!.push(m.fromLane);
   }
-  for (const road of laneChanges ? compiled.roads : []) {
-    const lanes = road.lanes.map((i) => compiled.lanes[i]!);
-    if (lanes.some((l) => l.lengthM < (lanes.length - 1) * 30 + 10)) continue;
-    for (const lane of lanes)
-      for (const other of lanes) {
-        if (lane.idx === other.idx) continue;
-        out[lane.idx]!.push(other.idx);
-        incoming[other.idx]!.push(lane.idx);
-      }
-  }
+  const moves = out.map((next) => [...next]);
+  if (laneChanges === 'router')
+    for (const lane of compiled.lanes) {
+      const endM = Math.max(0, compiled.roads[lane.road]!.lengthM - 10);
+      for (const { lane: from, changes } of reachableLanes(
+        compiled,
+        open,
+        lane.idx,
+        endM,
+        laneChangeM,
+      ))
+        for (const to of changes ? moves[from]! : []) {
+          out[lane.idx]!.push(to);
+          incoming[to]!.push(lane.idx);
+        }
+    }
+  else
+    for (const road of laneChanges === 'none' ? [] : compiled.roads) {
+      const lanes = road.lanes.map((i) => compiled.lanes[i]!);
+      if (lanes.some((l) => !open[l.idx])) continue;
+      if (
+        laneChanges === 'long' &&
+        lanes.some((l) => l.lengthM < (lanes.length - 1) * laneChangeM + 10)
+      )
+        continue;
+      for (const lane of lanes)
+        for (const other of lanes) {
+          if (lane.idx === other.idx) continue;
+          out[lane.idx]!.push(other.idx);
+          incoming[other.idx]!.push(lane.idx);
+        }
+    }
   const seen = new Set<number>(),
     order: number[] = [];
   for (const lane of compiled.lanes) {
@@ -92,7 +146,26 @@ export function networkAccess(compiled: CompiledCity, laneChanges = true) {
       }
     return result;
   };
-  return { core: new Set(core), fromCore: reach(out), toCore: reach(incoming) };
+  const coreSet = new Set(core),
+    fromCore = reach(out),
+    toCore = reach(incoming);
+  /** A car starting on `lane` at `fromM` reaches the core (the router's origin budget is the
+   * lane's length). */
+  const leaves = (lane: number, fromM: number) => {
+    const { lengthM } = compiled.lanes[lane]!;
+    for (const { lane: from } of reachableLanes(compiled, open, lane, lengthM, laneChangeM, fromM))
+      if (coreSet.has(from) || moves[from]!.some((to) => toCore.has(to))) return true;
+    return false;
+  };
+  /** A car from the core can stop on `lane` at `atM`: it enters the road on a lane it can change
+   * from to `lane` within `atM` (the router's destination budget). */
+  const arrives = (lane: number, atM: number) =>
+    compiled.roads[compiled.lanes[lane]!.road]!.lanes.some(
+      (entry) =>
+        fromCore.has(entry) &&
+        [...reachableLanes(compiled, open, entry, atM, laneChangeM)].some((r) => r.lane === lane),
+    );
+  return { core: coreSet, fromCore, toCore, leaves, arrives };
 }
 
 export function addPlace(
@@ -123,8 +196,13 @@ export function addPlace(
 }
 
 export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity): void {
-  const access = networkAccess(compiled);
   const polygon = Boolean(city.geo!.boundary);
+  // TASK-270: a polygon import's gateway connector is made only on a car lane that reaches the
+  // network (out) or is reached from it (in): a cut end whose lanes lead nowhere had connectors
+  // anyway. TASK-283: through destination streets too (see `networkAccess`).
+  const access = networkAccess(compiled, polygon ? 'router' : 'long', polygon);
+  const reach = polygon ? networkAccess(compiled, 'every', true) : access;
+  const inset = (lengthM: number) => Math.min(5, lengthM / 2);
   const [west, south, east, north] = city.geo!.bbox;
   const nw = lonLatToLocal(city.geo!, { lon: west, lat: north });
   const se = lonLatToLocal(city.geo!, { lon: east, lat: south });
@@ -135,15 +213,24 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
       const lanes = compiled.roads[compiled.index.road.get(road.id)!]!.lanes.map(
         (i) => compiled.lanes[i]!,
       );
-      let candidates = lanes.filter((l) =>
-        (end === 'start' ? access.toCore : access.fromCore).has(l.idx),
-      );
-      // A polygon import keeps only entries at its ring (TASK-198): each carries a gateway.
+      // TASK-286: a polygon's connector lane is one the router can leave (out) or reach (in) from
+      // the connector's own position; of several, the driving side's outer one as before (York's
+      // Layerthorpe `r:3638`: lane 1, not lane 0, which reaches the core only by lane changes on
+      // roads under 30 m). Where no lane passes, TASK-270's reach decides, as before: Freiburg's
+      // curation makes Stefan-Meier-Straße's way in usable after the import (lead, 2026-11-21).
+      const reaches = (l: CLane) => (end === 'start' ? reach.toCore : reach.fromCore).has(l.idx);
+      let candidates = polygon
+        ? lanes.filter((l) =>
+            end === 'start'
+              ? access.leaves(l.idx, inset(l.lengthM))
+              : access.arrives(l.idx, l.lengthM - inset(l.lengthM)),
+          )
+        : lanes.filter(reaches);
+      if (polygon && !candidates.length) candidates = lanes.filter(reaches);
       if (
+        !polygon &&
         !candidates.length &&
-        (polygon
-          ? entryClasses.has(road.roadClass)
-          : ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass))
+        ['motorway', 'trunk', 'primary', 'secondary'].includes(road.roadClass)
       )
         candidates = lanes;
       if (!candidates.length) return [];
@@ -248,12 +335,11 @@ export function addGateways(city: City, roads: OsmRoad[], compiled: CompiledCity
         .map((e) => gatewayDemand[e.source.road.roadClass] * e.source.road.lanes.length),
     );
     for (const { source, lane, end } of group) {
-      const inset = Math.min(5, lane.lengthM / 2);
       place.connectors.push({
         id: allocateId(city, 'c'),
         roadId: source.road.id,
         lane: lane.lane,
-        positionM: end === 'start' ? inset : lane.lengthM - inset,
+        positionM: end === 'start' ? inset(lane.lengthM) : lane.lengthM - inset(lane.lengthM),
         direction: end === 'start' ? 'out' : 'in',
         throughputPerMin: 30 * source.road.lanes.length,
       });
@@ -318,7 +404,7 @@ export function polygonCenter(ring: Vec2[]): Vec2 | undefined {
 
 // Preserve the original layout and ID allocation while generating fixed roadside strips.
 export function layoutConnector(city: City, compiled: CompiledCity, parking = false) {
-  const { core } = networkAccess(compiled, false);
+  const { core } = networkAccess(compiled, 'none');
   const segments = compiled.lanes
     .filter((lane) => {
       if ((!parking && !core.has(lane.idx)) || !lane.allowed.includes('car')) return false;
@@ -365,6 +451,70 @@ export function layoutConnector(city: City, compiled: CompiledCity, parking = fa
 // Mapped facilities get a short inferred driveway, never an invented street connection.
 export const PARKING_SNAP_LIMIT_M = 30;
 
+/** Snap a mapped node to its street's nearest reachable edge lane. */
+export function parkingEntranceConnector(city: City, compiled: CompiledCity) {
+  const access = parkingEgress(compiled, 30);
+  const candidates = compiled.lanes.map((lane) => {
+    const compiledRoad = compiled.roads[lane.road]!;
+    const road = city.roads[compiledRoad.id]!;
+    return {
+      lane,
+      road,
+      usable:
+        lane.allowed.includes('car') &&
+        !['motorway', 'trunk', 'ramp'].includes(road.roadClass) &&
+        (lane.lane === 0 || lane.lane === compiledRoad.lanes.length - 1),
+    };
+  });
+  return (
+    entrance: {
+      point: Vec2;
+      layer?: number;
+      roads: ReadonlySet<number>;
+      direction: Place['connectors'][number]['direction'];
+    },
+    excluded?: ReadonlySet<string>,
+  ): Omit<Place['connectors'][number], 'id'> | undefined => {
+    let best:
+      | { roadId: string; lane: number; positionM: number; distance: number; mapped: boolean }
+      | undefined;
+    let mappedNearby = false;
+    for (const { lane, road, usable } of candidates) {
+      const mapped = road.provenance.osmIds?.some((id) => entrance.roads.has(id)) ?? false;
+      if (excluded?.has(road.id) || (!usable && !mapped)) continue;
+      const layer = entrance.layer ?? (mapped ? (road.layer ?? 0) : 0);
+      if ((road.layer ?? 0) !== layer) continue;
+      const hit = nearestOnPolyline(lane.polyline, entrance.point);
+      if (hit.away > PARKING_SNAP_LIMIT_M) continue;
+      mappedNearby ||= mapped;
+      if (!usable || (!mapped && road.provenance.inferred?.includes('lotAccess'))) continue;
+      if (entrance.direction !== 'out' && hit.along + 1e-9 < access.earliestArrival(lane.idx))
+        continue;
+      if (entrance.direction !== 'in' && hit.along > access.latestDeparture(lane.idx) + 1e-9)
+        continue;
+      if (!best || (mapped && !best.mapped) || (mapped === best.mapped && hit.away < best.distance))
+        best = {
+          roadId: road.id,
+          lane: lane.lane,
+          positionM: hit.along,
+          distance: hit.away,
+          mapped,
+        };
+    }
+    // A nearby street cannot supply access when the mapped approach cannot carry it.
+    if (mappedNearby && !best?.mapped) return;
+    return (
+      best && {
+        roadId: best.roadId,
+        lane: best.lane,
+        positionM: best.positionM,
+        direction: entrance.direction,
+        throughputPerMin: 30,
+      }
+    );
+  };
+}
+
 export function placeConnector(
   city: City,
   compiled: CompiledCity,
@@ -379,10 +529,12 @@ export function placeConnector(
   const candidates = compiled.lanes.flatMap((lane) => {
     // Lead (TASK-124 review): a new portal is a driveway on the curb lane of an at-grade
     // street, never in a tunnel, on a bridge, on a motorway, trunk or ramp, or on an inner lane.
+    // TASK-351: a place's, unlike a car park's, never on a lot's aisle (Sindelfingen's p:1338).
     const road = compiled.roads[lane.road]!,
       source = city.roads[road.id]!;
     if (
       (source.layer ?? 0) !== 0 ||
+      (!parking && source.provenance.inferred?.includes('lotAccess')) ||
       ['motorway', 'trunk', 'ramp'].includes(source.roadClass) ||
       lane.lane !== (city.drivingSide === 'left' ? 0 : road.lanes.length - 1)
     )
@@ -496,11 +648,18 @@ export function placeConnector(
   };
 }
 
+/** TASK-351: how far a trapped place entrance may move, from the place's outline or point; beyond
+ * it, the entrance stays where the layout put it. Zurich's moved up to 4.2 km, 114 of them onto one
+ * 204 m service road in Kloten, while the public network split. Buildings on airport roads still
+ * reach a public road within it; at the parking search radius (400 m) they lost their car exits,
+ * their people walked instead and 33 walks found no path. */
+export const CAR_EXIT_MOVE_LIMIT_M = 1000;
+
 /** Final import pass: keep the mapped vehicle/parking layout, repair only trapped portals. */
 export function connectCarExits(
   city: City,
   compiled: CompiledCity,
-  garageFootprints?: Map<string, Vec2[][]>,
+  garageFootprints?: ReadonlyMap<string, Vec2[][]>,
   refreshLots?: ReadonlySet<string>,
 ): boolean {
   const exits = parkingEgress(compiled, 30);
@@ -535,6 +694,7 @@ export function connectCarExits(
     footprints: Vec2[][],
     mapped: boolean,
     anchor?: Vec2,
+    away?: (point: Vec2) => number,
   ) => {
     if (entry.direction === 'in') return false;
     const road = compiled.roads[compiled.index.road.get(entry.roadId)!]!;
@@ -553,6 +713,17 @@ export function connectCarExits(
     ));
     const candidate = snap(point, footprints, false, entry.id);
     if (!candidate) return false;
+    if (away) {
+      const to =
+        layout.lanes[
+          layout.roads[layout.index.road.get(candidate.roadId)!]!.lanes[candidate.lane]!
+        ]!;
+      if (
+        away(pointAtDistance(to.polyline, to.cumulative, candidate.positionM)) >
+        CAR_EXIT_MOVE_LIMIT_M
+      )
+        return false;
+    }
     if (reachableArrival) {
       entry.direction = 'in';
       entries.push({
@@ -573,9 +744,16 @@ export function connectCarExits(
   for (const place of Object.values(city.places)) {
     if (refreshLots) break;
     if (place.kind === 'gateway') continue;
-    const anchor =
-      place.shape.kind === 'point' ? place.shape.pos : polygonCenter(place.shape.ring)!;
-    for (const entry of [...place.connectors]) repair(entry, place.connectors, [], false, anchor);
+    const { shape } = place;
+    const anchor = shape.kind === 'point' ? shape.pos : polygonCenter(shape.ring)!;
+    const away = (p: Vec2) =>
+      shape.kind === 'point'
+        ? Math.hypot(p.x - shape.pos.x, p.y - shape.pos.y)
+        : pointInPolygon(p, shape.ring)
+          ? 0
+          : nearestOnPolyline([...shape.ring, shape.ring[0]!], p).away;
+    for (const entry of [...place.connectors])
+      repair(entry, place.connectors, [], false, anchor, away);
   }
   for (const source of Object.values(city.parking ?? {})) {
     if (refreshLots && !refreshLots.has(source.id)) continue;

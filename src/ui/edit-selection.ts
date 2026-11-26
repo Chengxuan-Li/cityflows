@@ -54,6 +54,22 @@ export function selectionAfterEdit(
         return selectionAfterEdit({ kind: 'parking', parking: previous.parking }, before, after);
       return selectionAfterEdit({ kind: 'place', place: previous.place }, before, after);
     }
+    // TASK-305: airside items by id; a split taxiway keeps its id on its first piece.
+    case 'stand': {
+      const id = before.airside?.stands[selection.stand]?.id;
+      const stand = id === undefined ? undefined : after.airside?.index.stand.get(id);
+      return stand === undefined ? null : { kind: 'stand', stand };
+    }
+    case 'taxiway': {
+      const id = before.airside?.edges[selection.edge]?.id;
+      const edge = id === undefined ? undefined : after.airside?.index.edge.get(id);
+      return edge === undefined ? null : { kind: 'taxiway', edge };
+    }
+    case 'hold': {
+      const id = before.airside?.holds[selection.hold]?.id;
+      const hold = after.airside?.holds.findIndex((h) => h.id === id) ?? -1;
+      return hold < 0 ? null : { kind: 'hold', hold };
+    }
     default:
       return selection;
   }

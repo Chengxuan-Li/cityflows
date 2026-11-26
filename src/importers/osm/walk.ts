@@ -6,9 +6,17 @@ import {
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
 import { SIGNAL_NEAR_M } from '../../network/crossings';
-import { allocateId, type City, type Road, type WalkKind, type WalkNode } from '../../schema';
+import {
+  allocateId,
+  type City,
+  type CrossingMarking,
+  type HandrailSide,
+  type Road,
+  type WalkKind,
+  type WalkNode,
+} from '../../schema';
 import { clipPart, contains, type Bounds, type RoadPoint } from './clip';
-import { drivableClass } from './filter';
+import { drivableClass, isJetBridge } from './filter';
 import type { OsmData, OsmTags } from './parse';
 import { osmLayer } from './roads';
 
@@ -33,8 +41,11 @@ export function sidewalkTags(tags: OsmTags, backward: boolean): Road['sidewalk']
 const walkWays = (data: OsmData) =>
   data.way.filter(
     (way) =>
-      ['footway', 'pedestrian', 'path', 'steps', 'living_street'].includes(way.tag.highway ?? '') ||
-      way.tag.footway === 'crossing',
+      !isJetBridge(way) &&
+      (['footway', 'pedestrian', 'path', 'steps', 'living_street'].includes(
+        way.tag.highway ?? '',
+      ) ||
+        way.tag.footway === 'crossing'),
   );
 
 export function importWalk(
@@ -120,6 +131,9 @@ export function importWalk(
     const kind: WalkKind = way.tag.footway === 'crossing' ? 'crossing' : (highway as WalkKind);
     const layer = osmLayer(way.tag) ?? 0;
     const width = Number(way.tag.width?.replace(/\s*m$/, ''));
+    const marked = kind === 'crossing' ? wayMarking(way, sourceNodes) : undefined;
+    const covered = walkCovered(way.tag),
+      handrail = walkHandrail(way.tag);
     let run: RoadPoint[] = [];
     const flush = () => {
       for (const part of clipPart(run, bounds, `walk/${way.id}`, new Set())) {
@@ -130,12 +144,16 @@ export function importWalk(
           const from = addNode(a, layer),
             to = addNode(b, layer);
           const id = allocateId(city, 'wl');
+          const marking = marked?.(a.osmId, b.osmId);
           walk.links[id] = {
             id,
             from: from.id,
             to: to.id,
             line: [from.pos, to.pos],
             kind,
+            ...(marking ? { marking } : {}),
+            ...(covered ? { covered } : {}),
+            ...(handrail ? { handrail } : {}),
             layer,
             widthM: width > 0 && Number.isFinite(width) ? width : null,
             provenance: { source: 'osm', osmIds: [way.id] },
@@ -165,10 +183,86 @@ export function importWalk(
   city.walk = walk;
 }
 
+/** TASK-275: a way under a roof: `covered=yes|roof|canopy|arcade|colonnade`, or a covered bridge
+ * (`bridge=covered`, the Schwabentorsteg). `covered=no`, `pergola` and other values say no roof. */
+export function walkCovered(tags: OsmTags): boolean {
+  return (
+    ['yes', 'roof', 'canopy', 'arcade', 'colonnade'].includes(tags.covered ?? '') ||
+    tags.bridge === 'covered'
+  );
+}
+
+const handrailSides = ['left', 'right', 'center'] as const;
+
+/**
+ * TASK-275: a way's handrails from its OSM tags, sides in the way's direction. `handrail=yes|both`
+ * gives left and right, `left`, `right` or `center` that one, `no` none; then each
+ * `handrail:left|right|center=yes|no` adds or removes its side (the finer tag wins: mappers write
+ * `handrail=no` with `handrail:left=yes` and `handrail:right=yes`, Freiburg 24740545). Once any of
+ * these tags says something, a side none names has no handrail. Undefined where none does.
+ */
+export function walkHandrail(tags: OsmTags): HandrailSide[] | undefined {
+  const base = tags.handrail;
+  const sides = new Set<HandrailSide>();
+  if (base === 'yes' || base === 'both') sides.add('left').add('right');
+  else if (base === 'left' || base === 'right' || base === 'center') sides.add(base);
+  let stated = base === 'no' || sides.size > 0;
+  for (const side of handrailSides) {
+    const value = tags[`handrail:${side}`];
+    if (value === 'yes') sides.add(side);
+    else if (value === 'no') sides.delete(side);
+    stated ||= value === 'yes' || value === 'no';
+  }
+  return stated ? handrailSides.filter((side) => sides.has(side)) : undefined;
+}
+
+/**
+ * TASK-257: a crossing's paint from its OSM tags. `crossing:markings` is the finest: `no` none;
+ * `lines`, `dashes`, `dots` (and their `:paired` forms) two lines; `yes`, `zebra`, `ladder` (and
+ * theirs) a zebra; other values (`surface`, `pictograms`) leave it to the next tags. Then
+ * `crossing_ref=zebra`, or `crossing=zebra|marked|uncontrolled` (marked without a finer tag), a
+ * zebra; `crossing=unmarked|no|informal` none; `crossing=traffic_signals` two lines (the German
+ * `Fußgängerfurt`, a US crosswalk's lines). Undefined where no tag says.
+ */
+export function crossingMarking(tags: OsmTags): CrossingMarking | undefined {
+  const markings = tags['crossing:markings']?.split(':')[0];
+  if (markings === 'no') return 'none';
+  if (markings === 'lines' || markings === 'dashes' || markings === 'dots') return 'lines';
+  if (markings === 'yes' || markings === 'zebra' || markings === 'ladder') return 'zebra';
+  const { crossing } = tags;
+  if (tags.crossing_ref === 'zebra' || ['zebra', 'marked', 'uncontrolled'].includes(crossing ?? ''))
+    return 'zebra';
+  if (crossing === 'unmarked' || crossing === 'no' || crossing === 'informal') return 'none';
+  return crossing === 'traffic_signals' ? 'lines' : undefined;
+}
+
+/** TASK-257: the marking of each link of a crossing way, by its OSM end nodes: the way's own tags
+ * (`crossingMarking`), else those of its nearest node along the way that has them (OSM often
+ * tags only the `highway=crossing` node where the way meets the road; a way over a divided road
+ * can carry a different crossing on each carriageway, Munich 656828598), a painted one winning
+ * a tie. */
+function wayMarking(way: OsmData['way'][number], nodes: Map<number, OsmData['node'][number]>) {
+  const own = crossingMarking(way.tag);
+  if (own) return () => own;
+  const tagged = way.nd.flatMap((ref, i) => {
+    const node = nodes.get(ref);
+    const marking = node && crossingMarking(node.tag);
+    return marking ? [{ i, marking }] : [];
+  });
+  if (!tagged.length) return undefined;
+  const rank = { zebra: 0, lines: 1, none: 2 };
+  return (a: number | undefined, b: number | undefined) => {
+    const at = [a, b].flatMap((ref) => (ref === undefined ? [] : [way.nd.indexOf(ref)]));
+    const gap = (i: number) => Math.min(...at.map((j) => Math.abs(i - j)));
+    return [...tagged].sort((x, y) => gap(x.i) - gap(y.i) || rank[x.marking] - rank[y.marking])[0]!
+      .marking;
+  };
+}
+
 /** TASK-239: a crossing node's paint from its `crossing`, `crossing_ref` and `crossing:markings`
  * tags (TASK-217's full version): marked (zebra, marked, uncontrolled or signalised), or unmarked
- * or unknown (no tag says), which get no crossing link: a walk link carries only its kind, so it
- * would paint as a zebra (the owner's open schema decision for `crossing=unmarked` ways). */
+ * or unknown (no tag says), which get no crossing link. TASK-257 left this rule as it was (a
+ * node crossing link moves traffic): the link's paint is `crossingMarking`. */
 export function markedCrossing(tags: OsmTags): boolean {
   const { crossing } = tags,
     markings = tags['crossing:markings'];
@@ -218,9 +312,10 @@ export function addNodeCrossings(
   // Cycle tracks too: a crossing node on one is the cycle crossing (Freiburg 5268773652, Munich
   // 9344476700), whose pedestrian crossing OSM maps as its own way beside it.
   const onPath = new Set(
-    [...walkWays(data), ...data.way.filter((way) => way.tag.highway === 'cycleway')].flatMap(
-      (way) => way.nd,
-    ),
+    [
+      ...walkWays(data),
+      ...data.way.filter((way) => way.tag.highway === 'cycleway' && !isJetBridge(way)),
+    ].flatMap((way) => way.nd),
   );
   const roadWays = new Map<number, number[]>();
   for (const way of data.way)
@@ -308,12 +403,14 @@ export function addNodeCrossings(
     const from = end(low, -1),
       to = end(high, 1);
     const id = allocateId(city, 'wl');
+    const marking = crossingMarking(tags);
     walk.links[id] = {
       id,
       from: from.id,
       to: to.id,
       line: [from.pos, to.pos],
       kind: 'crossing',
+      ...(marking ? { marking } : {}),
       layer,
       widthM: null,
       provenance: { source: 'osm', osmIds: [node.id] },

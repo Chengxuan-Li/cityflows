@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { CanvasSource, Container, Graphics, Particle, ParticleContainer, Texture } from 'pixi.js';
 import type { Vec2 } from '../../geo/vec2';
 import {
   walkGreenS,
@@ -75,29 +75,79 @@ export function drawWalkSignals(
   };
 }
 
+/** TASK-277: a grade's walkers: one particle per dot and a ring for the selected one. Drawn as
+ * vector circles, every snapshot re-tessellated thousands of them (Philadelphia at 07:45: 2.5 ms
+ * of a 2D frame ten times a second); particles only move, as the vehicles' dots do. */
+export function createWalkerLayer() {
+  const container = new Container();
+  const dots = new ParticleContainer({
+    dynamicProperties: { position: true, color: true, vertex: true },
+  });
+  const ring = new Graphics();
+  container.addChild(dots, ring);
+  return { container, dots, ring, pool: [] as Particle[], count: 0, ringDrawn: false };
+}
+export type WalkerLayer = ReturnType<typeof createWalkerLayer>;
+
+let dotTexture: Texture | undefined;
+/** A white disc, 32 px across, tinted per walker; mipmapped, so a dot two pixels across stays
+ * round rather than sampling a cross out of the disc. */
+function walkerDot() {
+  if (dotTexture) return dotTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 32;
+  const context = canvas.getContext('2d')!;
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.arc(16, 16, 16, 0, Math.PI * 2);
+  context.fill();
+  const source = new CanvasSource({ resource: canvas, autoGenerateMipmaps: true });
+  return (dotTexture = new Texture({ source }));
+}
+
 /** Walkers as dots, at least two pixels across, per grade; the selected one gets a ring. */
 export function drawWalkers(
-  layers: Map<number, Graphics>,
+  layers: Map<number, WalkerLayer>,
   snapshot: WalkerSnapshot | undefined,
   zoom: number,
   selected: number,
 ) {
-  for (const graphics of layers.values()) graphics.clear();
-  if (!snapshot) return;
+  for (const layer of layers.values()) {
+    layer.count = 0;
+    if (layer.ringDrawn) layer.ring.clear();
+    layer.ringDrawn = false;
+  }
   const radius = Math.max(0.3, 1.2 / zoom);
   const base = layers.get(0) ?? layers.values().next().value;
-  for (let i = 0; i < snapshot.count; i++) {
-    const graphics = layers.get(snapshot.layer[i]!) ?? base;
-    if (!graphics) continue;
-    const x = snapshot.x[i]!,
-      y = snapshot.y[i]!;
-    graphics
-      .circle(x, y, radius)
-      .fill(snapshot.state[i] === 2 ? style.walker.waiting : style.walker.walking);
-    if (snapshot.id[i] === selected)
-      graphics
+  const texture = walkerDot();
+  const scale = (2 * radius) / texture.width;
+  for (let i = 0; i < (snapshot?.count ?? 0); i++) {
+    const layer = layers.get(snapshot!.layer[i]!) ?? base;
+    if (!layer) continue;
+    const x = snapshot!.x[i]!,
+      y = snapshot!.y[i]!;
+    const particle = (layer.pool[layer.count++] ??= new Particle({
+      texture,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    }));
+    particle.x = x;
+    particle.y = y;
+    particle.scaleX = particle.scaleY = scale;
+    particle.tint = snapshot!.state[i] === 2 ? style.walker.waiting : style.walker.walking;
+    if (snapshot!.id[i] === selected) {
+      layer.ringDrawn = true;
+      layer.ring
         .circle(x, y, radius + 4 / zoom)
         .stroke({ width: 1.25 / zoom, color: style.selection });
+    }
+  }
+  for (const { dots, pool, count } of layers.values()) {
+    const children = dots.particleChildren;
+    if (children.length === count) continue;
+    for (let i = children.length; i < count; i++) children[i] = pool[i]!;
+    children.length = count;
+    dots.update();
   }
 }
 

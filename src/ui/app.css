@@ -91,6 +91,9 @@
   --on-accent-disabled: #ffffff;
   --warning-text: #8a4b00;
   --warning-fill: #fdf0dc;
+  /* TASK-341: experimental (category 3) and offline (category 4) visual quality values. */
+  --quality-experimental: #8a4b00;
+  --quality-offline: #b3261e;
   --danger-text: #a3261e;
   --danger-fill: #fbe9e7;
   --danger-edge: #efc3bd;
@@ -188,6 +191,8 @@
   --on-accent-disabled: #a2adbd;
   --warning-text: #ffb340;
   --warning-fill: #3d2f14;
+  --quality-experimental: #ffb340;
+  --quality-offline: #ff7b72;
   --danger-text: #ff8f85;
   --danger-fill: #3c2220;
   --danger-edge: #6e302b;
@@ -1566,6 +1571,18 @@ input[type='file']::file-selector-button {
   font-size: var(--text-small);
 }
 
+.flight-board table {
+  font-size: var(--text-small);
+}
+
+.flight-board :is(th, td):not(:nth-child(4)) {
+  white-space: nowrap;
+}
+
+.flight-board td:nth-child(4) {
+  overflow-wrap: normal;
+}
+
 .inspector th:first-child {
   padding-left: 0;
   text-align: left;
@@ -1594,6 +1611,25 @@ input[type='file']::file-selector-button {
   display: grid;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* TASK-305: a runway configuration in the flight board's runway table. */
+.runway-configuration {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--separator);
+}
+
+.runway-ends {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.runway-ends > span {
+  min-width: 72px;
 }
 
 .parking-fields {
@@ -1669,7 +1705,27 @@ input[type='file']::file-selector-button {
 
 /* Sheets: New city and Import. */
 .new-picker {
-  width: min(20rem, calc(100% - 2 * var(--inset)));
+  width: min(28rem, calc(100% - 2 * var(--inset)));
+}
+
+.new-picker section + section {
+  margin-top: 12px;
+}
+
+.new-picker h3 {
+  margin: 0 8px 4px;
+  color: var(--label-secondary);
+  font-size: var(--text-small);
+}
+
+.new-picker small {
+  display: block;
+  color: var(--label-secondary);
+  font-size: var(--text-small);
+}
+
+.new-picker button:enabled:hover small {
+  color: inherit;
 }
 
 .scenario-list {
@@ -1818,6 +1874,67 @@ input[type='file']::file-selector-button {
 
 .layers-panel label select {
   margin-left: auto;
+}
+
+/* TASK-341: Visual quality. A control, then its cost hint as small secondary text. */
+.visual-quality {
+  display: grid;
+  gap: 4px;
+}
+
+.visual-quality .disclosure-group {
+  margin-left: -20px;
+}
+
+.visual-quality .disclosure-body {
+  gap: 4px;
+}
+
+.quality-field {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr) auto;
+  gap: 6px;
+}
+
+.cost-hint {
+  color: var(--label-secondary);
+  font-size: var(--text-small);
+}
+
+.check-row .cost-hint {
+  margin-left: auto;
+}
+
+.visual-quality p {
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.quality-note.experimental {
+  color: var(--quality-experimental);
+}
+
+.quality-note.offline {
+  color: var(--quality-offline);
+  font-weight: bold;
+}
+
+.quality-casters {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.quality-casters legend {
+  padding: 0 0 2px;
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* TASK-163: the light preset across the panel's width, the exposure slider below it. */

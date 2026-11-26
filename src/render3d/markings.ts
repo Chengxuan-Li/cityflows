@@ -1,7 +1,19 @@
 import { cityMarkingTheme } from '../schema/marking-theme';
 import { booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import { nearestOnPolyline } from '../geo/polyline';
-import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
+import {
+  BufferGeometry,
+  Color,
+  CylinderGeometry,
+  Float32BufferAttribute,
+  Group,
+  InstancedMesh,
+  MeshLambertMaterial,
+  Object3D,
+  ShapeUtils,
+  SphereGeometry,
+  Vector2,
+} from 'three';
 import type { Vec2 } from '../geo/vec2';
 import type { CompiledCity } from '../network';
 import {
@@ -10,15 +22,19 @@ import {
   nodeMarkingGeometry,
   movementMarkings,
   markingPolygons,
+  zebraBeacons,
   type MarkingShape,
   type GoreSurface,
   type PaintedGore,
 } from '../render/marking-geometry';
+import { roadStrip } from '../render/layers/nodes';
+import { airsideMarkings } from '../render/airside-markings';
 import { markingThemes } from '../render/style';
 import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, levelRoad, roadStation, roadSurfaceAt, type cityHeights } from './heights';
+import { heightAt, levelRoad, once, roadStation, roadSurfaceAt, type cityHeights } from './heights';
 import { drape } from './terrain';
+import { computeVertexNormals } from './buffers';
 
 export function goreHeight(
   city: CompiledCity,
@@ -110,8 +126,10 @@ export function buildMarkings(
   const raised = { positions: [] as number[], colors: [] as number[] };
   const land = { positions: [] as number[], colors: [] as number[] };
   let target = raised;
+  let airside = false;
   const emit = (polygon: Vec2[], color: number, height: (p: Vec2) => number) => {
     const { positions, colors } = target;
+    const rgb = airside ? new Color(color) : undefined;
     for (const triangle of ShapeUtils.triangulateShape(
       polygon.map((p) => new Vector2(p.x, p.y)),
       [],
@@ -119,7 +137,9 @@ export function buildMarkings(
       for (const index of [triangle[2]!, triangle[1]!, triangle[0]!]) {
         const p = polygon[index]!;
         positions.push(p.x, height(p) + 0.025, p.y);
-        colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
+        if (rgb) colors.push(rgb.r, rgb.g, rgb.b);
+        else
+          colors.push(((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255);
       }
   };
   const counts = { line: 0, polygon: 0 };
@@ -184,7 +204,8 @@ export function buildMarkings(
     target = terrain && profile.crossfall ? land : raised;
     add(
       [...geometry.below, ...geometry.above, ...transitionMarkings(city, road, markingTheme)],
-      (p) => roadSurfaceAt(road, profile, p),
+      // A line's 0.5 m pieces share their ends.
+      once((p) => roadSurfaceAt(road, profile, p)),
       !terrain && profile.fromM === profile.toM && profile.fromM === profile.deckM,
     );
   }
@@ -195,13 +216,19 @@ export function buildMarkings(
     const nodeZ = (p: Vec2) => (followsGround ? z + terrain.surfaceAt(p.x, p.y) - ground : z);
     target = followsGround ? land : raised;
     add(nodeMarkingGeometry(city, node, markingTheme), nodeZ, true);
-    if (node.outline.length)
+    if (node.outline.length && !roadStrip(city, node))
       for (const index of node.movements) {
         const movement = city.movements[index]!;
         // Pixi draws movement paths before the junction fill; retain that occlusion in 3D.
         if (!movement.neverGreen)
           add(movementMarkings(movement, markingTheme), (p) => nodeZ(p) - 0.05, true);
       }
+  }
+  if (source.airport) {
+    // Between TASK-295's runway surface (-10 mm) and ground-level service roads.
+    airside = true;
+    target = terrain ? land : raised;
+    add(airsideMarkings(source.airport), () => -0.027, true);
   }
   const buffer = ({ positions, colors }: typeof raised) => {
     const geometry = new BufferGeometry();
@@ -219,6 +246,43 @@ export function buildMarkings(
     draped.dispose();
   }
   geometry.userData.markingCounts = counts;
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
+}
+
+/** TASK-269 (D16): the UK theme's Belisha beacons at its zebras (`zebraBeacons`): a 2.4 m pole in
+ * black and white bands of 0.3 m and an amber globe, standing on the road's surface height. */
+export function buildBeacons(
+  city: CompiledCity,
+  source: CityGeometry,
+  heights: ReturnType<typeof cityHeights>,
+): Group {
+  const beacons = zebraBeacons(city, source, markingThemes[cityMarkingTheme(source)]);
+  const group = new Group();
+  group.name = 'beacons';
+  if (!beacons.length) return group;
+  const band = new CylinderGeometry(0.06, 0.06, 0.3, 10);
+  const bands = [0x1c1c1c, 0xf4f4f0].map(
+    (color) => new InstancedMesh(band, new MeshLambertMaterial({ color }), beacons.length * 4),
+  );
+  const globes = new InstancedMesh(
+    new SphereGeometry(0.18, 16, 12),
+    new MeshLambertMaterial({ color: 0xf5a623, emissive: 0xf5a623, emissiveIntensity: 0.6 }),
+    beacons.length,
+  );
+  const transform = new Object3D();
+  beacons.forEach(({ pos, road }, i) => {
+    const base = roadSurfaceAt(city.roads[road]!, heights.roads[road]!, pos);
+    for (let k = 0; k < 8; k++) {
+      transform.position.set(pos.x, base + 0.15 + k * 0.3, pos.y);
+      transform.updateMatrix();
+      bands[k % 2]!.setMatrixAt(i * 4 + Math.floor(k / 2), transform.matrix);
+    }
+    transform.position.set(pos.x, base + 2.4 + 0.15, pos.y);
+    transform.updateMatrix();
+    globes.setMatrixAt(i, transform.matrix);
+  });
+  for (const mesh of [...bands, globes]) mesh.castShadow = true;
+  group.add(...bands, globes);
+  return group;
 }

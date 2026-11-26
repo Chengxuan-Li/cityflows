@@ -158,7 +158,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-220: 16 of Munich's 54 tram tracks change `form` (10 grass, 6 embedded); with every
           // tram `form` stripped the city equals b3bcde6's.
           // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
-          'f7eaa3d5eb4daf32b43c12a5a4b152f6153116f74fa6e87a182933f9f517ce2b',
+          // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+          // TASK-290: Munich's mapped garage entrance moves c:1911 from r:1071 to r:1070.
+          '6fcdf825427650c4e60b14bcd890aa1c53e92dc162a239505d91716aa21e1af6',
           // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
           // removed every pin equals 3e9951a's.
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -171,23 +173,33 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // tram `form` stripped the city equals b3bcde6's.
           // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
-          '24d078c287731f39cd8c6f38b5ae67f982c5f9edf4fa5403ae701bf1b1b8f219',
+          // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+          // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
+          // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
+          '2a1177263f24fe71098c676118cecfc777e1c291182ac1c6d78ee9d68832cbfb',
         ]
       : [
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
-          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          '76c416e327ae7d060c93a38b0a88af5ed3bfcc31a39429d9b0f1cbcad467829c',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          // TASK-290: Sindelfingen's mapped garage entrance moves c:1449 from r:97 to r:954.
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          '1c7dd7ce452d4c6e53cc9ba6026caf1d6ba45a5003f2f0650e9ceb1d3d83418a',
           // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
           // TASK-194: generated signal programs are actuated (`actuated: true`).
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
-          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          '7d66cbd149f70b1e8679bd3f5a3fb293fc9d945db26cce06d9b6853a3a0fc084',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
+          // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+          '859200ab752ce41d10bb4f9c9ecb8853207406913922a6c6ec7145e010fec328',
         ];
     expect([hash(oldCity), hash(oldCompiled)]).toEqual(before);
     expect(crossingCounts(facilities)).toMatchObject(

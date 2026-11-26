@@ -22,6 +22,7 @@ import { allocateId, type City } from '../../schema';
 import type { RailPlatform, RailTrack, TramStop } from '../../schema/rail';
 import { contains, type Bounds } from './clip';
 import type { OsmData, OsmTags } from './parse';
+import { stopAreaNames } from './rail';
 
 /** TASK-137: the island generated beside a track that has stop positions but no mapped platform. */
 export const tramIsland = {
@@ -421,6 +422,7 @@ export function importTramStops(
       a.ids[0]! - b.ids[0]! || (a.c.platform?.id ?? '').localeCompare(b.c.platform?.id ?? ''),
   );
   const stops: Record<string, TramStop> = {};
+  const areaNames = stopAreaNames(data);
   const noIsland: string[] = [];
   const relations = data.relation.filter(
     (r) => r.tag.type === 'route' && r.tag.route === 'tram' && r.tag.ref,
@@ -435,8 +437,13 @@ export function importTramStops(
     );
     const tagOf = <K extends string>(key: K) =>
       tags.map((t) => t[key]).find((v) => v !== undefined);
-    const name = tagOf('name') ?? tagOf('ref') ?? 'Tram stop';
     const members = new Set(ids.flatMap((id) => [`node/${id}`, `way/${id}`, `relation/${id}`]));
+    // TASK-277 (D13): a stop's own name, else its stop area's; a `ref` is a platform number.
+    const name =
+      tagOf('name') ??
+      [...members].map((m) => areaNames.get(m)).find((n) => n !== undefined) ??
+      tagOf('ref') ??
+      'Tram stop';
     const lines = (() => {
       const refs = tags.flatMap((t) => t.route_ref?.split(';') ?? []);
       if (!refs.length)

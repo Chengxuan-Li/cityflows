@@ -1,6 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three';
 import { booleanOpD, ClipType, FillRule, areaD, simplifyPathD } from 'clipper2-ts';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { computeVertexNormals, mergeVertices } from './buffers';
 import Flatbush from 'flatbush';
 import { pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
@@ -20,7 +20,7 @@ export function indexTerrain(geometry: BufferGeometry) {
   geometry.deleteAttribute('normal');
   const indexed = mergeVertices(geometry);
   geometry.dispose();
-  indexed.computeVertexNormals();
+  computeVertexNormals(indexed);
   return indexed;
 }
 
@@ -206,7 +206,7 @@ export function terrainAreas(rings: Vec2[][], terrain: Terrain) {
     new Float32BufferAttribute(positions, 3),
   );
   const merged = mergeGroundPlanes(geometry, terrain, 0);
-  merged.computeVertexNormals();
+  computeVertexNormals(merged);
   return merged;
 }
 
@@ -399,7 +399,7 @@ export function groundMesh(terrain: Terrain, bounds: Bounds, offset = 0) {
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   if (terrain.grid) {
     geometry = drape(geometry, terrain, offset);
     const p = geometry.getAttribute('position'),
@@ -435,7 +435,7 @@ export function groundMesh(terrain: Terrain, bounds: Bounds, offset = 0) {
         1 - (positions[i + 2]! - bounds.minY) / (bounds.maxY - bounds.minY),
       );
     cut.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-    cut.computeVertexNormals();
+    computeVertexNormals(cut);
     geometry = cut;
   }
   if (!terrain.grid) return geometry;
@@ -690,7 +690,7 @@ export function drape(
     new Float32BufferAttribute(values, 3),
   );
   if (inputColors) result.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  result.computeVertexNormals();
+  computeVertexNormals(result);
   return result;
 }
 

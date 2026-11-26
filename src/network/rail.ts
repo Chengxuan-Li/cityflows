@@ -3,6 +3,7 @@ import { lonLatToLocal } from '../geo/projection';
 import {
   cumulativeLengths,
   distance,
+  headingAtDistance,
   nearestOnPolyline,
   pointAtDistance,
   polylineCrossings,
@@ -220,6 +221,9 @@ export const railGrade = {
   maxGrade: (kind: RailTrack['kind']) => (kind === 'tram' ? 0.06 : 0.04),
   /** Profile sample spacing. */
   stepM: 2,
+  /** TASK-280: centre lines on one layer closer than this share a bed (3.2 m, the widest bed the
+   * renderers draw, so any two beds that overlap; a railway bed is 2.7 m). */
+  sharedBedM: 3.2,
 };
 export type TrackGrade = 'tunnel' | 'covered' | 'bridge' | 'ground';
 /** Tags decide a track's grade; `layer` only orders crossings (a ground track may be layer -1). */
@@ -307,7 +311,8 @@ const cachedHeights = new WeakMap<RailGraph, RailHeights>();
  * track's `maxGrade` (cones, so no sample-to-sample slope exceeds it). Pinned points stay at 0
  * and push a ramp into the structure instead: switches between ground tracks, level crossings,
  * road and junction surfaces, track crossings, platform edges, covered tracks, and a structure's
- * end at a node mapped at ground (`layer` 0) with nothing beyond it.
+ * end at a node mapped at ground (`layer` 0) with nothing beyond it. TASK-280: tracks on one layer
+ * that share a bed (a switch's tracks until they part) share one profile there.
  */
 export function railHeights(
   city: CompiledCity,
@@ -394,12 +399,76 @@ export function railHeights(
         ? rail.tracks[t]!.toNode
         : bases[t]! + i - 1;
   const points = (t: number) => Array.from({ length: counts[t]! + 1 }, (_, i) => point(t, i));
+  // TASK-280: tracks that share a bed share one profile. A station ties, at no cost, to the nearest
+  // station of each track on the same layer whose centre line runs abreast within `sharedBedM`
+  // and within 30 degrees of parallel: a switch's tracks until they part, and parallel track
+  // mapped closer than two beds. Bounds then reach both alike, so one bed never has two heights,
+  // and the deck over it carries it. Other layers pass over or under (flyovers, tunnels below).
+  const ties: number[] = [];
+  const segments: [track: number, segment: number][] = [];
+  for (const t of rail.tracks)
+    for (let i = 1; i < t.line.length; i++)
+      if (t.cumulative[i]! > t.cumulative[i - 1]!) segments.push([t.idx, i - 1]);
+  const segmentIndex = index(segments, ([t, i]) => rail.tracks[t]!.line.slice(i, i + 2));
+  const parallel = Math.cos((railDeflectionDeg * Math.PI) / 180),
+    r = railGrade.sharedBedM;
+  // Per other track: its nearest point's distance, the station abreast and the line's direction.
+  const away = new Float64Array(rail.tracks.length).fill(Infinity),
+    abreast = new Float64Array(rail.tracks.length),
+    direction = new Float64Array(rail.tracks.length * 2),
+    near: number[] = [];
+  for (const a of rail.tracks) {
+    const step = a.lengthM / counts[a.idx]!;
+    for (let i = 0; i <= counts[a.idx]!; i++) {
+      const p = pointAtDistance(a.line, a.cumulative, i * step),
+        heading = headingAtDistance(a.line, a.cumulative, i * step);
+      for (const k of segmentIndex([
+        { x: p.x - r, y: p.y - r },
+        { x: p.x + r, y: p.y + r },
+      ])) {
+        const [j, s] = segments[k]!,
+          b = rail.tracks[j]!;
+        if (j === a.idx || b.layer !== a.layer) continue;
+        const u = b.line[s]!,
+          length = b.cumulative[s + 1]! - b.cumulative[s]!,
+          ux = (b.line[s + 1]!.x - u.x) / length,
+          uy = (b.line[s + 1]!.y - u.y) / length,
+          w = (p.x - u.x) * ux + (p.y - u.y) * uy,
+          t = Math.max(0, Math.min(length, w)),
+          d = Math.hypot(p.x - u.x - ux * t, p.y - u.y - uy * t);
+        if (d >= r || d >= away[j]!) continue;
+        if (away[j] === Infinity) near.push(j);
+        away[j] = d;
+        abreast[j] = b.cumulative[s]! + w;
+        direction[2 * j] = ux;
+        direction[2 * j + 1] = uy;
+      }
+      for (const j of near) {
+        away[j] = Infinity;
+        const b = rail.tracks[j]!;
+        // Abreast, not beyond either end (the next track along takes it there), and parallel.
+        if (
+          abreast[j]! < 0 ||
+          abreast[j]! > b.lengthM ||
+          Math.abs(
+            Math.cos(heading) * direction[2 * j]! + Math.sin(heading) * direction[2 * j + 1]!,
+          ) < parallel
+        )
+          continue;
+        const q = point(j, Math.round((abreast[j]! / b.lengthM) * counts[j]!)),
+          o = point(a.idx, i);
+        if (q !== o) ties.push(o, q);
+      }
+      near.length = 0;
+    }
+  }
   const degree = new Int32Array(total);
   for (const t of rail.tracks)
     for (let i = 0; i < counts[t.idx]!; i++) {
       degree[point(t.idx, i)]!++;
       degree[point(t.idx, i + 1)]!++;
     }
+  for (const p of ties) degree[p]!++;
   const start = new Int32Array(total + 1);
   for (let i = 0; i < total; i++) start[i + 1] = start[i]! + degree[i]!;
   const fill = start.slice(0, total);
@@ -415,6 +484,12 @@ export function railHeights(
       to[fill[b]!] = a;
       cost[fill[b]!++] = step;
     }
+  }
+  for (let i = 0; i < ties.length; i += 2) {
+    const a = ties[i]!,
+      b = ties[i + 1]!;
+    to[fill[a]!++] = b;
+    to[fill[b]!++] = a;
   }
   const adjacency = { start, to, cost };
   const deepest = Math.max(0, ...levels.map(Math.abs));

@@ -46,8 +46,10 @@ function corridor() {
   gate(-150, west[0], west[1]);
   gate(160, east[1], east[0]);
   const compiled = setup(city);
-  // The crossing holds both directions at the link's start, just past the signal before it.
-  expect(compiled.rail!.facilities![0]!.spans!.map((s) => s.fromM)).toEqual([1, 1]);
+  // The crossing holds both directions on the link, just past the signal before it (TASK-348: a
+  // signal between two nodes is laid out as a plain node, so the link keeps its whole 10 m and
+  // the crossing starts 3.5 m in, not 1 m past a 2.5 m cut).
+  expect(compiled.rail!.facilities![0]!.spans!.map((s) => s.fromM)).toEqual([3.5, 3.5]);
   const [westGate, eastGate] = Object.values(city.places);
   const trips: TripRequest[] = Array.from({ length: 30 }, (_, i) => ({
     id: `trip:${i}`,

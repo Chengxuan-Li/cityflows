@@ -1,0 +1,1312 @@
+{
+  "luebeck": {
+    "diagnosticImport": false,
+    "extract": {
+      "bytes": 7977599,
+      "osmBase": "2026-11-21T07:00:36Z"
+    },
+    "cityHash": "1455a468a3b82119",
+    "importS": [32, 39.9],
+    "importCpu": [75, 68],
+    "compileS": [4.8, 4.8, 4.27],
+    "counts": {
+      "nodes": 816,
+      "roads": 1513,
+      "lanes": 1641,
+      "movements": 2319,
+      "roadKm": 65,
+      "roadKmOutside": 0,
+      "signals": 46,
+      "junctionGroups": 48,
+      "walkLinks": 16630,
+      "parkingSpaces": 3204,
+      "buildings": 5189,
+      "bridges": 32,
+      "tunnels": 31,
+      "gateways": 9,
+      "drivableCrossings": 49,
+      "majorCrossings": 20,
+      "places": {
+        "gateway": 9,
+        "station": 1,
+        "parking": 64,
+        "retail": 33,
+        "school": 1,
+        "residential": 100,
+        "work": 66
+      }
+    },
+    "rail": {
+      "trackKm": {
+        "rail": 8.2
+      },
+      "platforms": 105,
+      "tramStops": 0,
+      "trains": {
+        "periodS": 720,
+        "routes": 3,
+        "byKind": {
+          "mainline": 3
+        },
+        "departuresPerHour": 30
+      },
+      "trams": {
+        "routes": 0,
+        "served": 0,
+        "unserved": 0
+      }
+    },
+    "size": {
+      "cityJsonMB": 8.29,
+      "cityJsonGzipMB": 1.49,
+      "projectMB": 9.15,
+      "projectGzipMB": 1.54,
+      "persons": 6825
+    },
+    "junctionAudit": {
+      "nodes": 816,
+      "overlapM2": 10.56,
+      "overlapNodes": 3,
+      "continuationOverlapM2": 33.44,
+      "awayOverlapM2": 0.75,
+      "bodyOverlapM2": 15.69,
+      "selfIntersections": 0,
+      "movementsEscaping": 0,
+      "edgesOff": 4,
+      "edgesUnder": 263,
+      "curbTurnDeg": 171.3,
+      "curbKinks": 1805,
+      "sharpCorners": 18,
+      "cappedEnds": 23
+    },
+    "diagnostics": {
+      "osm_unsupported_tag": 19,
+      "parking_unreachable": 16,
+      "parking_inferred_strip_covered": 3,
+      "osm_clipped": 1,
+      "osm_inferred_lanes": 1,
+      "osm_inferred_speeds": 1,
+      "road_too_short": 118,
+      "inferred_attributes": 1,
+      "lot_stalls_unreachable": 22,
+      "place_no_exit": 2,
+      "parking_no_exit": 40,
+      "disconnected_component": 1,
+      "dead_end": 108
+    },
+    "morningChoiceOn": {
+      "persons": 6825,
+      "completed": 2546,
+      "failedByReason": {
+        "no_route": 122,
+        "no_parking": 52
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:1288",
+        "osm": [134808713],
+        "waitS": 94
+      },
+      "noParkingShare": 3.15,
+      "meanDelayS": 110,
+      "stepMs": 0.26,
+      "cpuPercent": [78, 81],
+      "stateHash": 3776828727
+    },
+    "morningChoiceOff": {
+      "persons": 6825,
+      "completed": 4322,
+      "failedByReason": {
+        "no_route": 115,
+        "gridlocked": 137,
+        "no_parking": 47
+      },
+      "stalledHeads": 3,
+      "worstVisit": {
+        "road": "r:628",
+        "osm": [26773828],
+        "waitS": 8276
+      },
+      "noParkingShare": 1.26,
+      "meanDelayS": 976,
+      "stepMs": 3.833,
+      "cpuPercent": [84, 78],
+      "stateHash": 2847010261
+    },
+    "browser": {
+      "production": [
+        {
+          "firstFrameAfterLoadMs": 6361,
+          "threeDAfterFirstFrameMs": 10929,
+          "build3dMs": 2952,
+          "cpu": [100, 64]
+        },
+        {
+          "firstFrameAfterLoadMs": 5581,
+          "threeDAfterFirstFrameMs": 11643,
+          "build3dMs": 2705,
+          "cpu": [71, 84]
+        }
+      ],
+      "render2d": {
+        "meanMs": 1.15,
+        "p95Ms": 4.6000001430511475,
+        "frameMs": 16.7
+      },
+      "render3d": {
+        "meanMs": 2.74,
+        "p95Ms": 3.3999998569488525,
+        "frameMs": 16.7
+      },
+      "build3dMs": 2763,
+      "workerStepMs": 0.469,
+      "cpu": [90, 82, 84],
+      "errors": 0
+    },
+    "unroutable": {
+      "deadEndRoads": 107,
+      "deadByClass": {
+        "secondary": 3,
+        "residential": 6,
+        "tertiary": 3,
+        "service": 95
+      },
+      "disconnected": ["171 lanes are not connected to the main network"],
+      "places": [
+        {
+          "id": "p:2474",
+          "kind": "gateway",
+          "osm": [4095369],
+          "out": false,
+          "in": false,
+          "roads": ["Wallstraße"]
+        },
+        {
+          "id": "p:2477",
+          "kind": "gateway",
+          "osm": [135321955, 4428797, 134664153],
+          "out": false,
+          "in": true,
+          "roads": ["Fährstraße", "Burgtor"]
+        },
+        {
+          "id": "p:2852",
+          "kind": "work",
+          "osm": [142355898],
+          "out": true,
+          "in": false,
+          "roads": ["Wahmstraße"]
+        },
+        {
+          "id": "p:2854",
+          "kind": "retail",
+          "osm": [142357287],
+          "out": true,
+          "in": false,
+          "roads": ["Wahmstraße"]
+        }
+      ]
+    }
+  },
+  "york": {
+    "diagnosticImport": true,
+    "extract": {
+      "bytes": 4171558,
+      "osmBase": "2026-11-21T07:01:36Z"
+    },
+    "cityHash": "687ebb05b155d207",
+    "importS": [49.2, 47.5],
+    "importCpu": [78, 91],
+    "compileS": [5.55, 5.77, 6.29],
+    "counts": {
+      "nodes": 1116,
+      "roads": 2139,
+      "lanes": 2267,
+      "movements": 3418,
+      "roadKm": 65.535,
+      "roadKmOutside": 0,
+      "signals": 63,
+      "junctionGroups": 78,
+      "walkLinks": 19124,
+      "parkingSpaces": 1940,
+      "buildings": 1433,
+      "bridges": 34,
+      "tunnels": 98,
+      "gateways": 10,
+      "drivableCrossings": 66,
+      "majorCrossings": 14,
+      "places": {
+        "gateway": 10,
+        "station": 1,
+        "parking": 67,
+        "retail": 38,
+        "residential": 87,
+        "work": 54
+      }
+    },
+    "rail": {
+      "trackKm": {
+        "rail": 5.3
+      },
+      "platforms": 98,
+      "tramStops": 0,
+      "trains": {
+        "periodS": 720,
+        "routes": 4,
+        "byKind": {
+          "mainline": 4
+        },
+        "departuresPerHour": 40
+      },
+      "trams": {
+        "routes": 0,
+        "served": 0,
+        "unserved": 0
+      }
+    },
+    "size": {
+      "cityJsonMB": 6.38,
+      "cityJsonGzipMB": 1.15,
+      "projectMB": 6.78,
+      "projectGzipMB": 1.18,
+      "persons": 3191
+    },
+    "junctionAudit": {
+      "nodes": 1116,
+      "overlapM2": 0.88,
+      "overlapNodes": 4,
+      "continuationOverlapM2": 22.81,
+      "awayOverlapM2": 1,
+      "bodyOverlapM2": 70.56,
+      "selfIntersections": 0,
+      "movementsEscaping": 1,
+      "edgesOff": 0,
+      "edgesUnder": 549,
+      "curbTurnDeg": 172.3,
+      "curbKinks": 2012,
+      "sharpCorners": 16,
+      "cappedEnds": 17
+    },
+    "diagnostics": {
+      "osm_unsupported_tag": 9,
+      "parking_unreachable": 8,
+      "parking_inferred_strip_covered": 1,
+      "osm_clipped": 1,
+      "osm_inferred_lanes": 1,
+      "osm_inferred_speeds": 1,
+      "road_too_short": 279,
+      "signal_unserved_movement": 2,
+      "inferred_attributes": 1,
+      "lot_stalls_unreachable": 22,
+      "place_no_exit": 1,
+      "parking_no_exit": 10,
+      "disconnected_component": 1,
+      "dead_end": 49
+    },
+    "morningChoiceOn": {
+      "persons": 3191,
+      "completed": 1779,
+      "failedByReason": {
+        "no_parking": 20
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:3109",
+        "osm": [820241337, 820241987, 820241988],
+        "waitS": 156
+      },
+      "noParkingShare": 1.39,
+      "meanDelayS": 90,
+      "stepMs": 0.268,
+      "cpuPercent": [76, 71],
+      "stateHash": 2391607628
+    },
+    "morningChoiceOff": {
+      "persons": 3191,
+      "completed": 3122,
+      "failedByReason": {
+        "gridlocked": 25,
+        "no_parking": 20
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:3109",
+        "osm": [820241337, 820241987, 820241988],
+        "waitS": 1362
+      },
+      "noParkingShare": 0.72,
+      "meanDelayS": 185,
+      "stepMs": 0.896,
+      "cpuPercent": [91, 81],
+      "stateHash": 1626473658
+    },
+    "browser": {
+      "production": [
+        {
+          "firstFrameAfterLoadMs": 8559,
+          "threeDAfterFirstFrameMs": 11443,
+          "build3dMs": 3965,
+          "cpu": [62, 81]
+        },
+        {
+          "firstFrameAfterLoadMs": 8342,
+          "threeDAfterFirstFrameMs": 12068,
+          "build3dMs": 3726,
+          "cpu": [67, 84]
+        }
+      ],
+      "render2d": {
+        "meanMs": 0.88,
+        "p95Ms": 2.5,
+        "frameMs": 16.7
+      },
+      "render3d": {
+        "meanMs": 2,
+        "p95Ms": 2.5,
+        "frameMs": 16.7
+      },
+      "build3dMs": 3294,
+      "workerStepMs": 0.334,
+      "cpu": [72, 84, 68],
+      "errors": 0
+    },
+    "leftHandAudit": {
+      "drivingSide": "left",
+      "markingTheme": "uk",
+      "laneBlocks": {
+        "offsets": {
+          "left": 1866,
+          "right": 0,
+          "zero": 0
+        },
+        "wrongOffset": [],
+        "wrongOffsetCount": 0,
+        "pairs": 1866,
+        "wrongPairs": [],
+        "wrongPairCount": 0
+      },
+      "roundabouts": [
+        {
+          "roads": ["r:218", "r:220", "r:221"],
+          "clockwise": true,
+          "osm": [4436615],
+          "entryTurns": {
+            "merge": 1,
+            "left": 1
+          },
+          "exitTurns": {
+            "diverge": 2
+          },
+          "entryControls": {
+            "yield": 2
+          }
+        }
+      ],
+      "miniRoundabouts": [
+        {
+          "osm": 27231340,
+          "direction": null,
+          "node": "n:209",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 2,
+          "movements": 6,
+          "priorities": [42, 41, 32, 31]
+        },
+        {
+          "osm": 1424571655,
+          "direction": "clockwise",
+          "node": null,
+          "control": null,
+          "minorRoads": 0,
+          "arms": 0,
+          "movements": 0,
+          "priorities": []
+        },
+        {
+          "osm": 2369587625,
+          "direction": "clockwise",
+          "node": "n:319",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 3,
+          "movements": 6,
+          "priorities": [31, 32, 41, 42]
+        }
+      ],
+      "curb": {
+        "connectorsOnMultiLaneRoads": 27,
+        "connectorsOffCurb": 12,
+        "offCurb": [
+          "c:3691 on r:3638#1 of 2",
+          "c:4064 on r:1555#1 of 2",
+          "c:4106 on r:3384#1 of 2",
+          "c:pk:13199:0 on r:2311#1 of 2",
+          "c:pk:13199:1 on r:2311#1 of 2",
+          "c:pk:13200:0 on r:2311#1 of 2",
+          "c:pk:13200:1 on r:2311#1 of 2",
+          "c:pk:13200:2 on r:2311#1 of 2",
+          "c:pk:13200:3 on r:2311#1 of 2",
+          "c:pk:13200:4 on r:2311#1 of 2",
+          "c:pk:13200:5 on r:2311#1 of 2",
+          "c:pk:13200:6 on r:2311#1 of 2"
+        ],
+        "stripSides": {
+          "left": 241,
+          "right": 29
+        },
+        "stripsOnTwoWayBySide": {}
+      },
+      "busLanes": {
+        "curb": 3,
+        "only": 2
+      },
+      "signals": {
+        "nodes": 63,
+        "groups": 78,
+        "fourArmNodes": 5,
+        "turnOnRedMovements": 0,
+        "turnOnRedTurns": {},
+        "extraPhaseGroupsByDurationAndTurn": {
+          "15s:left": 10,
+          "30s:right": 4,
+          "30s:through": 2
+        },
+        "phaseDurations": {
+          "15": 4,
+          "30": 11
+        },
+        "programTurnOnRed": 0
+      },
+      "uncontrolledPriorityByTurn": {},
+      "controls": {
+        "signal": 63,
+        "uncontrolled": 1038,
+        "yield": 15
+      },
+      "turns": {
+        "through": 1396,
+        "right": 842,
+        "left": 828,
+        "merge": 34,
+        "uturn": 270,
+        "diverge": 48
+      },
+      "osmTags": {
+        "turnLanes": 72,
+        "busLanesTagged": 6,
+        "crossingRefs": {
+          "puffin": 31,
+          "pelican": 30,
+          "zebra": 6,
+          "toucan": 13
+        },
+        "junctionYellowBox": 0,
+        "parkingLaneTags": 18,
+        "waitingRestrictions": 4,
+        "giveWayNodes": 37,
+        "stopNodes": 0
+      }
+    }
+  },
+  "cambridge": {
+    "diagnosticImport": true,
+    "extract": {
+      "bytes": 4880856,
+      "osmBase": "2026-11-21T07:01:36Z"
+    },
+    "cityHash": "c4da3c297772ed2a",
+    "importS": [35.8, 38.1],
+    "importCpu": [76, 100],
+    "compileS": [5.86, 5.49, 5.38],
+    "counts": {
+      "nodes": 588,
+      "roads": 1188,
+      "lanes": 1226,
+      "movements": 1949,
+      "roadKm": 52.452,
+      "roadKmOutside": 0,
+      "signals": 16,
+      "junctionGroups": 33,
+      "walkLinks": 29623,
+      "parkingSpaces": 427,
+      "buildings": 2114,
+      "bridges": 4,
+      "tunnels": 50,
+      "gateways": 7,
+      "drivableCrossings": 59,
+      "majorCrossings": 17,
+      "places": {
+        "gateway": 7,
+        "parking": 50,
+        "retail": 28,
+        "school": 1,
+        "residential": 85,
+        "work": 26
+      }
+    },
+    "rail": {
+      "trackKm": {},
+      "platforms": 0,
+      "tramStops": 0,
+      "trains": null
+    },
+    "size": {
+      "cityJsonMB": 5.32,
+      "cityJsonGzipMB": 0.96,
+      "projectMB": 5.63,
+      "projectGzipMB": 0.98,
+      "persons": 2469
+    },
+    "junctionAudit": {
+      "nodes": 588,
+      "overlapM2": 31.56,
+      "overlapNodes": 2,
+      "continuationOverlapM2": 56.31,
+      "awayOverlapM2": 1.81,
+      "bodyOverlapM2": 129.88,
+      "selfIntersections": 0,
+      "movementsEscaping": 2,
+      "edgesOff": 1,
+      "edgesUnder": 265,
+      "curbTurnDeg": 163.4,
+      "curbKinks": 1391,
+      "sharpCorners": 6,
+      "cappedEnds": 37
+    },
+    "diagnostics": {
+      "osm_unsupported_tag": 14,
+      "parking_unreachable": 10,
+      "osm_clipped": 1,
+      "osm_inferred_lanes": 1,
+      "osm_inferred_speeds": 1,
+      "road_too_short": 100,
+      "inferred_attributes": 1,
+      "lot_stalls_unreachable": 21,
+      "place_no_exit": 3,
+      "parking_no_exit": 37,
+      "disconnected_component": 1,
+      "dead_end": 27
+    },
+    "morningChoiceOn": {
+      "persons": 2469,
+      "completed": 1263,
+      "failedByReason": {
+        "no_route": 229,
+        "no_parking": 10
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:982",
+        "osm": [52614856],
+        "waitS": 193
+      },
+      "noParkingShare": 1.13,
+      "meanDelayS": 101,
+      "stepMs": 0.15,
+      "cpuPercent": [100, 100],
+      "stateHash": 462132652
+    },
+    "morningChoiceOff": {
+      "persons": 2469,
+      "completed": 2170,
+      "failedByReason": {
+        "no_route": 229,
+        "no_parking": 10
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:335",
+        "osm": [3987043],
+        "waitS": 1378
+      },
+      "noParkingShare": 0.56,
+      "meanDelayS": 524,
+      "stepMs": 0.404,
+      "cpuPercent": [100, 100],
+      "stateHash": 2057958402
+    },
+    "browser": {
+      "production": [
+        {
+          "firstFrameAfterLoadMs": 4175,
+          "threeDAfterFirstFrameMs": 8566,
+          "build3dMs": 1928,
+          "cpu": [100, 55]
+        },
+        {
+          "firstFrameAfterLoadMs": 4118,
+          "threeDAfterFirstFrameMs": 9196,
+          "build3dMs": 2063,
+          "cpu": [52, 62]
+        }
+      ],
+      "render2d": {
+        "meanMs": 0.68,
+        "p95Ms": 2.200000047683716,
+        "frameMs": 16.7
+      },
+      "render3d": {
+        "meanMs": 1.62,
+        "p95Ms": 2,
+        "frameMs": 16.7
+      },
+      "build3dMs": 2151,
+      "workerStepMs": 0.262,
+      "cpu": [88, 90, 87],
+      "errors": 0
+    },
+    "leftHandAudit": {
+      "drivingSide": "left",
+      "markingTheme": "uk",
+      "laneBlocks": {
+        "offsets": {
+          "left": 1060,
+          "right": 0,
+          "zero": 0
+        },
+        "wrongOffset": [],
+        "wrongOffsetCount": 0,
+        "pairs": 1060,
+        "wrongPairs": ["r:1647", "r:1691", "r:1719"],
+        "wrongPairCount": 3
+      },
+      "roundabouts": [
+        {
+          "roads": ["r:115", "r:116", "r:1963", "r:1968", "r:1969", "r:1967", "r:1966", "r:1965"],
+          "clockwise": true,
+          "osm": [3986770, 567520625, 567520629, 567520628, 567520627, 567520626],
+          "entryTurns": {
+            "left": 4,
+            "merge": 2
+          },
+          "exitTurns": {
+            "left": 2,
+            "diverge": 3
+          },
+          "entryControls": {
+            "yield": 6
+          }
+        },
+        {
+          "roads": ["r:1140"],
+          "clockwise": false,
+          "osm": [83632354],
+          "entryTurns": {},
+          "exitTurns": {
+            "diverge": 1
+          },
+          "entryControls": {}
+        },
+        {
+          "roads": ["r:1957"],
+          "clockwise": true,
+          "osm": [521543344],
+          "entryTurns": {
+            "merge": 2
+          },
+          "exitTurns": {
+            "diverge": 1
+          },
+          "entryControls": {
+            "signal": 2
+          }
+        },
+        {
+          "roads": ["r:1960"],
+          "clockwise": true,
+          "osm": [521543345],
+          "entryTurns": {
+            "merge": 2
+          },
+          "exitTurns": {},
+          "entryControls": {
+            "signal": 2
+          }
+        }
+      ],
+      "miniRoundabouts": [
+        {
+          "osm": 104541,
+          "direction": "clockwise",
+          "node": "n:730",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 4,
+          "movements": 12,
+          "priorities": [22, 21, 31, 32]
+        },
+        {
+          "osm": 609070,
+          "direction": "clockwise",
+          "node": "n:950",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 3,
+          "movements": 6,
+          "priorities": [62, 61, 31, 32]
+        },
+        {
+          "osm": 6572035,
+          "direction": "clockwise",
+          "node": null,
+          "control": null,
+          "minorRoads": 0,
+          "arms": 0,
+          "movements": 0,
+          "priorities": []
+        },
+        {
+          "osm": 6572064,
+          "direction": "clockwise",
+          "node": "n:863",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 3,
+          "movements": 6,
+          "priorities": [61, 62]
+        },
+        {
+          "osm": 14959442,
+          "direction": "clockwise",
+          "node": "n:98",
+          "control": "uncontrolled",
+          "minorRoads": 0,
+          "arms": 3,
+          "movements": 6,
+          "priorities": [31, 32]
+        }
+      ],
+      "curb": {
+        "connectorsOnMultiLaneRoads": 5,
+        "connectorsOffCurb": 0,
+        "offCurb": [],
+        "stripSides": {},
+        "stripsOnTwoWayBySide": {}
+      },
+      "busLanes": {
+        "only": 2,
+        "curb": 3
+      },
+      "signals": {
+        "nodes": 16,
+        "groups": 33,
+        "fourArmNodes": 3,
+        "turnOnRedMovements": 0,
+        "turnOnRedTurns": {},
+        "extraPhaseGroupsByDurationAndTurn": {
+          "15s:left": 9,
+          "30s:right": 4,
+          "30s:through": 5
+        },
+        "phaseDurations": {
+          "15": 3,
+          "30": 11
+        },
+        "programTurnOnRed": 0
+      },
+      "uncontrolledPriorityByTurn": {},
+      "controls": {
+        "uncontrolled": 564,
+        "yield": 8,
+        "signal": 16
+      },
+      "turns": {
+        "through": 718,
+        "right": 527,
+        "left": 532,
+        "merge": 18,
+        "diverge": 19,
+        "uturn": 135
+      },
+      "osmTags": {
+        "turnLanes": 0,
+        "busLanesTagged": 3,
+        "crossingRefs": {
+          "toucan": 9,
+          "zebra": 10,
+          "puffin": 10,
+          "pelican": 1
+        },
+        "junctionYellowBox": 0,
+        "parkingLaneTags": 34,
+        "waitingRestrictions": 0,
+        "giveWayNodes": 3,
+        "stopNodes": 0
+      }
+    },
+    "unroutable": {
+      "deadEndRoads": 27,
+      "deadByClass": {
+        "residential": 3,
+        "service": 24
+      },
+      "disconnected": ["27 lanes are not connected to the main network"],
+      "places": [
+        {
+          "id": "p:2365",
+          "kind": "gateway",
+          "osm": [4276099],
+          "out": false,
+          "in": true,
+          "roads": ["Hills Road"]
+        },
+        {
+          "id": "p:2371",
+          "kind": "gateway",
+          "osm": [54563658, 54563632, 83632354, 521543345],
+          "out": false,
+          "in": false,
+          "roads": ["Elizabeth Way", "Newmarket Road"]
+        },
+        {
+          "id": "p:2382",
+          "kind": "gateway",
+          "osm": [1328818227],
+          "out": false,
+          "in": false,
+          "roads": ["Victoria Avenue"]
+        },
+        {
+          "id": "p:2564",
+          "kind": "residential",
+          "osm": [108047436, 137147874],
+          "out": true,
+          "in": false,
+          "roads": ["Gresham Road"]
+        }
+      ]
+    }
+  },
+  "philadelphia": {
+    "diagnosticImport": false,
+    "extract": {
+      "bytes": 3614029,
+      "osmBase": "2026-11-21T07:02:38Z"
+    },
+    "cityHash": "8a2bb9ecfc59b85c",
+    "importS": [40.4, 36.1],
+    "importCpu": [56, 75],
+    "compileS": [3.83, 3.9, 4.44],
+    "counts": {
+      "nodes": 665,
+      "roads": 1071,
+      "lanes": 1747,
+      "movements": 2473,
+      "roadKm": 53.732,
+      "roadKmOutside": 0,
+      "signals": 151,
+      "junctionGroups": 43,
+      "walkLinks": 20195,
+      "parkingSpaces": 2014,
+      "buildings": 1540,
+      "bridges": 18,
+      "tunnels": 23,
+      "gateways": 22,
+      "drivableCrossings": 88,
+      "majorCrossings": 49,
+      "places": {
+        "gateway": 22,
+        "station": 8,
+        "parking": 70,
+        "retail": 22,
+        "school": 1,
+        "residential": 129,
+        "work": 52
+      }
+    },
+    "rail": {
+      "trackKm": {
+        "rail": 7.3,
+        "subway": 10.7,
+        "tram": 2.1
+      },
+      "platforms": 54,
+      "tramStops": 7,
+      "trains": {
+        "periodS": 720,
+        "routes": 7,
+        "byKind": {
+          "sbahn": 7
+        },
+        "departuresPerHour": 105
+      },
+      "trams": {
+        "routes": 1,
+        "served": 7,
+        "unserved": 0
+      }
+    },
+    "size": {
+      "cityJsonMB": 4.81,
+      "cityJsonGzipMB": 0.92,
+      "projectMB": 6.45,
+      "projectGzipMB": 1.02,
+      "persons": 12926
+    },
+    "junctionAudit": {
+      "nodes": 665,
+      "overlapM2": 0,
+      "overlapNodes": 0,
+      "continuationOverlapM2": 4,
+      "awayOverlapM2": 155.56,
+      "bodyOverlapM2": 46.38,
+      "selfIntersections": 0,
+      "movementsEscaping": 0,
+      "edgesOff": 0,
+      "edgesUnder": 189,
+      "curbTurnDeg": 166.4,
+      "curbKinks": 2105,
+      "sharpCorners": 10,
+      "cappedEnds": 56
+    },
+    "diagnostics": {
+      "osm_unsupported_tag": 12,
+      "parking_unreachable": 1,
+      "parking_inferred_strip_covered": 1,
+      "parking_entry_unreachable": 4,
+      "osm_clipped": 1,
+      "osm_inferred_lanes": 1,
+      "osm_inferred_speeds": 1,
+      "road_too_short": 72,
+      "signal_unserved_movement": 10,
+      "inferred_attributes": 1,
+      "lot_stalls_unreachable": 13,
+      "place_no_exit": 4,
+      "parking_no_exit": 5,
+      "disconnected_component": 1,
+      "dead_end": 50,
+      "connector_unreachable": 2
+    },
+    "morningChoiceOn": {
+      "persons": 12926,
+      "completed": 4740,
+      "failedByReason": {
+        "no_route": 98,
+        "no_parking": 4
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:1004",
+        "osm": [196355317],
+        "waitS": 306
+      },
+      "noParkingShare": 0.11,
+      "meanDelayS": 146,
+      "stepMs": 1.045,
+      "cpuPercent": [88, 99],
+      "stateHash": 3309201898
+    },
+    "morningChoiceOff": {
+      "persons": 12926,
+      "completed": 5258,
+      "failedByReason": {
+        "no_route": 84,
+        "gridlocked": 402,
+        "no_parking": 4
+      },
+      "stalledHeads": 12,
+      "worstVisit": {
+        "road": "r:255",
+        "osm": [12159456],
+        "waitS": 8406
+      },
+      "noParkingShare": 0.09,
+      "meanDelayS": 1026,
+      "stepMs": 8.627,
+      "cpuPercent": [100, 67],
+      "stateHash": 2524536814
+    },
+    "browser": {
+      "production": [
+        {
+          "firstFrameAfterLoadMs": 10227,
+          "threeDAfterFirstFrameMs": 16379,
+          "build3dMs": 6898,
+          "cpu": [85, 64]
+        },
+        {
+          "firstFrameAfterLoadMs": 9605,
+          "threeDAfterFirstFrameMs": 17603,
+          "build3dMs": 7878,
+          "cpu": [64, 88]
+        }
+      ],
+      "render2d": {
+        "meanMs": 2.49,
+        "p95Ms": 9.099999904632568,
+        "frameMs": 16.7
+      },
+      "render3d": {
+        "meanMs": 3.22,
+        "p95Ms": 4.099999904632568,
+        "frameMs": 16.7
+      },
+      "build3dMs": 7628,
+      "workerStepMs": 0.987,
+      "cpu": [76, 76, 74],
+      "errors": 0
+    },
+    "signalAudit": {
+      "nodes": 151,
+      "groups": 43,
+      "fourArmNodes": 0,
+      "turnOnRedMovements": 163,
+      "turnOnRedTurns": {
+        "right": 163
+      },
+      "extraPhaseGroupsByDurationAndTurn": {},
+      "phaseDurations": {},
+      "programTurnOnRed": 89
+    },
+    "unroutable": {
+      "deadEndRoads": 48,
+      "deadByClass": {
+        "secondary": 1,
+        "primary": 8,
+        "service": 35,
+        "tertiary": 4
+      },
+      "disconnected": ["82 lanes are not connected to the main network"],
+      "places": [
+        {
+          "id": "p:1905",
+          "kind": "gateway",
+          "osm": [12189624],
+          "out": false,
+          "in": true,
+          "roads": ["North 13th Street"]
+        },
+        {
+          "id": "p:1932",
+          "kind": "gateway",
+          "osm": [137469643, 556954158],
+          "out": true,
+          "in": false,
+          "roads": ["South 13th Street", "South 12th Street"]
+        },
+        {
+          "id": "p:1935",
+          "kind": "gateway",
+          "osm": [170020486, 584038595],
+          "out": true,
+          "in": false,
+          "roads": ["North 12th Street", "Race Street"]
+        },
+        {
+          "id": "p:1938",
+          "kind": "gateway",
+          "osm": [195815883],
+          "out": false,
+          "in": true,
+          "roads": ["Walnut Street"]
+        },
+        {
+          "id": "p:1940",
+          "kind": "gateway",
+          "osm": [196207110],
+          "out": true,
+          "in": false,
+          "roads": ["Chestnut Street"]
+        },
+        {
+          "id": "p:1949",
+          "kind": "gateway",
+          "osm": [1326494337, 424807264],
+          "out": false,
+          "in": true,
+          "roads": ["Market Street"]
+        },
+        {
+          "id": "p:1961",
+          "kind": "gateway",
+          "osm": [1036210304],
+          "out": false,
+          "in": true,
+          "roads": ["Chestnut Street"]
+        },
+        {
+          "id": "p:1971",
+          "kind": "gateway",
+          "osm": [492215278],
+          "out": true,
+          "in": false,
+          "roads": ["Arch Street"]
+        },
+        {
+          "id": "p:2499",
+          "kind": "residential",
+          "osm": [345167315, 349200354, 349200355, 663657711],
+          "out": true,
+          "in": false,
+          "roads": ["Pearl Street"]
+        }
+      ]
+    }
+  },
+  "downtown": {
+    "diagnosticImport": false,
+    "extract": {
+      "bytes": 819800,
+      "osmBase": "2026-11-03T22:23:38Z"
+    },
+    "cityHash": "8c21f3b7c9a2ad53",
+    "importS": [10.9, 10.4],
+    "importCpu": [79, 76],
+    "compileS": [1.58, 1.6, 1.69],
+    "counts": {
+      "nodes": 401,
+      "roads": 659,
+      "lanes": 965,
+      "movements": 1444,
+      "roadKm": 33.86,
+      "roadKmOutside": 0,
+      "signals": 80,
+      "junctionGroups": 24,
+      "walkLinks": 14093,
+      "parkingSpaces": 1016,
+      "buildings": 0,
+      "bridges": 0,
+      "tunnels": 11,
+      "gateways": 21,
+      "drivableCrossings": 62,
+      "majorCrossings": 35,
+      "places": {
+        "gateway": 21
+      }
+    },
+    "rail": {
+      "trackKm": {},
+      "platforms": 0,
+      "tramStops": 0,
+      "trains": null
+    },
+    "size": {
+      "cityJsonMB": 1.46,
+      "cityJsonGzipMB": 0.25,
+      "projectMB": 1.55,
+      "projectGzipMB": 0.25,
+      "persons": 717
+    },
+    "junctionAudit": {
+      "nodes": 401,
+      "overlapM2": 0,
+      "overlapNodes": 0,
+      "continuationOverlapM2": 3.44,
+      "awayOverlapM2": 0.06,
+      "bodyOverlapM2": 27.5,
+      "selfIntersections": 0,
+      "movementsEscaping": 0,
+      "edgesOff": 0,
+      "edgesUnder": 88,
+      "curbTurnDeg": 157.3,
+      "curbKinks": 1632,
+      "sharpCorners": 7,
+      "cappedEnds": 22
+    },
+    "diagnostics": {
+      "osm_unsupported_tag": 2,
+      "osm_clipped": 1,
+      "osm_inferred_lanes": 1,
+      "osm_inferred_speeds": 1,
+      "road_too_short": 32,
+      "signal_unserved_movement": 3,
+      "inferred_attributes": 1,
+      "place_no_exit": 1,
+      "disconnected_component": 1,
+      "dead_end": 9,
+      "connector_unreachable": 1
+    },
+    "morningChoiceOn": {
+      "persons": 717,
+      "completed": 468,
+      "failedByReason": {
+        "no_route": 160
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:620",
+        "osm": [173543402],
+        "waitS": 29
+      },
+      "noParkingShare": 0,
+      "meanDelayS": 43,
+      "stepMs": 0.036,
+      "cpuPercent": [84, 73],
+      "stateHash": 597449598
+    },
+    "morningChoiceOff": {
+      "persons": 717,
+      "completed": 468,
+      "failedByReason": {
+        "no_route": 160
+      },
+      "stalledHeads": 0,
+      "worstVisit": {
+        "road": "r:620",
+        "osm": [173543402],
+        "waitS": 29
+      },
+      "noParkingShare": 0,
+      "meanDelayS": 43,
+      "stepMs": 0.041,
+      "cpuPercent": [87, 79],
+      "stateHash": 597449598
+    },
+    "browser": {
+      "production": [
+        {
+          "firstFrameAfterLoadMs": 4638,
+          "threeDAfterFirstFrameMs": 5749,
+          "build3dMs": 2875,
+          "cpu": [81, 66]
+        },
+        {
+          "firstFrameAfterLoadMs": 4716,
+          "threeDAfterFirstFrameMs": 5851,
+          "build3dMs": 2870,
+          "cpu": [75, 66]
+        }
+      ],
+      "render2d": {
+        "meanMs": 0.78,
+        "p95Ms": 3.5999999046325684,
+        "frameMs": 16.7
+      },
+      "render3d": {
+        "meanMs": 1.42,
+        "p95Ms": 1.7999999523162842,
+        "frameMs": 16.7
+      },
+      "build3dMs": 3072,
+      "workerStepMs": 0.138,
+      "cpu": [84, 94, 81],
+      "errors": 0
+    }
+  },
+  "freiburgReference": {
+    "production": [
+      {
+        "firstFrameAfterLoadMs": 5333,
+        "threeDAfterFirstFrameMs": 9200,
+        "build3dMs": 3163,
+        "cpu": [70, 65]
+      },
+      {
+        "firstFrameAfterLoadMs": 5025,
+        "threeDAfterFirstFrameMs": 8935,
+        "build3dMs": 3085,
+        "cpu": [52, 90]
+      }
+    ],
+    "render2d": {
+      "p95Ms": 2.8000001907348633
+    },
+    "render3d": {
+      "p95Ms": 4.5
+    },
+    "build3dMs": 3083,
+    "workerStepMs": 0.379,
+    "cpu": [85, 61, 40]
+  }
+}

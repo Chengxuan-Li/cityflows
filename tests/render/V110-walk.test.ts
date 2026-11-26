@@ -107,8 +107,11 @@ test('V110 mapped steps join the ground to a bridge deck', () => {
   const r = compile(city);
   if (!r.ok) throw new Error('compile');
   const meshes = buildWalk(r.compiled, city, cityHeights(r.compiled, city));
-  const pos = meshes.footways.getAttribute('position'),
-    ys = Array.from({ length: pos.count }, (_, i) => pos.getY(i));
+  // TASK-261: a flight's treads are paving, its risers and stringers the steps' colour.
+  const ys = [meshes.footways, meshes.steps].flatMap((mesh) => {
+    const pos = mesh.getAttribute('position');
+    return Array.from({ length: pos.count }, (_, i) => pos.getY(i));
+  });
   expect(Math.min(...ys)).toBeLessThan(0.2);
   expect(Math.max(...ys)).toBeGreaterThan(5.1);
   for (const g of Object.values(meshes)) g.dispose();

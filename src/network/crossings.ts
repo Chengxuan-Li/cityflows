@@ -1,4 +1,6 @@
 import {
+  boxesMeet,
+  boxOf,
   headingAtDistance,
   nearestOnPolyline,
   pointAtDistance,
@@ -6,9 +8,10 @@ import {
   preparePolygon,
   segmentDistance,
 } from '../geo/polyline';
+import type { Box } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
-import type { City } from '../schema';
-import { junctionCorners } from './junctions';
+import type { City, CrossingMarking } from '../schema';
+import { isSignalCrossing, junctionCorners } from './junctions';
 import type { CLane, CompiledCity, CNode, CRoad } from './types';
 
 // Pedestrian crossings (TASK-091, TASK-094): which road ends have one, where its stripes lie, and
@@ -90,10 +93,24 @@ function cityTopology(city: CompiledCity) {
   return cached;
 }
 
+/** TASK-287: the roads meeting a node, in compiled order (`city.roads.filter` by node, which the
+ * renderer ran per road end). */
+export function nodeRoads(city: CompiledCity, node: CNode): CRoad[] {
+  return cityTopology(city).incident[node.idx]!;
+}
+
 /** A node's arms (TASK-091): its road ends, where ends within 20 degrees of each other form one
  * arm if they are of one corridor or run in opposite directions (the two directions of a street,
  * a divided pair, carriageways the importer did not pair, as Munich r:476 and r:984 at n:1181). */
 export function crossingArms(city: CompiledCity, node: CNode): RoadEnd[][] {
+  // TASK-287: per compiled city and node; callers read the arms, never change them (York's first
+  // frame asked for them 15,000 times for 1,096 nodes, each time for every incident road end).
+  let byNode = armSets.get(city);
+  if (!byNode) armSets.set(city, (byNode = []));
+  return (byNode[node.idx] ??= nodeArms(city, node));
+}
+const armSets = new WeakMap<CompiledCity, RoadEnd[][][]>();
+function nodeArms(city: CompiledCity, node: CNode): RoadEnd[][] {
   const arms: RoadEnd[][] = [];
   const close = Math.cos(Math.PI / 9);
   for (const road of cityTopology(city).incident[node.idx]!)
@@ -175,7 +192,9 @@ export const MAPPED_M = 12;
 
 interface MappedCrossing {
   line: Vec2[];
+  box: Box;
   grade: number;
+  marking?: CrossingMarking;
 }
 const mappedSets = new WeakMap<object, MappedCrossing[]>();
 /** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
@@ -186,28 +205,43 @@ function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
-      .map((l) => ({ line: l.line, grade: l.layer ?? walk.nodes[l.from]!.layer }));
+      .map((l) => ({
+        line: l.line,
+        box: boxOf(l.line),
+        grade: l.layer ?? walk.nodes[l.from]!.layer,
+        ...(l.marking ? { marking: l.marking } : {}),
+      }));
     mappedSets.set(walk.links, set);
   }
   return set;
 }
 
-/** TASK-217 (D1): whether a mapped crossing way crosses a lane centreline of the arm of a road
- * end within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a
- * short road belongs to one of its ends). */
+const laneBoxes = new WeakMap<readonly Vec2[], Box>();
+function laneBox(lane: CLane): Box {
+  let box = laneBoxes.get(lane.polyline);
+  if (!box) laneBoxes.set(lane.polyline, (box = boxOf(lane.polyline)));
+  return box;
+}
+
+/** TASK-217 (D1): the mapped crossing ways that cross a lane centreline of the arm of a road end
+ * within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a short
+ * road belongs to one of its ends). */
 function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: CrossingSource) {
   const links = mappedCrossings(source);
-  if (!links.length) return false;
+  if (!links.length) return [];
   const node = city.nodes[atEnd ? road.to : road.from]!;
   const arm = crossingArms(city, node).find((a) =>
     a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
   )!;
-  return links.some((link) =>
+  return links.filter((link) =>
     arm.some(
       (e) =>
         link.grade === e.road.grade &&
         e.road.lanes.some((i) => {
           const lane = city.lanes[i]!;
+          // TASK-277: lines whose boxes do not meet cannot cross (Philadelphia: 4.8 s of the first
+          // frame and again of the 3D build went to testing every mapped crossing against every lane).
+          if (!boxesMeet(link.box, laneBox(lane))) return false;
           return polylineCrossings(link.line, lane.polyline).some((hit) => {
             const s = e.atEnd ? lane.lengthM - hit.alongB : hit.alongB;
             return s <= MAPPED_M && s <= lane.lengthM / 2;
@@ -220,11 +254,13 @@ function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: Cro
 /** TASK-217 (D1): how a road end's crossing is painted; it changes nothing else (place, span,
  * stop line, walk link). `signal`: at a signalized node the two broken lines of a signalised
  * crossing (German practice: no zebra under signals), also where a mapped crossing leads the arm
- * within `SIGNAL_NEAR_M` of a signalized node; `zebra`: where a mapped crossing way leads the
- * arm (`mappedArm`), where an edit turned the crossing on, and at the default crossings of roads
- * drawn by hand; `none`: a default crossing of an imported road where OSM maps none near the arm
- * (TASK-216's D1: 155 of 167 drawn crossings at the Hauptbahnhof lay over 4 m from any mapped
- * one; a mapped city maps its marked crossings). */
+ * within `SIGNAL_NEAR_M` of a signalized node, or (TASK-257) where every painted one leading it
+ * is marked with lines; `zebra`: where a mapped crossing way leads the arm (`mappedArm`), where
+ * an edit turned the crossing on, and at the default crossings of roads drawn by hand; `none`: a
+ * default crossing of an imported road where OSM maps none near the arm (TASK-216's D1: 155 of
+ * 167 drawn crossings at the Hauptbahnhof lay over 4 m from any mapped one; a mapped city maps
+ * its marked crossings), and (TASK-257) one away from a signalized node whose mapped crossings
+ * all say unmarked (`marking: 'none'`), unless an edit turned it on. */
 export type CrossingStyle = 'zebra' | 'signal' | 'none';
 export function crossingStyle(
   city: CompiledCity,
@@ -232,9 +268,34 @@ export function crossingStyle(
   atEnd: boolean,
   source?: CrossingSource,
 ): CrossingStyle {
+  // TASK-287: per compiled city, source and road end; the renderer asks once per lane and paint
+  // (UK zig-zags, stripes, lane lines), and a city and its source are not changed once compiled.
+  let bySource = styles.get(city);
+  if (!bySource) styles.set(city, (bySource = new WeakMap()));
+  let byRoad = bySource.get(source ?? noSource);
+  if (!byRoad) bySource.set(source ?? noSource, (byRoad = new WeakMap()));
+  let ends = byRoad.get(road);
+  if (!ends) byRoad.set(road, (ends = []));
+  return (ends[+atEnd] ??= endStyle(city, road, atEnd, source));
+}
+const styles = new WeakMap<CompiledCity, WeakMap<object, WeakMap<CRoad, CrossingStyle[]>>>();
+const noSource = {};
+function endStyle(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): CrossingStyle {
   const node = city.nodes[atEnd ? road.to : road.from]!;
+  // The walk lights stand at its ends (TASK-111): a signalised crossing whatever OSM paints.
   if (node.signal !== null) return 'signal';
-  if (mappedArm(city, road, atEnd, source)) {
+  const leading = mappedArm(city, road, atEnd, source);
+  const painted = leading.filter((link) => link.marking !== 'none');
+  const canonical = source?.roads?.[road.id];
+  const edited = canonical?.crossings?.[atEnd ? 'end' : 'start'] === true;
+  const unmarked = leading.length > 0 && !painted.length && !edited;
+  if (painted.length) {
+    if (painted.every((link) => link.marking === 'lines')) return 'signal';
     const points = crossingPlacement(city, road, atEnd).stripes.flat();
     const centre = points.length
       ? {
@@ -244,9 +305,8 @@ export function crossingStyle(
       : node.pos;
     return nearSignal(city, centre) ? 'signal' : 'zebra';
   }
-  const canonical = source?.roads?.[road.id];
-  if (canonical?.crossings?.[atEnd ? 'end' : 'start'] === true) return 'zebra';
-  return canonical?.provenance.source === 'osm' ? 'none' : 'zebra';
+  if (edited) return 'zebra';
+  return unmarked || canonical?.provenance.source === 'osm' ? 'none' : 'zebra';
 }
 
 /** TASK-217 (D1): a mapped crossing this close to a signalized node is a signalised crossing,
@@ -293,7 +353,10 @@ export function crossingPlacement(city: CompiledCity, road: CRoad, atEnd: boolea
     servedSignal(city, road) &&
     road.lanes.some((i) => {
       const lane = city.lanes[i]!;
-      return lane.lengthM - placement.farM - STOP_CLEAR_M < lane.lengthM / 2;
+      // TASK-348: at a plain signalised crossing, half of the lane before its stripes' floor.
+      const before =
+        lane.lengthM - (city.nodes[road.to]!.outline.length ? 0 : placement.nearM - 0.25);
+      return lane.lengthM - placement.farM - STOP_CLEAR_M < before / 2;
     });
   return clamped && placement.stripes.length ? { ...placement, stripes: [] } : placement;
 }
@@ -309,13 +372,18 @@ const placements = new WeakMap<CRoad, Placement[]>();
 
 function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
   const node = city.nodes[atEnd ? road.to : road.from]!;
-  if (!node.outline.length) return { stripes: [], nearM: 0, farM: 0 };
+  // TASK-348: a signalised crossing laid out as a plain node keeps its crossing.
+  if (!node.outline.length && !isSignalCrossing(node)) return { stripes: [], nearM: 0, farM: 0 };
   const arm = crossingArms(city, node).find((a) =>
     a.some((e) => e.road.idx === road.idx && e.atEnd === atEnd),
   )!;
   const lanes = road.lanes.map((index) => city.lanes[index]!);
   const curbs = junctionCorners(node).filter((c) => c.kind === 'curb' && c.curve);
-  let near = 0.25;
+  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
+  // TASK-348: at a signalised crossing laid out as a plain node the stripes stay where its junction
+  // floor (half the road plus 1 m) put them, over the mapped walkway (Freiburg n:31's stood 4.5 m
+  // past them when they started at the node).
+  let near = node.outline.length ? 0.25 : width / 2 + 1.25;
   for (const corner of curbs)
     corner.roads.forEach((index, k) => {
       if (!arm.some((e) => e.road.idx === index)) return;
@@ -326,7 +394,6 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
       const fromCut = atEnd ? nearest.lane.lengthM - nearest.on.along : nearest.on.along;
       near = Math.max(near, fromCut + CURB_CLEAR_M);
     });
-  const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
   const local = (d: number, side: number): Vec2 => {
     let edge = 0;
     const lane = lanes.find((lane) => {
@@ -346,10 +413,19 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
   const inOwn = preparePolygon(node.outline);
   const inFar = far.length ? preparePolygon(far) : () => false;
   const outside = (p: Vec2) => !inOwn(p) && !inFar(p);
+  // TASK-287: a curb return whose box lies over the clearance (and a micrometre) away passes
+  // without its segments.
+  const curbBoxes = curbs.map((c) => boxOf(c.curve!));
   const clearOfCurbs = (p: Vec2) =>
-    curbs.every((c) =>
-      c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M),
-    );
+    curbs.every((c, k) => {
+      const box = curbBoxes[k]!;
+      const dx = Math.max(box.minX - p.x, 0, p.x - box.maxX),
+        dy = Math.max(box.minY - p.y, 0, p.y - box.maxY);
+      return (
+        dx * dx + dy * dy > (CURB_CLEAR_M + 1e-6) ** 2 ||
+        c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M)
+      );
+    });
   const at = (from: number) => {
     const stripes: Vec2[][] = [];
     for (let side = 0.225; side + STRIPE_M <= width; side += STRIPE_PITCH_M) {

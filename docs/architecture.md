@@ -227,6 +227,7 @@ interface GeoSource {
 
 interface City {
   rail?: RailNetwork;      // TASK-126: independent track network
+  airport?: Airport;       // TASK-295: the airside of an airport in the area (section 4)
   schemaVersion: 3;
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
@@ -311,7 +312,9 @@ type WalkKind = 'footway' | 'pedestrian' | 'path' | 'steps' | 'living_street' | 
 interface WalkNode { id: WalkNodeId; pos: Vec2; layer: number;
   entrance?: { placeId: PlaceId | null }; provenance: Provenance }
 interface WalkLink { id: WalkLinkId; from: WalkNodeId; to: WalkNodeId; line: Vec2[];
-  kind: WalkKind; widthM: number | null; layer?: number; provenance: Provenance }
+  kind: WalkKind; marking?: 'zebra' | 'lines' | 'none'; covered?: boolean;
+  handrail?: ('left' | 'right' | 'center')[]; widthM: number | null; layer?: number;
+  provenance: Provenance }
 ~~~
 
 Stall geometry, sidewalks along streets and walk links over TASK-091 crossings are derived at
@@ -351,8 +354,8 @@ identical with terrain present or absent.
 
 ~~~ts
 type ContextArea = 'building' | 'water' | 'green' | 'landuse' | 'parking';
-type ContextPoint = 'tree' | 'street_lamp';
-type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row';
+type ContextPoint = 'tree' | 'street_lamp' | 'elevator';
+type ContextLine = 'rail' | 'tram' | 'waterway' | 'tree_row' | 'city_wall' | 'city_gate';
 
 type RoofShape = 'flat' | 'gabled' | 'hipped' | 'pyramidal' | 'skillion' | 'mansard'
   | 'gambrel' | 'half-hipped' | 'round' | 'dome' | 'onion';
@@ -362,7 +365,8 @@ type ContextFeature =
                material?: string; orientation?: 'along' | 'across'; directionDeg?: number };
       colour?: string; material?: string; minHeightM?: number;
       parts?: BuildingPart[] }  // TASK-201, buildings only
-  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number }
+  | { kind: 'line'; class: ContextLine; line: Vec2[]; widthM?: number; layer?: number; spacingM?: number;
+      heightM?: number; walkway?: true; bridge?: true }  // the last three: TASK-273, walls and gates
   | { kind: 'point'; class: ContextPoint; pos: Vec2; heightM?: number; crownM?: number; sub?: string };
 // An area's own fields without kind, class and parts; `sub` is the `building:part` value.
 type BuildingPart = { rings: Vec2[][]; sub?: string; heightM?: number; levels?: number; roof?: …;
@@ -383,15 +387,49 @@ tags as a building (`height`, `min_height`, `building:levels`, `building:min_lev
 and material). The 3D view draws a building's parts, each from its minimum height and on the
 outline's base, in the outline's colour and material unless the part has its own, instead of the
 outline; 2D, demand, picking and terrain cuts use the outline. No schema-version bump; old files
-omit the field.
+omit the field. TASK-272: an outline whose height is not its tallest part's is the building's
+body, so 3D also draws the outline's area that no part covers (pieces under 1 m wide or 4 m² left
+out) with the outline's tags, and a part with neither height nor levels takes the outline's height
+or levels; an outline as tall as its tallest part only envelopes its parts, as before. Display only;
+the data are unchanged.
 TASK-106 adds tree points (`sub` is `leaf_type`, dimensions are metres) and tree-row lines
 with optional `spacingM` (minimum 2 m) from OSM `spacing` (default 8 m). This is an optional context
 extension without a schema-version bump. Only imported context is saved; generated trees
 are derived display geometry and never enter the project or compiled network.
 
+TASK-273 adds city walls and gate arches as context lines, without a schema-version bump. A
+`city_wall` line is a way tagged `barrier=city_wall` or the older `historic=citywalls`, but not
+its stairs (`highway=steps`, which stay walk) nor a way that is also a `building` (a gatehouse or
+tower over the wall, which stays a building); clipped and rounded as every context line, with
+optional `heightM` from `height`, `widthM` from `width`, `layer`, `walkway` when the way is also a
+`highway=footway`, `path`, `pedestrian`, `cycleway` or `bridleway` (York maps the wall walk on the
+wall's own way), and `bridge` when it is tagged `bridge` (it spans an opening). A wall footway is
+the wall, never a wooded path area. A gate mapped as a building stays that building (the
+gatehouse); a `historic=city_gate` node that lies on a way and in no building outline is a
+`city_gate` line: square to the way through the node, spanning the way's `width` (else 3 m a lane,
+else 6 m for a road and 3 m for a path) and a 1.5 m pier each side, with `heightM` from the node's
+`height`; a gate node on no way is left out. Drawing (display only): 3D draws a wall as a stone body
+of its height (default 4 m) and width (default 2 m) in the building meshes; a `bridge` wall keeps
+a 1.2 m lintel over its opening; a walkway at grade is paved between two 1 m parapets, and a walkway
+on a raised `layer` meets the underside of the walk's own footbridge deck (layer x 5 m), whose paving
+and handrails are the walkway. A gate arch is two piers and a lintel with haunches, 8 m high and
+3 m deep by default, clear to 4.5 m. 2D draws a wall as a band of its width with edges, a gate arch
+as a darker band. Walls and arches count as neither buildings nor ground. Query version 11 adds
+`way[barrier=city_wall]`, `way[historic=citywalls]` and `nwr[historic=city_gate]` to the
+surroundings.
+
 TASK-107 adds `street_lamp` context points: optional `heightM` from `height` and `sub`
 from `lamp_mount`, falling back to `support`. No schema-version bump; old files still open.
 Imported lamps persist, while generated furniture stays renderer-only and is never saved.
+
+TASK-274 adds `elevator` context points: `highway=elevator` nodes with optional `heightM` from
+`height` and `sub` from `level`, except `indoor=yes` ones and those inside a building outline (indoors,
+or TASK-263's `building=elevator` shaft), unless the outline is the lift's tower: at most 16 m², without
+parts and not valued `elevator`. The 3D view draws one by TASK-263's shaft rule (landings where
+mapped walkways of different layers meet it, the top 3 m above the highest unless tagged), in its
+tower's outline or else as a 1.6 m square, when it serves a level above the ground: a landing above
+it, and the `level` tag, when present, naming a level above 0. Underground lifts and those whose
+walkways show one layer draw nothing. No schema-version bump; old files still open.
 
 Invariants (checked by compile, section 5):
 
@@ -408,7 +446,9 @@ Invariants (checked by compile, section 5):
 TASK-114 adds optional display-only `City.markingTheme` without a schema-version bump.
 Compile, routing and simulation ignore it. Import uses explicit OSM country tags first,
 then coarse offline bounds: US/Canada → `us`, UK/Ireland → `uk`, elsewhere → `de`.
-Files without the field resolve from their geographic bounding box, else `de`.
+Files without the field resolve from their geographic bounding box, else `de`. TASK-268: an
+OSM import without `ImportOptions.drivingSide` drives on the left where the theme it infers is
+`uk`, on the right elsewhere; the import wizard proposes the same from the area.
 The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
 absent override. A pure marking-style edit retains the city version and compiled object.
 
@@ -479,6 +519,102 @@ any other value; absent when untagged, which draws wired. It adds optional `Rail
 none); compiled `RailGraph.masts` carries them. No schema-version bump: older projects omit both
 and draw every track wired with generated supports.
 
+TASK-295 adds optional `City.airport: Airport` (`schema/airport.ts`, validated by
+`airport.schema.ts`) without a version bump. Imports include it when they read aeroway features
+(an aerodrome outline alone is none). TASK-296 also generates it for the two synthetic airport
+layouts. Holding positions, gates, terminals, helipads, surfaces, hangars and turn pads retain their
+`osmId` from OSM. The synthetic layouts omit it. The map frames a synthetic airport using its
+local outline along with the landside roads and places. Airport ids use the city's shared counter:
+`tm:` terminals, `gt:` gates, `rw:` runways, `st:` stands, `an:` airside nodes, `ae:` edges, `hp:`
+holding positions, `hl:` helipads. Units are metres and radians in the local frame; a heading is
+`atan2(dy, dx)` (x east, y south). The aircraft size scale is the ICAO aerodrome reference code
+letter `A` to `F` of the aircraft catalogue (`schema/aircraft.ts`: `AircraftCode`,
+`codeSpanLimitM` the wingspan each admits, exclusive: 15, 24, 36, 52, 65, 80 m; `codeAdmits`).
+
+```ts
+interface Airport {
+  name: string | null; iata?: string; icao?: string;
+  boundary?: Vec2[][];                       // the aerodrome outline, outer ring then holes
+  nodes: Record<string, AirsideNode>;        // an:  { pos, layer, osmId?, provenance }
+  edges: Record<string, AirsideEdge>;        // ae:  undirected (a `oneway` one runs along its line)
+  runways: Record<string, Runway>;           // rw:
+  holdingPositions: Record<string, HoldingPosition>; // hp:
+  stands: Record<string, Stand>;             // st:
+  gates: Record<string, Gate>;               // gt:  { ref?, pos, terminal: tm: | null, osmId? }
+  terminals: Record<string, Terminal>;       // tm:  { name?, rings, group, osmId? }
+  jetBridges?: { osmId: number; line: Vec2[]; stand: string | null }[]; // terminal end first
+  helipads: Record<string, Helipad>;         // hl:  { pos, ring?, ref?, name?, osmId? }
+  surfaces: AirsideSurface[];                // aprons, runway, taxiway, turn-pad and helipad areas
+  hangars: { rings; name?; ref?; osmId? }[];
+  windsocks: { pos; lit?; osmId }[];
+  approachAids: { kind; pos; facing?; runway?; end?; osmId }[]; // aeroway=navigationaid
+  turnPads: { pos; node?; osmId? }[];
+  roadCrossings: RoadCrossing[];
+  runwayOperations?: RunwayOperations;       // TASK-305: the airport's own runway table
+}
+interface RunwayOperations {                 // TASK-305; absent fields fall back (section 8)
+  configurations?: { id; arrivalEnds: string[]; departureEnds: string[] }[]; // ends by designator
+  concepts?: { startS; endS; configurationId: string | null }[];             // after midnight; may wrap
+  tailwindLimitKt?: number;
+}
+interface AirsideEdge {
+  id; from; to; line: Vec2[];                // first point at `from`, last at `to`
+  kind: 'runway' | 'taxiway' | 'taxilane' | 'lead_in';
+  layer: number; widthM: number;             // mapped `width`, else the code's width (inferred)
+  maxCode: AircraftCode | null;              // the largest code it admits, by rule; null: none
+  ref?; name?; surface?; oneway?: true;
+  runway?: string; stand?: string;           // a runway edge's runway, a lead-in's stand
+  provenance: Provenance;                    // `generated` for a generated lead-in
+}
+interface Runway {
+  id; ref;                                   // '09/27'
+  ends: [RunwayEnd, RunwayEnd];              // in the order of `ref`
+  edges: string[];                           // from ends[0] to ends[1], each oriented that way
+  lengthM; widthM; surface?; maxCode; stopways: Vec2[][]; osmIds; provenance;
+}
+interface RunwayEnd {
+  designator: string; node: string; pos: Vec2;     // where the pavement ends (take-off start)
+  threshold: { node: string; pos: Vec2 }; displacedM: number;
+  heading: number;                           // taking off from this end
+}
+interface HoldingPosition {
+  id; node; ref?; kind: 'runway' | 'intermediate';
+  runway: string | null;                     // the protected runway
+  side: 'left' | 'right' | null;             // of the runway, looking from ends[0] to ends[1]
+  toward: string | null;                     // the edge at the hold leading to that runway
+  osmId?; provenance;
+}
+interface Stand {
+  id; ref?; kind: 'contact' | 'remote' | 'cargo' | 'general_aviation' | 'maintenance';
+  pos: Vec2; heading: number;                // the stop (nose) position and the aircraft's heading
+  leadIn: string[];                          // edges from the taxi network to `pos`, network first
+  gate: string | null; maxCode: AircraftCode | null; osmIds; provenance;
+}
+interface RoadCrossing { edge; pos; roads: string[]; roadOsmIds: number[]; osmId? }
+```
+
+Boundary validation checks that record keys match ids, edges meet existing endpoints, a runway's
+edges chain from `ends[0].node` to `ends[1].node`, holds, stands, gates and crossings name
+existing entities, every lead-in edge names its stand, and a runway table's configurations name
+existing runway ends (at least one for arrivals and one for departures). TASK-305: a code given
+by rule carries `maxCode` in `provenance.inferred` (stands, taxi edges, lead-ins), a width given
+by rule `widthM`; an edit re-derives the first where geometry changes and never touches a code or
+width the user set, which drops the name from the list. Authored airside items have
+`provenance.source: 'authored'`. The graph is undirected: a runway edge
+is usable both ways, so a backtrack (taxiing along the runway to its end and turning there, as at
+London City, which has no full parallel taxiway) is a route over runway edges while the runway is
+held. `RoadCrossing.roads` are the directed roads at the crossing as imported; an edit can retire
+them, so a reader resolves by `pos` and `roadOsmIds` as rail crossings do by OSM way. Nothing in
+the section bounds aircraft to the map: runway ends, headings and thresholds define the extended
+centrelines that approaches and climbs (TASK-298, TASK-301) follow some 10 km past the polygon.
+Mapped jet bridges retain the imported stand association. The renderer leaves a bridge stowed
+if an edit removes the stand, and resolves it again if undo restores the stand.
+Compile reads it only into `CompiledCity.airside` (TASK-298, below); no lane, connector or road
+route reads it. The 2D and 3D maps draw it as paving (`render/airside-geometry.ts`):
+mapped aprons, then taxiways and taxilanes buffered to their widths with round ends, then each
+runway along its edges and stopways with square ends, over the place tints and under the roads, at
+grade 0; terminals and hangars are the buildings the context already draws.
+
 ## 5. Compiled model: `CompiledCity`
 
 `compile(city: City): CompileResult` lives in `src/network` and is a pure, deterministic
@@ -519,7 +655,8 @@ interface CompiledCity {
 }
 
 interface CNode { idx: number; id: NodeId; pos: Vec2; grade: number; radiusM: number; control: Control;
-  movements: number[]; signal: CSignal | null; group?: number; }
+  movements: number[]; signal: CSignal | null; group?: number;
+  miniRoundabout?: boolean; }               // TASK-269: `highway=mini_roundabout`; every entry gives way, priority 0
 interface CGroup { idx: number; id: JunctionGroupId; nodes: number[]; innerRoads: number[];
   entries: number[]; exits: number[];          // road idx entering / leaving the group
   chains: { from: number; to: number; movements: number[] }[]; signalised: boolean; }
@@ -578,6 +715,15 @@ join the same zone. Zones are assigned deterministically in compiled road order.
 zone separate from non-lot roads and other lots, even when the adjoining street is private.
 An aisle listed by overlapping facilities belongs to the first facility in compiled id order
 for zone assignment. Thus a neighbouring private-road origin cannot grant aisle access.
+TASK-294 (`src/network/zones.ts`): a pocket, a component of a class's open roads (`yes`, a
+lane the class may use) other than the largest that a car reaches only through zones, becomes
+a zone too, numbered after the others; roads carrying a gateway's connector join no pocket.
+Zones and pockets are ranked by the fewest zones a car passes from the open roads outside
+pockets (a pocket counts none), and each reaches itself and what the zones and pockets it
+touches on those ways in reach (`zoneReach(compiled, class)`, derived). A zone the outside
+touches reaches only itself, so a lot on a public street, a private street beside a lot and a
+city without pockets keep their rules; a lot or street only another zone reaches, and a pocket
+behind "Anlieger frei" streets, take the zones on their way in.
 
 TASK-104 derives `CompiledCity.lots?: CLot[]` only when lots exist. Each lot has its
 facility id, entry node ids, aisle road ids, `stalls` and `stallCount`. A stall stores `position`, `heading`,
@@ -981,6 +1127,27 @@ routing, demand, the timetable or simulation state.
   by side with dividers to the point where the branches separate, and an absorbing merge's
   outer edge as one smooth taper over `taperM`; a change to which nodes are continuation
   nodes is allowed only where every movement stays as compiled.
+- TASK-348 (lane geometry under junction groups and signalised crossings; owner decisions
+  2026-11-25/26). (1) Deferred (lead, 2026-11-26): an inner road of a junction group keeping
+  0.5 m of lane under its cuts instead of 5 m, so that where it is shorter than its members' cuts
+  it carries no lane block of its own, gridlocked Freiburg's gate; it is off (`INNER_LANE_M` =
+  `MIN_LANE_M`) until a follow-up diagnoses that. A road whose cut moves after the first layout
+  (a continuation node's cut dropped) is laid out again at that end. (2) A signalised node whose roads lead to two other nodes
+  (a signalised crossing between junctions; a junction group's member keeps its junction layout)
+  keeps its control but is laid out as TASK-255's stop position is: a through node (setback 0, no
+  outline) where its two arms run on within 30 degrees with the same lanes, whatever the ways'
+  names and classes, else a continuation by TASK-071's rule; its crossing stays where the
+  junction's floor put it (half the road plus 1 m from the node, over the mapped walkway), the
+  stop line before it, so the approach's storage is unchanged.
+  (3) Off in the merge-rule variant (2026-11-26; `ONE_WAY_CONTINUATIONS`: Munich's full demand +5.3%, fixed
+  time): a continuation node would also cover a one-way road continuing one direction of a two-way street
+  straight on (within 10 degrees) at a node of their own, where the street's other direction has
+  no movement: that direction starts or ends at the node outside the layout; the one-way road's
+  lanes line up with the direction they continue (TASK-093's lane step where it applies, else the
+  one-way road jogs onto it, since a direction of a two-way street never moves), and its surface
+  takes the other direction's width on over its taper (`ContinuationEnd.widenOverM`), so the width
+  change is drawn as a lane taper, not a junction. Corners over 30 degrees stay drawing-only
+  (TASK-347) and the 30 m smoothing exclusion around plain degree-two nodes is kept.
 
 ### 5.2 Movement generation
 
@@ -1043,9 +1210,11 @@ the OSM `lanes` tags carry one.
   service 2, ramp uses the rank of the road it joins minus one (minimum 1).
 - `priority = majorRank * 10 + turnRank` where `majorRank` is the incoming road's classRank,
   except that roads listed in `node.minorRoads` (yield/stop) get rank 0, and `turnRank` is 2
-  for through and right, 1 for left, merge and diverge, 0 for uturn. Ties are broken in the
-  simulation by the right-before-left rule (left-before-right under left-hand traffic), then by
-  waiting time, then by vehicle id.
+  for through and the near-side turn, 1 for the turn across the oncoming flow, merge and diverge,
+  0 for uturn. The near-side turn is right under right-hand traffic and left under left-hand, the
+  turn across the flow the other one (TASK-282). Ties are broken in the
+  simulation by the right-before-left rule (none under left-hand traffic, TASK-268: the UK gives
+  way by the road hierarchy, which the rank holds), then by waiting time, then by vehicle id.
 - Default `minorRoads` when empty at a yield or stop node: incoming roads whose class rank is
   below the maximum rank among the node's incoming roads.
 
@@ -1228,7 +1397,7 @@ the trapped connectors and their lanes (or reports that no departure connector e
 The check uses TASK-122's largest movement SCC per origin access zone, excluding
 `neverGreen` and lane-drop fallback movements; adjacent-lane changes need 30 m each,
 measured from the connector's actual station. Car access is `yes`, or `private`/`destination`
-in the origin's own zone. Tied largest SCCs all seed the check. Strips retain their mapped
+in a zone the origin's zone reaches (TASK-294). Tied largest SCCs all seed the check. Strips retain their mapped
 roads and are counted separately by the import probe. Warnings do not move saved connectors
 or prevent compilation; re-import repairs the source portals.
 
@@ -1312,6 +1481,26 @@ existing walk IDs. Entrance association uses a matching name when present, then 
 station within 250 m, excluding foot/access=no. The existing 150 m, same-grade, no-road-crossing
 access attachment above supplies streets; stations without doors use the platform/building shape.
 
+### 5.7 Airside graph (TASK-298)
+
+Where the city has an airport section, `compile` adds `CompiledCity.airside`
+(`network/airside.ts`): the section in dense indices, sorted by id. Nodes carry their incident
+edges and the runways whose edges meet there; edges their line, cumulative stations, kind, width,
+code as an index into `aircraftCodes` (-1 admits none), runway and stand; runways their edges and
+nodes in order from `ends[0]` with stations, centreline, and each end's node, threshold and
+stations; holds their node, protected runway and `toward` edge; stands their lead-in edges, root
+(network end) and stop node, and (TASK-320) where apron service roads (`service` roads closed to
+cars, TASK-316's reading) cross the stand's line, as merged bands of distance back from the stop,
+and the paved room ahead of the stop (to the edge of the non-runway airside surfaces or a terminal
+or hangar wall, at most 30 m); hangars their centroid and the nearest node a taxi edge reaches;
+`maxSpanM`, the span limit of the largest stand code. Each road crossing gets the lanes of its
+recorded roads whose drawn line passes within a lane width of it, with a stop `clearance` short of
+it: the larger of half the edge's width and half its code's span, plus 7.5 m; a stop before a
+lane's start falls on the lanes leading in. Cities without the section compile unchanged.
+TASK-305: the graph also carries the airport's `runwayOperations`. Nothing else in the compiled
+city reads the section, so a commit whose patch edits the airport alone recompiles only
+`airside` (and the version) on the previous compiled city; the result equals a full compile's.
+
 ## 6. Editing
 
 TASK-131: patches carry `junctionGroups` (set and remove), so undo restores a group. A topology
@@ -1326,6 +1515,60 @@ and inverse patches. Inferred facilities become canonical when editing begins or
 added; undo removes newly inferred facilities with their place. Garage connectors follow
 road topology and lane edits. The live engine rejects reducing capacity below occupied slots;
 the inspector uses current occupancy as the minimum. Restart can apply a lower capacity.
+
+TASK-305 adds airport edits (`editor/commands/airport.ts`). Patches carry `airport: { set,
+remove }` of the section's `nodes`, `edges`, `runways`, `holdingPositions` and `stands`, and the
+whole `roadCrossings` or `runwayOperations` (null removes it) when they change; inverse patches
+and `diffCity` (restore, batches) cover them, and the editor validates the edited section with
+`airportSchema` before it commits (`airport_invalid` otherwise). Commands:
+
+```ts
+  | { kind: 'addStand'; pos: Vec2; standKind: StandKind; ref?: string; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'moveStand'; standId: string; pos: Vec2 }
+  | { kind: 'setStand'; standId: string; standKind?: StandKind; ref?: string | null; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'deleteStand'; standId: string }
+  | { kind: 'addTaxiway'; edgeKind: 'taxiway' | 'taxilane'; vertices: AirsideVertex[]; ref?: string; widthM?: number; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'splitTaxiway'; edgeId: string; atM: number }
+  | { kind: 'setTaxiway'; edgeId: string; edgeKind?: 'taxiway' | 'taxilane'; ref?: string | null; widthM?: number | null; maxCode?: AircraftCode | null | 'rule' }
+  | { kind: 'deleteTaxiway'; edgeId: string }
+  | { kind: 'addHold'; edgeId: string; atM: number; runway?: string | null; ref?: string }
+  | { kind: 'moveHold'; holdId: string; edgeId: string; atM: number }
+  | { kind: 'setHold'; holdId: string; runway?: string | null; ref?: string | null }
+  | { kind: 'deleteHold'; holdId: string }
+  | { kind: 'setRunwayOperations'; operations: RunwayOperations | null }
+type AirsideVertex = { node: string } | { edge: string; atM: number } | { pos: Vec2 };
+```
+
+- A new or moved stand joins the network as the import joins a stand node: a straight lead-in
+  (`generated` rule, `authored` source) from the nearest point of a taxiway or taxilane within
+  150 m whose line to the stop crosses no building but one the stand stands in, splitting that
+  edge there; the heading is the lead-in's. A moved stand's old lead-in goes with the nodes it
+  leaves without edges. `maxCode` 'rule' (or none on an add) derives the code; a code or null
+  sets it, and a lead-in takes its stand's code.
+- `addTaxiway` resolves each vertex: a node joins there, a point on a taxiway, taxilane or runway
+  edge splits it (the farthest along first, so the others keep their place), a free point is a
+  shape point, or a new node at either end. Each section between joins is one edge, at least 1 m.
+  A width given is mapped; without one the width is the code's.
+- Splitting an edge keeps its id on the piece at `from` and copies the attributes; a runway's
+  edge list takes the new piece in order, a hold looking along it from the far end looks along
+  the far piece, and road crossings go to the nearer piece. Splits re-derive nothing. Deleting a
+  taxiway removes the end nodes it leaves without edges (not runway ends), the holds on them and
+  its road crossings; holds looking along it look again by rule.
+- A hold added on a taxiway protects the runway the graph reaches first within 1 km (the import's
+  rule for a runway hold), else none (intermediate); `runway` sets it, null makes it
+  intermediate. `side` and `toward` follow the runway (`toward` is null on the runway or out of
+  reach). A moved hold keeps its runway on its new node; the old node stays.
+- Codes by rule again (`network/airside-codes.ts`, TASK-295's rules, shared with the importer):
+  after an edit that changes geometry, every stand within 175 m of a placed or removed stand (the
+  reach of two code F stands with their clearance) and every taxi edge within 211 m of a drawn,
+  deleted or re-kinded line (the code F separation plus the 120 m junction detour), whose code is
+  inferred, gets the code the rules give it in the edited airport. Obstacles are the city's
+  context buildings, terminals and hangars; London City re-derives every one of its imported codes
+  unchanged from the bundled city. A width given by rule follows its code.
+- Restart policy: the run's flight day (stands, routes, schedule, runway table) is built from the
+  airside at load, so an airport edit marks the run stale and offers a restart, as a scheduling
+  change does. Until then the map draws the edited airside and maps the loaded run's aircraft
+  routes and cleared stop bars onto it by id; the aircraft inspector reads the loaded graph.
 
 Lives in `src/editor`. The editor owns one `City` and exposes:
 
@@ -1546,12 +1789,13 @@ travel times and add bounded, hysteretic rerouting; the provider contract does n
 
 TASK-101 removes `no` roads from the class graph, including its origin and destination
 checks. Each request filters road-search and lane-search edges: destination/private roads
-are allowed only in the origin road's or destination connector road's zone; delivery roads
+are allowed only in a zone the origin road's or destination connector road's zone reaches
+(itself, and since TASK-294 the zones on its way in, section 5); delivery roads
 require `purpose: 'delivery'`. The same checks apply to endpoints. A topologically possible
 route that requires violating access returns `class_forbidden`, including when lane
 feasibility forces a restricted detour. No successful fallback relaxes access. A vehicle
 already in a local zone can route out of it through that origin zone.
-Live patches compare effective access and zone arrays. A remaining route crossing an
+Live patches compare effective access and zone arrays, and the zones that reach each zone. A remaining route crossing an
 access-changed road is checked immediately as invalid, bypassing congestion hysteresis;
 otherwise an edit could retain a faster but forbidden route.
 Missed-turn fallback candidates use that same access filter with the vehicle's actual
@@ -1590,7 +1834,331 @@ weights)` scans the events in time order once (within two hours of the departure
 `weights.ride`, `weights.transferS` per transfer. The plan lists its rides (route, run, stops,
 times), transfer walks, access and egress stops, and walking, waiting and riding seconds.
 
+TASK-298 routes aircraft on the airside graph (`routing/airside.ts`). An arc is an edge in one
+direction (`2e` along its line, `2e + 1` against; a oneway edge only along). Dijkstra over arcs
+from an arc (continuing from its end) or a node, to the first arc a goal accepts; cost is length,
+four times on runway edges, times a caller's factor. The sim further penalizes runway transit
+and increases the cost of edges locked in the opposite direction. An arc is admitted when its edge's code admits the aircraft's
+and, for a lead-in, when it is the goal stand's. A turn from arc a into b (never b's reverse) is
+taken when its deflection, measured over a turning radius on each side, is under 165 degrees and
+needs a tangent `R tan(θ/2)` no longer than the shorter of the two edges or 1.5 R, whichever is
+more.
+
 ## 8. Simulation
+
+TASK-306 prepares aircraft motion profiles over a metric polyline with cumulative stations.
+`src/sim/aircraft-motion.ts` samples position, heading, height above runway or pad, horizontal
+speed, and phase at elapsed simulation time, clamped to the profile's duration. Taxi, pushback,
+and tow brake for curvature and stop at a requested station. The caller supplies legal turns
+using the catalogue's minimum radius and supplies extended runway centrelines for roll, climb,
+approach, and flare. Approach samples reach zero height at the aiming station and end at the
+requested exit speed. Helicopter profiles use vertical pad motion, forward transition, and
+hover taxi. The profiles use nominal catalogue figures and have no engine dependency.
+TASK-298 adds `taxiEntrySpeedMps` (the fastest a path can be entered and still keep its limits
+and stop) and lets a replanned ground profile start up to 1e-6 m/s above its envelope (rounding).
+
+TASK-298 moves aircraft (`sim/aircraft.ts`, `createAircraftFleet(graph, seed)`), created by the
+engine only where `CompiledCity.airside` exists; its state enters `stateHash` only then. Aircraft
+carry no persons and generate no road trips.
+- **Legs.** A ground leg is a run of arcs (and runway stretches) as one polyline, its corners
+  rounded with the type's turning radius where the segments leave room (tangent at most 45% of
+  either); the aircraft's centre follows it from its tail at the start to its centre at the end.
+  Motion is TASK-306's taxi, pushback or tow profile from the current station and speed to the
+  current stop, replanned when the stop moves forward; air legs are its approach, take-off,
+  climb and helicopter profiles.
+- **Claims.** A moving aircraft claims the stretch of its leg from its tail less a margin to its
+  nose plus braking distance plus the margin (extended 80 m ahead before it binds), as edge
+  intervals and the nodes inside (runway edges and nodes excluded); no two aircraft's claims share
+  an edge interval or a node, and an aircraft's stop is its claim's end less the margin. The
+  margin is half `maxSpanM` plus 12 m. A parked aircraft, and one standing at a hold, claims only
+  its body (and 10 m ahead), so it closes no junction another aircraft's leg crosses.
+- **Order** (TASK-312, in place of whole-route direction locks and whole-route sweep admission).
+  A movement is ordered when it is admitted: a departure or tow at its request (after TASK-319's
+  ready-for-pushback hold), an arrival when it first tries to appear (its stand free, its landing
+  and exit chosen). Its legs' swept bodies (sampled every 6 m, `SAMPLE_M`) are compared with every
+  other aircraft's remaining legs (from where it is; an approach's taxi leg; an admitted movement's
+  legs). Where bodies would touch, the one earlier in the order passes first: the later stops one
+  sample short of the conflict until the earlier is one sample past it; on a stretch both follow
+  each other on (same arcs, same direction) the later enters once the earlier is in ahead of it,
+  and the claims keep them apart from there. The order is the order of admission (tows included:
+  putting tows last starved them at Zurich); a re-routed departure (runway change) is ordered anew.
+  TASK-329: an aircraft that has started (left its stand, appeared on approach) never waits for one
+  that has not. Starting, it goes before the departures and tows ordered before it that are still
+  at their stands (they wait for it instead, unless their parked body is in its way); it does not
+  start while it would still wait for a queued arrival or an aircraft parked in its way (it waits at
+  its stand or in the air). Started aircraft are thus in the order they started and
+  the others follow in the order of admission. Rings of waits can still close through aircraft
+  parked in the way (a stand's or a helipad's); one that lasts 60 s is broken where an aircraft can
+  give way (one not started first, else the latest admitted; a started one only to another that
+  has started). An aircraft waited for
+  ignores the margins (claims, push-sweep check) of those waiting for it, which stand clear of its
+  path. An arrival appears only when every conflict before its tail is off its runway is passed. A
+  stand does not take a type whose parked body would stand in the way of one like it taxiing past
+  on a taxiway or taxilane (Zurich's H11 to H14, 26 to 29 m from taxiway P); routes avoid edges
+  where a parked aircraft stands in the way of the mover (factor 50), and an aircraft whose way an
+  aircraft parks across waits short of it until it leaves its stand. Edges an aircraft will use are
+  still marked with its direction; routes taxiing against such a mark cost 3 times as much.
+- **Progressive order** (TASK-330). Admission orders only the conflicts within 300 m
+  (`ORDER_HORIZON_M`) of either aircraft along its route; aircraft parked in the way are still
+  taken over the whole route. Every 5 s each ground aircraft orders the conflicts that have come
+  within 300 m: a pair already ordered keeps its direction; otherwise the one that can no longer
+  stop short goes first, else a started one before one not started, else the one that gets there
+  first (ties by admission). A direction that would close a ring of waits is not taken (the other
+  is, or the pair stays open while both can still stop). A departure or tow at its stand does not
+  wait for a queued arrival that cannot reach where they meet before it is past (90 s per arrival
+  queued before it on its end, the 10 km final, its taxi; against the starter's push, tug and taxi
+  plus 120 s); that arrival is ordered after it. An arrival behind another on the same way off the
+  runway waits only until the leader's tail is a margin past the nose of one standing at its safe
+  point (tail off the runway). TASK-342: a ground aircraft's body where it stands is tested against
+  the other's sweep too, so a wait is short of a holder's wing in an adjacent lane.
+- **Parked in the way** (TASK-339). A tow at its rest point counts as parked (route cost, waits).
+  Of a pair, the one whose movement ends (stand, rest point, return) with its body in the other's
+  remaining way goes second where it can still stop short. A departure or tow not started does not
+  push back while it would wait, beyond its pushback, for an aircraft parked or at rest with no
+  movement planned (a new admission is refused; an admitted one is dropped and planned again), nor
+  while an aircraft still moving is to come to rest across its way. A taxiing departure ordered to
+  wait for such an aircraft re-routes around it while a turn short of it is ahead; a parked
+  aircraft that others stand waiting for plans its route off their bodies.
+- **Runways.** A grant covers the runway a movement uses and each intersection area its path
+  reaches (TASK-327). An intersection area is the overlap of two runway strips at their shared
+  node, widened by the aircraft protection margin. The aircraft releases each area when its tail
+  clears it. A ground leg stops at the mapped hold within 300 m before the runway node it enters
+  (else 75 m short of it) until granted. It asks when first in line and gets the grant when each
+  resource is free and the estimated clear time plus 20 s fits before its next booking. A crossing
+  releases the runway when its tail passes the next hold beyond (else 75 m past the runway). An
+  arrival appears about 10 km out (`FINAL_M`) on the extended centreline when its windows are free
+  of bookings and holders and it keeps its spacing on final (TASK-330: 2.5 NM threshold to
+  threshold, or the ICAO wake pair if longer, at the follower's approach speed; A388 super,
+  double-deckers and widebodies heavy, private light, the rest medium; super to heavy, medium,
+  light 6, 7, 8 NM, heavy to the same 4, 5, 6, medium to light 5), so several can be on final
+  to one runway. It books each resource from 35 s before the threshold to 5 s after estimated
+  clearance, then takes them 30 s before the threshold. If a holder remains, it goes around
+  straight ahead at approach speed and its climb gradient, then queues again. TASK-330, on a
+  runway that crosses no other (no intersection area): the booking starts 10 s before the
+  threshold (5 s, `CLEAR_BEFORE_S`, plus the 5 s pad); at the decision a holder predicted off
+  the runway by 5 s before the threshold does not force a go-around: the arrival commits and
+  claims the runway once the holder is off, and goes around if it is still held 5 s before the
+  threshold. It releases
+  its runway when its tail passes the first hold beyond its exit (else 75 m past it). A departure
+  releases its runway passing the far end. A ground aircraft that has waited 30 s for a runway
+  window gets a gap on the resources it needs. A new arrival that needs one of those resources
+  appears only when its window starts the waiting aircraft's occupancy plus twice 20 s after the
+  last window on that resource (TASK-312).
+- **Landing flow** (TASK-330). An arrival does not appear while an aircraft stands in its way off
+  the runway that could not give way there. At the decision (30 s before the threshold) its way
+  off is ordered: an arrival ahead on the same way off counts as clear if its exit speed profile
+  has its tail past in time and no ungranted runway hold stops it before; a ground aircraft that
+  can still stop short (and holds no runway grant covering its stop) gives way; ground aircraft
+  not yet ordered with it are ordered then; anything else and it goes around. Its claim runs to
+  its safe point only. No order gives a landing aircraft a wait short of its safe point. A
+  crossing is granted behind a landing aircraft whose tail is 60 m past the crossing, rolling
+  away (the runway is shared). A stop short of a runway moves back, 2 m at a time and at most
+  150 m, until the waiting body is clear of the widest type the runway takes rolling on its
+  centreline. A tow does not start while an arrival on final, or the next to appear on an end,
+  would meet its route before that arrival's tail is off the runway, unless that arrival is
+  already ordered to wait for the tow. Tows run at towbarless-tractor speeds (7 m/s, 6 m/s for
+  double-deckers).
+- **Departure flow** (TASK-330), on a runway that crosses no other: a departure is granted its
+  line-up behind a departure that has started its roll from the same end (its tail well clear of
+  its line-up point, which is not behind the new line-up: TASK-346, never ahead of a roll), and
+  takes off once no other departure on the runway still holds it and the wake time
+  behind the last roll has run (super before a lighter class 180 s, a heavier class before a
+  lighter 120 s, else 75 s, `DEP_SEP_S`).
+- **Approach and landing.** Glide path 3 degrees, or the published steep approach by aerodrome
+  (EGLC 5.5 degrees); aiming point 300 m past the threshold or a fifth of the landing distance;
+  roll-out ends 40 m before the exit node at the speed the taxi leg can take. The exit is the
+  first runway node past touchdown plus the type's landing roll whose turn-off has a route to the
+  stand and whose predicted exit is free when the arrival books it. The exit is checked again
+  before landing clearance. A reversing loop at the far end permits a backtrack when needed.
+- **Line-up and take-off.** (TASK-312) Options in order: full-length entries; backtracks of up to
+  1,000 m along the runway; intersection departures with a quarter of the take-off run to spare;
+  longer backtracks. A way to the line-up that taxis along a runway is taken only when no later
+  option reaches the runway by taxiways. A departure lines up at the first runway node from its end up to the
+  threshold (or within 60 m of the end, half the runway at most: a full-length line-up past a
+  threshold at the end itself, Zurich 32's entry 11 m in; TASK-302) that a route turns onto in the
+  take-off direction (centre half its length or its
+  turning radius past it, plus 5 m); otherwise it backtracks: onto the runway toward the end at
+  the nearest node far enough out, along it, and round a reversing loop (right 60, left 300, right
+  60 degrees at its turning radius, reaching (1 + sqrt 3) R) back to the centreline. It pauses 5 s,
+  rolls, rotates and climbs 10 km past the far end, then leaves.
+- **Pushback and tow.** From a stand whose stop is a dead end, the tug pushes it back along the
+  lead-in and onto the straightest admissible arc at the root until the nose is 10 m past the
+  root; a departure then waits 20 s (tug off, engines on) and taxis; a tow continues as a tow (no
+  engines) to a stand or a node (`requestTow(id, { stand } | { node } | { hangar })`). A stand
+  admits a type only up to its code and only with a way out (a push arc and a turn on from it).
+- **Parked pose** (TASK-320). A leg that ends at a stand's stop (an arrival, a tow, an aircraft
+  placed on its stand) ends on the stand's line: its last half length plus 1 m runs straight on
+  the stand heading, so the parked aircraft stands on that heading with its nose at the stop. The
+  corner before is rounded with the turning radius where the lead-in leaves room for the
+  straight, tighter where it does not (London City's stands turn back 130 degrees 25 m short of
+  their stops). Where the lead-in's last straight is shorter than that or off the stand heading,
+  an alignment segment replaces the leg's end: from the route a turning radius before, to a
+  point a half length, 1 m and a turning radius back from the stop on the stand's line, then on
+  to the stop. A pushback starts from the same pose by the same rule. The stop moves along the
+  stand heading so that the parked body keeps 1 m clear of the apron service roads across the
+  stand's line: the least move, within the paved room ahead or 20 m back, that clears every road
+  there and stands in no taxiway's way; where none does the stop stays (the report of TASK-320
+  lists those stands). The drawn pose settles into the simulation's pose at the stop over the
+  last two wheelbases (no longer into the mapped stand pose), so a parked aircraft is drawn where
+  it stands.
+- **Helicopters** land vertically on a helipad from a stated heading, leave climbing vertically
+  then forward, and hover-taxi between helipads. The flight operations give the heading of the
+  helicopter runway's end with the most headwind where the airport has one (a runway with no
+  fixed-wing code, Zurich's H01/H19; TASK-302), else the fixed-wing flow's; helicopter runways
+  are not in the fixed-wing configurations.
+- **Operations API** (TASK-299): `spawnParked`, `requestArrival({ typeId, runwayEnd, stand })`,
+  `requestDeparture(id, end)`, `requestTow`, the helicopter requests, `drainEvents()` (landed,
+  parked, off-block, departed, towed, go-around), `parked()`, `standFree`, `standAdmits`, `metrics()`.
+  `engine.load({ airsideOperations })` can supply a scripted driver. The default driver
+  (`sim/flight-operations.ts`) runs the airport's seeded flight schedule for the scenario's
+  starting day on the runway configuration in use (below). Ground movements can run
+  concurrently on separate paths and on shared directed taxiways with following-distance
+  claims. Crossing and converging body sweeps take turns in the order above (TASK-312).
+  Helicopters use separate pad slots and a shorter schedule.
+- **Airside clearance.** Gates come from runway intervals and crossing nodes on the actual
+  ground trajectory, including intermediate runway taxi and backtracks. A runway clearance
+  checks that the path through the runway and its exit can be claimed. Approaches book a runway
+  window at appearance and check the runway and swept ground route at the decision point 30 s
+  before the threshold. An aircraft unable to secure both goes around. Runway use is sequenced
+  so that this is rare (TASK-300; TASK-312: by the order above, an arrival appears only when the
+  conflicts before its tail is off the runway are passed, and at the decision it needs its exit
+  claimable through its length and the margin past the vacating point).
+  Pushback reserves its
+  swept aircraft body against neighbouring occupied stands and conflicting lead-ins until the
+  push ends. Sweeps follow the rounded trajectories and use fuselage, wing and tail rectangles.
+  TASK-319: a fixed-wing departure or tow enters `ready-for-pushback` once requested. The
+  aircraft holds its stand and stays stationary with engines off while its tug prepares to
+  move it. The minimum durations are 10 s for double-deckers, 8 s for widebodies, 6 s for
+  narrowbodies and regional jets, and 5 s for turboprops and private aircraft. Off-block is
+  recorded when the departure has clearance and starts moving. Helicopters depart as before.
+- **Stands and service.** Stand selection checks that the type can land, reach the stand,
+  push back and depart on the chosen ends. Passenger flights prefer contact stands. Private
+  and cargo flights prefer their designated stands where available. Within each kind the
+  allocator prefers the smallest suitable code, then the shorter combined surface route. It
+  checks both stands' parked bodies and pushback sweeps before pairing neighbours. Arrivals with no
+  stand wait off-map at the entry to the final approach for up to 30 minutes. A diversion
+  cancels the paired departure. Turnaround starts when the aircraft parks. Long turns can
+  move to a remote stand, maintenance uses a maintenance or nearest hangar-apron stand, and
+  overnight aircraft use remote parking where available, with a return tow due 20 minutes
+  before departure when they need to return to a contact or general-aviation stand. A scenario
+  opened partway through the schedule places aircraft whose
+  turns are already in progress on compatible stands. The bundled airports' browser showcases
+  run to midnight from the stored start time. The archives remain unchanged.
+- **Flight board.** The worker exposes the day's schedule, movement states, delays and stand
+  occupancy separately from the per-frame pose snapshot. Counts cover movements scheduled
+  at or after the scenario start. London City's timetable spreads the seeded movements across
+  operating hours, retaining morning and evening demand, and allows three minutes of taxi-in
+  before turnaround. Arrival delay is actual touchdown minus scheduled touchdown, and departure
+  delay is actual off-block minus scheduled off-block, each floored at zero. Departure completion
+  still requires the aircraft to reach the end of climb. The status bar shows the movement count,
+  and the inspector shows the board and the code, kind and occupancy of a picked stand.
+- **Snapshot.** `VehicleSnapshot.aircraft`: id, registration-like id (by ICAO prefix), type,
+  position, height, heading, speed, state (approach, flare, landing-roll, go-around, taxi,
+  holding, line-up, takeoff-roll, rotation, climb, parked, ready-for-pushback, pushback, tow and the helicopter
+  phases), engines running, on runway, airborne, gear down (on the ground, below 600 m on
+  approach, below 150 m climbing), stand, runway end and the airside edges ahead.
+  In `ready-for-pushback`, `pushbackReadySinceS` gives the simulation time when retraction
+  began. Bridges stow within 4 s and use the timestamp when snapshots skip part of that interval.
+  `VehicleSnapshot.airfield` (TASK-301, `fleet.airfield()`): per runway the end arrivals and the
+  end departures use (-1: none), the holding positions whose stop bar is off (an aircraft granted
+  past it whose tail has not passed the hold node) and the glide slope. The ends in use are the
+  latest requested, or those `fleet.setActiveEnds({ arrivalEnds, departureEnds })` names; once a
+  runway configuration is set they are its ends from the moment it opens. Its `runways` field
+  (TASK-300, additive, present once a configuration is set) gives the open configuration, the
+  ends open for arrivals and departures and, during a change, the configuration it changes to,
+  since when, the closed ends still in use and the departures re-routed so far. Not in the state
+  hash.
+- **Runway configurations** (TASK-300). The flight operations build TASK-308's chooser over the
+  airport's runway ends, with the configurations and time-of-day concepts of the airport's own
+  `runwayOperations` (TASK-305, set in the flight board), else of `airportRunwayConcepts` by ICAO
+  code, field by field. London City derives configurations by wind alone. Boston uses its
+  southwest and northeast flows on non-crossing parallels. Under TASK-328, Zurich lands on 14
+  and departs on 16 and 28 from 06:00 to the 23:30 night closure, with east and south as wind
+  alternatives. Heathrow keeps landings on 27L and take-offs on 27R all day in westerly wind, with
+  09L arrivals and 09R departures in easterly wind. The chooser applies the airport's tailwind
+  limit or 5 kt and the strictest maximum demonstrated crosswind of the types in
+  the airport's mix (`demonstratedCrosswindKt`, stated approximations of the manufacturers'
+  figures). The wind starts at 240 degrees, 8 kt and is set by `engine.setAirportWind`
+  (protocol `setWind`; the flight board's wind control). The configuration is chosen at the
+  start and again only at a concept's time boundary or when a wind change takes an end it uses
+  past a limit (or while closed); it can be null, a closure. `fleet.setRunwayConfiguration`
+  runs the change: the ends the new configuration drops close at once (no approach appears and no
+  departure is granted its line-up there; ends kept in the same role stay open); approaches
+  already on final land, aircraft lined up, rolling, climbing out or going around from a closed
+  end and runway grants for it complete. Queued arrivals and departures not yet started take the
+  first new end that reaches their stand. Departures from a stand with multiple eligible ends
+  weigh the taxi distance against the departures queued for each end. A taxiing departure bound
+  for a closed end is re-routed (tried each second). While moving, it keeps its leg up to the
+  first node far enough ahead to brake and turn (and at least half its last edge ahead), then
+  continues toward the new line-up. Passed runway gates stay passed and new edges are locked
+  after checking the swept path. At a closed hold, the new leg must preserve the stopped pose
+  and any required clearance. The aircraft keeps its admission order and taxis back to a
+  compatible stand if it cannot reach an open end. A departure holding a runway grant keeps its route.
+  The new ends open when no aircraft uses a closed end any more. Each change records its
+  start, opening and the departures re-routed (`fleet.runwayTransitions()`, `metrics().aircraft
+  .reconfigurations` and `.rerouted`). Stands are chosen for the configuration in use; with
+  several ends, each turn takes the arrival and departure end pair that serves its stand at least
+  cost. Taxiways within 15 degrees and 400 m of a runway in use prefer the flow toward the
+  departure threshold: the other direction costs three times its length in routing (the factor of
+  an edge locked the other way), so taxiing against the flow is avoided where an alternative
+  exists. Mapped one-way taxiways keep their direction.
+- **Taxi-flow preferences** (TASK-323). `sim/taxi-flow-preferences.ts` derives a direction for
+  each taxi edge from the open runway ends. It iteratively routes between stand roots, arrival
+  exits and departure line-ups, charging up to three times the distance against assigned flows.
+  It keeps majority directions where the resulting routes agree and leaves shared access and
+  unused edges neutral. The resulting threefold routing cost is a soft preference. Results are
+  cached per compiled graph and set of ends in each role for TASK-322's block clearance.
+- **Road crossings** (`sim/airside-give-way.ts`): a crossing is closed while an aircraft below
+  100 m is within the larger of 150 m and 25 s of it on its path, until its tail is 10 m past. A
+  road vehicle meeting a closure decides once per closure: it stops at the crossing's stop if it
+  can at its comfortable deceleration, else clears. Aircraft never stop for road vehicles.
+- **Airside ground vehicles** (TASK-316, `network/airside-service.ts`, `sim/ground-vehicles.ts`).
+  The service network is read from the compiled city alone: the lanes of mapped `service` roads
+  closed to cars (`access=no` or `private`) within 150 m of the taxi network and outside every
+  runway strip (half the runway width plus 45 m), joined by their compiled movements and by a turn
+  at each end of a two-way road; its largest strongly connected part is kept. A zone is a stretch
+  of a vehicle's way within an airside edge's aircraft corridor (half the span its code admits,
+  capped at the largest stand's, plus 4 m). Each stand's access point is the lane point nearest
+  its aircraft's middle and at most 25 m ahead of its nose; bases (where vehicles join and leave
+  the simulation) are the lane points nearest each group of stands and each hangar. The flight
+  operations emit `drainTurnarounds()`: `on-block` (stand, type, ready-to-push time, whether it
+  landed) when an aircraft stands where it departs from with no tow to come, `tow-planned`
+  (stand, type, time) and `off-block`. A tow back is planned when the tow away is (at least 5
+  minutes ahead), and a departure after a tow is ready no sooner than 5 minutes after it, so a tug
+  can come; a tow away as the aircraft parks and the first departures of a run keep the fleet's
+  timing and go without a vehicle tug (`metrics.unannounced`).
+  `turnaroundVisits` gives the set and timeline: baggage trains (two on widebodies, one to three
+  carts), a hydrant dispenser at contact stands for narrow- and widebodies or a fuel truck,
+  catering for jets, apron buses off and on at remote stands, and a tug for each push from a
+  dead-end stop or tow; service vehicles leave 5 minutes before the ready time, the tug comes 4
+  minutes before the push or tow. Positions lie on lines parallel to the parked aircraft as the
+  fleet draws it (catering, aft and forward baggage, fuel outwards on the starboard side, the bus
+  to port), clear of its fuselage and tailplane in plan (wings and engines stand above apron
+  vehicles) and of other parked hulls; vehicles drive in along their line from the end facing the
+  access point and out forward, returning on nested outer lines, and reach the line ends from the
+  lane round the aircraft (the shortest way over a ring of corners outside all positions, clear of
+  every parked hull); ways out join the lane where it is 6 m clear of the hull. The tug backs onto the nose,
+  where TASK-314's tug is drawn; from TASK-319's `ready-for-pushback` through the push it is
+  `attachedTo` the aircraft and hidden; it stays on through a tow and leaves forward and aside
+  where a push ends, or round the aircraft to the new stand's lane after a tow (as from a push). Vehicles read the fleet snapshot
+  once a second; aircraft never see them (the fleet's hash is the same with or without them).
+  `fleet.movementSpace()` (read only, additive) gives the space aircraft movements may sweep, as
+  TASK-299's bodies: each parked aircraft's planned pushback (its stand envelope), a push under way,
+  an arrival's lead-in into its bound stand, and each moving aircraft's next 150 m. Vehicles hold
+  clear of that space (but their own aircraft's, which their timeline keeps them out of) and leave
+  a position it covers: a parked aircraft's push from 5 minutes before it is ready or due to be
+  towed, the rest at once. They give way to aircraft by entering a zone only when no moving aircraft is within its radius plus 30 m
+  or routed through it within the larger of 250 m and 40 s, and only when their way beyond it,
+  the junctions in it and its merges are clear; to each other by following on lanes, one at a time
+  through each junction (from 6 m before it), merging only into a clear lane, one mover per stand
+  (released after 20 s held up), holding short of standing vehicles and parked hulls (past a
+  hull that reaches over the way they edge 1 to 4 m to the far side where that clears every
+  parked hull, else detour round its end), and a last guard that refuses any step onto
+  another body. Two vehicles that still hold each other off for 15 s, or one held up within 45 m
+  of its base, leave the simulation (`metrics.withdrawn`); as the last resort, so does one in the
+  next 3 s (at least 15 m) of an aircraft's movement, under a parked hull or on another vehicle
+  after a step (`metrics.cleared`). `metrics.droppedBy` counts dropped visits by cause. Snapshot `groundVehicles` (poses,
+  carts, `attachedTo`, stand); `metrics.groundVehicles`. Not in the state hash.
 
 TASK-136 operates only mapped, at-grade road facilities with a scheduled service. Compilation
 adds per-lane painted stops, lane/movement conflict spans and rail-coordinate road spans to
@@ -1732,7 +2300,12 @@ standing obstacle for the lane's traffic (and for traffic about to enter it), cl
 line, and no spawn or lane change lands in it. A car turning into the same mouth on the
 exit lane (TASK-149's yield) stops the departure's length and spawn gap short of the connector or
 the join station, whichever is earlier (TASK-153), so it never stands in the gap the grant
-checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
+checks; one turning in from a crossed lane stops the spawn gap short of its span. TASK-289: a car
+bound for a lot entry where its body would stand over a crosswalk (keep clear, section 8) stops
+0.5 m short of it while the lot would not admit it at once, unless the lot is full and turns it
+away there; no departure of the lot starts while such a car can no longer stop short of it. Held
+on the crosswalk it held the walkers, whose wait held the crossing's span of the exit lane, where
+the departure in its way waited for its landing (York pk:4462). TASK-152: a bay with a `departure` leaves as a kerbside space does: it takes the
 departure's spawn gap (with the reversing room ahead) while parked, is inserted there at speed 0,
 reverses out over `leaveManoeuvreS` and drives the aisle as a lane vehicle; it never starts in the
 lot. A lot exit whose drive-out has no pose clear of its lane is offered only when no other exit
@@ -1922,9 +2495,9 @@ Step sequence, in this order every step:
 4. Resolution:
    - Lane changes are accepted in proposal order when the target gap is still free given
      already accepted changes this step.
-   - Per node, entry candidates are sorted by (priority desc, right-before-left, waiting time
-     desc, id asc). A candidate is granted when its movement is green or uncontrolled-allowed,
-     no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
+   - Per node, entry candidates are sorted by (priority desc, right-before-left under right-hand
+     traffic, waiting time desc, id asc). A candidate is granted when its movement is green or
+     uncontrolled-allowed, no vehicle holds a grant on or drives on a conflicting movement (TASK-064: no vehicle
      holds a grant on a conflicting movement while still on its approach lane, or drives on
      it with its rear not yet past the end of that movement's conflict zone with the
      candidate's movement, `position < endM + occupant.lengthM`; a vehicle that has cleared the
@@ -2053,6 +2626,16 @@ available. Recovery, edits and a changed parking destination reset this history.
 the engine's head choices without changing route search or its request/result contract.
 TASK-077 remains the last resort. Snapshots and the hash keep their existing per-vehicle fields (which do
 not contain the other per-vehicle timers).
+
+TASK-208: a head alternative into another lane of the blocked movement's own next road is not
+taken when its route needs at least two more lane changes after that road than the route from the
+blocked movement's landing lane. Such a lane gets round a car standing on the next road, but not
+round a queue beyond it: its route runs beside the queue and has to change back into it. In Munich
+the heads on `r:53` and `r:1306`, refused into `r:700` lane 1 by the jughandle's queue, took lane
+0, whose route needs two changes into that queue on `r:698` and `r:654`; most missed the turn.
+TASK-223: an alternative needing one more change is still taken. Refusing those too (TASK-208's
+first form) held heads at many other Munich stop lines and raised fixed-time delay by 6.7%; the
+two-change threshold keeps almost all of the `r:654` reduction.
 
 Detour reroutes (TASK-193). The reroute after a head detour, and after every missed turn taken
 by a lane fallback (including the chain chosen through a junction group), avoids coming back
@@ -2352,6 +2935,22 @@ original trips and seed.
 Lives in `src/demand`. Population is persistent and saved with the project; trips are
 regenerated deterministically from it.
 
+TASK-308 provides airport operations with two pure decision modules over summaries. The seeded
+`generateFlightSchedule` in `src/demand/flight-schedule.ts` accepts fixed-wing movements directly
+or assumes four turns per usable stand per day, bounded by 40 movements per runway per operating
+hour. It weights both legs by the hourly profile, applies the curfew to both movement times,
+and uses the synthetic turnaround minutes in the aircraft catalogue. Times are seconds from
+midnight: an overnight carry-in arrives before 0 and a carry-out departs at or after 86400. An
+odd count adds a carry-in. Helicopter movements are additional and require helipads. The flight
+operations take the profile of `airportSchedules` by ICAO code (London City, Zurich; TASK-302),
+else the large-airport default.
+`src/sim/runway-configuration.ts` derives single ends and co-directional pairs within three
+degrees when no configurations are supplied. Explicit configurations can name ends on crossing
+runways. The chooser honours concept closures, prefers a concept within the wind limits, then
+prefers more usable ends and stronger mean headwind. It checks all active ends against the
+tailwind limit (default 5 kt) and the tightest supplied type crosswind limit. The timeline uses
+wind samples held until the next sample, starting at midnight, and also checks concept boundaries.
+
 ```ts
 interface Activity { kind: 'home' | 'work' | 'school' | 'shop' | 'leisure' | 'other';
   placeId: PlaceId; startS: number; durationS: number }
@@ -2411,7 +3010,10 @@ variant. Saving a baseline captures current editor state, including unapplied li
 - Persons are created per residential place (and gateway places, which stand in for external
   commuters) in proportion to `population * personsPerResident`. Work places are drawn by
   gravity: probability proportional to `jobs * exp(-distance / gravityScaleM)` over places with
-  jobs, using straight-line distance between centroids. A person keeps the same home, work and
+  jobs, using straight-line distance between centroids. TASK-288: a person drawn to a work place
+  that the TASK-155 rule below does not serve both ways (from home by their own car, and back)
+  draws again, by the same weights, among the work places it serves; with none, the first draw
+  stands. A person keeps the same home, work and
   car access until the population is regenerated on purpose.
 - Gate 1 agendas: home, work (start from `workStart`, duration from `workDuration`), home.
   Gate 3 adds shop, school, leisure legs, gateway through traffic and place events.
@@ -2436,12 +3038,15 @@ variant. Saving a baseline captures current editor state, including unapplied li
   facilities it could park at (own, public, or an unowned lot, without the distance limit),
   and a place serves a gateway when one of its departure connectors or such facilities reaches
   the gateway's arrival lanes; between gateways, departure lanes must reach arrival lanes.
+  TASK-283: a leg from the person's home is judged by their own car instead: every facility the
+  home owns with an exit (its own connectors when it owns none) must reach the gateway's arrival
+  lanes, since the car may stand in any of them.
   Reach follows movements (not `neverGreen` or lane-drop fallbacks) and adjacent-lane changes
   on car-legal lanes: public roads and the trip end's own private/destination zone, entering
   another zone only to end in it; lane-change distances and stations are ignored, so only
-  trips no route can serve are removed. Population and its draws are unchanged: a person
-  whose next leg is unserved stays at the activity before it for the rest of the day, and
-  that leg and the rest of the agenda generate no trips. Through destinations are drawn among
+  trips no route can serve are removed. Population is unchanged apart from TASK-288's work
+  draw above: a person whose next leg is unserved stays at the activity before it for the
+  rest of the day, and that leg and the rest of the agenda generate no trips. Through destinations are drawn among
   the gateways the origin serves. Event visitors are drawn among gateways that serve their
   inbound and outbound legs, falling back to residential places when none does. Served trips
   are unchanged: the Sindelfingen 0.15 morning keeps exactly its 155 departures.
@@ -2540,6 +3145,17 @@ do not depend on an arbitrary component). Private/destination roads are legal on
 origin zone, and delivery roads only for delivery trips. Reverse propagation includes the
 distance needed for each lane change, so a late strip slot cannot borrow an upstream exit.
 A lot stall also needs a local circulation path to a usable outbound connector.
+
+TASK-351: when the public network splits inside the map (Zurich: Kloten and the airport landside
+meet only on private and no-access airport roads), every other strongly connected part that a map
+entry (a gateway's out connector) feeds and a map exit (its in connector) drains, by movements and
+lane changes, joins the largest in the core: the roads go on beyond the map. The importer's repair
+of a trapped place entrance moves it at most 1 km from the place's outline or point, and never onto
+a lot's aisle. A car trip between two places is served only if the origin's car (at home: each
+facility the home owns) reaches the destination or a facility it could park at; a first trip's car
+starts only in a facility that reaches its destination, and, bound for a gateway, from which the
+router finds a route. A gateway trip leaves the map by one of the gateway's connectors its car can
+reach (Zurich's `p:6241` has connectors in Kloten and on the landside).
 
 Residential street-stock transfers and first-trip origin allocation skip unusable spaces;
 virtual garages need a usable exit too. Assigned cars stay in their garages or use the next
@@ -2798,6 +3414,91 @@ type HostEvent =
 
 ## 11. Rendering and UI
 
+TASK-335 draws six generic road vehicle models in 3D. Cars hash their vehicle IDs to a sedan,
+hatchback or SUV. Vans, trucks and buses use one model each. Parking uses the same geometry and
+hash, falling back to the space index for anonymous occupancy. The models fit the existing class
+dimensions and retain the presentation colour. One instanced batch per visible model draws the
+body and four wheels, with dark glass and TASK-163 lamps painted in the shader. Models are used at
+6 px/m of camera depth at street zoom. The existing boxes draw farther away and parked cars still
+become dots below the detail zoom. The moving boxes remain the pick and selection volumes, carry
+the existing headlight beam transforms, and alone cast vehicle shadows. Parked stock stays unlit
+and casts no shadow.
+
+TASK-298: aircraft are drawn from the snapshot with TASK-307's outlines in 2D (over the map,
+under the evening tint; one off the ground casts a shadow displaced by its height; drawn only
+within the map's node extent) and its meshes in 3D (heights above the first runway's middle,
+gear by the snapshot, a plain pitch by state; the far plane reaches 15 km where an airport
+exists). Both pick an aircraft; the inspector shows its registration, type, status, stand,
+runway, speed, height and route by taxiway names.
+
+TASK-316: ground vehicles are drawn from `groundVehicles`, interpolated one snapshot behind like
+the aircraft (`render/ground-vehicles.ts`): in 2D as bodies with a cab, tank or box accent and a
+tractor's carts, under the aircraft (`render/layers/ground-vehicles.ts`); in 3D as one instanced
+mesh per kind and one for carts (seven draw calls) with amber roof beacons as halos
+(`render3d/ground-vehicles.ts`). A tug attached to an aircraft ready for pushback or pushing is
+left to the aircraft layers' tug; one towing is drawn from its snapshot pose.
+
+TASK-301: airfield and aircraft lighting by rule (`render/airfield-lights.ts`, shared by both
+views; ICAO Annex 14 in simplified form). `placeAirfieldLights` places every light once: runway
+edge lights at most 60 m apart 1.5 m outside the edge, centreline lights every 30 m, threshold
+(every 3 m) and end lights (every 6 m, at least six) across each end, approach lights 900 m out
+(420 m on a runway under 1,800 m) with a crossbar at 300 m, four PAPI units (a mapped PAPI's
+distance and side, else 300 m past the threshold on the left), taxiway centreline lights every
+30 m (taxiways and taxilanes, off runway pavement), taxiway edge lights every 60 m (taxiways, off
+any airside pavement), a stop bar across the taxiway every 3 m at each runway holding position,
+three yellow lights at an intermediate one, and a floodlight per stand. `airfieldLightColors`
+colours them from `VehicleSnapshot.airfield`: a runway with no end in use is dark; edge lights
+amber over the last 600 m (or third) and centreline lights red and white from 900 m and red over
+the last 300 m in the landing direction (else the take-off one); green threshold, approach and
+PAPI at a landing end; red end lights at the far end of each run in use; stop bars off while
+cleared. Each PAPI unit is white when the nearest aircraft on approach to its end, short of the
+units, is above its setting (the glide slope plus 30', 10', -10', -30', next to the runway first),
+else red; with none, the on-slope two and two. `aircraftLights` reads an aircraft's state:
+navigation lights always, beacon while engines run or it moves, strobes on the runway or airborne,
+landing lights on approach to the landing roll, on the take-off roll and climbing until the gear
+comes up, taxi lights while taxiing (not holding). In 3D (`render3d/airfield-lights.ts`,
+`render3d/aircraft.ts`) the lights are additive camera-facing glows never under a pixel radius,
+shown with the scene's artificial light (aircraft lights also by day, dimmer), with beacon and
+strobe flashes, ground beams for taxi and near-ground landing lights and floodlight pools.
+Aircraft carry a per-registration accent colour, a one-pixel dark outline, propellers and rotors
+that spin up with the engines, and, off the ground, a shadow straight below with a drop line;
+positions run on between snapshots at the last two snapshots' velocity, and animation stands still
+while the run is paused. The camera follows the selected aircraft (`Scene3D.follow`; inspector
+switch "Follow with camera"), and a distant aircraft picks within 12 px. In 2D the night layer
+shows the same lights steadily (`render/layers/airfield-lights.ts`).
+
+TASK-318: real aircraft models in 3D. `bench/aircraft-models.ts` prepares Flightradar24's
+GPL-2.0 glTF set (FlightGear FGMEMBERS models; NOTICE) offline into `fixtures/aircraft`: per
+mapped catalogue type two glTF 2.0 files, LOD0 (at most 15,000 triangles) and LOD1 (at most
+2,000), with flat part colours (`hull`, `tail`, `engine` take the flight's livery; `wing`,
+`glass` and `c<rrggbb>` parts keep theirs), spinning parts as `mount-<kind>-<n>` nodes turning
+about their local +y, and `models.json` (files, triangles, bytes, scale, a fuselage profile every
+2.5% of the length, light mounts on the model). Each model is turned to +x forward, +y up, +z
+starboard, scaled to the catalogue length and span (the wings outside the fuselage stretched to
+the span, the fuselage section scaled no more than the length), and set with its belly on the
+procedural body's so that TASK-307's procedural landing gear, drawn with every level, reaches it.
+`render3d/aircraft-models.ts` fetches a file the first time an aircraft of its type needs that
+level and shares each level's geometry, merged and coloured per livery, between aircraft.
+`Aircraft3D.setDetail` picks the level by the aircraft's on-screen size across its length and
+span (`lodPixels`: LOD0 from 260 px down to 210, LOD1 from 8 px down to 6, else TASK-315's
+procedural mesh, which also stands in while a file loads and for types without a model). The
+real levels use the model's light mounts, the model's own skids on a helicopter, and
+`boardingDoor` docks jet bridges at the real fuselage side (`modelSection`).
+
+TASK-331: an airliner's cabin windows are placed by the preparation, not taken from the source:
+the source's cabin glass and black window decals between the first and last door become skin,
+and one row of panes per deck (A380 both decks, 747-8 upper deck on the hump) is cast onto the
+skin at the real size and frame pitch (`cabinWindows`), straight along the cabin and clear of the
+doors (LOD1: one band per row and side); a business jet keeps its source's glass. The landing
+gear of a type with a real model is `buildAircraftGear` (`render3d/aircraft-mesh.ts`): a table
+of real tracks, bogies and tyres (`gearTable`) at TASK-307's stations and ground contact, legs
+reaching the level's own underside (`modelGear` casts up from the ground), near (oleos, links,
+braces, bogies, tyres with hubs, doors, within 4,000 triangles) and middle (struts and wheel
+blocks) versions built once per type and level and drawn in the aircraft's existing gear
+batches (`Aircraft3D` swaps their geometry with the level). That gear retracts by folding in its
+own material (`gearFoldMaterial`: per-vertex pivot and turn, the sim's extension as a uniform);
+TASK-307's gear, at the far level and for types without a model, slides up; nothing is scaled.
+
 TASK-126 draws rail from shared `render/rail-geometry.ts` triangles in both views: muted main
 line beds, thinner sidings, cool station-serving/light-rail/subway beds, twin street-running tram rails,
 switch discs, platforms and small station discs. Same-grade asphalt clips non-tram paint;
@@ -2847,6 +3548,49 @@ with identical picking, occlusion and Rail-layer visibility. Both scenes use aut
 The inspector reads that same authoritative snapshot, identifies synthetic tram service,
 names its direction, served stops, next stop and stopped/running status. It does not replace
 a held controller pose with a raw timetable sample.
+
+TASK-332 draws 3D trains as models (drawing only: the sim, timetable and car poses are
+unchanged; 2D keeps TASK-127's bodies). `render3d/train-variants.ts` holds one record per kind of
+rolling stock (profile, width, height, floor, nose, windows, doors, bogie and pantograph designs,
+car types with their bogie, pantograph, roof-housing and door positions and livery, and the
+formation) and `trainVariantFor(route, rail, drivingSide)`: `tram` routes take the low-floor tram;
+otherwise the rail kind covering most of the route's length decides (`light_rail` the DLR-style
+metro, `subway` the London tube train in a left-hand-traffic city and the New York subway train
+elsewhere). TASK-333 draws the remaining routes in left-hand-traffic cities as Elizabeth-line
+EMUs, including through-running `mainline` routes. In right-hand-traffic cities, `mainline`
+takes the DB Intercity and `sbahn` takes the ET 423-like S-Bahn.
+`render3d/train-kit.ts` builds every record into three instanced geometries per variant, shared
+by all its cars and created only for variants a route uses: the body (the profile extruded, both
+cab noses lofted from it, end walls, inset bellows, couplers and optional buffers), the gear (three bogie, two pantograph and two
+roof-housing slots) and the far box. Body vertices carry an anchor (rear end, middle, front end)
+and a part, so the vertex shader draws a car at its own length without stretching its noses and
+hides the parts a car does not show; gear slots move to each car's positions. Windows, doors,
+livery bands, windscreens, lamps and destination displays are painted by the body shader in the
+car's metres, with TASK-163's night glow (cabins, head lamps at the train's front, tail lamps at
+its rear, the lead cab's display). Formations count from the route's forward end, so a make-up
+keeps its order when a terminal train reverses; a unit's last car is turned round, so its cab
+faces out, and a car's front faces the direction of travel or away from it accordingly. Cars
+coupled without bellows show a coupler reaching the middle of the sim's gap (limited to 0.6 m by
+default), and a coupled cab reaches up to 0.2 m into the gap. Each car
+is drawn near (the model) from 60 px along its length and far (the box) below 48 px, chosen per
+car every rendered frame; a car behind the camera is far. Picking raycasts an undrawn box per
+shown car, the same at both levels; the tunnel rule and selection colour are TASK-132's and
+TASK-127's.
+
+TASK-333 adds the DLR's coupled two-section units with shared joint bogies and collector shoes,
+the Elizabeth-line EMU with two pantographs and gangways between its cars, and the DB push-pull
+Intercity with a 19 m locomotive, 24.8 m coach bodies on the 25 m pose pitch, and a control car
+at the opposite end. The locomotive sits towards its coach end, so the buffers meet across a
+1 m body gap. A plain Intercity coach end without bellows shows a closed gangway door. Fixed-length
+bodies shorten with poses clipped at the extract edge, and pick boxes follow the drawn bodies.
+The models use operator colours without logos or names.
+
+The London tube train draws 2.6 m wide cars with an elliptical roof, two single and two double
+red doors per side, a white and blue body, flat red cab ends and current-rail shoes. The New York
+subway train uses the 75 ft (22.9 m) R46/R68 as a reference, with four double doors per side,
+a fluted stainless-steel skirt, a muted upper band and flat ends with storm doors. Both fill
+the existing car spans (21.8 m at a 22.5 m pitch), leaving the pose's 0.7 m between bodies for
+the couplers and dark gangway or storm doors. Door spacing and window pitch are fixed in metres.
 
 TASK-136 draws crossing equipment from shared `render/level-crossings.ts` positions and
 dimensions. Every railway road approach has a striped gate, St Andrew's cross, warning
@@ -3172,6 +3916,36 @@ the city, and roads retain the strongest tone.
   crossing, still ends them).
   The node inspector lists the arms with a "Crossing" checkbox each (disabled, with the reason,
   where no stripe fits).
+- TASK-257 (owner-approved field): a crossing walk link's optional `marking` is its paint as OSM
+  maps it, read by the importer (`crossingMarking`) from the way's tags, else from its nearest
+  crossing node along the way that has them (per link, so a way over a divided road can be
+  unmarked on one carriageway and a zebra on the other), and for TASK-239's node crossings from
+  the node: `crossing:markings` first (`no` none; `lines`, `dashes`, `dots` lines; `yes`,
+  `zebra`, `ladder` zebra), then `crossing_ref=zebra` or `crossing=zebra|marked|uncontrolled`
+  zebra, `crossing=unmarked|no|informal` none, `crossing=traffic_signals` lines (a signalised
+  crossing's two lines). Absent (no tag says, and every older file) paints as before. Paint
+  only: an unmarked link paints nothing where it crosses a road, and a road end whose arm only
+  unmarked mapped crossings lead paints nothing unless an edit turned it on; a lines link and an
+  end whose painted mapped crossings are all lines draw the two broken lines; a road end at a
+  signalized node keeps them whatever OSM marks (its walk lights stand there); otherwise
+  TASK-217's rule (broken lines near a signal, a zebra elsewhere). The walk graph, crossing
+  controls, spans, stop lines and the simulation do not read it.
+- TASK-275 (owner-approved fields): a walk link's optional `covered` and `handrail`, read by the
+  importer from its way (`walkCovered`, `walkHandrail`). `covered`: `covered=yes|roof|canopy|
+  arcade|colonnade` or `bridge=covered`, stored only when true. `handrail`: the sides with a
+  handrail, left and right in the link's direction: `handrail=yes|both` left and right,
+  `left|right|center` that one, `no` none, then `handrail:left|right|center=yes|no` adds or
+  removes its side; once any of these says something, an unnamed side has none (`[]`). Absent
+  (no tag says, and every older file) draws as before. 3D only (`render3d/footbridges.ts`): on a
+  footbridge (TASK-262) a side the tag does not name has no railing; a named side keeps the
+  open-edge rule, and on stairs runs the whole flight (also beside a wall); ends keep the rule; a
+  stair flight at grade carries its named handrails; `center` draws a rail along the line. A
+  covered way, raised or at grade (layer 0, both nodes at grade), gets a light canopy 3 m over its
+  paving (pieces of at most 2 m) on posts along its sides wherever nothing stands over it: no
+  footbridge roof (TASK-262's canopy), no building taller than the paving, no road, junction,
+  walk or platform surface more than 1 m above it, no track on a bridge within 2.2 m; at grade the
+  paving under buildings and roofs is not drawn. The walk graph and the simulation do not read
+  them.
 - TASK-091 (B46): a centre line (a two-way street's, or the solid median edge of TASK-089) ends
   at the junction mouth: it is clipped out of both its nodes' outlines, also where an outline
   reaches back over the approach (TASK-079's stretch drawn above the junction now applies to
@@ -3419,6 +4193,21 @@ transit (system purple) to the caption, the counts and the hourly bars, the mean
 by a full vehicle, and a table of riders per line (residents boarded, TASK-128's riders off and on,
 the most aboard of the places).
 
+TASK-305: where the city has an airport, the toolbox adds the Airside tool (key 6), whose
+sidebar options choose what a click adds: a stand of the chosen kind (ref one above the largest
+numeric ref), a taxiway or taxilane drawn point by point (snapping to airside nodes within 12 px
+and to taxiway, taxilane and runway centrelines within their half width or 10 px; Enter or a
+double click ends), or a holding position on a taxiway. In 2D the Select tool picks a holding
+position (8 px) and a taxiway or taxilane under the pointer, before a place's tint; a selected
+stand or hold shows a handle that drags it (a hold snaps along the taxiways), a selected taxiway
+its line. The stand inspector sets the stand's ref, kind and code limit ("By rule (C)", a code,
+or none) and deletes it; the taxiway inspector its name, kind, width (blank: the code's) and code
+limit, splits it at the clicked point and deletes it; the holding position inspector its name and
+the runway it protects. Delete removes the selected stand, taxiway or hold. The flight board's
+Runways section adds a "Runway table": the tailwind limit, each configuration's arrival and
+departure ends, the time-of-day periods preferring a configuration or closing the runways, and a
+reset to the default table.
+
 ## 12. Project format and migrations
 
 Lives in `src/project`. A project is a ZIP with extension `.cityflows` (fflate), or a single
@@ -3614,8 +4403,9 @@ overrides are retained; otherwise-public aisle access is inferred as destination
 TASK-101, preventing through shortcuts without changing routing or simulation.
 Entries reuse mapped public nodes (including consolidated-node provenance). TASK-103 gives
 a lot with no reachable aisle one inferred driveway connector on the nearest permitted car
-lane within 30 m of its polygon; no vehicle road is fabricated. Only lots without a road
-that close retain `parking_unreachable`.
+lane within 30 m of its polygon; no vehicle road is fabricated. A lot without a road that
+close is reported (`parking_unreachable`) and left out with the aisles only it owns; its place
+stays (TASK-281).
 A mapped mouth that would consume an existing place connector remains disconnected with
 `parking_entry_unreachable`, preserving the original place and demand. TASK-144 also restores
 a real shared OSM node omitted from, or merged out of, the public graph when it remains an
@@ -3716,8 +4506,9 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
    order. Two one-way carriageways of one name meeting at more than 90 degrees are a U-turn.
 7. Control: `highway=traffic_signals` on the node gives `signal` with a generated program:
    two 30 s phases for the two opposing approach axes with amber 3 s and all-red 1 s; a
-   road-pair group that conflicts with its phase, or a left turn at a node with four or more
-   approaches, gets an extra 15 s (left) or 30 s phase. TASK-048 resolves conflicting lanes
+   road-pair group that conflicts with its phase, or a far-side turn (left, right under
+   left-hand traffic, TASK-268) or U-turn at a node with four or more approaches, gets an extra
+   15 s (far-side turn) or 30 s phase. TASK-048 resolves conflicting lanes
    within a road-pair group before generating the program: keep the first nonconflicting
    movement in deterministic compiler order, explicitly ban conflicting pairs and record
    `signalLaneAssignment`. Drivers must merge on the approach; unresolved groups still get
@@ -3854,6 +4645,105 @@ height ranges and fetch times; its tile cache lives in this worktree's `node_mod
     60 degrees the arm gets as far as they allow and a `realign_limited` info names it.
     Provenance records `realigned:<degrees>`. Roundabout rings, layer changes and controlled
     nodes whose control would change meaning are left alone.
+
+TASK-295 reads the airside last (`osm/airport.ts`), after every other id is allocated. Query
+version 13 adds `nwr[aeroway]` and `nwr[building~"^(terminal|hangar)$"]` to both queries. A feature
+with a node inside the area is kept whole (the airside is not clipped, so a runway keeps both
+ends). The rules, with ICAO Annex 14 Vol. I (8th edition, 2018) figures by code letter
+(`airsideRules`; the stand and taxi edge code rules live in `network/airside-codes.ts`, which the
+editor re-runs, TASK-305):
+
+- **Graph.** Edges are the centrelines of `aeroway=runway|taxiway|taxilane` ways (an `area=yes`
+  way or a multipolygon is a surface, not an edge), split at every node two such ways share, at
+  holding positions, thresholds, turn pads and stand nodes, at nodes shared with drivable roads,
+  and at the nodes `parking_position` ways touch; a closed way also at its middle. A crossing of
+  distinct runway centrelines on the same layer gets a shared node even when OSM maps none.
+  Otherwise centrelines intersect at shared nodes. Before stands are attached, an isolated taxi
+  component can join the runway network at its shortest gap from a dangling end to a taxi edge.
+  The gap must be at most 5 m, on the same layer, and clear of buildings. A way with nodes missing
+  from the extract is broken there (`airport_incomplete_way`).
+- **Runways.** Runway ways joined end to end within 15 degrees of a straight line, with at most
+  one `ref` between them, are one runway; a `runway=displaced_threshold` way is part of the runway
+  it continues. Its edges run from end to end; ways that do not form one line stay taxiable edges
+  with no runway (`airport_runway_unordered`). `ref` gives the designators (else they are derived
+  from the true bearing, `inferred: ['ref']`); designator n is the end where a heading of n x 10
+  degrees starts. A threshold is a mapped `aeroway=threshold` node in the half nearer the end (its
+  `ref` first), else the inner end of the entire displaced-threshold stretch, else the pavement
+  end. Width is the mapped `width`, else 45, 30, 23 or 18 m for a runway of at least 1,800, 1,200,
+  800 or 0 m. Its code is the largest whose runway width (A 18, B 23, C 30, D to F 45 m) the width
+  meets. Paired helicopter designators such as `H01/H19` are retained and take `maxCode: null`
+  because the fixed-wing codes do not apply. Stopways are `aeroway=stopway` ways starting at an end.
+- **Holding positions.** On the graph, or snapped onto the nearest taxiway or taxilane edge within
+  20 m by a generated node (`inferred: ['node']`); farther ones are left out (`airport_unjoined`).
+  A runway hold protects the runway the graph reaches first from it within 1 km of travel; `toward`
+  is the first edge of that path and `side` the side of that runway's centreline it lies on.
+  `holding_position:type=intermediate` protects none; an untyped hold is a runway hold when that
+  runway is within 300 m of travel (`inferred: ['kind']`).
+- **Stands.** A `parking_position` way is a lead-in that ends at the stop position: it runs from
+  the last graph node before a free end to that end, the aircraft's heading being its last
+  segment's (a way with both ends on the graph is a drive-through stand stopping at its middle). A
+  `parking_position` node is the stop of a lead-in way of its `ref` (or of none) ending within
+  30 m or passing through it (TASK-302: Zurich's 700s, whose node is the way's end on the
+  taxiway), else a stand of its own. A stand or lead-in that shares no node with the graph joins the
+  nearest taxiway or taxilane edge within 150 m by a straight generated lead-in that crosses no
+  building (`provenance.source: 'generated'`); farther ones are left out (`airport_unjoined`).
+  The gate is the `aeroway=gate` of the stand's `ref` within 250 m. Kind: cargo or general aviation
+  by the stand's or its containing apron's tags (`cargo=yes`, `apron=*`) or name (cargo, freight;
+  GA, general aviation, business aviation, executive, FBO); else contact with a gate; else
+  maintenance by tags or name (maintenance, hangar) or within 60 m of a hangar; else remote.
+- **Jet bridges.** Complete linear `aeroway=jet_bridge` ways retain their projected geometry.
+  The aeroway tag excludes the way from road and pedestrian import and from ground path drawing.
+  The terminal end is the endpoint shared with a gate node, or the one nearest a terminal
+  footprint, with distance from the stands breaking ties. The apron end selects the nearest stop
+  position among stands serving that mapped gate, or among all stands if the gate has none.
+  At airports with mapped bridges the 2D and 3D maps follow the mapped
+  fixed links and dock the tunnels to the occupied stands' closest reachable port-side boarding
+  doors. Where no bridges are mapped, placement follows TASK-315's terminal and stand rule.
+- **Stand codes.** The largest code whose aircraft keeps the stand clearance (A, B 3 m; C 4.5 m; D
+  to F 7.5 m) from the same code's aircraft on every other stand and from every building but one
+  it stands in. The aircraft is a fuselage as long as the code's span (a capsule of radius 5.5% of
+  the span) from the nose back along the heading, a wing of the full span across it 45% of the
+  length back and a tailplane of 35% of the span at the tail: nose-in stands side by side then
+  need the span plus the clearance between them, and angled stands (London City's) fit as their
+  wings stagger. Stands so close that two code A aircraft could not stand on them together are
+  alternatives (TASK-302: the positions of a multiple-aircraft ramp, Zurich's E32 and E34):
+  neither limits the other's code, and aircraft keep apart by their parked bodies and push sweeps
+  (`standPairSafe`, section 8). A lead-in edge takes its stand's code.
+- **Taxi edge codes.** Start at the code whose taxiway width (A 7.5, B 10.5, C 15, D 18, E 23,
+  F 25 m) a mapped width meets. Without a mapped width, start at the largest fixed-wing runway
+  code in the airport (F when no fixed-wing runway code is known). Limit that code by the
+  separations at 5 m intervals from parallel taxi edges and runways (taxiway centre line to taxiway centre line, A 21.5,
+  B 31.5, C 44, D 63, E 76, F 91 m; two taxilanes A 19.5, B 28.5, C 40.5, D 59.5, E 72.5, F 87.5
+  m), and from buildings (taxiway to object A 15.5, B 20, C 26, D 37, E 43.5, F 51 m; taxilane to
+  object A 12, B 16.5, C 22.5, D 33.5, E 40, F 47.5 m), but a building the edge enters. Where
+  every segment of a taxiway edge lies within 20 degrees of the chord, remove the allowance for
+  lateral tracking error from its fixed-object distance (A 1.5, B 2.25, C 3, D–F 4 m, per ICAO
+  Doc 9157 Part 2, Table 1-4). The simulation follows the centreline and keeps the full allowance
+  on bends for wingtip sweep. A parallel neighbour is another edge on the same layer within
+  20 degrees of the edge's direction that the
+  graph does not join to the sample within their distance plus 120 m of travel. At junctions
+  aircraft use the same pavement in turn. Two taxi edges running side by side for 20 m, separated
+  by at least the code A minimum, still impose clearance limits when connected by a short link.
+  A runway counts as a parallel taxiway (wingtip clearance), except to the taxi edges that meet
+  it (TASK-302): an exit or entry, a rapid exit included, runs close to its runway by design
+  (Zurich's H1 and H2 read null before). The runway-strip separations of
+  Table 3-1 are operating restrictions, left to the operations tasks. An unmapped width is the
+  width of the edge's code.
+- **Terminals, gates, hangars.** Terminals are `aeroway=terminal` or `building=terminal` outlines;
+  terminals within 30 m of each other share a `group`, so a detached terminal is a group alone. A
+  gate belongs to the terminal containing it or nearest within 100 m. Hangars are
+  `aeroway=hangar` or `building=hangar` outlines. Aprons are `aeroway=apron` areas.
+- **Aids, windsocks, helipads, turn pads.** `aeroway=navigationaid` nodes keep their
+  `navigationaid` kind and `direction` (as `facing`), and take the runway end whose threshold is
+  nearest within 1.5 km. `aeroway=helipad` nodes, closed outlines and multipolygons are helipads.
+- **Road crossings.** A road crosses an airside edge where its OSM way shares a node with a
+  runway, taxiway or taxilane edge (the directed roads of that way passing within 5 m of it), or
+  where its centreline crosses the edge's line on the same layer, at least 5 m from a crossing
+  already found on that edge and 1 m from one on another (the node two edges share); the directed
+  roads within 15 m of the first such point are one crossing.
+- **Disconnected.** Edges outside the component holding the most runway length are reported
+  (`airport_disconnected`) with their OSM ways and why: the closest gap, or a crossing with no
+  shared node.
 
 Overpass provider: query drivable highways and restriction relations in a bbox capped at
 50 km squared, one request at a time, results cached in IndexedDB by bbox and query version,

@@ -1,4 +1,5 @@
 import { distance, polylineLength } from '../../geo/polyline';
+import { MINI_ROUNDABOUT, STOP_POSITION } from '../../network/junctions';
 import { allocateId, type City, type Road } from '../../schema';
 import { vehicleClasses } from '../../schema';
 import type { OsmWay } from './parse';
@@ -137,8 +138,16 @@ export function formJunctionGroups(
   const boundaries = new Set(
     Object.values(city.nodes)
       .filter((node) => {
-        if (node.control !== 'uncontrolled') return true;
+        if (node.control !== 'uncontrolled' || node.provenance.inferred?.includes(MINI_ROUNDABOUT))
+          return true;
         const here = incident.get(node.id) ?? [];
+        // A polygon cut is a potential gateway. An arm ending there must stay an entry or
+        // exit so the group can build a complete chain and give it a green.
+        if (
+          city.geo?.boundary &&
+          here.some(({ road, cutStart, cutEnd }) => (road.from === node.id ? cutStart : cutEnd))
+        )
+          return true;
         if (here.some(({ road }) => road.roadClass === 'motorway')) return true;
         const neighbors = new Set(
           here.map(({ road }) => (road.from === node.id ? road.to : road.from)),
@@ -310,6 +319,31 @@ export function formJunctionGroups(
   // (c) Other links short against the roads they join.
   for (const link of byLength(candidates.filter((r) => !crossing(r) && short(r))))
     unite(link, true);
+  // (d) TASK-255 (TASK-218's D4, TASK-216): a signal mapped at its stop position before the
+  // junction and kept as a node there (its two ways differ, a boundary above) joins the junction
+  // its control moved to, over its road of at most `maxM`: the group's entry, and so the stop
+  // line, stand where the signal stands instead of at the junction, before any crossing between
+  // (Freiburg's Stefan-Meier-Straße `r:1178` stopped 9 m past the painted line, beyond a
+  // signalised cycle crossing). Uncapped: the stop position is part of the approach, not another
+  // junction, and the compiler lays it out as the plain node it is (`STOP_POSITION`).
+  const stopPositions = new Set<string>();
+  for (const link of byLength(roads)) {
+    const { road } = link;
+    const source = city.nodes[road.from]!;
+    if (
+      !sources.has(source.id) ||
+      source.control !== 'uncontrolled' ||
+      !boundaries.has(source.id) ||
+      !signals.has(road.to) ||
+      length.get(road.id)! > maxM ||
+      !city.nodes[road.to]!.provenance.inferred!.includes(
+        `controlTransferred:traffic_signals:node/${osm(source.id)}`,
+      )
+    )
+      continue;
+    unite(link, false);
+    stopPositions.add(source.id);
+  }
   const junction = (group: string[]) => {
     if (group.length === 1) return false;
     const nodes = new Set(group);
@@ -354,6 +388,8 @@ export function formJunctionGroups(
     );
   return groups.map((nodes) => {
     const set = new Set(nodes);
+    for (const id of nodes)
+      if (stopPositions.has(id)) city.nodes[id]!.provenance.inferred!.push(STOP_POSITION);
     return {
       nodes: [...nodes].sort(),
       innerRoads: roads

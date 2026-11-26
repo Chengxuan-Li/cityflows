@@ -374,8 +374,8 @@ export function pointInPolygon(point: Vec2, ring: readonly Vec2[], tolerance = 1
 /** Every crossing of two polylines: the point, the distance along each from its start, and
  * the index of the crossing segment's end vertex in each. */
 export function polylineCrossings(a: readonly Vec2[], b: readonly Vec2[]) {
-  const lengthsA = cumulativeLengths(a),
-    lengthsB = cumulativeLengths(b);
+  // TASK-277: the lengths only once a crossing is found; most pairs a caller tests never cross.
+  let lengthsA: Float64Array | undefined, lengthsB: Float64Array | undefined;
   const crossings: { point: Vec2; alongA: number; alongB: number; i: number; j: number }[] = [];
   for (let i = 1; i < a.length; i++) {
     const p = a[i - 1]!,
@@ -391,14 +391,16 @@ export function polylineCrossings(a: readonly Vec2[], b: readonly Vec2[]) {
       )
         continue;
       const point = segmentIntersection(p, q, r, s);
-      if (point)
-        crossings.push({
-          point,
-          alongA: lengthsA[i - 1]! + distance(p, point),
-          alongB: lengthsB[j - 1]! + distance(r, point),
-          i,
-          j,
-        });
+      if (!point) continue;
+      lengthsA ??= cumulativeLengths(a);
+      lengthsB ??= cumulativeLengths(b);
+      crossings.push({
+        point,
+        alongA: lengthsA[i - 1]! + distance(p, point),
+        alongB: lengthsB[j - 1]! + distance(r, point),
+        i,
+        j,
+      });
     }
   }
   return crossings;
@@ -542,9 +544,90 @@ export function nearestOnPolyline(points: readonly Vec2[], p: Vec2) {
   return best;
 }
 
-type Box = { minX: number; minY: number; maxX: number; maxY: number };
+/**
+ * TASK-278: `nearestOnPolyline` for many queries on one polyline, with the same result to the bit.
+ * Segments are grouped in runs of 8 under a bounding box; the run nearest by its box is searched
+ * first, then every run whose box is within the best distance so far. A segment's distance is
+ * taken (with `Math.hypot`, as `distance`) only when its squared distance is within the best;
+ * both tests allow 1 nm against rounding. Equal distances go to the lower segment, as the plain
+ * scan's strict `<` does, and the along-distances are the same running sums.
+ */
+export function polylineNearest(points: readonly Vec2[]): (p: Vec2) => NearestOnPolyline {
+  const segments = Math.max(0, points.length - 1);
+  const runs = new Float64Array(segments),
+    lengths = new Float64Array(segments);
+  let run = 0;
+  for (let i = 0; i < segments; i++) {
+    const a = points[i]!,
+      b = points[i + 1]!;
+    runs[i] = run;
+    lengths[i] = Math.hypot(b.x - a.x, b.y - a.y);
+    run += lengths[i]!;
+  }
+  const size = 8,
+    blocks = Math.ceil(segments / size);
+  const boxes = new Float64Array(blocks * 4),
+    gaps = new Float64Array(blocks);
+  for (let k = 0; k < blocks; k++) {
+    const box = boxOf(points, k * size, Math.min(points.length, (k + 1) * size + 1));
+    boxes.set([box.minX, box.minY, box.maxX, box.maxY], k * 4);
+  }
+  let best = -1,
+    bestAway = Infinity,
+    bestT = 0;
+  const reach = () => (bestAway + 1e-9) ** 2;
+  const visit = (p: Vec2, k: number) => {
+    for (let i = k * size; i < Math.min(segments, (k + 1) * size); i++) {
+      const length = lengths[i]!;
+      if (length === 0) continue;
+      const a = points[i]!,
+        b = points[i + 1]!;
+      const dx = b.x - a.x,
+        dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length ** 2));
+      const ex = a.x + t * dx - p.x,
+        ey = a.y + t * dy - p.y;
+      if (ex * ex + ey * ey > reach()) continue;
+      const away = Math.hypot(ex, ey);
+      if (away < bestAway || (away === bestAway && i < best)) {
+        best = i;
+        bestAway = away;
+        bestT = t;
+      }
+    }
+  };
+  return (p) => {
+    let first = 0;
+    for (let k = 0; k < blocks; k++) {
+      const dx = Math.max(boxes[k * 4]! - p.x, 0, p.x - boxes[k * 4 + 2]!),
+        dy = Math.max(boxes[k * 4 + 1]! - p.y, 0, p.y - boxes[k * 4 + 3]!);
+      gaps[k] = dx * dx + dy * dy;
+      if (gaps[k]! < gaps[first]!) first = k;
+    }
+    best = -1;
+    bestAway = Infinity;
+    if (blocks) visit(p, first);
+    for (let k = 0; k < blocks; k++) if (k !== first && gaps[k]! <= reach()) visit(p, k);
+    if (best < 0) return { point: points[0]!, along: 0, away: Infinity, direction: { x: 1, y: 0 } };
+    const a = points[best]!,
+      b = points[best + 1]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      length = lengths[best]!;
+    return {
+      point: { x: a.x + bestT * dx, y: a.y + bestT * dy },
+      along: runs[best]! + bestT * length,
+      away: bestAway,
+      direction: { x: dx / length, y: dy / length },
+    };
+  };
+}
 
-function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
+export type NearestOnPolyline = ReturnType<typeof nearestOnPolyline>;
+
+export type Box = { minX: number; minY: number; maxX: number; maxY: number };
+
+export function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
   let minX = Infinity,
     minY = Infinity,
     maxX = -Infinity,
@@ -559,7 +642,7 @@ function boxOf(points: readonly Vec2[], from = 0, to = points.length): Box {
   return { minX, minY, maxX, maxY };
 }
 
-const boxesMeet = (a: Box, b: Box) =>
+export const boxesMeet = (a: Box, b: Box) =>
   a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
 
 /** A closed ring with its bounding box and the boxes of runs of 32 edges (edge `i` runs from

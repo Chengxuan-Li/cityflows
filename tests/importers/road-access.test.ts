@@ -36,6 +36,76 @@ test('access precedence, directional class overrides, limits and inference', () 
   ).toEqual([{ all: 'no' }, { all: 'destination' }]);
 });
 
+// TASK-271 (TASK-259 D12): time-conditional access read into the one value a road carries, over
+// the simulated day (07:00 to 19:00, a working day).
+test.each([
+  // York's footstreets: closed most of the day, with delivery windows.
+  [
+    { 'motor_vehicle:conditional': 'delivery @ (08:00-10:30, 17:00-18:00); no @ (10:30-17:00)' },
+    'delivery',
+  ],
+  [
+    {
+      motor_vehicle: 'no',
+      'motor_vehicle:conditional': 'yes @ (18:00-08:00; 10:00-16:00 AND loading)',
+    },
+    'delivery',
+  ],
+  [
+    {
+      motor_vehicle: 'yes',
+      'motor_vehicle:conditional': 'yes @ (18:00-08:00; 10:00-16:00 AND loading)',
+    },
+    'yes',
+  ],
+  [{ 'motor_vehicle:conditional': 'destination @ (10:30-18:00)' }, 'destination'],
+  [{ 'vehicle:conditional': 'destination @ (Mo-Sa 08:00-18:00)' }, 'destination'],
+  [{ 'vehicle:conditional': 'destination @ (Sa 08:00-18:00)' }, undefined],
+  [
+    { vehicle: 'no', 'vehicle:conditional': 'destination @ delivery AND (05:00-10:30; 19:00-22)' },
+    'delivery',
+  ],
+  // Cambridge's school street closes for less than half the day.
+  [
+    { 'motor_vehicle:conditional': 'destination @ (Mo-Fr 08:30-09:30,14:45-15:30; SH off)' },
+    undefined,
+  ],
+  // Not read: dates, occupancy, nights.
+  [{ 'motor_vehicle:conditional': 'no @ (2026 Jan 05-2026 Apr 30)' }, undefined],
+  [{ 'vehicle:conditional': 'destination @ (occupancy > 16)' }, undefined],
+  [{ 'motor_vehicle:conditional': 'no @ (20:00-07:00)' }, undefined],
+])('conditional access %j reads as %s', (tags, all) => {
+  expect(specs(tags)[0]!.access?.all).toBe(all);
+});
+
+test('directional and class conditional access', () => {
+  const [forward, backward] = specs({
+    'motor_vehicle:backward:conditional': 'no @ (Mo-Sa 08:00-18:00)',
+    'hgv:conditional': 'no @ (07:00-19:00)',
+    psv: 'yes',
+  });
+  expect(forward!.access).toEqual({ truck: 'no', bus: 'yes' });
+  expect(backward!.access).toEqual({ all: 'no', bus: 'yes' });
+  expect(specs({ 'hgv:conditional': 'no @ (20:00-07:00)' })[0]!.access).toBeUndefined();
+});
+
+// TASK-271 (TASK-259 D18, D12): `faux` is no one-way; `alternating` is one lane both ways share.
+test.each([
+  ['faux', 2, false],
+  ['alternating', 2, true],
+  ['reversible', 2, false],
+])('oneway=%s', (oneway, directions, shared) => {
+  const diagnostics: Parameters<typeof roadSpecs>[2] = [];
+  const read = roadSpecs(
+    { id: 1, nd: [1, 2], tag: { highway: 'tertiary', oneway, lanes: '2' } },
+    'tertiary',
+    diagnostics,
+  );
+  expect(read).toHaveLength(directions);
+  expect(read.map((s) => s.provenance.inferred.includes('sharedLane'))).toEqual([shared, shared]);
+  expect(diagnostics.length).toBe(oneway === 'reversible' ? 1 : 0);
+});
+
 function imported(tags: Record<string, string>, drivingSide: 'right' | 'left' = 'right') {
   const result = importOsm(
     `<osm version="0.6"><node id="1" lat="48" lon="9"/><node id="2" lat="48" lon="9.01"/><way id="1"><nd ref="1"/><nd ref="2"/><tag k="highway" v="service"/>${Object.entries(

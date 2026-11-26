@@ -2,9 +2,94 @@ import type { CompiledCity } from './types';
 import { isLaneDrop } from './lane-drop';
 import { vehicleClasses, type VehicleClass } from '../schema';
 import { parkingConnectorPermitted } from './parking';
+import { zoneReach } from './zones';
 
 const cache = new WeakMap<CompiledCity, Map<string, ReturnType<typeof derive>>>();
 const reachability = new WeakMap<CompiledCity, Map<string, Float64Array>>();
+
+/**
+ * The circulation core a car must reach to leave, or come from to arrive: the largest strongly
+ * connected part of the `allowed` lanes, by movements (a lane needing a change is not itself a
+ * core seed). TASK-351: when the public network splits inside the map (Zurich: Kloten and the
+ * airport landside meet only on private and no-access airport roads), every other strongly
+ * connected part that a map entry feeds and a map exit drains, by movements and lane changes,
+ * joins it: the roads go on beyond the map. A part with no way in or no way out stays apart.
+ */
+export function circulationCore(
+  city: CompiledCity,
+  outgoing: number[][],
+  incoming: number[][],
+  allowed: boolean[],
+) {
+  // Iterative Kosaraju.
+  const seen = new Uint8Array(city.lanes.length),
+    order: number[] = [];
+  for (const lane of city.lanes) {
+    if (!allowed[lane.idx] || seen[lane.idx]) continue;
+    const stack = [lane.idx];
+    while (stack.length) {
+      const at = stack.pop()!;
+      if (at < 0) {
+        order.push(~at);
+        continue;
+      }
+      if (seen[at]) continue;
+      seen[at] = 1;
+      stack.push(~at);
+      for (const to of outgoing[at]!) if (allowed[to] && !seen[to]) stack.push(to);
+    }
+  }
+  seen.fill(0);
+  const components: number[][] = [];
+  for (const at of order.reverse()) {
+    if (seen[at]) continue;
+    const component: number[] = [],
+      stack = [at];
+    seen[at] = 1;
+    while (stack.length) {
+      const to = stack.pop()!;
+      component.push(to);
+      for (const from of incoming[to]!)
+        if (allowed[from] && !seen[from]) {
+          seen[from] = 1;
+          stack.push(from);
+        }
+    }
+    components.push(component);
+  }
+  const largest = Math.max(0, ...components.map((c) => c.length));
+  const exits: number[] = [],
+    entries: number[] = [];
+  for (const place of city.places)
+    if (place.kind === 'gateway') {
+      for (const c of place.connectorsIn) exits.push(city.connectors[c]!.lane);
+      for (const c of place.connectorsOut) entries.push(city.connectors[c]!.lane);
+    }
+  const reach = (seeds: number[], edges: number[][]) => {
+    const reached = new Uint8Array(city.lanes.length),
+      queue: number[] = [];
+    const visit = (lane: number) => {
+      if (lane === -1 || !allowed[lane] || reached[lane]) return;
+      reached[lane] = 1;
+      queue.push(lane);
+    };
+    seeds.forEach(visit);
+    for (let head = 0; head < queue.length; head++) {
+      const at = queue[head]!;
+      edges[at]!.forEach(visit);
+      visit(city.lanes[at]!.left);
+      visit(city.lanes[at]!.right);
+    }
+    return reached;
+  };
+  const drained = reach(exits, incoming),
+    fed = reach(entries, outgoing);
+  return components
+    .filter(
+      (c) => c.length === largest || (c.length > 1 && drained[c[0]!] === 1 && fed[c[0]!] === 1),
+    )
+    .flat();
+}
 
 /** Derived once per compile/class: reach the circulation core legal from the origin's access zone. */
 export function parkingEgress(
@@ -37,51 +122,9 @@ function derive(
   const incoming = city.lanes.map((): number[] => []);
   for (let from = 0; from < outgoing.length; from++)
     for (const to of outgoing[from]!) incoming[to]!.push(from);
-  const coreFor = (allowed: boolean[]) => {
-    // Iterative Kosaraju: movements only. A lane needing a change is not itself a core seed.
-    const seen = new Uint8Array(city.lanes.length),
-      order: number[] = [];
-    for (const lane of city.lanes) {
-      if (!allowed[lane.idx] || seen[lane.idx]) continue;
-      const stack = [lane.idx];
-      while (stack.length) {
-        const at = stack.pop()!;
-        if (at < 0) {
-          order.push(~at);
-          continue;
-        }
-        if (seen[at]) continue;
-        seen[at] = 1;
-        stack.push(~at);
-        for (const to of outgoing[at]!) if (allowed[to] && !seen[to]) stack.push(to);
-      }
-    }
-    seen.fill(0);
-    let core: number[] = [];
-    let largest = 0;
-    for (const at of order.reverse()) {
-      if (seen[at]) continue;
-      const component: number[] = [],
-        stack = [at];
-      seen[at] = 1;
-      while (stack.length) {
-        const to = stack.pop()!;
-        component.push(to);
-        for (const from of incoming[to]!)
-          if (allowed[from] && !seen[from]) {
-            seen[from] = 1;
-            stack.push(from);
-          }
-      }
-      if (component.length > largest) {
-        largest = component.length;
-        core = component;
-      } else if (component.length === largest) core.push(...component);
-    }
-    return core;
-  };
+  const coreFor = (allowed: boolean[]) => circulationCore(city, outgoing, incoming, allowed);
 
-  const allowedFor = (zone: number) =>
+  const allowedFor = (zone: number, near = zoneReach(city, kind)[zone] ?? []) =>
     city.lanes.map((lane) => {
       if (!lane.allowed.includes(vehicleClass)) return false;
       const road = city.roads[lane.road]!,
@@ -89,7 +132,7 @@ function derive(
       return (
         access === 'yes' ||
         (access === 'delivery' && delivery) ||
-        ((access === 'private' || access === 'destination') && road.zone[kind] === zone)
+        ((access === 'private' || access === 'destination') && near.includes(road.zone[kind]!))
       );
     });
   const byZone = new Map<number, Float64Array>();

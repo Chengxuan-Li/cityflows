@@ -2,24 +2,39 @@ import { polylineLength } from '../../geo/polyline';
 import { lonLatToLocal } from '../../geo/projection';
 import { compile, type Diagnostic } from '../../network';
 import { groupAngle, groupExits } from '../../network/groups';
+import { MINI_ROUNDABOUT, STOP_POSITION, STOP_POSITION_CROSSING } from '../../network/junctions';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
 import { osmMarkingTheme } from './controls';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
-import { clipPart, findBoundaryCuts, prunePolygonCuts, type Bounds, type RoadPoint } from './clip';
+import {
+  clipPart,
+  findBoundaryCuts,
+  prunePolygonCuts,
+  roundaboutBounds,
+  type Bounds,
+  type RoadPoint,
+} from './clip';
 import { importContext } from './context';
 import { addLots, restoreLotJunctions } from './lots';
 import { addMappedLotPortals } from './lot-junctions';
 import { addNodeCrossings, importWalk } from './walk';
+import { importAirport } from './airport';
 import { assignTramForms, importRail } from './rail';
 import { importTramStops } from './tram-stops';
 import { addStrips } from './strips';
 import { addBuildings } from './buildings';
-import { addGroupSignal, addSignal, assignSignalLanes, markRoundaboutEntries } from './controls';
+import {
+  addGroupSignal,
+  addSignal,
+  assignSignalLanes,
+  markMiniRoundabouts,
+  markRoundaboutEntries,
+} from './controls';
 import { drivableClass } from './filter';
 import { parseOsm } from './parse';
-import { addOsmGarages } from './parking';
+import { addOsmGarages, addParkingEntranceConnectors, compileDroppingParking } from './parking';
 import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
 import {
@@ -146,13 +161,16 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     const ring = geo.boundary.map(([lon, lat]) => lonLatToLocal(geo, { lon, lat }));
     bounds.ring = [...ring, ring[0]!];
   }
+  const markingTheme = osmMarkingTheme(data) ?? geographicMarkingTheme(geo);
   const city: City = {
     schemaVersion: 3,
     version: 0,
     name: 'OpenStreetMap import',
-    drivingSide: options.drivingSide ?? 'right',
+    // TASK-268 (D11): unless set, the side follows the marking theme, from the extract's country
+    // tags or else its location: left where the theme is the UK's (Great Britain and Ireland).
+    drivingSide: options.drivingSide ?? (markingTheme === 'uk' ? 'left' : 'right'),
     geo,
-    markingTheme: osmMarkingTheme(data) ?? geographicMarkingTheme(geo),
+    markingTheme,
     nodes: {},
     roads: {},
     places: {},
@@ -162,9 +180,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const positions = new Map(data.node.map((node) => [node.id, lonLatToLocal(geo, node)]));
   const ways = kept.map(({ way }) => way);
   const boundaryCuts = findBoundaryCuts(ways, positions, bounds);
+  const roadBounds = roundaboutBounds(ways, positions, bounds);
   const splits = junctions(ways, [
     ...data.node
-      .filter(({ tag }) => ['traffic_signals', 'stop', 'give_way'].includes(tag.highway ?? ''))
+      .filter(({ tag }) =>
+        ['traffic_signals', 'stop', 'give_way', 'mini_roundabout'].includes(tag.highway ?? ''),
+      )
       .map(({ id }) => id),
     ...data.relation.flatMap(({ tag, member }) =>
       tag.type === 'restriction'
@@ -175,6 +196,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const nodes = new Map<string, Node>();
   const incidents = new Map<string, JunctionRoads>();
   const signals: Node[] = [];
+  const crossingSignals = new Set<string>();
   function addNode(point: RoadPoint, wayLayer: number, wayId: number) {
     const existing = nodes.get(point.key);
     if (existing) return existing.id;
@@ -216,6 +238,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     // OSM defaults, not guesses.
     const inferred: string[] = [];
     if (control === 'stop' || control === 'yield') inferred.push('minorRoads');
+    if (tags?.highway === 'mini_roundabout') inferred.push(MINI_ROUNDABOUT);
     const id = allocateId(city, 'n');
     const node: Node = {
       id,
@@ -228,6 +251,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
       provenance: { source: 'osm', osmIds: [point.osmId ?? wayId], inferred },
     };
     if (tags?.highway === 'traffic_signals') signals.push(node);
+    if (tags?.highway === 'traffic_signals' && tags.crossing && tags.crossing !== 'no')
+      crossingSignals.add(id);
     nodes.set(point.key, node);
     city.nodes[id] = node;
     incidents.set(id, { incoming: [], outgoing: [] });
@@ -251,7 +276,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
           `way/${way.id}`,
         ]);
       }
-      for (const clipped of clipPart(points, bounds, `way/${way.id}/${index}`, boundaryCuts)) {
+      for (const clipped of clipPart(points, roadBounds, `way/${way.id}/${index}`, boundaryCuts)) {
         const first = clipped.points[0]!;
         const last = clipped.points.at(-1)!;
         if (first.key === last.key)
@@ -331,6 +356,9 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   const sameDirection = pairSameDirection(roads);
   const groupMaxM = options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M;
   const groups = formJunctionGroups(city, roads, groupMaxM, sources, new Set(signalIds));
+  for (const id of crossingSignals)
+    if (city.nodes[id]?.provenance.inferred!.includes(STOP_POSITION))
+      city.nodes[id].provenance.inferred!.push(STOP_POSITION_CROSSING);
   const crossovers = medianCrossovers(roads, groupMaxM);
   // Provisional group ids: the final ones are allocated last, so that no other id moves.
   if (groups.length)
@@ -389,6 +417,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     );
   }
   markRoundaboutEntries(city, data);
+  markMiniRoundabouts(city);
   // One signal anywhere in a group makes the group signalised, as the merged node was.
   const signalGroups = Object.values(city.junctionGroups ?? {}).filter((g) =>
     g.nodes.some((id) => signalIds.includes(id)),
@@ -441,10 +470,15 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
   addBuildings(city, data, positions, bounds, base.compiled);
   const garageFootprints = addOsmGarages(city, data, positions, bounds, base.compiled);
   addImplicitGarages(city);
-  const parkingGraph = addLots(city, data, positions, bounds, diagnostics) ?? base.compiled;
+  const lots = addLots(city, data, positions, bounds, diagnostics, { garageFootprints });
+  const parkingGraph = lots.compiled ?? base.compiled;
   importWalk(city, data, positions, bounds);
   addStrips(city, data, positions, bounds, diagnostics);
-  connectCarExits(city, parkingGraph, garageFootprints);
+  connectCarExits(
+    city,
+    parkingGraph,
+    new Map([...garageFootprints].map(([id, { rings }]) => [id, rings])),
+  );
   importRail(city, data, positions, bounds, diagnostics);
   assignTramForms(city, data, parkingGraph, positions);
   if (options.context !== false)
@@ -472,8 +506,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     parkingGraph,
   );
   addMappedLotPortals(city, data, diagnostics, portalGeometry ?? parkingGraph);
-  // TASK-239: last, so that no other id moves.
+  // TASK-239: crossing IDs follow the existing network imports.
   addNodeCrossings(city, data, positions, bounds);
+  if (lots.entrances)
+    addParkingEntranceConnectors(city, portalGeometry ?? parkingGraph, lots.entrances, diagnostics);
+  // TASK-295: the airside last, so that no other id moves.
+  importAirport(city, data, positions, bounds, diagnostics);
 
   const clipped = roads.filter(({ cutStart, cutEnd }) => cutStart || cutEnd);
   if (clipped.length)
@@ -496,6 +534,12 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
         message: `Inferred ${label} on ${inferred.length} roads`,
       });
   }
+  const validation = citySchema.safeParse(city);
+  if (!validation.success) {
+    const issue = validation.error.issues[0]!;
+    return fail('osm_invalid_city', `${issue.path.join('.')}: ${issue.message}`);
+  }
+  const final = compileDroppingParking(city, diagnostics);
   geo.source.inferredCount = [
     ...Object.values(city.nodes),
     ...Object.values(city.nodes).flatMap((node) => node.turnRules),
@@ -503,12 +547,6 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     ...Object.values(city.places),
     ...Object.values(city.parking ?? {}),
   ].reduce((sum, entity) => sum + (entity.provenance.inferred?.length ?? 0), 0);
-  const validation = citySchema.safeParse(city);
-  if (!validation.success) {
-    const issue = validation.error.issues[0]!;
-    return fail('osm_invalid_city', `${issue.path.join('.')}: ${issue.message}`);
-  }
-  const final = compile(city);
   if (final.ok)
     for (const lot of final.compiled.lots ?? []) {
       const facility = city.parking![lot.id]!;

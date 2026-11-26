@@ -9,6 +9,8 @@ import {
   triangulateD,
 } from 'clipper2-ts';
 import {
+  boxOf,
+  boxesMeet,
   clipOutside,
   cumulativeLengths,
   distance,
@@ -18,6 +20,7 @@ import {
   pointAtDistance,
   pointInPolygon,
   polylineCrossings,
+  polylineNearest,
   segmentDistance,
   segmentIntersection,
   trimPolyline,
@@ -34,10 +37,12 @@ import {
   endEdges,
   MAPPED_M,
   nearSignal,
+  nodeRoads,
   type CrossingSource,
 } from '../network/crossings';
 import { lanesNear } from '../network/walk';
-import { SETBACK_CAP_M, junctionCorners } from '../network/junctions';
+import { roadStrip } from './layers/nodes';
+import { SETBACK_CAP_M, isSignalCrossing, junctionCorners } from '../network/junctions';
 import { keepClearZones, type KeepClearZone } from '../network/keep-clear';
 import {
   markingTheme as defaultTheme,
@@ -47,7 +52,12 @@ import {
 } from './style';
 
 import { defaultSlice, orderBranches } from '../network/continuity';
-import { paintedCity, paintedLaneEdges as laneEdges } from './road-paint';
+import {
+  paintedCity,
+  paintedLaneEdges as laneEdges,
+  transitionLanes,
+  transitionAt,
+} from './road-paint';
 
 const LINE_CLEAR_M = 0.5;
 /** TASK-215 (M2): an inner road's lanes carry lane lines from this length (the audit's 15 m). */
@@ -148,19 +158,27 @@ const keepGlyphs: Record<string, string[]> = {
   A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
   R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
 };
+/** TASK-233: a direction of a two-way `lanes=1` way, one carriageway both directions share (the
+ * importer's `sharedLane`, read from the canonical road): drawn without lane paint. */
+const sharedCarriageway = (road: CRoad, source?: CrossingSource) =>
+  road.lanes.length === 1 &&
+  !!source?.roads?.[road.id]?.provenance.inferred?.includes('sharedLane');
 /** TASK-169: the stretches of a lane its keep-clear markings cover, in lane metres: its mouth
  * zones (`keepClearZones`), cut 0.5 m clear of the lane's crossings (TASK-215, M4: Freiburg
  * n:1462, a lot mouth at two crossings), each 3 m or more; the US and UK themes' text also needs
  * glyphs of 0.8 m or more. TASK-246: a box stands on the lane at its full width, so it keeps to the
  * lane between its taper at the start (a lane gain, `taperStartM`) and its taper at the end
  * (`taperEndM`), where the lane's centre line and edges bend: Freiburg's r:1189#3 box fanned
- * across the gain at n:1169. A box that is shorter than 3 m once cut is left out. */
+ * across the gain at n:1169. A box that is shorter than 3 m once cut is left out. TASK-256: none
+ * on a shared one-lane carriageway (`sharedCarriageway`), which has no lane of its own direction
+ * to box and no lane paint: the Freiburg promenade's garage mouth (`r:225`) is plain paving. */
 export function keepClearBoxes(
   city: CompiledCity,
   lane: CLane,
   markingTheme: MarkingTheme,
   source?: CrossingSource,
 ): KeepClearZone[] {
+  if (sharedCarriageway(city.roads[lane.road]!, source)) return [];
   const crosswalks = [false, true].flatMap((atEnd) => {
     const span = crossingSpan(city, lane, atEnd, source);
     return span
@@ -274,18 +292,24 @@ export function keepClearMarkings(
   }
   return shapes;
 }
-/** Side is relative to travel (-1 left, +1 right). Strip runs are cut by `besideNoStrip`. */
-export function edgeLineColor(city: CompiledCity, road: CRoad, side: number, theme: MarkingTheme) {
-  if (theme.id === 'uk') {
-    const nearside = side === (city.drivingSide === 'right' ? 1 : -1);
-    return nearside && ['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass)
-      ? theme.colors.edge
-      : theme.colors.lane;
-  }
-  return theme.id === 'us' && side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
-    ? theme.colors.centre
-    : theme.colors.edge;
+/** The yellow lines of a UK kerb, as the importer read them (`kerbLines`). */
+export type KerbLine = 'single' | 'double';
+/** Side is relative to travel (-1 left, +1 right). */
+export function kerbLine(road: CRoad, side: number, source?: CrossingSource): KerbLine | undefined {
+  const prefix = `kerbLine:${side < 0 ? 'left' : 'right'}:`;
+  const entry = source?.roads?.[road.id]?.provenance.inferred?.find((v) => v.startsWith(prefix));
+  return entry?.slice(prefix.length) as KerbLine | undefined;
 }
+/** TASK-276 (D8): UK town roads carry no edge line of their own; their kerbs have the yellow
+ * lines the importer read from OSM, or none. */
+const ukTownRoad = (road: CRoad) =>
+  ['residential', 'tertiary', 'secondary', 'primary'].includes(road.roadClass);
+/** Centre-line insets from the kerb and line widths of the UK theme's single and double yellow
+ * lines (TSRGD diagrams 1017 and 1018.1), drawn 0.1 m wide and 0.1 m apart. */
+const KERB_LINES: Record<KerbLine, { insetsM: number[]; widthM: number }> = {
+  single: { insetsM: [0.15], widthM: 0.1 },
+  double: { insetsM: [0.15, 0.35], widthM: 0.1 },
+};
 
 /** Lead (TASK-103 merge): the pieces of a kerb line beside no parking strip on that side; a
  * kerb with parking carries no UK no-waiting line. */
@@ -358,6 +382,7 @@ function buildRoadMarkings(
   source: CrossingSource | undefined,
   markingTheme: MarkingTheme,
 ) {
+  city = transitionLanes(city);
   road = city.roads[road.idx]!;
   const belowShapes: MarkingShape[] = [],
     aboveShapes: MarkingShape[] = [],
@@ -414,7 +439,11 @@ function buildRoadMarkings(
   // B46 (TASK-091): a centre line ends at the junction mouth, also where the outline reaches back
   // over the end of the approach: no centre line inside a junction polygon, and no piece shorter
   // than a dash left between two (a stub road inside a junction, Munich r:1172 at n:182).
-  const centreClips = junction.length ? [...clips, junction] : clips;
+  const zigZags = markingTheme.id === 'uk' ? zigZagZones(city, road, source) : [];
+  const centreClips = [
+    ...(junction.length ? [...clips, junction] : clips),
+    ...zigZagRings(city, zigZags),
+  ];
   const drawCentre = (lines: Vec2[][]) =>
     belowShapes.push(
       ...lines
@@ -422,14 +451,12 @@ function buildRoadMarkings(
         .filter((piece) => cumulativeLengths(piece).at(-1)! >= 2.7)
         .map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)),
     );
-  const sharedLane =
-    road.lanes.length === 1 &&
-    source?.roads?.[road.id]?.provenance.inferred?.includes('sharedLane');
+  const sharedLane = sharedCarriageway(road, source);
   const partners =
     road.streetGroupId === null && road.corridorId !== null
       ? city.roads
           .filter((r) => r !== road && r.corridorId === road.corridorId && r.streetGroupId === null)
-          .map((r) => [...r.surface, r.surface[0]!])
+          .map((r) => polylineNearest([...r.surface, r.surface[0]!]))
       : [];
   for (const index of road.lanes) {
     const lane = city.lanes[index]!;
@@ -461,10 +488,7 @@ function buildRoadMarkings(
       road.streetGroupId !== null &&
       !sharedLane &&
       (medianOnRight ? lane.right : lane.left) < 0 &&
-      (markingTheme.id !== 'uk' ||
-        !city.roads.some(
-          (other) => other.streetGroupId === road.streetGroupId && other.idx < road.idx,
-        ))
+      (markingTheme.id !== 'uk' || firstOfGroup(city, road))
     ) {
       const edge = parallelOffset(along, ((medianOnRight ? 1 : -1) * lane.widthM) / 2);
       const pattern = markingTheme.classes[road.roadClass].centre.dash;
@@ -487,9 +511,7 @@ function buildRoadMarkings(
       for (const run of runs) {
         const facing = run.map(
           (p) =>
-            partners
-              .map((ring) => nearestOnPolyline(ring, p))
-              .reduce((a, b) => (b.away < a.away ? b : a)).point,
+            partners.map((nearest) => nearest(p)).reduce((a, b) => (b.away < a.away ? b : a)).point,
         );
         pavement.push([...run, ...facing.reverse()]);
       }
@@ -504,40 +526,86 @@ function buildRoadMarkings(
         if ((side < 0 ? lane.left : lane.right) >= 0) continue;
         const median = medianOnRight ? side > 0 : side < 0;
         if (median && road.streetGroupId !== null) continue;
+        // TASK-276 (D8): a UK kerb draws the yellow lines read from OSM (`kerbLine`); a double
+        // line stops beside a parking strip, a single one runs on (cars park over it out of its
+        // hours). A town road's kerb without them has no line; other UK edges, and the median
+        // edge of a divided town road, are white.
+        const yellow = markingTheme.id === 'uk' ? kerbLine(road, side, source) : undefined;
+        if (
+          markingTheme.id === 'uk' &&
+          !yellow &&
+          ukTownRoad(road) &&
+          !(median && road.corridorId !== null)
+        )
+          continue;
+        const color = yellow
+          ? markingTheme.colors.edge
+          : markingTheme.id === 'uk'
+            ? markingTheme.colors.lane
+            : side < 0 && (road.corridorId !== null || road.roadClass === 'ramp')
+              ? markingTheme.colors.centre
+              : undefined;
         // Compiled edges follow tapers and the road's lane-block normals.
         const boundary = side < 0 ? edges.left : edges.right;
-        const inset = parallelOffset(boundary, -side * 0.15);
-        const ratio = cumulativeLengths(inset).at(-1)! / lane.lengthM;
-        const edge = trimPolyline(
-          inset,
-          (startSpan ? startSpan.farM + LINE_CLEAR_M : 0) * ratio,
-          Math.max(lane.lengthM - lane.stopM, endSpan ? endFarM + LINE_CLEAR_M : 0) * ratio,
-        );
-        let sections = [edge];
-        if (median && partners.length) {
-          // Nearby opposing carriageways already carry the shared centre paint.
-          const kerb = (p: Vec2) => {
-            const boundaryPoint = nearestOnPolyline(boundary, p).point;
-            return partners.every((ring) => nearestOnPolyline(ring, boundaryPoint).away > 1.5);
-          };
-          // Separation can change between the vertices of a straight boundary.
-          sections = keepInside(edge, kerb, true);
+        for (const insetM of yellow ? KERB_LINES[yellow].insetsM : [0.15]) {
+          const inset = parallelOffset(boundary, -side * insetM);
+          const ratio = cumulativeLengths(inset).at(-1)! / lane.lengthM;
+          const edge = trimPolyline(
+            inset,
+            (startSpan ? startSpan.farM + LINE_CLEAR_M : 0) * ratio,
+            Math.max(lane.lengthM - lane.stopM, endSpan ? endFarM + LINE_CLEAR_M : 0) * ratio,
+          );
+          let sections = [edge];
+          if (median && partners.length) {
+            // Nearby opposing carriageways already carry the shared centre paint.
+            const nearestBoundary = polylineNearest(boundary);
+            const kerb = (p: Vec2) => {
+              const boundaryPoint = nearestBoundary(p).point;
+              return partners.every((nearest) => nearest(boundaryPoint).away > 1.5);
+            };
+            // Separation can change between the vertices of a straight boundary.
+            sections = keepInside(edge, kerb, true);
+          }
+          for (const section of sections)
+            for (const clipped of clipOutside(section, centreClips, 0))
+              for (const points of yellow === 'double'
+                ? besideNoStrip(city, road, side, clipped)
+                : [clipped])
+                belowShapes.push({
+                  ...lineShape(road, 'edge', points, 0.85, markingTheme),
+                  ...(yellow ? { widthM: KERB_LINES[yellow].widthM } : {}),
+                  ...(color === undefined ? {} : { color }),
+                });
         }
-        const kerbLine =
-          markingTheme.id === 'uk' &&
-          edgeLineColor(city, road, side, markingTheme) === markingTheme.colors.edge;
-        for (const section of sections)
-          for (const clipped of clipOutside(section, centreClips, 0))
-            for (const points of kerbLine ? besideNoStrip(city, road, side, clipped) : [clipped])
-              belowShapes.push({
-                ...lineShape(road, 'edge', points, 0.85, markingTheme),
-                ...(markingTheme.id === 'uk' ||
-                (markingTheme.id === 'us' &&
-                  side < 0 &&
-                  (road.corridorId !== null || road.roadClass === 'ramp'))
-                  ? { color: edgeLineColor(city, road, side, markingTheme) }
-                  : {}),
-              });
+      }
+    }
+    // TASK-269 (D16): a zebra's zig-zags at the kerbs, and on a two-way street at the centre
+    // where this road draws the centre line.
+    const zones = zigZags.filter((zone) => zone.lane === lane.idx);
+    if (zones.length) {
+      const median = medianOnRight ? 1 : -1;
+      const centre = road.streetGroupId !== null && !sharedLane && firstOfGroup(city, road);
+      for (const side of [-1, 1]) {
+        if ((side < 0 ? lane.left : lane.right) >= 0) continue;
+        if (side === median && road.streetGroupId !== null && !centre) continue;
+        const offset =
+          side === median && road.streetGroupId !== null
+            ? (side * lane.widthM) / 2
+            : side * (lane.widthM / 2 - 0.15 - ZIGZAG_ACROSS_M / 2);
+        for (const zone of zones)
+          belowShapes.push({
+            kind: 'line',
+            role: 'lane',
+            alpha: 0.85,
+            widthM: 0.15,
+            points: Array.from({ length: zone.marks + 1 }, (_, k) =>
+              laneOffsetPoint(
+                lane,
+                zone.fromM + k * ZIGZAG_MARK_M,
+                offset + ((k % 2) - 0.5) * ZIGZAG_ACROSS_M,
+              ),
+            ),
+          });
       }
     }
     aboveShapes.push(
@@ -548,6 +616,154 @@ function buildRoadMarkings(
   belowShapes.push(...busLabels(city, road, source).flatMap((label) => label.shapes));
   belowShapes.push(...keepClearMarkings(city, road, markingTheme, source));
   return { below: belowShapes, above: aboveShapes, pavement };
+}
+
+const groupFirsts = new WeakMap<CompiledCity, Map<string, number>>();
+/** Whether no road of the road's street group comes before it (TASK-287: the least index per
+ * group once per city, instead of a scan of every road per lane). */
+function firstOfGroup(city: CompiledCity, road: CRoad): boolean {
+  let firsts = groupFirsts.get(city);
+  if (!firsts) {
+    firsts = new Map();
+    for (const r of city.roads)
+      if (r.streetGroupId !== null)
+        firsts.set(r.streetGroupId, Math.min(firsts.get(r.streetGroupId) ?? Infinity, r.idx));
+    groupFirsts.set(city, firsts);
+  }
+  return firsts.get(road.streetGroupId!)! >= road.idx;
+}
+
+/** A point `offset` metres right of a lane's centreline (left when negative), `atM` along it. */
+function laneOffsetPoint(lane: CLane, atM: number, offset: number): Vec2 {
+  const s = Math.max(0, Math.min(lane.lengthM, atM));
+  const p = pointAtDistance(lane.polyline, lane.cumulative, s);
+  const h = headingAtDistance(lane.polyline, lane.cumulative, s);
+  return { x: p.x - Math.sin(h) * offset, y: p.y + Math.cos(h) * offset };
+}
+
+/** TASK-269 (D16): a UK zebra's zig-zag marks (diagram 1001.3): eight of 2 m on each side of the
+ * crossing where they fit, at least two, 0.4 m across, from 1 m beyond the stripes. */
+const ZIGZAG_MARK_M = 2;
+const ZIGZAG_MARKS = 8;
+const ZIGZAG_ACROSS_M = 0.4;
+const ZIGZAG_GAP_M = 1;
+
+/** TASK-269 (D16): the zebras a lane crosses, in lane metres: those its road's ends paint as
+ * stripes (`crossingStripes`' zebra style), whose zig-zags run on the road's side only, and the
+ * mapped zebras it paints midblock (`mappedStripes`), with zig-zags on both sides. */
+function laneZebras(
+  city: CompiledCity,
+  road: CRoad,
+  lane: CLane,
+  source?: CrossingSource,
+): { fromM: number; toM: number; before: boolean; after: boolean }[] {
+  return [false, true].flatMap((atEnd) => {
+    const span = crossingSpan(city, lane, atEnd, source);
+    const own =
+      span && crossingStyle(city, road, atEnd, source) === 'zebra'
+        ? [
+            {
+              fromM: Math.min(span.nearM, span.farM),
+              toM: Math.max(span.nearM, span.farM),
+              before: atEnd,
+              after: !atEnd,
+            },
+          ]
+        : [];
+    const first = city.lanes[road.lanes[0]!]!;
+    const mapped = paintedMapped(city, road, atEnd, source).flatMap(({ at, lines }) => {
+      const m = at.get(lane.idx);
+      if (m === undefined || lines) return [];
+      const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
+      const p = pointAtDistance(first.polyline, first.cumulative, Math.min(first.lengthM, mean));
+      return nearSignal(city, p)
+        ? []
+        : [{ fromM: m - 1.25, toM: m + 1.25, before: true, after: true }];
+    });
+    return [...own, ...mapped];
+  });
+}
+
+interface ZigZagZone {
+  lane: number;
+  fromM: number;
+  marks: number;
+}
+/** TASK-269 (D16): each lane's zig-zag runs, between its zebras and up to its stop position. */
+function zigZagZones(city: CompiledCity, road: CRoad, source?: CrossingSource): ZigZagZone[] {
+  return road.lanes.flatMap((index) => {
+    const lane = city.lanes[index]!;
+    const zebras = laneZebras(city, road, lane, source);
+    return zebras.flatMap((zebra) => {
+      const runs: ZigZagZone[] = [];
+      const room = (from: number, to: number) =>
+        Math.min(ZIGZAG_MARKS, Math.floor((to - from) / ZIGZAG_MARK_M + 1e-9));
+      if (zebra.before) {
+        const end = zebra.fromM - ZIGZAG_GAP_M;
+        const limit = Math.max(0, ...zebras.filter((z) => z.toM <= zebra.fromM).map((z) => z.toM));
+        const marks = room(limit, end);
+        if (marks >= 2) runs.push({ lane: index, fromM: end - marks * ZIGZAG_MARK_M, marks });
+      }
+      if (zebra.after) {
+        const start = zebra.toM + ZIGZAG_GAP_M;
+        const limit = Math.min(
+          lane.stopM,
+          ...zebras.filter((z) => z.fromM >= zebra.toM).map((z) => z.fromM),
+        );
+        const marks = room(start, limit);
+        if (marks >= 2) runs.push({ lane: index, fromM: start, marks });
+      }
+      return runs;
+    });
+  });
+}
+
+/** TASK-269 (D16): the areas of the zig-zag runs, 0.3 m beyond their lanes, where no centre or
+ * kerb line is drawn. */
+function zigZagRings(city: CompiledCity, zones: ZigZagZone[]): Vec2[][] {
+  return zones.map((zone) => {
+    const lane = city.lanes[zone.lane]!;
+    const stations = Array.from(
+      { length: zone.marks + 1 },
+      (_, k) => zone.fromM + k * ZIGZAG_MARK_M,
+    );
+    const half = lane.widthM / 2 + 0.3;
+    return [
+      ...stations.map((s) => laneOffsetPoint(lane, s, -half)),
+      ...stations.reverse().map((s) => laneOffsetPoint(lane, s, half)),
+    ];
+  });
+}
+
+/** TASK-269 (D16): the Belisha beacons of the UK theme's zebras, 0.5 m beyond each kerb at the
+ * middle of the stripes (not at the centre of a two-way street), one per spot within 2 m. */
+export function zebraBeacons(
+  city: CompiledCity,
+  source: CrossingSource | undefined,
+  markingTheme: MarkingTheme,
+): { pos: Vec2; road: number }[] {
+  if (markingTheme.id !== 'uk') return [];
+  city = paintedCity(city);
+  const beacons: { pos: Vec2; road: number }[] = [];
+  const median = city.drivingSide === 'left' ? 1 : -1;
+  for (const road of city.roads) {
+    if (road.group !== undefined) continue;
+    for (const index of road.lanes) {
+      const lane = city.lanes[index]!;
+      for (const zebra of laneZebras(city, road, lane, source))
+        for (const side of [-1, 1]) {
+          if ((side < 0 ? lane.left : lane.right) >= 0) continue;
+          if (side === median && road.streetGroupId !== null) continue;
+          const pos = laneOffsetPoint(
+            lane,
+            (zebra.fromM + zebra.toM) / 2,
+            side * (lane.widthM / 2 + 0.5),
+          );
+          if (beacons.every((b) => distance(b.pos, pos) > 2)) beacons.push({ pos, road: road.idx });
+        }
+    }
+  }
+  return beacons;
 }
 
 /**
@@ -731,12 +947,26 @@ function approachShapes(
     // moved along the lane to the nearest place clear of boxes and crossing paint, between the
     // start crossing and the stop line, else none.
     const boxes = keepClearBoxes(city, lane, markingTheme, source);
+    // TASK-264: an arrow on a gain's transition also keeps off the boxes of the lane under it there.
+    const before = at < 0 ? transitionAt(city, road, false) : null;
+    if (before) {
+      const start = lane.polyline[0]!;
+      const under = before.road.lanes
+        .map((i) => city.lanes[i]!)
+        .find((l) => {
+          const end = l.polyline.at(-1)!;
+          return Math.hypot(end.x - start.x, end.y - start.y) < l.widthM / 2;
+        });
+      if (under)
+        for (const box of keepClearBoxes(city, under, markingTheme, source))
+          boxes.push({ ...box, fromM: box.fromM - under.lengthM, toM: box.toM - under.lengthM });
+    }
     if (clearOf(at, 2.5 * scale, 2.5 * scale, at, at, boxes) === null) {
       const moved = clearOf(
         at,
         2.5 * scale,
         2.5 * scale,
-        startFarM > 0 ? back : 2.5 * scale,
+        before ? 2.5 * scale - before.road.lengthM : startFarM > 0 ? back : 2.5 * scale,
         front,
         [...boxes, ...crossingPaint(city, lane, source)],
       );
@@ -749,7 +979,12 @@ function approachShapes(
       shapes.push(
         fillShape(
           'arrow',
-          polygon.map((p) => local(Math.max(0, at + p.x * scale), 0, p.y)),
+          // Before the lane's start (a gain's transition), along its first heading.
+          polygon.map((p) =>
+            before
+              ? local(Math.max(0, at + p.x * scale), Math.min(0, at + p.x * scale), p.y)
+              : local(Math.max(0, at + p.x * scale), 0, p.y),
+          ),
         ),
       );
   }
@@ -790,11 +1025,11 @@ export function markingPolygons(shape: MarkingShape): Vec2[][] {
   return left.slice(1).map((p, i) => [left[i]!, p, right[i + 1]!, right[i]!]);
 }
 /** The runs of `line` whose points lie within 1.5 m of one of the closed `rings`. */
-function besidePartners(line: Vec2[], rings: Vec2[][]): Vec2[][] {
+function besidePartners(line: Vec2[], partners: ReturnType<typeof polylineNearest>[]): Vec2[][] {
   const runs: Vec2[][] = [];
   let run: Vec2[] = [];
   for (const p of line) {
-    if (rings.some((ring) => nearestOnPolyline(ring, p).away <= 1.5)) run.push(p);
+    if (partners.some((nearest) => nearest(p).away <= 1.5)) run.push(p);
     else if (run.length) {
       if (run.length > 1) runs.push(run);
       run = [];
@@ -818,8 +1053,8 @@ function nodeClips(city: CompiledCity, road: CRoad, node: number, withOutline: b
   if (!outline.length) return [];
   const rings = withOutline ? [outline] : [];
   const own = endDirection(road, road.to === node);
-  for (const other of city.roads) {
-    if (other === road || (other.from !== node && other.to !== node)) continue;
+  for (const other of nodeRoads(city, city.nodes[node]!)) {
+    if (other === road) continue;
     if (other.streetGroupId !== null && other.streetGroupId === road.streetGroupId) continue;
     const atEnd = other.to === node;
     const d = endDirection(other, atEnd);
@@ -834,21 +1069,34 @@ function splitAtRing(line: Vec2[], ring: Vec2[]) {
   const inside: Vec2[][] = [],
     outside: Vec2[][] = [];
   if (!ring.length) return { inside, outside: [line] };
+  const box = boxOf(ring);
   let current: Vec2[] = [],
     within = false;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
     const ts = [0, 1];
-    for (let j = 1; j < ring.length; j++) {
-      const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
-      if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+    // Keep the endpoint tolerance of segmentIntersection when rejecting the ring.
+    const pad =
+      2e-9 *
+      Math.max(box.maxX - box.minX, box.maxY - box.minY, Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+    const meets = boxesMeet(box, {
+      minX: Math.min(a.x, b.x) - pad,
+      minY: Math.min(a.y, b.y) - pad,
+      maxX: Math.max(a.x, b.x) + pad,
+      maxY: Math.max(a.y, b.y) + pad,
+    });
+    if (meets) {
+      for (let j = 1; j < ring.length; j++) {
+        const hit = segmentIntersection(a, b, ring[j - 1]!, ring[j]!);
+        if (hit) ts.push(distance(a, hit) / Math.max(distance(a, b), 1e-12));
+      }
     }
     ts.sort((x, y) => x - y);
     for (let k = 1; k < ts.length; k++) {
       if (ts[k]! - ts[k - 1]! < 1e-9) continue;
       const at = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      const side = pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
+      const side = meets && pointInPolygon(at((ts[k - 1]! + ts[k]!) / 2), ring, 0);
       if (current.length && side !== within) {
         (within ? inside : outside).push(current);
         current = [];
@@ -978,6 +1226,8 @@ const arrowMovements = (city: CompiledCity, lane: CLane) =>
  * where no two movements cross (`innerCarriageway`'s crossing; movements to or from service roads
  * aside, so a median crossover's end is none, Freiburg `n:1147`). */
 function noJunction(city: CompiledCity, node: CNode): boolean {
+  // TASK-348: a signalised crossing laid out as a plain node is no junction for the arrows.
+  if (node.group === undefined && isSignalCrossing(node)) return true;
   if (node.group !== undefined || node.signal || node.control !== 'uncontrolled') return false;
   const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
   const counted = (m: CMovement) =>
@@ -998,6 +1248,13 @@ function noJunction(city: CompiledCity, node: CNode): boolean {
   });
 }
 
+/** TASK-255: a signal's stop position before its junction (TASK-218's D4): a member of a signalised
+ * group laid out as the plain node it is, with no floor (`STOP_POSITION` in the compiler). The
+ * approach's arrows read past it, as past a node that is no junction (`aheadTurns`). */
+function stopPosition(city: CompiledCity, node: CNode): boolean {
+  return node.group !== undefined && city.groups![node.group]!.signalised && !node.outline.length;
+}
+
 /**
  * TASK-240: on an approach that ends at no junction (`noJunction`: a plain node or a median
  * crossover), each lane's turns at the junction its path reaches next, where no lane on the way
@@ -1016,9 +1273,17 @@ function noJunction(city: CompiledCity, node: CNode): boolean {
  * no junction or inside a group, or a lane on the way with room for arrows of its own; and when
  * the junction gives a lane no arrow (all its paths u-turns, Freiburg `r:1059#0` and `#1`), so an
  * approach keeps its arrows rather than show the junction's on some lanes only (`r:1285`).
+ * TASK-255: an approach ending at a signal's stop position (`stopPosition`), whose road on to the
+ * junction is an inner road that draws no arrows, is read the same way: the stop position is the
+ * group entry, so each lane shows its paths through the group, or where it has none the first turn
+ * its movements make inside it, the junction's movement as its turn:lanes give it. Zur
+ * Unterführung's r:261 enters the Hauptbahnhof group at its signal n:260: #0 has no path and its
+ * movements turn left after two links straight on, so it reads left, as on the ground and as before
+ * the signal joined the group, not through (N2's stand-in, its link onto the inner r:1185).
  */
 function aheadTurns(city: CompiledCity, road: CRoad): Turn[][] | null {
-  if (road.group !== undefined || !noJunction(city, city.nodes[road.to]!)) return null;
+  const end = city.nodes[road.to]!;
+  if (road.group !== undefined || !(noJunction(city, end) || stopPosition(city, end))) return null;
   const turns: Turn[][] = [];
   for (const index of road.lanes) {
     let lane = city.lanes[index]!;
@@ -1140,7 +1405,8 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
   const differ = road.lanes.some(
     (index) => key(arrowTurns(city, city.lanes[index]!)) !== key(turns),
   );
-  const arrowAt = arrowPosition(lane, crossingFarM);
+  const before = transitionAt(city, road, false);
+  const arrowAt = before ? -before.atM : arrowPosition(lane, crossingFarM);
   return {
     // TASK-131: no stop or yield line on a junction group's inner road.
     stop:
@@ -1152,7 +1418,7 @@ export function approachMarkings(city: CompiledCity, lane: CLane, crossingFarM =
     turns:
       road.group === undefined &&
       differ &&
-      arrowRoom(lane, crossingFarM) &&
+      (before !== null || arrowRoom(lane, crossingFarM)) &&
       !onOtherRoad(city, lane, arrowAt)
         ? turns
         : [],
@@ -1252,13 +1518,14 @@ export function crossingStripes(
 }
 
 /** TASK-217 (D1): where each mapped crossing way (walk link of kind `crossing`) crosses a
- * road's lanes, in lane metres from the lane's start, by road; a link crossing at another grade
- * is left out. */
+ * road's lanes, in lane metres from the lane's start, by road; a link crossing at another grade,
+ * or (TASK-257) one OSM maps unmarked, is left out. */
 const mappedHits = new WeakMap<object, WeakMap<CompiledCity, Map<number, MappedHit[]>>>();
 interface MappedHit {
   link: number;
   lane: number;
   atM: number;
+  lines: boolean;
 }
 function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource): MappedHit[] {
   const walk = source?.walk;
@@ -1269,14 +1536,14 @@ function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource
   if (!byRoad) {
     byRoad = new Map();
     for (const [k, link] of Object.values(walk.links).entries()) {
-      if (link.kind !== 'crossing') continue;
+      if (link.kind !== 'crossing' || link.marking === 'none') continue;
       const grade = link.layer ?? walk.nodes[link.from]!.layer;
       for (const i of lanesNear(city, link.line)) {
         const lane = city.lanes[i]!;
         if (city.roads[lane.road]!.grade !== grade) continue;
         for (const hit of polylineCrossings(link.line, lane.polyline)) {
           const list = byRoad.get(lane.road) ?? [];
-          list.push({ link: k, lane: i, atM: hit.alongB });
+          list.push({ link: k, lane: i, atM: hit.alongB, lines: link.marking === 'lines' });
           byRoad.set(lane.road, list);
         }
       }
@@ -1292,8 +1559,8 @@ function roadMappedHits(city: CompiledCity, road: CRoad, source?: CrossingSource
  * or one at an end without a crossing of its own (Freiburg's zebras where a slip road splits at
  * the crossing node, n:398). Stripes 2.5 m long along each lane, centred where the way crosses
  * its centreline, at the end crossings' 0.9 m pitch across the road; none inside a junction; the
- * broken lines of a signalised crossing near a signalized node (`nearSignal`), zebra stripes
- * elsewhere.
+ * broken lines of a signalised crossing near a signalized node (`nearSignal`) or (TASK-257) where
+ * OSM marks it with lines, zebra stripes elsewhere.
  */
 function mappedStripes(
   city: CompiledCity,
@@ -1307,7 +1574,7 @@ function mappedStripes(
     .map((o) => preparePolygonRing(o));
   const width = lanes.reduce((sum, lane) => sum + lane.widthM, 0);
   const paint: Vec2[][] = [];
-  for (const at of paintedMapped(city, road, atEnd, source)) {
+  for (const { at, lines } of paintedMapped(city, road, atEnd, source)) {
     const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
     const local = (lane: CLane, d: number, offset: number): Vec2 => {
       const s = Math.max(0, Math.min(lane.lengthM, d));
@@ -1342,7 +1609,7 @@ function mappedStripes(
       lanes[0]!.cumulative,
       Math.min(lanes[0]!.lengthM, mean),
     );
-    paint.push(...(nearSignal(city, p) ? signalLines(stripes) : stripes));
+    paint.push(...(lines || nearSignal(city, p) ? signalLines(stripes) : stripes));
   }
   return paint;
 }
@@ -1350,24 +1617,28 @@ function mappedStripes(
 const preparePolygonRing = (ring: Vec2[]) => (p: Vec2) => pointInPolygon(p, ring, 0);
 
 /** The mapped crossings `mappedStripes` paints over the half of a road nearer one end: per
- * crossing way, where it crosses each lane (lane index to lane metres). */
+ * crossing way, where it crosses each lane (lane index to lane metres), and whether OSM marks it
+ * with lines. */
 function paintedMapped(
   city: CompiledCity,
   road: CRoad,
   atEnd: boolean,
   source?: CrossingSource,
-): Map<number, number>[] {
+): { at: Map<number, number>; lines: boolean }[] {
   const hits = roadMappedHits(city, road, source);
   if (!hits.length || road.group !== undefined) return [];
   const ownCrossing =
     crossingEnabled(city, road, atEnd, source) &&
     crossingPlacement(city, road, atEnd).stripes.length > 0;
   return [...new Set(hits.map((h) => h.link))].flatMap((link) => {
-    const at = new Map(hits.filter((h) => h.link === link).map((h) => [h.lane, h.atM]));
+    const own = hits.filter((h) => h.link === link);
+    const at = new Map(own.map((h) => [h.lane, h.atM]));
     const mean = [...at.values()].reduce((a, b) => a + b, 0) / at.size;
     const length = city.lanes[road.lanes.find((lane) => at.has(lane))!]!.lengthM;
     const fromCut = atEnd ? length - mean : mean;
-    return mean > length / 2 !== atEnd || (ownCrossing && fromCut <= MAPPED_M) ? [] : [at];
+    return mean > length / 2 !== atEnd || (ownCrossing && fromCut <= MAPPED_M)
+      ? []
+      : [{ at, lines: own[0]!.lines }];
   });
 }
 
@@ -1382,7 +1653,7 @@ function crossingPaint(city: CompiledCity, lane: CLane, source?: CrossingSource)
       span && crossingStyle(city, road, atEnd, source) !== 'none'
         ? [{ fromM: Math.min(span.nearM, span.farM), toM: Math.max(span.nearM, span.farM) }]
         : [];
-    const mapped = paintedMapped(city, road, atEnd, source).flatMap((at) => {
+    const mapped = paintedMapped(city, road, atEnd, source).flatMap(({ at }) => {
       const m = at.get(lane.idx);
       return m === undefined ? [] : [{ fromM: m - 1.25, toM: m + 1.25 }];
     });
@@ -1709,6 +1980,10 @@ export function junctionGuides(
     groups.flat().flatMap((m) => [city.lanes[m.fromLane]!.road, city.lanes[m.toLane]!.road]),
   );
   const curb = city.drivingSide === 'right' ? 1 : -1;
+  // TASK-276 (D8): UK yellow lines stop at a side road's mouth, so a UK town road's kerb, which
+  // has no white edge line (`buildRoadMarkings`), has no guide across it either.
+  const kerbGuide = (m: CMovement) =>
+    markingTheme.id !== 'uk' || !ukTownRoad(city.roads[city.lanes[m.fromLane]!.road]!);
   for (const group of groups) {
     // At a split junction the dividers are the lined-up movements' (above).
     for (let i = 1; i < group.length && !lined; i++) {
@@ -1717,12 +1992,12 @@ export function junctionGuides(
       for (const line of midway(a, b, false)) lines.push({ kind: 'divider', line });
     }
     const outer = group.at(-1)!;
-    if (mouth(city, node, outer, major, curb))
+    if (kerbGuide(outer) && mouth(city, node, outer, major, curb))
       lines.push({ kind: 'edge', line: edge(city, outer, curb) });
   }
   // A one-way road has a curb on its median side too.
   const inner = groups[0]?.[0];
-  if (inner && groups.length === 1 && mouth(city, node, inner, major, -curb))
+  if (inner && groups.length === 1 && kerbGuide(inner) && mouth(city, node, inner, major, -curb))
     lines.push({ kind: 'edge', line: edge(city, inner, -curb) });
   if (groups.length === 2)
     for (const line of midway(groups[0]![0]!, groups[1]![0]!, true))
@@ -1813,19 +2088,35 @@ function segmentLanes(city: CompiledCity): Int32Array {
   return lanes;
 }
 
-function lineDistance(p: Vec2, line: Vec2[]): number {
-  let best = Infinity;
+function seamSegmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
+function withinSeam(p: Vec2, line: Vec2[], distanceM: number): boolean {
+  // The padded box only rejects distant segments. The distance test still decides the threshold.
+  const pad = distanceM + 1e-6;
+  const minX = p.x - pad,
+    maxX = p.x + pad,
+    minY = p.y - pad,
+    maxY = p.y + pad;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1]!,
       b = line[i]!;
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const length2 = dx * dx + dy * dy;
-    const t =
-      length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
-    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+    if (
+      (a.x < minX && b.x < minX) ||
+      (a.x > maxX && b.x > maxX) ||
+      (a.y < minY && b.y < minY) ||
+      (a.y > maxY && b.y > maxY)
+    )
+      continue;
+    if (seamSegmentDistance(p, a, b) <= distanceM) return true;
   }
-  return best;
+  return false;
 }
 
 const seamCache = new WeakMap<CompiledCity, Map<number, Vec2[][]>>();
@@ -1843,13 +2134,14 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
   const lengths = cumulativeLengths(edge);
   const owner = segmentLanes(city);
   const candidates = new Set<number>();
-  for (let s = 0; ; s = Math.min(lengths.at(-1)!, s + 4)) {
+  const total = lengths.at(-1)!;
+  for (let s = 0; ; s = Math.min(total, s + 4)) {
     const p = pointAtDistance(edge, lengths, s);
     for (const k of city.laneSpatial.search(p.x - 3, p.y - 3, p.x + 3, p.y + 3)) {
       const lane = city.lanes[owner[k]!]!;
       if (lane.road !== road.idx && lane.left < 0) candidates.add(lane.idx);
     }
-    if (s === lengths.at(-1)!) break;
+    if (s === total) break;
   }
   const found: Vec2[][] = [];
   for (const index of candidates) {
@@ -1866,8 +2158,7 @@ export function seams(city: CompiledCity, road: CRoad): Vec2[][] {
       run = [];
     };
     for (const q of edge) {
-      const d = lineDistance(q, left);
-      if (d <= (run.length ? 0.25 : 0.1)) run.push(q);
+      if (withinSeam(q, left, run.length ? 0.25 : 0.1)) run.push(q);
       else close();
     }
     close();
@@ -1881,12 +2172,14 @@ function sameWay(run: Vec2[], left: Vec2[]): boolean {
   const a = run[0]!,
     b = run[1]!;
   let closest = 1;
-  for (let i = 2; i < left.length; i++)
-    if (
-      lineDistance(a, [left[i - 1]!, left[i]!]) <
-      lineDistance(a, [left[closest - 1]!, left[closest]!])
-    )
+  let best = seamSegmentDistance(a, left[0]!, left[1]!);
+  for (let i = 2; i < left.length; i++) {
+    const distance = seamSegmentDistance(a, left[i - 1]!, left[i]!);
+    if (distance < best) {
       closest = i;
+      best = distance;
+    }
+  }
   const c = left[closest - 1]!,
     d = left[closest]!;
   return (b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y) > 0;
@@ -2230,17 +2523,148 @@ function buildNodeMarkings(
       alpha: 0.78,
       widthM: markingTheme.guide.widthM,
       dash: markingTheme.guide.dash,
+      // TASK-276: a UK edge guide continues a white edge line, never a yellow kerb line.
+      ...(markingTheme.id === 'uk' && g.kind === 'edge' ? { color: markingTheme.colors.lane } : {}),
     })),
   );
   return [
     ...guides,
+    ...stripLines(city, node, markingTheme),
     ...paintedGores(city, node).flatMap((g) =>
       hatchGeometry(g.ring, g.heading, g.road, g.holes, markingTheme).map((shape) => ({
         ...shape,
         gore: g,
       })),
     ),
+    ...miniRoundaboutMarkings(city, node, markingTheme),
   ];
+}
+
+/**
+ * TASK-347: across an uncontrolled node drawn as road (`roadStrip`) without a crossing, the lines
+ * of its roads run on along the movements: dividers midway between neighbouring paths of one road
+ * pair (dashed on in the road's phase, a gap first after the dash its approach ends with), the
+ * centre midway between the two directions' median-side paths, and outside the German theme the
+ * edges along the outermost paths, as `buildRoadMarkings` draws them on the roads.
+ */
+function stripLines(city: CompiledCity, node: CNode, markingTheme: MarkingTheme): MarkingShape[] {
+  if (node.control !== 'uncontrolled' || !roadStrip(city, node)) return [];
+  const roads = nodeRoads(city, node);
+  if (
+    roads.some((r) =>
+      [false, true].some(
+        (end) => (end ? r.to : r.from) === node.idx && crossingEnabled(city, r, end),
+      ),
+    )
+  )
+    return [];
+  const roadOf = (lane: number) => city.roads[city.lanes[lane]!.road]!;
+  const movements = node.movements
+    .map((i) => city.movements[i]!)
+    .filter((m) => !m.neverGreen && m.turn !== 'uturn');
+  const pairs = new Map<string, CMovement[]>();
+  for (const m of movements) {
+    const key = `${city.lanes[m.fromLane]!.road}>${city.lanes[m.toLane]!.road}`;
+    pairs.set(key, [...(pairs.get(key) ?? []), m]);
+  }
+  // From the median side to the curb.
+  const curb = city.drivingSide === 'right' ? 1 : -1;
+  const key = (lane: number) => curb * city.lanes[lane]!.lane;
+  const shapes: MarkingShape[] = [];
+  const inners: CMovement[] = [];
+  for (const group of pairs.values()) {
+    group.sort((a, b) => key(a.fromLane) - key(b.fromLane) || key(a.toLane) - key(b.toLane));
+    const road = roadOf(group[0]!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].lane.dash!;
+    for (let i = 1; i < group.length; i++) {
+      const [a, b] = [group[i - 1]!, group[i]!];
+      if (a.fromLane === b.fromLane || a.toLane === b.toLane) continue;
+      for (const line of midway(a, b, false)) {
+        const total = cumulativeLengths(line).at(-1)!;
+        if (total <= pattern[1]) continue;
+        for (const dash of roadDashes(trimPolyline(line, pattern[1], 0), false, pattern))
+          shapes.push(lineShape(road, 'lane', dash, 0.78, markingTheme));
+      }
+    }
+    if (road.streetGroupId !== null) inners.push(group[0]!);
+    const ends = road.streetGroupId === null ? [group[0]!, group.at(-1)!] : [group.at(-1)!];
+    if (markingTheme.id === 'de' || (markingTheme.id === 'uk' && ukTownRoad(road))) continue;
+    for (const m of ends) {
+      const side = m === group.at(-1)! ? curb : -curb;
+      const line = parallelOffset(edge(city, m, side), -side * 0.15);
+      shapes.push({
+        ...lineShape(road, 'edge', line, 0.85, markingTheme),
+        ...(markingTheme.id === 'uk' ? { color: markingTheme.colors.lane } : {}),
+      });
+    }
+  }
+  // The two directions of one street: their median-side paths run opposite.
+  const [a, b] = inners;
+  const paired = (x: CMovement, y: CMovement) => {
+    const [from, to] = [roadOf(x.fromLane), roadOf(y.toLane)];
+    return from.streetGroupId !== null && from.streetGroupId === to.streetGroupId;
+  };
+  if (inners.length === 2 && paired(a!, b!) && paired(b!, a!)) {
+    const road = roadOf(a!.fromLane);
+    const pattern = markingTheme.classes[road.roadClass].centre.dash;
+    for (const line of midway(a!, b!, true)) {
+      const lines =
+        markingTheme.id === 'us'
+          ? [parallelOffset(line, 0.15), parallelOffset(line, -0.15)]
+          : pattern
+            ? roadDashes(trimPolyline(line, pattern[1], 0), false, pattern)
+            : [line];
+      shapes.push(...lines.map((points) => lineShape(road, 'centre', points, 0.85, markingTheme)));
+    }
+  }
+  return shapes;
+}
+
+/**
+ * TASK-269 (D4): a mini-roundabout's paint (its give-way lines are the entries' own, as at any
+ * yield node): a white disc at the node, a third of the junction's inscribed radius, 0.75 to 2 m;
+ * under the UK theme also its three arrows round the disc (diagram 1003.4 with 1014), 0.15 m
+ * wide, 0.9 m outside it, in the circulating sense: clockwise in left-hand traffic,
+ * anticlockwise in right-hand (with y south, clockwise is increasing angle).
+ */
+function miniRoundaboutMarkings(
+  city: CompiledCity,
+  node: CNode,
+  markingTheme: MarkingTheme,
+): MarkingShape[] {
+  if (!node.miniRoundabout) return [];
+  const { pos } = node;
+  const ring = node.outline;
+  const inscribed = ring.length
+    ? Math.min(...ring.map((p, i) => segmentDistance(pos, p, ring[(i + 1) % ring.length]!)))
+    : node.radiusM;
+  const discM = Math.min(2, Math.max(0.75, inscribed / 3));
+  const at = (r: number, angle: number): Vec2 => ({
+    x: pos.x + r * Math.cos(angle),
+    y: pos.y + r * Math.sin(angle),
+  });
+  const arc = (r: number, from: number, to: number, steps: number) =>
+    Array.from({ length: steps + 1 }, (_, i) => at(r, from + ((to - from) * i) / steps));
+  const shapes = [fillShape('arrow', arc(discM, 0, 2 * Math.PI, 36).slice(0, -1))];
+  if (markingTheme.id !== 'uk') return shapes;
+  const sense = city.drivingSide === 'left' ? 1 : -1;
+  const r = discM + 0.9,
+    half = 0.075,
+    span = 1.2;
+  for (let k = 0; k < 3; k++) {
+    const from = (k * 2 * Math.PI) / 3,
+      to = from + sense * span;
+    shapes.push(
+      fillShape('arrow', [
+        ...arc(r + half, from, to, 12),
+        at(r + 0.3, to),
+        at(r, to + (sense * 0.5) / r),
+        at(r - 0.3, to),
+        ...arc(r - half, to, from, 12),
+      ]),
+    );
+  }
+  return shapes;
 }
 
 export function transitionMarkings(
@@ -2259,6 +2683,7 @@ function buildTransitionMarkings(
   road: CRoad,
   markingTheme: MarkingTheme,
 ): MarkingShape[] {
+  city = transitionLanes(city);
   road = city.roads[road.idx]!;
   const pattern = markingTheme.classes[road.roadClass].lane.dash!;
   const shapes = seams(city, road).flatMap((line) =>

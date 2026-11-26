@@ -18,6 +18,7 @@ import {
   crossingSpan,
   crossingStyle,
 } from '../../src/network/crossings';
+import { keepClearZones } from '../../src/network/keep-clear';
 import {
   approachMarkings,
   crossingStripes,
@@ -59,8 +60,10 @@ const striped = () =>
 
 test('M1: a group entry lane shows its turns through the group, not its first inner link', () => {
   const turns = (id: string) => [...approachMarkings(net, lane(id)).turns].sort();
-  // Each enters an inner road straight on and turns left at the next member.
-  for (const id of ['r:1277#0', 'r:1514#0', 'r:850#0', 'r:130#0', 'r:1396#0'])
+  // Each enters an inner road straight on and turns left at the next member. TASK-255: r:850 is
+  // an inner road now (its signal, n:848, stands 22 m before the junction); the entry r:1832 before
+  // it, 11 m, has no room for arrows.
+  for (const id of ['r:1277#0', 'r:1514#0', 'r:130#0', 'r:1396#0'])
     expect(turns(id), id).toEqual(['left']);
   // Through to r:873 and left to r:845 through the group; right at the first member.
   expect(turns('r:1396#1')).toEqual(['left', 'through']);
@@ -78,8 +81,9 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
     if (r.group === undefined || r.lanes.every((i) => net.lanes[i]!.lengthM >= 15)) continue;
     if (laneLines(r.id)) lines.push(r.id);
   }
-  // TASK-226: r:1149 and r:475 leave the Hauptbahnhof group (D2), 81 to 79.
-  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(79);
+  // TASK-226: r:1149 and r:475 leave the Hauptbahnhof group (D2), 81 to 79. TASK-255: the roads
+  // from signals mapped at their stop positions to their junctions join the groups, 79 to 90.
+  expect(net.roads.filter((r) => r.group !== undefined && r.lanes.length > 1).length).toBe(90);
   // Runs of 15 m or more node to node through plain joins, crossed at one end at most; the
   // other short inner roads lie inside junctions (TASK-217's M2).
   expect(lines.sort()).toEqual(
@@ -89,6 +93,7 @@ test('M2: inner roads of junction groups with lanes under 15 m carry lane lines 
       ...['r:816', 'r:1225'],
       ...['r:1484', 'r:1881'],
       ...['r:1372', 'r:2167', 'r:770'],
+      'r:1953', // TASK-255: the 11 m from the signal n:499 to its junction, on carriageway
     ].sort(),
   );
 });
@@ -149,6 +154,27 @@ test('TASK-240: an approach ending at a plain node or a median crossover shows t
   // The Lessingstraße group gives r:1059#0 and #1 no arrow (their paths are u-turns): r:1285
   // keeps its own movements' arrows rather than show the junction's on two lanes.
   expect(turns('r:1285')).toEqual(['through', 'through', 'through', 'right']);
+});
+
+test('TASK-255: approaches into a stop-position group show the arrows on the ground before the stop line', () => {
+  const turns = (id: string) =>
+    road(id).lanes.map((i) => [...approachMarkings(net, net.lanes[i]!).turns].sort().join('+'));
+  const arrows = (id: string) => {
+    const { below, above } = roadMarkingGeometry(net, road(id), city);
+    return [...below, ...above].filter((s) => s.role === 'arrow').length;
+  };
+  // Zur Unterführung's r:261 enters the Hauptbahnhof group at its signal n:260 (TASK-218's D4) and
+  // keeps way 23024402's turn:lanes: #0 has no path through the group and shows the left its
+  // movements make after two links straight on, not its link onto the inner r:1185 (N2's stand-in).
+  expect(turns('r:261')).toEqual(['left', 'through', 'through', 'right', 'right']);
+  expect(arrows('r:261')).toBe(5);
+  // Fahnenbergplatz: r:850, the 22 m from the signal n:848 to its junction, is an inner road and
+  // draws no arrows; the entry r:1832 (11 m) has no room, so the road before it, r:1750, shows
+  // the approach's arrows, as r:850 did before the signal joined the group.
+  expect(arrows('r:850')).toBe(0);
+  expect(arrows('r:1832')).toBe(0);
+  expect(turns('r:1750')).toEqual(['left', 'right+through']);
+  expect(arrows('r:1750')).toBe(3);
 });
 
 test('TASK-241: no hatched taper where lanes of one carriageway widen or fan', () => {
@@ -236,6 +262,29 @@ test('TASK-246: a keep-clear box stands on its lane between its tapers, inside t
     for (const shape of keepClearMarkings(net, r, markingThemes.de, city))
       for (const p of shape.points) expect(pointInPolygon(p, ring, 0.05), r.id).toBe(true);
   }
+});
+
+test('TASK-256: no keep-clear box on a shared one-lane carriageway (the promenade, r:225)', () => {
+  // The garage pk:2736 leaves onto the promenade's r:225#0 at 54.6 m: its mouth stays a zone cars
+  // keep clear, but the paving there is plain (a box 46.6 to 61.1 m before).
+  const promenade = lane('r:225#0');
+  expect(keepClearZones(net)[promenade.idx]!.some((z) => z.kind === 'mouth')).toBe(true);
+  expect(keepClearBoxes(net, promenade, markingThemes.de, city)).toEqual([]);
+  expect(keepClearMarkings(net, road('r:225'), markingThemes.de, city)).toEqual([]);
+  // Without the canonical city (no `sharedLane` known) the box is drawn, as on any street.
+  expect(keepClearBoxes(net, promenade, markingThemes.de)).toHaveLength(1);
+  const boxes = net.lanes.reduce(
+    (sum, l) =>
+      sum +
+      (net.roads[l.road]!.group === undefined
+        ? keepClearBoxes(net, l, markingThemes.de, city).length
+        : 0),
+    0,
+  );
+  // TASK-290: nine mapped garage entrances bring Freiburg's keep-clear box count from 137 to 139.
+  // TASK-294: two Freiburg places' driveways back in the pocket behind Anlieger streets: 141.
+  // TASK-351: three car parks on the Schwabentorring leave by their own streets: 144.
+  expect(boxes).toBe(144);
 });
 
 test('M4 dropped (TASK-217): of two crossings under 7.5 m apart on a road, both paint only at signals', () => {
@@ -327,6 +376,13 @@ const paintNear = (source: Pick<City, 'roads' | 'walk'>, p: Vec2, m: number) =>
   net.roads
     .flatMap((r) => [false, true].flatMap((atEnd) => crossingStripes(net, r, atEnd, source)))
     .filter((shape) => distance(centroid(shape), p) < m);
+const polygonArea = (ring: Vec2[]) =>
+  Math.abs(
+    ring.reduce((a, p, i) => {
+      const q = ring[(i + 1) % ring.length]!;
+      return a + p.x * q.y - q.x * p.y;
+    }, 0),
+  ) / 2;
 const key = (shape: Vec2[]) => shape.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join(' ');
 
 test('D1: a crossing at a signal paints the broken lines of a signalised crossing, no zebra', () => {
@@ -454,6 +510,51 @@ test('TASK-239: zebras mapped only as nodes cross their streets and paint (n:211
     expect(crossingStyle(net, r, atEnd, city), id).toBe('zebra');
     expect(crossingStyle(net, r, atEnd, without), id).toBe('none');
   }
+});
+
+test('TASK-257: crossings paint as OSM marks them; a project without the field paints as before', () => {
+  /** Road ends painting zebra stripes, and the stripes and line dashes painted. */
+  const count = (source: Pick<City, 'roads' | 'walk'>) => {
+    let ends = 0,
+      zebra = 0,
+      dashes = 0;
+    for (const r of net.roads)
+      for (const atEnd of [false, true]) {
+        const shapes = crossingStripes(net, r, atEnd, source);
+        // A zebra stripe is 0.45 by 2.5 m, a dash 0.5 by 0.15 m.
+        const stripes = shapes.filter((s) => polygonArea(s) > 0.5).length;
+        ends += stripes ? 1 : 0;
+        zebra += stripes;
+        dashes += shapes.length - stripes;
+      }
+    return { ends, zebra, dashes };
+  };
+  const links = city.walk!.links;
+  const marked = Object.values(links).filter((l) => l.marking);
+  expect(
+    marked.reduce<Record<string, number>>(
+      (n, l) => ({ ...n, [l.marking!]: (n[l.marking!] ?? 0) + 1 }),
+      {},
+    ),
+  ).toEqual({ none: 37, lines: 124, zebra: 40 });
+  // An older project: the links without the field, as main drew them.
+  const old = structuredClone(city.walk!);
+  for (const link of Object.values(old.links)) delete link.marking;
+  // Lead merge on TASK-255: its stop positions draw no crossing paint, so both counts drop
+  // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
+  // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
+  // 1,939 to 1,959 dashes; with it 2,023 to 2,043).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1959 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2043 });
+  // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
+  // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
+  // junction's broken lines: now broken lines only.
+  const at = { x: 181, y: -344 };
+  const near = (source: Pick<City, 'roads' | 'walk'>) =>
+    paintNear(source, at, 8).map((s) => (polygonArea(s) > 0.5 ? 'zebra' : 'dash'));
+  expect(near({ roads: city.roads, walk: old })).toContain('zebra');
+  expect(near(city).length).toBeGreaterThan(8);
+  expect(near(city)).not.toContain('zebra');
 });
 
 test('M7: lane lines are solid over the last 30 m before a stop line', () => {

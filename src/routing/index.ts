@@ -12,6 +12,7 @@ import { createLaneSearch } from './lane-search';
 import { resolveLanes } from './lanes';
 import { createPathSearch } from './search';
 import { parkingConnectorPermitted } from '../network/parking';
+import { zoneReach } from '../network/zones';
 
 export { freeFlowLinkCosts, movementPenaltyS } from './costs';
 export { reachableLanes } from './lanes';
@@ -65,28 +66,35 @@ export function roadAccessFilter(compiled: CompiledCity, request: RouteRequest) 
   const kind = vehicleClasses.indexOf(request.vehicleClass);
   const from = compiled.lanes[request.fromLane]!.road;
   const to = compiled.lanes[compiled.connectors[request.toConnector]!.lane]!.road;
-  const originZone = compiled.roads[from]!.zone[kind]!;
-  const destinationZone = compiled.roads[to]!.zone[kind]!;
+  const near = tripZones(
+    zoneReach(compiled, kind),
+    compiled.roads[from]!.zone[kind]!,
+    compiled.roads[to]!.zone[kind]!,
+  );
   return (idx: number) => {
     const road = compiled.roads[idx]!;
     const rule = road.access[kind]!;
     if (rule === 'delivery') return request.purpose === 'delivery';
-    if (rule === 'destination' || rule === 'private')
-      return road.zone[kind] === originZone || road.zone[kind] === destinationZone;
+    if (rule === 'destination' || rule === 'private') return near.includes(road.zone[kind]!);
     return rule === 'yes';
   };
+}
+
+/** TASK-294: the zones a trip may use, those its origin's and its destination's zones reach. */
+function tripZones(reach: number[][], originZone: number, destinationZone: number) {
+  const none: number[] = [];
+  return [...(reach[originZone] ?? none), ...(reach[destinationZone] ?? none)];
 }
 
 /** `roadAccessFilter` read from the class graph's access and zone arrays (TASK-243). */
 function graphAccessFilter(graph: RoadGraph, request: RouteRequest, from: number, to: number) {
   const { access, zone } = graph;
   const delivery = request.purpose === 'delivery';
-  const originZone = zone[from]!;
-  const destinationZone = zone[to]!;
+  const near = tripZones(graph.zoneReach, zone[from]!, zone[to]!);
   return (idx: number) => {
     const rule = access[idx];
     if (rule === ACCESS_YES) return true;
-    if (rule === ACCESS_ZONE) return zone[idx] === originZone || zone[idx] === destinationZone;
+    if (rule === ACCESS_ZONE) return near.includes(zone[idx]!);
     return rule === ACCESS_DELIVERY && delivery;
   };
 }

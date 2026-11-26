@@ -12,10 +12,20 @@ import type { placeTrees } from './vegetation';
 import { placeDetails, type placeStreet } from './street';
 import { drawStreet } from './layers/street';
 import { drawContext } from './layers/context';
+import { airsideAreas } from './airside-geometry';
+import { airsideMarkings } from './airside-markings';
+import { drawAirside, drawAirsidePaint } from './layers/airside';
 import { drawRail } from './layers/rail';
 import { catenaryZooms, drawCatenary } from './layers/catenary';
 import { catenary } from '../network/catenary';
 import { drawTrains, pickTrain, trainLayers } from './layers/trains';
+import { Aircraft2D, pickAircraft } from './layers/aircraft';
+import { GroundVehicles2D } from './layers/ground-vehicles';
+import { GroundVehicleTracks, shownVehicle } from './ground-vehicles';
+import { AircraftPoseTrack } from './aircraft-pose';
+import { apronLayout, JetBridgeStates } from './apron';
+import { AirfieldLights2D } from './layers/airfield-lights';
+import { boxOf, type Box } from '../geo/polyline';
 import { drawStations } from './layers/stations';
 import { createLabelLayer } from './layers/labels';
 import { labelCandidates } from './labels';
@@ -34,7 +44,7 @@ import { drawWalk } from './layers/walk';
 import { drawHillshade } from './layers/hillshade';
 import { drawEditOverlay, type EditOverlay } from './layers/edit-overlay';
 import { drawJunctionMarkings } from './layers/junction-markings';
-import { drawNode, drawRoadJoins, nodeColor } from './layers/nodes';
+import { drawJunction, drawRoadJoins, roadStrip } from './layers/nodes';
 import { drawRoute, drawSelection } from './layers/overlay';
 import { drawMultiSelection } from './layers/overlay';
 import { HeatLayer } from './layers/heat';
@@ -44,7 +54,13 @@ import { drawMovementArrow, drawRoad, drawCrossings, updateZoomFade } from './la
 import { drawTransitions } from './layers/transitions';
 import { paintedCity } from './road-paint';
 import { drawSignal } from './layers/signals';
-import { drawWalkerRoute, drawWalkers, drawWalkSignals } from './layers/walkers';
+import {
+  createWalkerLayer,
+  drawWalkerRoute,
+  drawWalkers,
+  drawWalkSignals,
+  type WalkerLayer,
+} from './layers/walkers';
 import { drawSigns } from './layers/signs';
 import { DeckCoverage, deckCover, DeckGhosts, drawGradeShadows } from './layers/shadows';
 import { Tiles } from './layers/tiles';
@@ -56,13 +72,21 @@ import { mapPalettes, style, type MapPalette } from './style';
 import { drawSignalPreview } from './layers/signal-preview';
 import { NightLayer, tinted } from './layers/night';
 import {
-  defaultLighting,
+  defaultVisual,
   lightKey,
   platformLights,
   sceneLight,
-  type LightingSettings,
+  type VisualSettings,
 } from './lighting';
-import type { Pick, CityGeometry, Scene, SignalStates, WalkerSnapshot } from './types';
+import type { LonLat } from '../geo/projection';
+import type {
+  AircraftPose,
+  Pick,
+  CityGeometry,
+  Scene,
+  SignalStates,
+  WalkerSnapshot,
+} from './types';
 import { defaultLayers, type LayerVisibility } from './types';
 
 export function orderedLayers(layers: readonly number[]): number[] {
@@ -110,8 +134,9 @@ export function createGrade(layer: number) {
   const placeFills = new Graphics();
   const connectors = new Graphics();
   const signals = new Container();
+  signals.isRenderGroup = true;
   const vehicles = createVehicleLayer();
-  const walkers = new Graphics();
+  const walkers = createWalkerLayer();
   const parkedCars = createVehicleLayer();
   const bands = new Graphics();
   const slotTicks = new Graphics();
@@ -139,7 +164,7 @@ export function createGrade(layer: number) {
     parkedCars.container,
     vehicles.container,
     trains,
-    walkers,
+    walkers.container,
   );
   return {
     layer,
@@ -175,7 +200,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setVehicleGeometry(city: CompiledCity, laneChangeDurationS: number): void;
   animateVehicles(elapsedS: number, playing?: boolean): void;
   setWalkerRoute(links: readonly number[] | null): void;
-  setLighting(settings: LightingSettings, timeS: number): void;
+  setLighting(settings: VisualSettings, timeS: number, origin?: LonLat): void;
   setMapPalette(palette: MapPalette): void;
 } {
   const app = new Application();
@@ -209,12 +234,56 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-163: the evening tint and lights sit over the map, under selection and overlays.
   const labels = createLabelLayer();
   const night = new NightLayer();
-  let lighting = defaultLighting;
+  // TASK-301: airfield and aircraft lights, with the evening's other glows.
+  const airfieldLights = new AirfieldLights2D(night.textures.glow);
+  night.container.addChild(airfieldLights.container);
+  let lighting = defaultVisual;
   let lightMinute = 0;
-  let light = sceneLight(defaultLighting, 0);
+  let lightOrigin: LonLat | undefined;
+  let light = sceneLight(defaultVisual, 0);
   let drawnLight = '';
+  // TASK-298: aircraft over the map, under the evening tint.
+  const aircraft = new Aircraft2D();
+  let aircraftPoses: AircraftPose[] = [];
+  let aircraftTracks = new Map<number, AircraftPoseTrack>();
+  let aircraftPlaying = false;
+  let mapBounds: Box | null = null;
+  // TASK-315: jet bridges, docked by the aircraft snapshot.
+  let jetBridges: JetBridgeStates | null = null;
+  let aircraftTimeS = 0;
+  // TASK-316: airside ground vehicles, under the aircraft.
+  const groundVehicles = new GroundVehicles2D();
+  const groundTracks = new GroundVehicleTracks();
+  const redrawGroundVehicles = () => {
+    const byId = new Map(aircraftPoses.map((p) => [p.id, p]));
+    const shown = groundTracks.poses.filter((p) => shownVehicle(p, byId));
+    groundVehicles.draw(shown, mapBounds);
+    canvas.dataset.groundVehicles = String(shown.length);
+  };
+  const redrawAircraft = () => {
+    redrawGroundVehicles();
+    aircraft.draw(
+      aircraftPoses,
+      mapBounds,
+      selection?.kind === 'aircraft' ? selection.id : null,
+      city?.airside,
+      jetBridges ? { states: jetBridges, timeS: aircraftTimeS } : undefined,
+    );
+    canvas.dataset.aircraft = String(
+      aircraftPoses.filter(
+        (p) =>
+          mapBounds &&
+          p.x >= mapBounds.minX &&
+          p.x <= mapBounds.maxX &&
+          p.y >= mapBounds.minY &&
+          p.y <= mapBounds.maxY,
+      ).length,
+    );
+  };
   world.addChild(
     map,
+    groundVehicles.container,
+    aircraft.container,
     night.container,
     labels.container,
     routeOverlay,
@@ -237,6 +306,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   // TASK-166: the canvas, land use, buildings, lots, place tints and paving follow the appearance.
   let palette = mapPalettes.light;
   let contextFeatures: ContextFeature[] = [];
+  let airsidePaint: Graphics | undefined;
   let hillshade: ReturnType<typeof drawHillshade> | undefined;
   let contextCount = 0;
   let vegetation: ReturnType<typeof drawVegetation> | undefined;
@@ -334,7 +404,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   }
   let layerVisibility: LayerVisibility = defaultLayers;
   let visibleGrades: ReturnType<typeof createGrade>[] = [];
-  let walkerLayers = new Map<number, Graphics>();
+  let walkerLayers = new Map<number, WalkerLayer>();
   let walkerSnapshot: WalkerSnapshot | undefined;
   let selectedWalker = -1;
   let drawnWalkers = false;
@@ -358,7 +428,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     // A 2048 px edge cap bounds texture storage; detailed views use vector geometry.
     const overview = camera.zoom < 0.7;
     const resolution = 2 ** Math.ceil(Math.log2(camera.zoom * window.devicePixelRatio));
-    if (surroundings) surroundings.ties.visible = !overview;
+    if (surroundings) surroundings.ties.visible = !overview && layerVisibility.context;
     for (const grade of visibleGrades) {
       // Twin rails are 0.18 m wide: below 3 px/m they are sub-pixel slivers that cost frame time.
       const detail = layerVisibility.rail && camera.zoom >= 3;
@@ -376,6 +446,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.guides.visible = !overview && layerVisibility.markings;
       grade.arrows.visible = !overview && layerVisibility.markings;
       grade.crossings.visible = !overview && layerVisibility.markings;
+      if (grade.layer === 0 && airsidePaint && airsidePaint.visible !== layerVisibility.markings) {
+        airsidePaint.visible = layerVisibility.markings;
+        grade.terrain.updateCacheTexture();
+      }
       const next = overview && grade.terrainSize * resolution <= 2048 ? resolution : 0;
       if (next === grade.cacheResolution) continue;
       grade.terrain.cacheAsTexture(false);
@@ -401,6 +475,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     drawnLight = key;
     invalidate();
     const on = night.setLight(light, layerVisibility);
+    if (on && !airfieldLights.container.visible)
+      airfieldLights.updateAircraft(aircraftPoses, mapBounds);
+    airfieldLights.container.visible = on;
     map.tint = night.mapTint;
     syncBackground();
     vehicles.setLights(
@@ -497,8 +574,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     updateTerrainCache();
     canvas.dataset.terrain = String(Boolean(hillshade && layerVisibility.terrain));
-    if (surroundings && surroundings.container.visible !== layerVisibility.context) {
-      surroundings.container.visible = layerVisibility.context;
+    if (surroundings && surroundings.walls.visible !== layerVisibility.context) {
+      surroundings.setVisible(layerVisibility.context);
       const grade = visibleGrades[0]!;
       const bounds = grade.terrain.getLocalBounds();
       grade.terrainSize = Math.max(bounds.width, bounds.height);
@@ -534,7 +611,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
     );
     routeOverlay.visible = layerVisibility.routes;
     walkerRoute.visible = layerVisibility.routes && layerVisibility.pedestrians;
-    for (const graphics of walkerLayers.values()) graphics.visible = layerVisibility.pedestrians;
+    for (const layer of walkerLayers.values())
+      layer.container.visible = layerVisibility.pedestrians;
     disconnectedOverlay.visible = layerVisibility.disconnected;
     for (const grade of visibleGrades) {
       if (grade.placeFills.visible !== layerVisibility.places) {
@@ -544,6 +622,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       grade.places.visible = layerVisibility.places;
       grade.connectors.visible = layerVisibility.connectors;
       grade.signals.visible = layerVisibility.signals;
+    }
+    const tint = surroundings?.aerodromeTint;
+    if (tint && tint.visible !== layerVisibility.places) {
+      tint.visible = layerVisibility.places;
+      visibleGrades[0]!.terrain.updateCacheTexture();
     }
     for (const ghost of ghosts) ghost.signals.visible = layerVisibility.signals;
     if (import.meta.env.MODE === 'test')
@@ -662,6 +745,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       previewLoaded = undefined;
       const rebuildStart = import.meta.env.MODE === 'test' ? performance.now() : 0;
       city = compiled;
+      // The map's edge: its nodes' extent (aircraft beyond it are not drawn in 2D).
+      mapBounds = compiled.nodes.length ? boxOf(compiled.nodes.map((n) => n.pos)) : null;
+      aircraftPoses = [];
+      jetBridges =
+        compiled.airside && source?.airport
+          ? new JetBridgeStates(
+              apronLayout(source.airport, compiled.airside, source.context).bridges,
+            )
+          : null;
+      aircraftTracks.clear();
+      airfieldLights.setCity(compiled.airside, source?.airport?.approachAids);
       parkingCounts = null;
       drawParking(parking, city, parkingCounts, camera.zoom);
       vehicles.setLights(null);
@@ -716,7 +810,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vegetation = drawVegetation([]);
       furniture = [];
       contextFeatures = features;
-      surroundings = drawContext(features, palette);
+      const airport = source?.airport;
+      const airside = airport ? airsideAreas(airport) : [];
+      airsidePaint = undefined;
+      canvas.dataset.airsideAreas = String(airside.length);
+      surroundings = drawContext(features, palette, !!airport);
       contextCount = features.length;
       map.addChild(surroundings.container);
       if (import.meta.env.MODE === 'test')
@@ -738,6 +836,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         ...(compiled.rail?.platforms.map((p) => p.layer) ?? []),
       ]).map(createGrade);
       const grades = new Map(visibleGrades.map((grade) => [grade.layer, grade]));
+      if (airport) {
+        const { terrain, placeFills } = grades.get(0)!;
+        const shapes = airsideMarkings(airport);
+        airsidePaint = drawAirsidePaint(shapes);
+        terrain.addChildAt(drawAirside(airside), terrain.getChildIndex(placeFills) + 1);
+        terrain.addChildAt(airsidePaint, terrain.getChildIndex(placeFills) + 2);
+        if (import.meta.env.MODE === 'test') canvas.dataset.airsideMarkings = String(shapes.length);
+      } else {
+        delete canvas.dataset.airsideMarkings;
+      }
       stations = undefined;
       tramStops = compiled.rail ? drawTramStops(tramPlacements) : undefined;
       for (const [layer, { container }] of tramStops?.grades ?? []) {
@@ -797,6 +905,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       // without another map-sized textured quad on software GPUs.
       visibleGrades[0]!.terrain.addChildAt(surroundings.container, 0);
       visibleGrades[0]!.terrain.addChildAt(vegetation.container, 1);
+      // Walls go above the street grade's place tints (the bottom grade may be a tunnel grade).
+      const street = grades.get(0)!;
+      street.terrain.addChildAt(
+        surroundings.walls,
+        street.terrain.getChildIndex(street.placeFills) + 1,
+      );
       lots = drawLots(compiled, source, palette.context.parking);
       visibleGrades[0]!.terrain.addChildAt(lots.container, 1);
       if (source?.terrain) {
@@ -869,11 +983,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           drawCrossings(grade.crossings, compiled, road, sourceGeometry, markingTheme);
         }
         for (const node of compiled.nodes) {
-          drawNode(
-            grades.get(nodeGrades[node.idx]!)!.nodes,
-            node,
-            nodeColor(compiled, node, layerVisibility.roadClasses),
-          );
+          const grade = grades.get(nodeGrades[node.idx]!)!;
+          drawJunction(grade.surfaces, grade.nodes, compiled, node, layerVisibility.roadClasses);
         }
         // TASK-131 (B55): two roads side by side on their OSM lines, an edge line between them,
         // over the junction surface where it runs on into a junction both meet at.
@@ -883,7 +994,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             .nodes.poly(line, false)
             .stroke({ color: style.walk.sidewalk, width: SIDE_BY_SIDE_EDGE_M, cap: 'round' });
         for (const movement of compiled.movements) {
-          if (!movement.neverGreen && compiled.nodes[movement.node]!.outline.length)
+          const node = compiled.nodes[movement.node]!;
+          if (!movement.neverGreen && node.outline.length && !roadStrip(compiled, node))
             drawMovementArrow(
               grades.get(nodeGrades[movement.node]!)!.arrows,
               movement,
@@ -905,7 +1017,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
         places.clear();
         placeFills.clear();
         connectors.clear();
-        updatePlaces = drawPlaces(places, city!, shapes, connectors, placeFills, palette.placeBase);
+        const tint = surroundings?.aerodromeTint;
+        tint?.clear();
+        if (tint) tint.visible = layerVisibility.places;
+        updatePlaces = drawPlaces(
+          places,
+          city!,
+          shapes,
+          connectors,
+          placeFills,
+          palette.placeBase,
+          tint,
+        );
         updatePlaces(camera.zoom);
       };
       redrawPlaces();
@@ -1083,7 +1206,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       canvas.dataset.parkedCars = String(layerVisibility.parkedCars ? parkedCars.count : 0);
       invalidate();
     },
-    setSnapshot(snapshot) {
+    setSnapshot(snapshot, playbackSpeed = 0) {
       invalidate();
       if (!city) return;
       trainTimeS = snapshot.timeS;
@@ -1095,6 +1218,25 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vehicleAgeS = 0;
       walkerSnapshot = snapshot.walkers;
       redrawWalkers();
+      if (snapshot.aircraft) {
+        const tracks = new Map<number, AircraftPoseTrack>();
+        for (const pose of snapshot.aircraft) {
+          const track = aircraftTracks.get(pose.id);
+          if (track) track.update(pose, snapshot.timeS, playbackSpeed);
+          tracks.set(pose.id, track ?? new AircraftPoseTrack(pose, snapshot.timeS));
+        }
+        aircraftTracks = tracks;
+        aircraftPoses = [...tracks.values()].map(({ pose }) => pose);
+      } else {
+        aircraftTracks.clear();
+        aircraftPoses = [];
+      }
+      jetBridges?.update(snapshot.aircraft ?? [], snapshot.timeS);
+      groundTracks.update(snapshot.groundVehicles ?? [], snapshot.timeS, playbackSpeed);
+      aircraftTimeS = snapshot.timeS;
+      redrawAircraft();
+      airfieldLights.update(snapshot.airfield, snapshot.aircraft ?? []);
+      airfieldLights.updateAircraft(aircraftPoses, mapBounds);
       if (import.meta.env.MODE === 'test')
         canvas.dataset.walkers = String(walkerSnapshot?.count ?? 0);
       for (const update of updateSignals) update(snapshot.timeS, snapshot.signals);
@@ -1113,12 +1255,26 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       vehicles.setGeometry(compiled, laneChangeDurationS);
     },
     animateVehicles(elapsedS, playing = false) {
-      if (elapsedS === vehicleAgeS && !playing) return;
+      if (elapsedS === vehicleAgeS && !playing && !aircraftPlaying) return;
+      aircraftPlaying = playing;
       vehicleAgeS = elapsedS;
       if (vehicles.snapshot?.count) invalidate();
       vehicles.animate(elapsedS);
+      let moved = false;
+      for (const track of aircraftTracks.values())
+        if (track.sample(elapsedS, playing)) moved = true;
+      if (groundTracks.sample(elapsedS, playing)) moved = true;
+      if (moved) {
+        redrawAircraft();
+        if (airfieldLights.container.visible)
+          airfieldLights.updateAircraft(aircraftPoses, mapBounds);
+        invalidate();
+      }
       for (const ghost of ghosts) ghost.sync();
       updateVehicleRing();
+    },
+    aircraftPosition(id) {
+      return aircraftTracks.get(id)?.pose;
     },
     setSelection(next) {
       invalidate();
@@ -1133,6 +1289,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateVehicleRing();
       selectedWalker = selection?.kind === 'walker' ? selection.id : -1;
       redrawWalkers();
+      redrawAircraft();
     },
     setMultiSelection(roads) {
       invalidate();
@@ -1218,9 +1375,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       syncBackground();
       if (!surroundings || !lots) return;
       const terrain = visibleGrades[0]!.terrain;
-      const context = drawContext(contextFeatures, palette);
-      context.container.visible = surroundings.container.visible;
+      const context = drawContext(contextFeatures, palette, !!sourceGeometry?.airport);
+      context.setVisible(layerVisibility.context);
       terrain.addChildAt(context.container, terrain.getChildIndex(surroundings.container));
+      const walls = surroundings.walls.parent!;
+      walls.addChildAt(context.walls, walls.getChildIndex(surroundings.walls));
       surroundings.container.destroy({ children: true, context: true });
       surroundings = context;
       const fresh = drawLots(city!, sourceGeometry, palette.context.parking);
@@ -1237,13 +1396,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
       updateTerrainCache();
       updateLabels();
     },
-    setLighting(settings, timeS) {
+    setLighting(settings, timeS, origin) {
       // Following the clock, the light moves once a simulated minute.
       const minute = settings.mode === 'clock' ? Math.floor(timeS / 60) : 0;
-      if (settings === lighting && minute === lightMinute) return;
+      if (settings === lighting && minute === lightMinute && origin === lightOrigin) return;
       lighting = settings;
       lightMinute = minute;
-      light = sceneLight(settings, minute * 60);
+      lightOrigin = origin;
+      light = sceneLight(settings, minute * 60, undefined, origin);
       applyLight();
     },
     setDisconnected(lanes) {
@@ -1297,6 +1457,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
             )
           : null;
       return (
+        pickAircraft(aircraftPoses, point, mapBounds) ??
         train ??
         vehicle ??
         (walker?.kind === 'vehicle' ? { kind: 'walker' as const, id: walker.id } : null) ??

@@ -692,10 +692,19 @@ export function createIntersections(
     vehicles.junctionWaiting[b]! - vehicles.junctionWaiting[a]! ||
     a - b;
 
+  // Priority to the right among equal ranks. TASK-268 (D15): left-hand traffic has no mirrored
+  // priority to the left (the UK gives way by the road hierarchy alone, which the rank holds), so
+  // its equal ranks go by waiting time and id. TASK-269 (D4): on a mini-roundabout the favoured
+  // side is the one the circulating traffic comes from (left under right-hand traffic, right under
+  // left-hand), in either driving side.
+  const mini = Uint8Array.from(compiled.nodes, (node) => Number(!!node.miniRoundabout));
   function yieldsTo(id: number, other: number) {
+    const atMini = mini[movementOf(id).node] === 1;
+    if (compiled.drivingSide === 'left' && !atMini) return false;
     const angle = headings[vehicles.lane[id]!]! - headings[vehicles.lane[other]!]!;
     const side = Math.sin(angle);
-    return compiled.drivingSide === 'right' ? side > 1e-9 : side < -1e-9;
+    const right = (compiled.drivingSide === 'right') !== atMini;
+    return right ? side > 1e-9 : side < -1e-9;
   }
 
   function resolve() {
@@ -707,7 +716,7 @@ export function createIntersections(
         const rank = priority(queue[start]!);
         let end = start + 1;
         while (end < queue.length && priority(queue[end]!) === rank) end++;
-        // Give way to a contender on the favored side. A circular tie uses wait time and id.
+        // Give way to a contender on the right. A circular tie uses wait time and id.
         for (let remaining = end - start; remaining > 0; remaining--) {
           let first = -1;
           let winner = -1;

@@ -7,8 +7,10 @@ export function drawWalk(
   shape: WalkShape,
   paving: MapPalette['walk'] = style.walk,
 ) {
-  for (const ring of shape.polygons)
-    graphics.poly(ring).fill(shape.sidewalk ? paving.sidewalk : paving.footway);
+  if (shape.polygons.length) {
+    for (const ring of shape.polygons) graphics.poly(ring);
+    graphics.fill(shape.sidewalk ? paving.sidewalk : paving.footway);
+  }
   for (const line of shape.hatches)
     graphics.poly(line, false).stroke({ color: paving.steps, width: 0.12 });
 }

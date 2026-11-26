@@ -31,7 +31,7 @@ it.each([saveProject, saveProjectJson])(
 );
 
 it.each([saveProject, saveProjectJson])(
-  'Phase 2 parking facilities, walk network and sidewalk tags survive save/open',
+  'Phase 2 parking facilities, walk network, crossing markings, covered, handrails and sidewalk tags survive save/open',
   async (save) => {
     const city = grid5x5();
     const road = Object.values(city.roads)[0]!;
@@ -88,9 +88,38 @@ it.each([saveProject, saveProjectJson])(
           widthM: null,
           provenance,
         },
+        // TASK-257: a crossing's marking (absent on the footway, as in older files).
+        'wl:906': {
+          id: 'wl:906',
+          from: 'wn:904',
+          to: 'wn:903',
+          line: [
+            { x: 20, y: 0 },
+            { x: 0, y: 0 },
+          ],
+          kind: 'crossing',
+          marking: 'none',
+          widthM: null,
+          provenance,
+        },
+        // TASK-275: covered steps with a handrail on the right (absent on the others).
+        'wl:907': {
+          id: 'wl:907',
+          from: 'wn:903',
+          to: 'wn:904',
+          line: [
+            { x: 0, y: 0 },
+            { x: 20, y: 0 },
+          ],
+          kind: 'steps',
+          covered: true,
+          handrail: ['right'],
+          widthM: null,
+          provenance,
+        },
       },
     };
-    city.nextId = 906;
+    city.nextId = 908;
     const project = { city, scenarios: [scenarioSchema.parse(defaultScenario('grid5x5'))] };
     expect(await openProject(await save(project))).toEqual({ ok: true, project });
     delete city.parking;

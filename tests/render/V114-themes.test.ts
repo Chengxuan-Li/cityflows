@@ -64,13 +64,20 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-235 (TASK-221): lane transitions carried through plain nodes (Munich: the n:194 ramp, r:259).
           // TASK-241: no hatch at lane gains (18 roads), r:269#4's arrow left out (keep-clear box).
           // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
-          '425ed4dc4f99a5ddab8d9d4ca5076222ff1c04c9d714b8a78ca0b3e6e1e3401f'
+          // TASK-290: Munich's garage entrance changes keep-clear paint on r:1070 and r:1071.
+          // TASK-347: lines run on across nodes drawn as road (`roadStrip`).
+          'd44e262654781e598367dfdfa775e88c64c6f1725a6a324cc37f1046d660197b'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.
           // TASK-241: no hatch at lane gains (5 roads).
-          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          '9873b797de58b8b13b6ff4cc5fab8766f0926f9676e7f1eb9f1ff9c84fddacde',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          // TASK-290: Sindelfingen's garage entrance changes keep-clear paint on r:97 and r:954.
+          // TASK-347: lines run on across nodes drawn as road (`roadStrip`).
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+          '4243da1886f93632ff601988f81d3844c48c8303379ee84503f72879c49cb169',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
@@ -221,6 +228,9 @@ unitTest(
     if (opened.ok) expect(cityMarkingTheme(opened.project.city)).toBe('uk');
     const result = compile(city);
     if (!result.ok) throw new Error('compile failed');
+    // TASK-276: UK kerbs are yellow where the importer read lines (`kerbLine`).
+    for (const road of Object.values(city.roads))
+      road.provenance = { ...road.provenance, inferred: ['kerbLine:right:double'] };
     for (const theme of ['us', 'uk'] as const) {
       const mesh = buildMarkings(
         result.compiled,
@@ -281,6 +291,11 @@ unitTest.each([0, 1.4])(
       road.streetGroupId = null;
       road.corridorId = 'paired';
       road.lateralOffsetM += gap / 2;
+      // TASK-276: yellow lines read from OSM on both kerbs, the median one beside the partner.
+      road.provenance = {
+        ...road.provenance,
+        inferred: ['kerbLine:left:double', 'kerbLine:right:double'],
+      };
     }
     const compiled = compile(city);
     if (!compiled.ok) throw new Error('compile failed');
@@ -296,6 +311,12 @@ unitTest.each([0, 1.4])(
 
 unitTest('V114: new theme edge paint stays on tapered road surfaces', () => {
   const city = continuity();
+  // TASK-276: UK kerbs draw the yellow lines read from OSM (`kerbLine`), here on both kerbs.
+  for (const road of Object.values(city.roads))
+    road.provenance = {
+      ...road.provenance,
+      inferred: ['kerbLine:left:double', 'kerbLine:right:double'],
+    };
   const result = compile(city);
   if (!result.ok) throw new Error('compile failed');
   const net = result.compiled;

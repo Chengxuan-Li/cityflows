@@ -1,4 +1,5 @@
 import type { City, Command } from '../../schema';
+import { editAirport } from './airport';
 import { batch } from './batch';
 import { editNode } from './node';
 import { editPlace } from './place';
@@ -51,6 +52,20 @@ export function dispatch(city: City, command: Command): CommandPatch {
       return editPlace(city, command);
     case 'batch':
       return batch(city, command.commands, dispatch);
+    case 'addStand':
+    case 'moveStand':
+    case 'setStand':
+    case 'deleteStand':
+    case 'addTaxiway':
+    case 'splitTaxiway':
+    case 'setTaxiway':
+    case 'deleteTaxiway':
+    case 'addHold':
+    case 'moveHold':
+    case 'setHold':
+    case 'deleteHold':
+    case 'setRunwayOperations':
+      return editAirport(city, command);
     case 'moveNode':
       return editTopology(city, command);
     case 'addRoad':

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import {
   DoubleSide,
@@ -8,11 +9,14 @@ import {
   Vector3,
   type BufferGeometry,
 } from 'three';
+import { createGeoReference, lonLatToLocal } from '../../src/geo/projection';
+import { pointInPolygon } from '../../src/geo/polyline';
 import { importContext } from '../../src/importers/osm/context';
-import type { OsmData } from '../../src/importers/osm/parse';
+import { parseOsm, type OsmData } from '../../src/importers/osm/parse';
 import type { Diagnostic } from '../../src/network';
 import { buildContext } from '../../src/render3d/context';
 import { buildingPrisms } from '../../src/render3d/labels';
+import { buildingPieces } from '../../src/render3d/roofs';
 import type { ContextFeature } from '../../src/schema';
 import { citySchema } from '../../src/schema';
 import { grid5x5 } from '../../src/fixtures/grid5x5';
@@ -200,6 +204,155 @@ test('a pyramidal roof on a convex octagon rises to a spire instead of falling b
     70 + 46 * (1 - 2.7 / 6),
     0,
   );
+  context.buildings.dispose();
+  context.detailedBuildings.dispose();
+  context.ground.dispose();
+});
+
+// TASK-272: an outline whose height is not its tallest part's (Simple 3D Buildings has the
+// outline envelope its parts) is the building's body: the area no part covers stands with the
+// outline's tags, and a part with no height or levels takes the outline's.
+
+/** A 40 x 40 m courtyard building (relation 9: outer way 11, inner way 12) of 20 m, with an
+ * untagged corner pavilion (way 13), a 60 m tower (way 14) and a strip part (way 15) that
+ * stops 0.2 m short of the courtyard, as simplified seams leave it. */
+const courtyard: OsmData = {
+  node: [],
+  relation: [
+    {
+      id: 9,
+      member: [
+        { type: 'way', ref: 11, role: 'outer' },
+        { type: 'way', ref: 12, role: 'inner' },
+      ],
+      tag: { type: 'multipolygon', building: 'civic', height: '20' },
+    },
+  ],
+  way: [
+    { id: 11, nd: [21, 22, 23, 24, 21], tag: {} },
+    { id: 12, nd: [25, 26, 27, 28, 25], tag: {} },
+    {
+      id: 13,
+      nd: [21, 29, 30, 31, 21],
+      tag: { 'building:part': 'yes', 'roof:shape': 'pyramidal' },
+    },
+    { id: 14, nd: [32, 33, 34, 35, 32], tag: { 'building:part': 'yes', height: '60' } },
+    { id: 15, nd: [36, 37, 38, 39, 36], tag: { 'building:part': 'yes', height: '12' } },
+  ],
+};
+const courtyardPositions = new Map([
+  [21, { x: 0, y: 0 }],
+  [22, { x: 40, y: 0 }],
+  [23, { x: 40, y: 40 }],
+  [24, { x: 0, y: 40 }],
+  [25, { x: 12, y: 12 }],
+  [26, { x: 28, y: 12 }],
+  [27, { x: 28, y: 28 }],
+  [28, { x: 12, y: 28 }],
+  [29, { x: 8, y: 0 }],
+  [30, { x: 8, y: 8 }],
+  [31, { x: 0, y: 8 }],
+  [32, { x: 30, y: 30 }],
+  [33, { x: 38, y: 30 }],
+  [34, { x: 38, y: 38 }],
+  [35, { x: 30, y: 38 }],
+  [36, { x: 12, y: 0 }],
+  [37, { x: 28, y: 0 }],
+  [38, { x: 28, y: 11.8 }],
+  [39, { x: 12, y: 11.8 }],
+]);
+
+test('the outline stands where no part covers it, and an untagged part takes its height', () => {
+  const [hall] = importContext(courtyard, courtyardPositions, {
+    min: { x: -1, y: -1 },
+    max: { x: 41, y: 41 },
+  }) as [Extract<ContextFeature, { kind: 'area' }>];
+  expect(hall.rings).toHaveLength(2);
+  expect(hall.parts).toHaveLength(3);
+  const context = buildContext([hall]);
+  for (const geometry of [context.buildings, context.detailedBuildings]) {
+    // The body west of the courtyard, which no part covers, at the outline's 20 m.
+    expect(Math.max(...hits(geometry, 5, 20))).toBe(20);
+    // The courtyard stays open.
+    expect(hits(geometry, 20, 20)).toEqual([]);
+    // The tower keeps its own height, the tagged strip its own 12 m; the 0.2 m seam between
+    // the strip and the courtyard raises no sliver of the outline.
+    expect(Math.max(...hits(geometry, 34, 34))).toBe(60);
+    expect(Math.max(...hits(geometry, 20, 6))).toBe(12);
+    expect(hits(geometry, 20, 11.9)).toEqual([]);
+  }
+  // The pavilion's pyramid rises to the outline's 20 m instead of the default 10 m.
+  expect(Math.max(...hits(context.detailedBuildings, 4, 4))).toBeCloseTo(20, 0);
+  expect(Math.max(...hits(context.detailedBuildings, 4, 4))).toBeLessThanOrEqual(20);
+  const terrain = { grid: undefined } as unknown as Parameters<typeof buildingPrisms>[1];
+  expect(buildingPrisms([hall], terrain).map((p) => p.top)).toEqual([20, 60, 12, 20]);
+  context.buildings.dispose();
+  context.detailedBuildings.dispose();
+  context.ground.dispose();
+});
+
+test('an outline as tall as its tallest part only envelopes them: gaps stay open', () => {
+  // The church without its nave part: the 116 m outline is the spire's height, so the nave's
+  // ground stays empty rather than rising to 116 m, and the parts keep their own heights.
+  const [church3d] = importContext(
+    { ...church, way: church.way.filter((w) => w.id !== 2) },
+    positions,
+    bounds,
+  ) as [Extract<ContextFeature, { kind: 'area' }>];
+  const context = buildContext([church3d]);
+  expect(hits(context.buildings, 25, 10)).toEqual([]);
+  expect(Math.max(...hits(context.buildings, 5, 10))).toBe(116);
+  context.buildings.dispose();
+  context.detailedBuildings.dispose();
+  context.ground.dispose();
+});
+
+test('Philadelphia City Hall stands as its 30 m body around its parts', () => {
+  // TASK-259's D9: relation 4720912 (one outer, three inner rings, height 30) with 30 parts, 26
+  // of them untagged; its parts cover 39% of it, so 3D showed low pavilions round an empty plaza.
+  const data = parseOsm(readFileSync('tests/render/city-hall.osm', 'utf8')) as OsmData;
+  const geo = createGeoReference({ lon: -75.1636, lat: 39.9524 });
+  const local = new Map(data.node.map((n) => [n.id, lonLatToLocal(geo, n)]));
+  const [hall] = importContext(data, local, {
+    min: { x: -1000, y: -1000 },
+    max: { x: 1000, y: 1000 },
+  }) as [Extract<ContextFeature, { kind: 'area' }>];
+  // 2D draws the outline with its three courtyards (it always did).
+  expect(hall).toMatchObject({ sub: 'civic', heightM: 30, levels: 9 });
+  expect(hall.rings).toHaveLength(4);
+  expect(hall.parts).toHaveLength(30);
+  const pieces = buildingPieces(hall);
+  const body = pieces.slice(30);
+  expect(body.length).toBeGreaterThan(0);
+  expect(body.every((piece) => piece.heightM === 30 && !piece.parts)).toBe(true);
+  expect(pieces.slice(0, 30).filter((piece) => piece.heightM === 30)).toHaveLength(26);
+  // The tagged parts keep theirs: the tower's three stages and a part of 3 levels.
+  expect(
+    pieces.filter((piece) => piece.heightM !== 30).map((p) => p.heightM ?? `${p.levels} levels`),
+  ).toEqual([137.77, 167, 155.8, '3 levels']);
+  // A point of the body that no part covers, outside the courtyards, now meets the 30 m roof.
+  const inBody = (p: { x: number; y: number }) =>
+    pointInPolygon(p, hall.rings[0]!) &&
+    !hall.rings.slice(1).some((r) => pointInPolygon(p, r)) &&
+    !hall.parts!.some((part) => pointInPolygon(p, part.rings[0]!));
+  const outer = hall.rings[0]!;
+  const xs = outer.map((p) => p.x),
+    ys = outer.map((p) => p.y);
+  let probe: { x: number; y: number } | undefined;
+  for (let x = Math.min(...xs); x < Math.max(...xs) && !probe; x += 2)
+    for (let y = Math.min(...ys); y < Math.max(...ys) && !probe; y += 2)
+      if ([0, 2].every((dx) => [0, 2].every((dy) => inBody({ x: x + dx - 1, y: y + dy - 1 }))))
+        probe = { x, y };
+  const context = buildContext([hall]);
+  expect(Math.max(...hits(context.buildings, probe!.x, probe!.y))).toBe(30);
+  // The courtyards stay open.
+  const yard = hall.rings[1]!;
+  const centre = {
+    x: yard.slice(0, -1).reduce((s, p) => s + p.x, 0) / (yard.length - 1),
+    y: yard.slice(0, -1).reduce((s, p) => s + p.y, 0) / (yard.length - 1),
+  };
+  expect(pointInPolygon(centre, yard)).toBe(true);
+  expect(hits(context.buildings, centre.x, centre.y)).toEqual([]);
   context.buildings.dispose();
   context.detailedBuildings.dispose();
   context.ground.dispose();

@@ -3,8 +3,9 @@ Copyright (C) 2026 Cheng Xuan Li
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version. See LICENSE.
+Foundation, either version 2 of the License, or (at your option) any later
+version. See LICENSE. (Relicensed from GPL-3.0-or-later by the owner on 2026-11-22
+so that GPL-2.0 aircraft models can be part of the work.)
 
 Third-party code and data
 -------------------------
@@ -47,3 +48,18 @@ License: SIL Open Font License 1.1 (see node_modules/@fontsource/arimo/LICENSE).
 releases were Apache-2.0; the files bundled here are OFL-1.1.
 Used as a dependency: src/ui/app.css loads its Latin and Latin Extended woff2 files, regular and
 bold, and the build ships them with the app. The font files are unmodified.
+
+Flightradar24 3D models (fr24-3d-models), from the FlightGear FGMEMBERS hangar
+Source: https://github.com/Flightradar24/fr24-3d-models at commit dd53267 (models/*.glb)
+License: GPL-2.0 (the repository's LICENSE; its README credits the FlightGear project,
+http://www.flightgear.org/, and the FGMEMBERS repository, https://github.com/FGMEMBERS, for the
+models). Used in fixtures/aircraft/*.glb (TASK-318) for these types, source model in brackets:
+A380-800 (a380, FGMEMBERS A380-omega), 747-8 (b748, 747-8i), 777-300ER (b773, 777),
+A350-900 (a359, A350XWB), A330-300 (a333, A330-300), 787-9 (b789, 787-9), A320neo (a320,
+A320-family), 737-800 (b738, 737-800), A321neo (a321, A320-family), A220-300 (cs300, CSeries),
+E190 (e190, E-jet-family), E175 (e170, E-jet-family), CRJ900 (crj900, CRJ700-family), ATR 72
+(atr42, ATR-42-500), Dash 8-400 (q400, Q400), Citation (citation, Citation), H145 and AW139
+(heli, ec135). Changed: converted from glTF 1.0 to glTF 2.0, textures removed and parts given
+flat colours, simplified to two levels of detail (about 15,000 and 1,500 triangles), turned and
+scaled to the catalogue length and span, window panes and door panels added, by
+bench/aircraft-models.ts.

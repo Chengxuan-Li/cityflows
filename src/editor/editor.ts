@@ -1,14 +1,29 @@
 import { compile, type CompileResult, type Diagnostic } from '../network';
+import { compileAirside } from '../network/airside';
 import { addImplicitGarages } from '../network/parking';
 import type { City, HistoryEntry, Patch } from '../schema';
+import { airportSchema } from '../schema/airport.schema';
 import { dispatch } from './commands';
 import { applyPatch, diffCity, invertPatch } from './patch';
 import type { CommitResult, Editor } from './types';
+
+/** TASK-305: a patch that edits the airport alone recompiles only the airside: nothing else in
+ * the compiled city reads the section (architecture section 5.7). */
+function airportOnly(patch: Patch): boolean {
+  return (
+    patch.airport !== undefined &&
+    patch.markingTheme === undefined &&
+    !patch.metadata &&
+    !Object.keys(patch.set).length &&
+    !Object.keys(patch.remove).length
+  );
+}
 
 function displayOnly(patch: Patch): boolean {
   return (
     patch.markingTheme !== undefined &&
     !patch.metadata &&
+    !patch.airport &&
     patch.nextId === undefined &&
     !Object.keys(patch.set).length &&
     !Object.keys(patch.remove).length
@@ -42,6 +57,29 @@ export function createEditor(initialCity: City, precompiled?: CompileResult): Ed
       return { ok: true, city, compiled, diagnostics };
     }
     candidate.version = city.version + 1;
+    // TASK-305: an airport edit must leave a section the project schema accepts.
+    if (patch.airport) {
+      const check = airportSchema.safeParse(candidate.airport);
+      if (!check.success)
+        return {
+          ok: false,
+          diagnostics: check.error.issues.map(({ path, message }) => ({
+            severity: 'error' as const,
+            code: 'airport_invalid',
+            refs: path.filter((part) => typeof part === 'string' && part.includes(':')) as string[],
+            message: `Airport ${path.join('.')}: ${message}`,
+          })),
+        };
+    }
+    if (airportOnly(patch)) {
+      city = candidate;
+      compiled = {
+        ...compiled,
+        version: candidate.version,
+        airside: compileAirside(candidate.airport!, candidate, compiled),
+      };
+      return { ok: true, city, compiled, diagnostics: [...diagnostics, ...warnings] };
+    }
     const result = compile(candidate);
     if (!result.ok) return result;
     city = candidate;

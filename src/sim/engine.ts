@@ -6,6 +6,7 @@ import {
   reachableLanes,
   roadAccessFilter,
   type LinkCosts,
+  type Route,
   type RouteProvider,
   type RouteRequest,
   type RouteResult,
@@ -33,6 +34,16 @@ import {
 import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
+import { createAircraftFleet, type AircraftFleet } from './aircraft';
+import type { AirportWind } from './runway-configuration';
+import { createAirsideGiveWay } from './airside-give-way';
+import {
+  createFlightOperations,
+  type FlightBoard,
+  type FlightOperationsMetrics,
+  type TurnaroundEvent,
+} from './flight-operations';
+import { createGroundVehicles } from './ground-vehicles';
 import { mouthAt, keepClearStand } from './keep-clear';
 import { keepClearZones } from '../network/keep-clear';
 import { createPersons, hasPerson } from './persons';
@@ -78,6 +89,14 @@ type LoadInput = Parameters<TrafficEngine['load']>[0] & {
    * kept lane plan, the lot stop looked up only on the way to the destination's lane) and check
    * each against the full computation, so a run with it gives the same results. */
   debugSkips?: boolean;
+  /** Optional fleet driver for scripted scenarios. */
+  airsideOperations?: (fleet: AircraftFleet) => {
+    step(timeS: number): void;
+    metrics?(): FlightOperationsMetrics;
+    board?(timeS: number): FlightBoard;
+    setWind?(wind: AirportWind): void;
+    drainTurnarounds?(): TurnaroundEvent[];
+  };
 };
 const detailStates: (VehicleState | null)[] = [
   null,
@@ -104,6 +123,7 @@ function createRun({
   debugParkingClaims = false,
   debugLaneOrder = false,
   debugSkips = false,
+  airsideOperations = (fleet) => createFlightOperations(fleet, scenario.seed, scenario.startS),
 }: LoadInput) {
   const params: SimParams = {
     ...DEFAULT_SIM_PARAMS,
@@ -249,6 +269,24 @@ function createRun({
     undefined,
     debugSkips,
   );
+  // Airports run their own seeded flight day when the city carries an airside graph.
+  const fleet = compiled.airside ? createAircraftFleet(compiled.airside, scenario.seed) : null;
+  const operations = fleet ? airsideOperations(fleet) : null;
+  // TASK-316: ground vehicles work the turnarounds; the aircraft never see them.
+  const drainTurnarounds = operations?.drainTurnarounds?.bind(operations);
+  const ground =
+    fleet && drainTurnarounds
+      ? createGroundVehicles(compiled, {
+          snapshot: () => fleet.snapshot(),
+          movementSpace: () => fleet.movementSpace(),
+          drainTurnarounds,
+        })
+      : null;
+  const airsideGiveWay = (city: CompiledCity) =>
+    fleet && city.airside?.crossings.length
+      ? createAirsideGiveWay(city, vehicles, params, fleet.crossingClosed)
+      : null;
+  let giveWay = airsideGiveWay(compiled);
   const hasGrant = (id: number) => intersections.grants[id] !== -1;
   const originCourtesy = createOriginCourtesy(
     compiled,
@@ -338,6 +376,20 @@ function createRun({
       vehicleRouteRequest(vehicles, params, id, lane, 0),
     );
     return avoiding.ok && revisits(avoiding.route.roads) < plain ? avoiding : result;
+  }
+
+  /** Lane changes a route needs after its first road: on each later road, from the lane it
+   * enters by to the lane its next movement leaves from, or to the destination's lane. */
+  function laterChanges(route: Route) {
+    let changes = 0;
+    for (let i = 0; i < route.movements.length; i++) {
+      const entry = compiled.lanes[compiled.movements[route.movements[i]!]!.toLane]!;
+      const leave = route.movements[i + 1];
+      const lane =
+        leave === undefined ? route.targetLanes.at(-1)![0]! : compiled.movements[leave]!.fromLane;
+      changes += Math.abs(compiled.lanes[lane]!.lane - entry.lane);
+    }
+    return changes;
   }
 
   function headRouteFrom(id: number, lane: number) {
@@ -916,6 +968,15 @@ function createRun({
           }
           limit[id] = Math.min(limit[id]!, Math.max(position, railStop));
         }
+        // TASK-298: a crossing an aircraft occupies or approaches is a stop, as a rail one.
+        const airsideStop = giveWay ? giveWay.hold(id, lane, path) : Infinity;
+        if (airsideStop < Infinity) {
+          if (airsideStop + idm.minGapM < obstacle) {
+            obstacle = airsideStop + idm.minGapM;
+            leaderSpeed = 0;
+          }
+          limit[id] = Math.min(limit[id]!, Math.max(position, airsideStop));
+        }
         const driving = profile(id);
         // TASK-169: keep clear. Where its front would stand (behind a leader, projected by the
         // leader's braking distance but no farther than behind the leader's own stand, or at a
@@ -1149,6 +1210,7 @@ function createRun({
       let best = -1;
       let cost = Infinity;
       if (headDestination[id] !== vehicles.destination[id]) unresolvedHeads[id] = undefined;
+      let plannedChanges = -1;
       for (const idx of lane.out) {
         const movement = compiled.movements[idx]!;
         const tail = vehicles.last(movement.toLane);
@@ -1164,6 +1226,22 @@ function createRun({
         )
           continue;
         const result = headRouteFrom(id, movement.toLane);
+        // TASK-208: another lane of the blocked movement's own next road gets round a car
+        // standing on that road, but not round a queue beyond it: a route that needs two or more
+        // lane changes after that road beyond the planned exit's runs beside the queue and has to
+        // merge back into it (Munich r:53 and r:1306 into r:700 lane 0, then two changes into the
+        // jughandle's lane 2 on r:698 and r:654, most of them missed). TASK-223: one extra change
+        // is still taken; refusing it too held heads at many Munich stop lines (fixed-time +6.7%).
+        if (
+          result.ok &&
+          compiled.lanes[movement.toLane]!.road === compiled.lanes[planned.toLane]!.road
+        ) {
+          if (plannedChanges === -1) {
+            const own = headRouteFrom(id, planned.toLane);
+            plannedChanges = own.ok ? laterChanges(own.route) : Infinity;
+          }
+          if (laterChanges(result.route) >= plannedChanges + 2) continue;
+        }
         if (
           result.ok &&
           !result.route.movements.includes(planned.idx) &&
@@ -1543,6 +1621,8 @@ function createRun({
       }),
       ...(railCrossings && { rail: railCrossings.snapshot() }),
       ...(transit && { transit: { vehicles: transit.snapshot(time()).vehicles } }),
+      ...(fleet && { aircraft: fleet.snapshot(), airfield: fleet.airfield() }),
+      ...(ground?.network && { groundVehicles: ground.snapshot() }),
     };
     let i = 0;
     for (let id = 0; id < vehicles.count; id++) {
@@ -1861,12 +1941,19 @@ function createRun({
       railCrossings?.roadState(changes),
       debugSkips,
     );
+    giveWay = airsideGiveWay(next);
     return result;
   }
 
   return {
     patch,
     time,
+    flightBoard: () => operations?.board?.(time()) ?? null,
+    /** TASK-300: the airport's wind, from the UI's wind control. */
+    setAirportWind(wind: AirportWind) {
+      if (!operations?.setWind) throw new Error('This city has no airport');
+      operations.setWind(wind);
+    },
     snapshot,
     inspect,
     metrics: () => {
@@ -1875,6 +1962,9 @@ function createRun({
       if (walkers) metrics.walkers = walkers.metrics();
       if (persons.enabled) metrics.persons = persons.metrics();
       if (transit) metrics.transit = transit.metrics();
+      if (fleet) metrics.aircraft = fleet.metrics();
+      if (operations?.metrics) metrics.flights = operations.metrics();
+      if (ground?.network) metrics.groundVehicles = ground.metrics();
       return metrics;
     },
     inspectWalker: (id: number): WalkerDetail | null => {
@@ -1911,12 +2001,17 @@ function createRun({
         parking.stateHash(),
         walkers ?? undefined,
         persons,
+        fleet ?? undefined,
       ),
     step(n: number) {
       for (let i = 0; i < n; i++) {
         const timeS = time();
         intersections.signals(timeS);
         railCrossings?.step(timeS);
+        operations?.step(timeS);
+        fleet?.step(timeS);
+        ground?.step(timeS);
+        giveWay?.update();
         persons.step(timeS);
         walkers?.step(timeS);
         connectors.spawn(timeS, spawnGap, releaseTrip);
@@ -2038,10 +2133,15 @@ export function createEngine() {
     },
     snapshot: () => loaded().snapshot(),
     metrics: () => loaded().metrics(),
+    flightBoard: () => loaded().flightBoard(),
+    setAirportWind: (wind: AirportWind) => loaded().setAirportWind(wind),
     inspect: (id) => loaded().inspect(id),
     inspectWalker: (id) => loaded().inspectWalker(id),
     inspectPerson: (id) => loaded().inspectPerson(id),
     signalTiming: () => loaded().signalTiming(),
     stateHash: () => loaded().stateHash(),
-  } satisfies TrafficEngine;
+  } satisfies TrafficEngine & {
+    flightBoard(): FlightBoard | null;
+    setAirportWind(wind: AirportWind): void;
+  };
 }

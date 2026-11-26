@@ -1,0 +1,1292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="cityflows TASK-269 excerpt">
+  <bounds minlat="52.1966" minlon="0.1202" maxlat="52.1989" maxlon="0.124"/>
+  <node id="104551" lat="52.2019205" lon="0.1180646"/>
+  <node id="609065" lat="52.1980486" lon="0.1225725"/>
+  <node id="609066" lat="52.1981287" lon="0.1242059"/>
+  <node id="609070" lat="52.1980209" lon="0.1220568">
+    <tag k="direction" v="clockwise"/>
+    <tag k="highway" v="mini_roundabout"/>
+  </node>
+  <node id="609072" lat="52.1986517" lon="0.1217765"/>
+  <node id="609073" lat="52.1993451" lon="0.1213087"/>
+  <node id="609074" lat="52.2002223" lon="0.1201448"/>
+  <node id="609748" lat="52.201136" lon="0.1188828"/>
+  <node id="6572062" lat="52.1973715" lon="0.1194272">
+    <tag k="bicycle" v="yes"/>
+    <tag k="check_date:crossing" v="2021-01-03"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing_ref" v="toucan"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="segregated" v="no"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="6572064" lat="52.1975262" lon="0.1221834">
+    <tag k="direction" v="clockwise"/>
+    <tag k="highway" v="mini_roundabout"/>
+  </node>
+  <node id="20922037" lat="52.2014215" lon="0.1185281"/>
+  <node id="20922081" lat="52.1998814" lon="0.1206755"/>
+  <node id="20922082" lat="52.1997067" lon="0.1209376"/>
+  <node id="20922087" lat="52.198103" lon="0.1238071"/>
+  <node id="20922091" lat="52.1985778" lon="0.1213713"/>
+  <node id="20949086" lat="52.1969002" lon="0.1226577"/>
+  <node id="21390889" lat="52.1977152" lon="0.1225414"/>
+  <node id="21390916" lat="52.1978031" lon="0.1243297"/>
+  <node id="25730054" lat="52.1987551" lon="0.1213593"/>
+  <node id="25730057" lat="52.1992282" lon="0.1209451"/>
+  <node id="36839622" lat="52.1968844" lon="0.122272">
+    <tag k="bicycle" v="dismount"/>
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing_ref" v="puffin"/>
+    <tag k="foot" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="source" v="survey"/>
+  </node>
+  <node id="290577078" lat="52.2006544" lon="0.1195193">
+    <tag k="crossing" v="marked"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="flush"/>
+    <tag k="source" v="survey"/>
+    <tag k="tactile_paving" v="no"/>
+  </node>
+  <node id="331431041" lat="52.1992035" lon="0.1209643">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="bicycle" v="yes"/>
+    <tag k="foot" v="yes"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET-F"/>
+    <tag k="vehicle" v="yes"/>
+  </node>
+  <node id="697736699" lat="52.1984001" lon="0.1218823"/>
+  <node id="1014842152" lat="52.1975068" lon="0.1217641"/>
+  <node id="1014842157" lat="52.1938699" lon="0.1228312"/>
+  <node id="1014842158" lat="52.1967331" lon="0.1221951"/>
+  <node id="1014842161" lat="52.194503" lon="0.1224878"/>
+  <node id="1014842162" lat="52.1959017" lon="0.1222038"/>
+  <node id="1014842165" lat="52.1969053" lon="0.1221683"/>
+  <node id="1014842171" lat="52.1938088" lon="0.1228644"/>
+  <node id="1014842172" lat="52.1963012" lon="0.1221954"/>
+  <node id="1014842181" lat="52.1948926" lon="0.1223249"/>
+  <node id="1014842185" lat="52.1974595" lon="0.1217701"/>
+  <node id="1014842195" lat="52.1952223" lon="0.122276"/>
+  <node id="1237352633" lat="52.2010116" lon="0.1190455"/>
+  <node id="1474330461" lat="52.1973376" lon="0.1221122"/>
+  <node id="1474330462" lat="52.1973983" lon="0.1220648"/>
+  <node id="1474330492" lat="52.1981916" lon="0.1246244"/>
+  <node id="1474330561" lat="52.1986489" lon="0.1232158"/>
+  <node id="1474330566" lat="52.1986912" lon="0.1233591"/>
+  <node id="1474330577" lat="52.1987155" lon="0.123292"/>
+  <node id="1474330578" lat="52.1987155" lon="0.1233179"/>
+  <node id="1474330579" lat="52.1987173" lon="0.1233405"/>
+  <node id="1474330580" lat="52.1987182" lon="0.1231633"/>
+  <node id="1474330581" lat="52.198719" lon="0.1232661"/>
+  <node id="1474330591" lat="52.1987265" lon="0.1232467"/>
+  <node id="1474330592" lat="52.1987367" lon="0.1232323"/>
+  <node id="1474330593" lat="52.1987398" lon="0.1231266"/>
+  <node id="1474330594" lat="52.1987459" lon="0.1232237"/>
+  <node id="1474330596" lat="52.198764" lon="0.1232107"/>
+  <node id="1474330597" lat="52.1987786" lon="0.1232"/>
+  <node id="1474330599" lat="52.1987825" lon="0.1217151"/>
+  <node id="1474330606" lat="52.1987825" lon="0.123151"/>
+  <node id="1474330607" lat="52.1987914" lon="0.1231913"/>
+  <node id="1474330611" lat="52.1988068" lon="0.1231913"/>
+  <node id="1474330617" lat="52.1988178" lon="0.1230669"/>
+  <node id="1474330623" lat="52.1988253" lon="0.1232028"/>
+  <node id="1474330627" lat="52.1988293" lon="0.1231143"/>
+  <node id="1474330631" lat="52.1988399" lon="0.1232201"/>
+  <node id="1474330633" lat="52.1988508" lon="0.123246"/>
+  <node id="1474330645" lat="52.1989055" lon="0.1216366">
+    <tag k="button_operated" v="yes"/>
+    <tag k="check_date:crossing" v="2021-06-10"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="flush"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+    <tag k="traffic_signals:vibration" v="no"/>
+  </node>
+  <node id="1474330693" lat="52.1991297" lon="0.1214826"/>
+  <node id="1474330771" lat="52.1992842" lon="0.1229649"/>
+  <node id="1474330814" lat="52.199444" lon="0.1212376"/>
+  <node id="1474330818" lat="52.1994886" lon="0.1228184"/>
+  <node id="1474330847" lat="52.1995798" lon="0.1211143"/>
+  <node id="1474330939" lat="52.1998038" lon="0.1225889"/>
+  <node id="1474331049" lat="52.2000536" lon="0.1224069"/>
+  <node id="1474331127" lat="52.2001707" lon="0.1223136"/>
+  <node id="1474503385" lat="52.198101" lon="0.1224889"/>
+  <node id="1474503388" lat="52.1981108" lon="0.1227337"/>
+  <node id="1474503393" lat="52.1981361" lon="0.122488">
+    <tag k="entrance" v="main"/>
+    <tag k="ref" v="E028-A"/>
+  </node>
+  <node id="1474503399" lat="52.198143" lon="0.1227303"/>
+  <node id="1474503401" lat="52.1981476" lon="0.1228283"/>
+  <node id="1474503402" lat="52.1981578" lon="0.1234627"/>
+  <node id="1474503403" lat="52.1981587" lon="0.1227287">
+    <tag k="entrance" v="main"/>
+    <tag k="ref" v="E029-A"/>
+  </node>
+  <node id="1474503410" lat="52.1981938" lon="0.123461">
+    <tag k="entrance" v="main"/>
+  </node>
+  <node id="1474503464" lat="52.1987378" lon="0.121952"/>
+  <node id="1474503476" lat="52.1987422" lon="0.121983">
+    <tag k="entrance" v="main"/>
+    <tag k="ref" v="E019-A"/>
+  </node>
+  <node id="1481442799" lat="52.1998469" lon="0.1225575"/>
+  <node id="1481442962" lat="52.2003803" lon="0.122144"/>
+  <node id="1481443067" lat="52.2007502" lon="0.1218447"/>
+  <node id="1482522718" lat="52.1987836" lon="0.1232937">
+    <tag k="barrier" v="entrance"/>
+    <tag k="bicycle" v="no"/>
+    <tag k="foot" v="yes"/>
+    <tag k="ref" v="E-D"/>
+    <tag k="vehicle" v="no"/>
+  </node>
+  <node id="1494525235" lat="52.1974189" lon="0.1199502"/>
+  <node id="1494525241" lat="52.1974333" lon="0.1195249">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="operator" v="University of Cambridge"/>
+    <tag k="ref" v="C/ENG-C"/>
+  </node>
+  <node id="1494525283" lat="52.1974894" lon="0.1213392"/>
+  <node id="1494525291" lat="52.1975009" lon="0.1215659">
+    <tag k="check_date:crossing" v="2021-06-06"/>
+    <tag k="crossing" v="uncontrolled"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing_ref" v="zebra"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="1494525301" lat="52.1975183" lon="0.1205336"/>
+  <node id="1494525318" lat="52.1975404" lon="0.1213213"/>
+  <node id="1494525336" lat="52.1975526" lon="0.1205639"/>
+  <node id="1494525339" lat="52.1975591" lon="0.1206128"/>
+  <node id="1494525355" lat="52.1975845" lon="0.1211681"/>
+  <node id="1494525360" lat="52.1976043" lon="0.1221743"/>
+  <node id="1494525362" lat="52.1976094" lon="0.1211265"/>
+  <node id="1494525378" lat="52.1976251" lon="0.1210406"/>
+  <node id="1494525380" lat="52.1976316" lon="0.121076"/>
+  <node id="1494525433" lat="52.1978469" lon="0.1215039"/>
+  <node id="1494525450" lat="52.1978489" lon="0.119333"/>
+  <node id="1494525453" lat="52.1978548" lon="0.1215579">
+    <tag k="entrance" v="yes"/>
+  </node>
+  <node id="1494525489" lat="52.1980619" lon="0.1202535">
+    <tag k="entrance" v="secondary"/>
+    <tag k="name" v="Inglis Building"/>
+    <tag k="ref" v="C018.1-A"/>
+    <tag k="wheelchair" v="yes"/>
+  </node>
+  <node id="1494525490" lat="52.1980644" lon="0.1202663"/>
+  <node id="1494525493" lat="52.1980696" lon="0.120302"/>
+  <node id="1494525496" lat="52.1980782" lon="0.1203498"/>
+  <node id="1494525502" lat="52.198084" lon="0.1203802"/>
+  <node id="1494525504" lat="52.1980911" lon="0.1209437"/>
+  <node id="1494525513" lat="52.1981006" lon="0.1202498"/>
+  <node id="1494525516" lat="52.198107" lon="0.1202862"/>
+  <node id="1494525522" lat="52.1981154" lon="0.1203344"/>
+  <node id="1494525528" lat="52.1981196" lon="0.1203651"/>
+  <node id="1494525537" lat="52.198121" lon="0.1211428">
+    <tag k="barrier" v="lift_gate"/>
+    <tag k="ref" v="C-G"/>
+  </node>
+  <node id="1494525539" lat="52.1981265" lon="0.1211805"/>
+  <node id="1494525565" lat="52.19816" lon="0.1214112"/>
+  <node id="1494525578" lat="52.1981633" lon="0.1214335"/>
+  <node id="1494525629" lat="52.1982359" lon="0.1202321"/>
+  <node id="1494525631" lat="52.198237" lon="0.1208884"/>
+  <node id="1494525636" lat="52.1982461" lon="0.1210885"/>
+  <node id="1494525646" lat="52.1982499" lon="0.1191792"/>
+  <node id="1494525648" lat="52.198252" lon="0.1211295"/>
+  <node id="1494525670" lat="52.1982728" lon="0.1211211"/>
+  <node id="1494525676" lat="52.1982748" lon="0.1213891"/>
+  <node id="1494525696" lat="52.1982998" lon="0.1213795"/>
+  <node id="1494525701" lat="52.1983101" lon="0.1213756"/>
+  <node id="1494525715" lat="52.1983196" lon="0.1212988"/>
+  <node id="1494525722" lat="52.1983289" lon="0.1213684"/>
+  <node id="1494525725" lat="52.1983452" lon="0.120882"/>
+  <node id="1494525739" lat="52.1983499" lon="0.119818"/>
+  <node id="1494525743" lat="52.1983614" lon="0.1201815"/>
+  <node id="1494525745" lat="52.1983644" lon="0.1210842"/>
+  <node id="1494525749" lat="52.1983782" lon="0.1198582"/>
+  <node id="1494525767" lat="52.1983787" lon="0.1210368"/>
+  <node id="1494525771" lat="52.1983842" lon="0.1210771"/>
+  <node id="1494525781" lat="52.198392" lon="0.1212728"/>
+  <node id="1494525797" lat="52.198423" lon="0.1201594"/>
+  <node id="1494525803" lat="52.1984181" lon="0.1201267"/>
+  <node id="1494525805" lat="52.1984251" lon="0.1205851"/>
+  <node id="1494525817" lat="52.1984316" lon="0.1205806"/>
+  <node id="1494525822" lat="52.1984399" lon="0.1206313"/>
+  <node id="1494525828" lat="52.1984533" lon="0.121248"/>
+  <node id="1494525863" lat="52.1984686" lon="0.1213487"/>
+  <node id="1494525892" lat="52.1984971" lon="0.1208208"/>
+  <node id="1494525936" lat="52.1986247" lon="0.1215849">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="entrance" v="main"/>
+    <tag k="locked" v="no"/>
+    <tag k="operator" v="University of Cambridge"/>
+    <tag k="ref" v="C/ENG-A"/>
+  </node>
+  <node id="1495245014" lat="52.1979775" lon="0.1203913">
+    <tag k="entrance" v="secondary"/>
+    <tag k="name" v="Baker Centre Wing Staircase"/>
+    <tag k="ref" v="C012.1-F"/>
+    <tag k="wheelchair" v="yes"/>
+  </node>
+  <node id="1495245017" lat="52.1982683" lon="0.1217215">
+    <tag k="entrance" v="secondary"/>
+    <tag k="name" v="Lecture Room 2"/>
+    <tag k="ref" v="C013.1-B"/>
+  </node>
+  <node id="1495245107" lat="52.1979756" lon="0.1203703"/>
+  <node id="1495245109" lat="52.1979975" lon="0.1203605"/>
+  <node id="1495245150" lat="52.198264" lon="0.1204514"/>
+  <node id="1495245152" lat="52.1982715" lon="0.1205016"/>
+  <node id="1495245154" lat="52.1982736" lon="0.1217604"/>
+  <node id="1495245163" lat="52.1982793" lon="0.1218003">
+    <tag k="barrier" v="gate"/>
+    <tag k="locked" v="no"/>
+    <tag k="ref" v="C-K"/>
+    <tag k="vehicle" v="no"/>
+  </node>
+  <node id="1495245182" lat="52.198372" lon="0.1202504">
+    <tag k="entrance" v="emergency"/>
+  </node>
+  <node id="1495245188" lat="52.1983828" lon="0.1202469"/>
+  <node id="1495245190" lat="52.1983905" lon="0.120305"/>
+  <node id="1495245209" lat="52.19852" lon="0.1209771">
+    <tag k="barrier" v="rising_kerb"/>
+  </node>
+  <node id="1495245220" lat="52.1985592" lon="0.1215977">
+    <tag k="entrance" v="main"/>
+    <tag k="ref" v="C013.1-A"/>
+  </node>
+  <node id="1495245225" lat="52.1985665" lon="0.1216467"/>
+  <node id="1495245226" lat="52.1985722" lon="0.1216893">
+    <tag k="barrier" v="gate"/>
+    <tag k="entrance" v="main"/>
+    <tag k="locked" v="no"/>
+    <tag k="ref" v="C-H"/>
+    <tag k="vehicle" v="no"/>
+  </node>
+  <node id="1495298952" lat="52.1981522" lon="0.1244152"/>
+  <node id="1495673217" lat="52.1998086" lon="0.1207847"/>
+  <node id="1495673218" lat="52.2003963" lon="0.1199001"/>
+  <node id="1498618033" lat="52.2018004" lon="0.1181756"/>
+  <node id="1514382016" lat="52.1973905" lon="0.1196162"/>
+  <node id="1697870071" lat="52.1990737" lon="0.1205429">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="bicycle" v="no"/>
+    <tag k="foot" v="yes"/>
+    <tag k="name" v="Garden Gate"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET-F"/>
+    <tag k="vehicle" v="no"/>
+  </node>
+  <node id="1697870237" lat="52.1985669" lon="0.1209676">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="bicycle" v="no"/>
+    <tag k="foot" v="yes"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET-E"/>
+    <tag k="vehicle" v="no"/>
+  </node>
+  <node id="1697870321" lat="52.1986564" lon="0.1213229"/>
+  <node id="1697870326" lat="52.1986697" lon="0.1213709"/>
+  <node id="1697870371" lat="52.1987527" lon="0.1213012"/>
+  <node id="1697870427" lat="52.1988221" lon="0.1212428"/>
+  <node id="1697870466" lat="52.1988616" lon="0.1201243"/>
+  <node id="1697870477" lat="52.1988695" lon="0.1207196"/>
+  <node id="1697870482" lat="52.1988717" lon="0.120884"/>
+  <node id="1697870490" lat="52.19889" lon="0.1209437">
+    <tag k="entrance" v="home"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET--PETERS"/>
+  </node>
+  <node id="1697870496" lat="52.198892" lon="0.1211839"/>
+  <node id="1697870552" lat="52.1989387" lon="0.1211447"/>
+  <node id="1697870643" lat="52.1990051" lon="0.1210888"/>
+  <node id="1697870669" lat="52.1990701" lon="0.121034"/>
+  <node id="1697870696" lat="52.1991306" lon="0.1209832"/>
+  <node id="1697870707" lat="52.1992172" lon="0.1209103"/>
+  <node id="1697871410" lat="52.2008335" lon="0.1192817"/>
+  <node id="1697871721" lat="52.2009789" lon="0.1190889"/>
+  <node id="1697872257" lat="52.1988839" lon="0.1211542">
+    <tag k="addr:city" v="Cambridge"/>
+    <tag k="addr:housenumber" v="5"/>
+    <tag k="addr:postcode" v="CB2 1QQ"/>
+    <tag k="addr:street" v="St Peter's Terrace"/>
+    <tag k="entrance" v="home"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET--PETERS5"/>
+  </node>
+  <node id="1697872271" lat="52.1988142" lon="0.1212136">
+    <tag k="addr:city" v="Cambridge"/>
+    <tag k="addr:housenumber" v="6"/>
+    <tag k="addr:postcode" v="CB2 1QQ"/>
+    <tag k="addr:street" v="St Peter's Terrace"/>
+    <tag k="entrance" v="home"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET--PETERS6"/>
+  </node>
+  <node id="1697872289" lat="52.1987452" lon="0.1212723">
+    <tag k="addr:city" v="Cambridge"/>
+    <tag k="addr:housenumber" v="7"/>
+    <tag k="addr:postcode" v="CB2 1QQ"/>
+    <tag k="addr:street" v="St Peter's Terrace"/>
+    <tag k="entrance" v="home"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="ref" v="PET--PETERS7"/>
+  </node>
+  <node id="1718129087" lat="52.1972773" lon="0.1226039"/>
+  <node id="1718129097" lat="52.1973201" lon="0.1231229"/>
+  <node id="1718129102" lat="52.1975692" lon="0.1230827"/>
+  <node id="2202004461" lat="52.197643" lon="0.1215808"/>
+  <node id="2202004549" lat="52.1980549" lon="0.1214226"/>
+  <node id="2202004645" lat="52.1975771" lon="0.1213142"/>
+  <node id="2339070179" lat="52.1974367" lon="0.121986"/>
+  <node id="2339070183" lat="52.1974517" lon="0.1219116"/>
+  <node id="2354636398" lat="52.1944604" lon="0.1225109"/>
+  <node id="2354853354" lat="52.1940996" lon="0.1227066"/>
+  <node id="2485502063" lat="52.1988703" lon="0.1245933"/>
+  <node id="2485502067" lat="52.1990263" lon="0.1249306"/>
+  <node id="2485502069" lat="52.1992057" lon="0.1233219"/>
+  <node id="2485502070" lat="52.1987815" lon="0.1236974"/>
+  <node id="2485502072" lat="52.1987848" lon="0.124089"/>
+  <node id="2485502073" lat="52.1986401" lon="0.1236759"/>
+  <node id="2485502074" lat="52.1991695" lon="0.1233165"/>
+  <node id="2485502076" lat="52.1987766" lon="0.1237614"/>
+  <node id="2485502078" lat="52.1991202" lon="0.1233004"/>
+  <node id="2485502083" lat="52.1987716" lon="0.1238261"/>
+  <node id="2485502087" lat="52.198696" lon="0.1237457"/>
+  <node id="2485502095" lat="52.1996693" lon="0.1229571"/>
+  <node id="2485502097" lat="52.1994818" lon="0.1231234"/>
+  <node id="2485502099" lat="52.1989065" lon="0.1234935"/>
+  <node id="2485502110" lat="52.1993799" lon="0.1232307"/>
+  <node id="2485502114" lat="52.1993076" lon="0.1232897"/>
+  <node id="2485502116" lat="52.1997042" lon="0.122875"/>
+  <node id="2485502118" lat="52.1990018" lon="0.1234453"/>
+  <node id="2485502126" lat="52.1988341" lon="0.1236116"/>
+  <node id="2485502128" lat="52.1989376" lon="0.1247388"/>
+  <node id="2485502130" lat="52.1988275" lon="0.1243089"/>
+  <node id="3516802999" lat="52.1974839" lon="0.1225744">
+    <tag k="amenity" v="parking"/>
+    <tag k="capacity" v="15"/>
+    <tag k="fee" v="yes"/>
+    <tag k="parking" v="street_side"/>
+  </node>
+  <node id="3629411863" lat="52.2006844" lon="0.121898"/>
+  <node id="3709074721" lat="52.200715" lon="0.1218732">
+    <tag k="amenity" v="parking"/>
+    <tag k="fee" v="yes"/>
+  </node>
+  <node id="3709074722" lat="52.1990873" lon="0.1215118">
+    <tag k="amenity" v="parking"/>
+    <tag k="fee" v="yes"/>
+    <tag k="parking" v="lane"/>
+  </node>
+  <node id="4195517243" lat="52.1980107" lon="0.121296">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="entrance" v="yes"/>
+    <tag k="operator" v="University of Cambridge"/>
+    <tag k="ref" v="C/ENG-G"/>
+  </node>
+  <node id="4195517244" lat="52.1979646" lon="0.1210004"/>
+  <node id="4195524609" lat="52.1979905" lon="0.1202835"/>
+  <node id="4195524610" lat="52.1979901" lon="0.1203861"/>
+  <node id="4196791589" lat="52.1974853" lon="0.1205365"/>
+  <node id="4196791590" lat="52.1975412" lon="0.120524">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+    <tag k="operator" v="University of Cambridge"/>
+    <tag k="ref" v="C/ENG-B"/>
+  </node>
+  <node id="4196791591" lat="52.1975299" lon="0.1211836"/>
+  <node id="4196811384" lat="52.1974484" lon="0.1205379"/>
+  <node id="4196811385" lat="52.1974817" lon="0.1211883"/>
+  <node id="5018487637" lat="52.1975172" lon="0.121978"/>
+  <node id="5030411011" lat="52.1976196" lon="0.1213761"/>
+  <node id="5030411012" lat="52.1976021" lon="0.1213297"/>
+  <node id="5030411013" lat="52.1976307" lon="0.121461">
+    <tag k="barrier" v="lift_gate"/>
+  </node>
+  <node id="5030418075" lat="52.1979704" lon="0.1218487">
+    <tag k="entrance" v="exit"/>
+  </node>
+  <node id="5030418076" lat="52.1979912" lon="0.1220652"/>
+  <node id="5373402582" lat="52.1983901" lon="0.1236086"/>
+  <node id="5373402583" lat="52.1984073" lon="0.1237056"/>
+  <node id="5373402584" lat="52.1985217" lon="0.1236595"/>
+  <node id="5373402585" lat="52.1983936" lon="0.1236327">
+    <tag k="access" v="private"/>
+    <tag k="barrier" v="gate"/>
+  </node>
+  <node id="5374415087" lat="52.1975644" lon="0.1219741"/>
+  <node id="8389051987" lat="52.1947203" lon="0.122397"/>
+  <node id="8593528637" lat="52.1965053" lon="0.1221953"/>
+  <node id="9107899252" lat="52.1974023" lon="0.1193995"/>
+  <node id="10023108419" lat="52.1973725" lon="0.1222046"/>
+  <node id="10784767424" lat="52.1985574" lon="0.1218161">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="raised"/>
+    <tag k="tactile_paving" v="no"/>
+  </node>
+  <node id="10784767425" lat="52.1981137" lon="0.1220076">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="raised"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="10784767426" lat="52.1980309" lon="0.1222436">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="yes"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="kerb" v="lowered"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="11277000850" lat="52.197462" lon="0.1222671"/>
+  <node id="11277025995" lat="52.1975911" lon="0.1221264"/>
+  <node id="11277025996" lat="52.1977873" lon="0.122063"/>
+  <node id="11277025997" lat="52.1979711" lon="0.1220131"/>
+  <node id="11277025998" lat="52.197987" lon="0.1220216"/>
+  <node id="11277025999" lat="52.1980291" lon="0.1222091"/>
+  <node id="11277026000" lat="52.1979974" lon="0.1221664"/>
+  <node id="11277026001" lat="52.1978795" lon="0.1221733"/>
+  <node id="11277026002" lat="52.1975452" lon="0.1222548"/>
+  <node id="11277026003" lat="52.1973009" lon="0.1222909"/>
+  <node id="11277026004" lat="52.1969604" lon="0.1223268"/>
+  <node id="11277026005" lat="52.1975965" lon="0.1222441"/>
+  <node id="11277026006" lat="52.197963" lon="0.1221502"/>
+  <node id="12368465035" lat="52.2017503" lon="0.1182222">
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="yes"/>
+    <tag k="crossing:signals" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="no"/>
+  </node>
+  <node id="12823911268" lat="52.1974498" lon="0.1215699"/>
+  <node id="13147100886" lat="52.1980024" lon="0.1219473"/>
+  <node id="13147100887" lat="52.1979814" lon="0.1219628"/>
+  <node id="13147100888" lat="52.197732" lon="0.1220438"/>
+  <node id="13147100889" lat="52.1976344" lon="0.1220728"/>
+  <node id="13147100890" lat="52.1976039" lon="0.1220718"/>
+  <node id="13147100891" lat="52.1975909" lon="0.1220542"/>
+  <node id="13147100892" lat="52.1975766" lon="0.1220324"/>
+  <node id="13147100893" lat="52.1975682" lon="0.1220022"/>
+  <node id="13147100894" lat="52.1975357" lon="0.1215662"/>
+  <node id="13147100895" lat="52.1975248" lon="0.1213823"/>
+  <node id="13147100896" lat="52.1975223" lon="0.1213277"/>
+  <node id="13147100897" lat="52.1975143" lon="0.1212167"/>
+  <node id="13147100898" lat="52.1975134" lon="0.1211852"/>
+  <node id="13147100899" lat="52.1974709" lon="0.120537"/>
+  <node id="13147100900" lat="52.1974436" lon="0.1199018"/>
+  <node id="13147101701" lat="52.1974278" lon="0.1197267"/>
+  <node id="13147101702" lat="52.1974141" lon="0.1196082"/>
+  <node id="13147101703" lat="52.1974018" lon="0.1194726"/>
+  <node id="13147101704" lat="52.1974026" lon="0.119163"/>
+  <node id="13250676729" lat="52.2007756" lon="0.1193586"/>
+  <way id="3993096">
+    <nd ref="20922087"/>
+    <nd ref="5373402582"/>
+    <nd ref="1474330771"/>
+    <nd ref="1474330818"/>
+    <nd ref="1474330939"/>
+    <nd ref="1481442799"/>
+    <nd ref="1474331049"/>
+    <nd ref="1474331127"/>
+    <nd ref="1481442962"/>
+    <nd ref="3629411863"/>
+    <nd ref="3709074721"/>
+    <nd ref="1481443067"/>
+    <tag k="cycleway:left" v="no"/>
+    <tag k="cycleway:right" v="yes"/>
+    <tag k="highway" v="unclassified"/>
+    <tag k="lane_markings" v="no"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Tennis Court Road"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="oneway:bicycle" v="no"/>
+    <tag k="parking:both" v="no"/>
+    <tag k="sidewalk" v="left"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q7700303"/>
+    <tag k="wikimedia_commons" v="Category:Tennis Court Road, Cambridge"/>
+    <tag k="wikipedia" v="en:Tennis Court Road"/>
+  </way>
+  <way id="3993100">
+    <nd ref="609072"/>
+    <nd ref="1474330599"/>
+    <nd ref="1474330645"/>
+    <nd ref="3709074722"/>
+    <nd ref="1474330693"/>
+    <nd ref="609073"/>
+    <nd ref="1474330814"/>
+    <nd ref="1474330847"/>
+    <nd ref="20922082"/>
+    <nd ref="1495673217"/>
+    <nd ref="20922081"/>
+    <nd ref="609074"/>
+    <nd ref="1495673218"/>
+    <nd ref="290577078"/>
+    <nd ref="13250676729"/>
+    <nd ref="1697871410"/>
+    <nd ref="1697871721"/>
+    <nd ref="1237352633"/>
+    <nd ref="609748"/>
+    <nd ref="20922037"/>
+    <nd ref="12368465035"/>
+    <nd ref="1498618033"/>
+    <nd ref="104551"/>
+    <tag k="highway" v="residential"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Trumpington Street"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="width" v="11.1"/>
+    <tag k="wikidata" v="Q7847831"/>
+    <tag k="wikimedia_commons" v="Category:Trumpington Street, Cambridge"/>
+    <tag k="wikipedia" v="en:Trumpington Street"/>
+  </way>
+  <way id="3993103">
+    <nd ref="1494525241"/>
+    <nd ref="1494525450"/>
+    <nd ref="1494525646"/>
+    <nd ref="1494525739"/>
+    <nd ref="1494525749"/>
+    <nd ref="1494525803"/>
+    <nd ref="1494525797"/>
+    <nd ref="1494525892"/>
+    <nd ref="1495245209"/>
+    <nd ref="20922091"/>
+    <nd ref="1494525936"/>
+    <nd ref="609072"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="4040785">
+    <nd ref="20949086"/>
+    <nd ref="1718129087"/>
+    <nd ref="3516802999"/>
+    <nd ref="21390889"/>
+    <nd ref="609065"/>
+    <tag k="highway" v="residential"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Brookside"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="4040788">
+    <nd ref="21390889"/>
+    <nd ref="21390916"/>
+    <tag k="highway" v="residential"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Saxon Street"/>
+    <tag k="smoothness" v="intermediate"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="unhewn_cobblestone"/>
+  </way>
+  <way id="4275819">
+    <nd ref="25730057"/>
+    <nd ref="331431041"/>
+    <nd ref="25730054"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="St Peter's Terrace"/>
+  </way>
+  <way id="33167970">
+    <nd ref="6572062"/>
+    <nd ref="1514382016"/>
+    <nd ref="1494525235"/>
+    <nd ref="4196811384"/>
+    <nd ref="4196811385"/>
+    <nd ref="1494525283"/>
+    <nd ref="1494525291"/>
+    <nd ref="1014842152"/>
+    <nd ref="5018487637"/>
+    <nd ref="6572064"/>
+    <tag k="cycleway:left" v="no"/>
+    <tag k="cycleway:right" v="separate"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="The Fen Causeway"/>
+    <tag k="ref" v="A1134"/>
+    <tag k="sidewalk:left" v="yes"/>
+    <tag k="sidewalk:right" v="separate"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q5442950"/>
+  </way>
+  <way id="51824379">
+    <nd ref="6572064"/>
+    <nd ref="1494525360"/>
+    <nd ref="5030418076"/>
+    <nd ref="609070"/>
+    <tag k="cycleway:both" v="separate"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Trumpington Road"/>
+    <tag k="ref" v="A603"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q7847829"/>
+  </way>
+  <way id="87281290">
+    <nd ref="1014842171"/>
+    <nd ref="1014842157"/>
+    <nd ref="2354853354"/>
+    <nd ref="2354636398"/>
+    <nd ref="1014842161"/>
+    <nd ref="8389051987"/>
+    <nd ref="1014842181"/>
+    <nd ref="1014842195"/>
+    <nd ref="1014842162"/>
+    <nd ref="1014842172"/>
+    <nd ref="8593528637"/>
+    <nd ref="1014842158"/>
+    <nd ref="1014842165"/>
+    <nd ref="1474330461"/>
+    <nd ref="1474330462"/>
+    <nd ref="2339070179"/>
+    <nd ref="2339070183"/>
+    <nd ref="1014842185"/>
+    <nd ref="1014842152"/>
+    <tag k="bicycle" v="yes"/>
+    <tag k="est_width" v="2.5"/>
+    <tag k="highway" v="footway"/>
+    <tag k="lit" v="yes"/>
+    <tag k="segregated" v="no"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="134022516">
+    <nd ref="1474330633"/>
+    <nd ref="1474330631"/>
+    <nd ref="1474330623"/>
+    <nd ref="1474330611"/>
+    <nd ref="1474330607"/>
+    <nd ref="1474330597"/>
+    <nd ref="1474330596"/>
+    <nd ref="1474330594"/>
+    <nd ref="1474330592"/>
+    <nd ref="1474330591"/>
+    <nd ref="1474330581"/>
+    <nd ref="1474330577"/>
+    <nd ref="1474330578"/>
+    <nd ref="1474330579"/>
+    <nd ref="1482522718"/>
+    <nd ref="1474330633"/>
+    <tag k="access" v="private"/>
+    <tag k="area" v="yes"/>
+    <tag k="highway" v="pedestrian"/>
+  </way>
+  <way id="134022519">
+    <nd ref="1474330580"/>
+    <nd ref="1474330561"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+  </way>
+  <way id="134022521">
+    <nd ref="1474330596"/>
+    <nd ref="1474330593"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+  </way>
+  <way id="134022527">
+    <nd ref="1474330580"/>
+    <nd ref="1474330592"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="134022538">
+    <nd ref="1474330561"/>
+    <nd ref="1474330566"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="134022548">
+    <nd ref="1474330607"/>
+    <nd ref="1474330606"/>
+    <nd ref="1474330627"/>
+    <nd ref="1474330617"/>
+    <nd ref="1474330593"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="134053913">
+    <nd ref="1474503385"/>
+    <nd ref="1474503393"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="4"/>
+  </way>
+  <way id="134053915">
+    <nd ref="1474503464"/>
+    <nd ref="1474503476"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="10"/>
+  </way>
+  <way id="134053918">
+    <nd ref="1474503388"/>
+    <nd ref="1474503399"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="4"/>
+  </way>
+  <way id="134053919">
+    <nd ref="1474503402"/>
+    <nd ref="1474503410"/>
+    <tag k="handrail" v="yes"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="ramp" v="no"/>
+  </way>
+  <way id="134053925">
+    <nd ref="1474503401"/>
+    <nd ref="1474503399"/>
+    <nd ref="1474503403"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="Downing College (University of Cambridge)"/>
+  </way>
+  <way id="136211534">
+    <nd ref="1494525565"/>
+    <nd ref="1494525539"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="layer" v="-1"/>
+    <tag k="tunnel" v="yes"/>
+  </way>
+  <way id="136211538">
+    <nd ref="1494525696"/>
+    <nd ref="1494525676"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="layer" v="-1"/>
+    <tag k="tunnel" v="yes"/>
+  </way>
+  <way id="136211540">
+    <nd ref="1494525433"/>
+    <nd ref="1494525453"/>
+    <tag k="highway" v="footway"/>
+  </way>
+  <way id="136211542">
+    <nd ref="1494525493"/>
+    <nd ref="1494525490"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="2"/>
+  </way>
+  <way id="136211543">
+    <nd ref="1494525378"/>
+    <nd ref="1494525380"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="136211545">
+    <nd ref="1494525629"/>
+    <nd ref="1494525743"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="layer" v="-1"/>
+    <tag k="operator" v="University of Cambridge"/>
+    <tag k="tunnel" v="yes"/>
+  </way>
+  <way id="136211546">
+    <nd ref="1494525339"/>
+    <nd ref="1494525336"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="136211547">
+    <nd ref="1494525283"/>
+    <nd ref="13147100896"/>
+    <nd ref="1494525318"/>
+    <nd ref="2202004645"/>
+    <nd ref="5030411012"/>
+    <nd ref="5030411011"/>
+    <nd ref="5030411013"/>
+    <nd ref="2202004461"/>
+    <nd ref="1494525433"/>
+    <nd ref="2202004549"/>
+    <tag k="highway" v="service"/>
+    <tag k="oneway" v="no"/>
+    <tag k="service" v="parking_aisle"/>
+  </way>
+  <way id="136211548">
+    <nd ref="1494525493"/>
+    <nd ref="1494525496"/>
+    <nd ref="1494525502"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="2"/>
+  </way>
+  <way id="136211550">
+    <nd ref="1494525676"/>
+    <nd ref="1494525578"/>
+    <nd ref="1494525565"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+  </way>
+  <way id="136211551">
+    <nd ref="1494525539"/>
+    <nd ref="1494525537"/>
+    <nd ref="1494525504"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+  </way>
+  <way id="136211552">
+    <nd ref="1494525805"/>
+    <nd ref="1494525817"/>
+    <nd ref="1494525822"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="136211553">
+    <nd ref="4196811384"/>
+    <nd ref="13147100899"/>
+    <nd ref="4196791589"/>
+    <nd ref="1494525301"/>
+    <nd ref="1494525362"/>
+    <nd ref="1494525355"/>
+    <nd ref="4196791591"/>
+    <nd ref="13147100898"/>
+    <nd ref="4196811385"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136211554">
+    <nd ref="1494525516"/>
+    <nd ref="1494525522"/>
+    <nd ref="1494525528"/>
+    <nd ref="1494525502"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136211555">
+    <nd ref="1494525516"/>
+    <nd ref="1494525513"/>
+    <nd ref="1494525490"/>
+    <nd ref="1494525489"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136211556">
+    <nd ref="1494525301"/>
+    <nd ref="4196791590"/>
+    <nd ref="1494525493"/>
+    <nd ref="1494525516"/>
+    <nd ref="1494525629"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136211558">
+    <nd ref="1494525771"/>
+    <nd ref="1494525767"/>
+    <nd ref="1494525636"/>
+    <nd ref="1494525648"/>
+    <nd ref="1494525670"/>
+    <nd ref="1494525745"/>
+    <nd ref="1494525771"/>
+    <tag k="access" v="private"/>
+    <tag k="area" v="yes"/>
+    <tag k="bridge" v="yes"/>
+    <tag k="highway" v="pedestrian"/>
+    <tag k="layer" v="1"/>
+  </way>
+  <way id="136211559">
+    <nd ref="1494525892"/>
+    <nd ref="1494525725"/>
+    <nd ref="1494525631"/>
+    <nd ref="1494525504"/>
+    <nd ref="4195517244"/>
+    <nd ref="4195517243"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136211560">
+    <nd ref="1494525863"/>
+    <nd ref="1494525828"/>
+    <nd ref="1494525781"/>
+    <nd ref="1494525715"/>
+    <nd ref="1494525722"/>
+    <nd ref="1494525701"/>
+    <nd ref="1494525696"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+  </way>
+  <way id="136286828">
+    <nd ref="1495245226"/>
+    <nd ref="1495245225"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136286829">
+    <nd ref="1495245225"/>
+    <nd ref="1495245220"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="7"/>
+  </way>
+  <way id="136286831">
+    <nd ref="1495245150"/>
+    <nd ref="1495245152"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="136286832">
+    <nd ref="1495245163"/>
+    <nd ref="1495245154"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136286833">
+    <nd ref="1495245154"/>
+    <nd ref="1495245017"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="step_count" v="5"/>
+  </way>
+  <way id="136286834">
+    <nd ref="1495245109"/>
+    <nd ref="1495245107"/>
+    <nd ref="1495245014"/>
+    <tag k="access" v="private"/>
+    <tag k="fixme" v="Tag with more precise incline value"/>
+    <tag k="highway" v="footway"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="University of Cambridge"/>
+  </way>
+  <way id="136286836">
+    <nd ref="1495245190"/>
+    <nd ref="1495245188"/>
+    <nd ref="1495245182"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+  </way>
+  <way id="157556188">
+    <nd ref="1697870707"/>
+    <nd ref="1697870696"/>
+    <nd ref="1697870669"/>
+    <nd ref="1697870643"/>
+    <nd ref="1697870552"/>
+    <nd ref="1697870496"/>
+    <nd ref="1697870427"/>
+    <nd ref="1697870371"/>
+    <nd ref="1697870326"/>
+    <nd ref="1697870321"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+  </way>
+  <way id="157556200">
+    <nd ref="1697870371"/>
+    <nd ref="1697872289"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="step_count" v="3"/>
+  </way>
+  <way id="157556203">
+    <nd ref="1697870482"/>
+    <nd ref="1697870490"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="step_count" v="6"/>
+  </way>
+  <way id="157556204">
+    <nd ref="1697870496"/>
+    <nd ref="1697872257"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="step_count" v="3"/>
+  </way>
+  <way id="157556223">
+    <nd ref="1697870427"/>
+    <nd ref="1697872271"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="steps"/>
+    <tag k="incline" v="up"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+    <tag k="step_count" v="3"/>
+  </way>
+  <way id="157556252">
+    <nd ref="1697870071"/>
+    <nd ref="1697870477"/>
+    <nd ref="1697870237"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+  </way>
+  <way id="157556254">
+    <nd ref="1697870466"/>
+    <nd ref="1697870477"/>
+    <nd ref="1697870482"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="operator" v="Peterhouse (University of Cambridge)"/>
+  </way>
+  <way id="159705522">
+    <nd ref="1718129087"/>
+    <nd ref="1718129097"/>
+    <nd ref="1718129102"/>
+    <tag k="highway" v="service"/>
+  </way>
+  <way id="240862574">
+    <nd ref="2485502116"/>
+    <nd ref="2485502095"/>
+    <nd ref="2485502097"/>
+    <nd ref="2485502110"/>
+    <nd ref="2485502114"/>
+    <nd ref="2485502069"/>
+    <nd ref="2485502074"/>
+    <nd ref="2485502078"/>
+    <nd ref="2485502118"/>
+    <nd ref="2485502099"/>
+    <nd ref="2485502126"/>
+    <nd ref="2485502070"/>
+    <nd ref="2485502076"/>
+    <nd ref="2485502083"/>
+    <nd ref="2485502072"/>
+    <nd ref="2485502130"/>
+    <nd ref="2485502063"/>
+    <nd ref="2485502128"/>
+    <nd ref="2485502067"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="source" v="survey"/>
+  </way>
+  <way id="240862586">
+    <nd ref="2485502073"/>
+    <nd ref="2485502087"/>
+    <nd ref="2485502076"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="footway"/>
+    <tag k="source" v="survey"/>
+  </way>
+  <way id="419503296">
+    <nd ref="4195524609"/>
+    <nd ref="4195524610"/>
+    <tag k="access" v="private"/>
+    <tag k="bridge" v="yes"/>
+    <tag k="highway" v="footway"/>
+    <tag k="layer" v="1"/>
+  </way>
+  <way id="513368039">
+    <nd ref="5374415087"/>
+    <nd ref="5018487637"/>
+    <nd ref="2339070179"/>
+    <tag k="highway" v="footway"/>
+    <tag k="lit" v="yes"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="515002394">
+    <nd ref="5030418075"/>
+    <nd ref="13147100887"/>
+    <nd ref="11277025998"/>
+    <nd ref="5030418076"/>
+    <tag k="highway" v="footway"/>
+  </way>
+  <way id="557118052">
+    <nd ref="5373402582"/>
+    <nd ref="5373402585"/>
+    <nd ref="5373402583"/>
+    <nd ref="5373402584"/>
+    <tag k="access" v="private"/>
+    <tag k="highway" v="service"/>
+    <tag k="service" v="parking_aisle"/>
+  </way>
+  <way id="874663932">
+    <nd ref="1474330492"/>
+    <nd ref="1495298952"/>
+    <nd ref="609066"/>
+    <nd ref="20922087"/>
+    <nd ref="609065"/>
+    <nd ref="10784767426"/>
+    <nd ref="11277025999"/>
+    <nd ref="609070"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Lensfield Road"/>
+    <tag k="ref" v="A603"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="smoothness" v="good"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="1094374094">
+    <nd ref="6572064"/>
+    <nd ref="10023108419"/>
+    <tag k="cycleway:both" v="separate"/>
+    <tag k="cycleway:right:width" v="1.25"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="30 mph"/>
+    <tag k="name" v="Trumpington Road"/>
+    <tag k="ref" v="A1134"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q7847829"/>
+  </way>
+  <way id="1094374095">
+    <nd ref="609070"/>
+    <nd ref="10784767425"/>
+    <nd ref="697736699"/>
+    <nd ref="10784767424"/>
+    <nd ref="609072"/>
+    <tag k="highway" v="residential"/>
+    <tag k="lanes" v="2"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Trumpington Street"/>
+    <tag k="sidewalk" v="both"/>
+    <tag k="sidewalk:both:surface" v="paving_stones"/>
+    <tag k="source:name" v="local knowledge"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="wikidata" v="Q7847831"/>
+  </way>
+  <way id="1217053616">
+    <nd ref="6572064"/>
+    <nd ref="11277025995"/>
+    <nd ref="11277025996"/>
+    <nd ref="11277025997"/>
+    <nd ref="11277025998"/>
+    <nd ref="609070"/>
+    <tag k="est_width" v="1.75"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="name" v="Trumpington Road"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="separation" v="paint"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="1217053617">
+    <nd ref="11277025999"/>
+    <nd ref="11277026000"/>
+    <nd ref="11277026006"/>
+    <nd ref="11277026001"/>
+    <nd ref="11277026005"/>
+    <nd ref="11277026002"/>
+    <nd ref="11277000850"/>
+    <nd ref="11277026003"/>
+    <nd ref="11277026004"/>
+    <nd ref="36839622"/>
+    <tag k="est_width" v="1.75"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="name" v="Trumpington Road"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="separation" v="paint"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="1217053618">
+    <nd ref="11277026005"/>
+    <nd ref="6572064"/>
+    <nd ref="11277000850"/>
+    <tag k="est_width" v="1.75"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="name" v="Trumpington Road"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="separation" v="paint"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="1385129865">
+    <nd ref="12823911268"/>
+    <nd ref="1494525291"/>
+    <nd ref="13147100894"/>
+    <tag k="highway" v="footway"/>
+  </way>
+  <way id="1430230229">
+    <nd ref="13147100886"/>
+    <nd ref="13147100887"/>
+    <nd ref="13147100888"/>
+    <nd ref="13147100889"/>
+    <nd ref="13147100890"/>
+    <nd ref="13147100891"/>
+    <nd ref="13147100892"/>
+    <nd ref="13147100893"/>
+    <nd ref="5374415087"/>
+    <nd ref="13147100894"/>
+    <nd ref="13147100895"/>
+    <nd ref="13147100896"/>
+    <nd ref="13147100897"/>
+    <nd ref="13147100898"/>
+    <nd ref="13147100899"/>
+    <nd ref="13147100900"/>
+    <nd ref="13147101701"/>
+    <nd ref="13147101702"/>
+    <nd ref="13147101703"/>
+    <nd ref="9107899252"/>
+    <nd ref="13147101704"/>
+    <tag k="highway" v="footway"/>
+  </way>
+</osm>

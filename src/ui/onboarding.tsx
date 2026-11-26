@@ -73,7 +73,7 @@ const hints: Hint[] = [
     done: (state) => state.compareOpen,
   },
   {
-    text: 'Open Layers for the time of day, the appearance and labels.',
+    text: 'Open Layers for the appearance and labels.',
     locate: () => beside('.sidebar button', 'Layers', 'right'),
     done: (state) => state.layersOpen,
   },

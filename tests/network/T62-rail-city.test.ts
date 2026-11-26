@@ -34,10 +34,17 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-190: no bay under 4.5 m of a ramp: Munich pk:2050 and pk:2056 lose 2 + 4 bays, so their capacities and every
           // later parking space and connector index move; with the bays restored every pin equals 9680f36's.
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
-          'e9094fb72b47af9bab3484fa9eb9798774291cf3f355a5b17f323be285fa7a9d'
+          // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
+          // TASK-290: Munich's lane connector lists move c:1911 from r:1071 to r:1070.
+          'c639821c5e85efc3612696e5a9359556f6d5299c629bb409f99680a399f931a2'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
-          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          '7003ade69db6a77de44a41aa7178cf4d038d0af595a9da03d6f067c64e173a0e',
+          // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
+          // TASK-290: Sindelfingen's lane connector lists move c:1449 from r:97 to r:954.
+          // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
+          // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+          '7216a2c2e099624542857c348752ea4eaf6d573292585b6555bb2c2bba118d16',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

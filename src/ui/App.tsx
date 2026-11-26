@@ -8,6 +8,9 @@ import {
 import { NodeInspector } from './inspector/node';
 import { PlaceInspector } from './inspector/place';
 import { RailInspector, TrainInspector } from './inspector/rail';
+import { AircraftInspector } from './inspector/aircraft';
+import { FlightBoardInspector, FlightBoardProvider } from './inspector/flight-board';
+import { HoldInspector, StandInspector, TaxiwayInspector } from './inspector/airside';
 import { ParkingInspector, ParkedSpaceInspector } from './inspector/parking';
 import { StreetInspector } from './inspector/street';
 import { BatchInspector } from './inspector/batch';
@@ -25,7 +28,7 @@ import { StatusBar } from './run-bar';
 import { Sidebar } from './sidebar';
 import { useAppStore } from './store';
 import { TopBar } from './top-bar';
-import { useLighting } from './lighting-store';
+import { useVisual } from './lighting-store';
 import { NodeTopologyActions } from './tools/topology-actions';
 
 function Inspector() {
@@ -50,12 +53,22 @@ function Inspector() {
         roads={selectedRoads.map((id) => city.roads[id]!)}
       />
     );
-  if (!selection) return null;
+  if (!selection) return compiled.airside ? <FlightBoardInspector /> : null;
   if (personId)
     return <PersonInspector id={personId} detail={person} city={city} compiled={compiled} />;
   switch (selection.kind) {
     case 'train':
       return <TrainInspector id={selection.id} route={selection.route} />;
+    case 'aircraft':
+      return <AircraftInspector id={selection.id} />;
+    case 'stand':
+      return <StandInspector index={selection.stand} />;
+    case 'taxiway':
+      return <TaxiwayInspector index={selection.edge} />;
+    case 'hold':
+      return <HoldInspector index={selection.hold} />;
+    case 'flight-board':
+      return <FlightBoardInspector />;
     case 'track':
       return <RailInspector kind="track" index={selection.track} />;
     case 'platform':
@@ -156,9 +169,16 @@ function usePhone() {
  *  selector re-renders only when the answer changes, not on every clock tick. */
 function useDocumentAppearance() {
   const { settings, systemDark } = useAppearance();
-  const lighting = useLighting((state) => state.lighting);
+  const lighting = useVisual((state) => state.visual);
   const dark = useAppStore(
-    (state) => resolveAppearance(settings, systemDark, lighting, state.run?.timeS).dark,
+    (state) =>
+      resolveAppearance(
+        settings,
+        systemDark,
+        lighting,
+        state.run?.timeS,
+        state.session?.project.city.geo?.origin,
+      ).dark,
   );
   useLayoutEffect(() => {
     document.documentElement.dataset.appearance = dark ? 'dark' : 'light';
@@ -166,6 +186,14 @@ function useDocumentAppearance() {
 }
 
 export function App() {
+  return (
+    <FlightBoardProvider>
+      <AppContent />
+    </FlightBoardProvider>
+  );
+}
+
+function AppContent() {
   useDocumentAppearance();
   useEffect(() => {
     if (window.cityflows) {
@@ -186,6 +214,7 @@ export function App() {
   const error = useAppStore((state) => state.error);
   const rejectedEdit = useAppStore((state) => state.rejectedEdit);
   const selection = useAppStore((state) => state.selection);
+  const airport = useAppStore((state) => state.session?.compiled.airside !== undefined);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const inspectorOpen = useAppStore((state) => state.inspectorOpen);
   const phone = usePhone();
@@ -194,36 +223,37 @@ export function App() {
 
   useEffect(installShortcuts, []);
 
-  const inspector = selection ? (
-    <aside className="inspector" id="inspector" aria-label="Inspector">
-      {!phone && (
-        <CloseButton
-          label="Close inspector"
-          className="close-sheet"
-          onClick={() => useAppStore.getState().select(null)}
-        />
-      )}
-      <Inspector />
-      <NodeTopologyActions />
-      {rejectedEdit.length > 0 && (
-        <div className="edit-diagnostics" role="alert">
-          <strong>Edit rejected</strong>
-          <ul>
-            {rejectedEdit
-              .filter(({ severity }) => severity === 'error')
-              .map(({ message }, index) => (
-                <li key={index}>{message}</li>
-              ))}
-          </ul>
-        </div>
-      )}
-    </aside>
-  ) : (
-    <div className="no-selection">
-      <p>No selection</p>
-      <ShowHints />
-    </div>
-  );
+  const inspector =
+    selection || (airport && !phone) ? (
+      <aside className="inspector" id="inspector" aria-label="Inspector">
+        {!phone && selection && (
+          <CloseButton
+            label="Close inspector"
+            className="close-sheet"
+            onClick={() => useAppStore.getState().select(null)}
+          />
+        )}
+        <Inspector />
+        <NodeTopologyActions />
+        {rejectedEdit.length > 0 && (
+          <div className="edit-diagnostics" role="alert">
+            <strong>Edit rejected</strong>
+            <ul>
+              {rejectedEdit
+                .filter(({ severity }) => severity === 'error')
+                .map(({ message }, index) => (
+                  <li key={index}>{message}</li>
+                ))}
+            </ul>
+          </div>
+        )}
+      </aside>
+    ) : (
+      <div className="no-selection">
+        <p>No selection</p>
+        <ShowHints />
+      </div>
+    );
 
   return (
     <div

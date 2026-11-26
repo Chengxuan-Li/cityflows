@@ -11,6 +11,7 @@ export interface ImportOptions {
    * Replaces the bbox: everything is clipped to the ring, the local frame and `geo.bbox` come
    * from its bounding box, and `geo.boundary` keeps the ring. */
   polygon?: [number, number][];
+  /** Absent: inferred with the marking theme, from the country tags or the location (TASK-268). */
   drivingSide?: DrivingSide;
   context?: boolean;
   terrain?: boolean;
