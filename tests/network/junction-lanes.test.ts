@@ -8,9 +8,10 @@ import { dualSingle, osm } from '../importers/junction-group-osm';
 
 // TASK-348: lane geometry under junction groups and at signalised crossings, one test per rule.
 
-function compiled(xml: string): { city: City; net: CompiledCity } {
+function compiled(xml: string, edit?: (city: City) => void): { city: City; net: CompiledCity } {
   const imported = importOsm(xml, { importerVersion: 'test' });
   if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics.slice(0, 3)));
+  edit?.(imported.city);
   const result = compile(imported.city);
   if (!result.ok) throw new Error(JSON.stringify(result.diagnostics.slice(0, 3)));
   return { city: imported.city, net: result.compiled };
@@ -89,37 +90,17 @@ describe('TASK-348 junction lanes', () => {
     }
   });
 
-  // Rule 3 is off (`ONE_WAY_CONTINUATIONS`): it moved Munich's full demand past the merge rule.
-  it.skip('a one-way road continuing a two-way street is a continuation with a lane taper', () => {
-    const { net } = compiled(
-      osm([
-        {
-          id: 1,
-          tags: { highway: 'residential', oneway: 'yes', name: 'Main' },
-          points: [
-            [-200, 0],
-            [0, 0],
-          ],
-        },
-        {
-          id: 2,
-          tags: { highway: 'residential', name: 'Main' },
-          points: [
-            [0, 0],
-            [200, 0],
-          ],
-        },
-      ]),
-    );
-    const node = net.nodes.find(
-      (n) => net.roads.filter((r) => r.from === n.idx || r.to === n.idx).length === 3,
-    )!;
+  it('a one-way road continuing a two-way street is a continuation with a lane taper', () => {
+    const { net, node } = oneWaySeam(200, 30);
     expect(node.setbacks.every((s) => s === 0)).toBe(true);
     expect(node.outline).toEqual([]);
     // The one-way lane runs on into the eastbound lane, and its surface widens over its taper to
     // take the westbound lane on.
     const oneWay = net.roads.find((r) => r.to === node.idx && r.streetGroupId === null)!;
     const on = net.roads.find((r) => r.from === node.idx)!;
+    const [movement] = node.movements.map((i) => net.movements[i]!);
+    expect(node.movements).toHaveLength(1);
+    expect(movement).toMatchObject({ fromLane: oneWay.lanes[0], toLane: on.lanes[0] });
     const a = net.lanes[oneWay.lanes[0]!]!.polyline.at(-1)!;
     const b = net.lanes[on.lanes[0]!]!.polyline[0]!;
     expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(0.05);
@@ -131,4 +112,74 @@ describe('TASK-348 junction lanes', () => {
       );
     expect(width(half - 1)).toBeGreaterThan(width(0) + 2.5);
   });
+
+  it('leaves room for a full speed-scaled taper on the one-way road', () => {
+    // 36 m can fit the 15 m taper at 30 km/h in its near half, but not the 24 m at 60.
+    expect(oneWaySeam(36, 30).node.outline).toEqual([]);
+    const { net, node } = oneWaySeam(36, 60);
+    expect(node.outline.length).toBeGreaterThan(0);
+    expect(net.movements[node.movements[0]!]!.lengthM).toBeGreaterThan(0);
+  });
+
+  it('keeps the junction at the entry to a group', () => {
+    const { net, node } = oneWaySeam(200, 30, { grouped: true });
+    expect(node.group).toBeDefined();
+    expect(node.outline.length).toBeGreaterThan(0);
+    expect(net.movements[node.movements[0]!]!.lengthM).toBeGreaterThan(0);
+  });
+
+  it('keeps the existing cuts where a lane step already joins the lanes', () => {
+    const { net, node } = oneWaySeam(200, 30, { stepped: true });
+    const oneWay = net.roads.find((r) => r.to === node.idx && r.streetGroupId === null)!;
+    expect(oneWay.endShift.length).toBeGreaterThan(0);
+    expect(node.setbacks.every((s) => s > 0)).toBe(true);
+    expect(net.movements[node.movements[0]!]!.lengthM).toBeGreaterThan(0);
+  });
 });
+
+function oneWaySeam(lengthM: number, kmh: number, { grouped = false, stepped = false } = {}) {
+  const { net } = compiled(
+    osm([
+      {
+        id: 1,
+        tags: {
+          highway: 'residential',
+          oneway: 'yes',
+          name: stepped ? 'Main' : 'West',
+          maxspeed: String(kmh),
+        },
+        points: [
+          [-lengthM, 0],
+          [0, 0],
+        ],
+      },
+      {
+        id: 2,
+        tags: { highway: 'residential', name: 'Main', maxspeed: String(kmh) },
+        points: [
+          [0, 0],
+          [grouped ? 9 : 200, 0],
+        ],
+      },
+    ]),
+    grouped
+      ? (city) => {
+          const roads = Object.values(city.roads).filter((road) => road.streetGroupId !== null);
+          const id = `jg:${city.nextId++}` as const;
+          city.junctionGroups = {
+            [id]: {
+              id,
+              nodes: [roads[0]!.from, roads[0]!.to],
+              innerRoads: roads.map((road) => road.id),
+              signal: null,
+              provenance: { source: 'authored' },
+            },
+          };
+        }
+      : undefined,
+  );
+  const node = net.nodes.find(
+    (n) => net.roads.filter((r) => r.from === n.idx || r.to === n.idx).length === 3,
+  )!;
+  return { net, node };
+}

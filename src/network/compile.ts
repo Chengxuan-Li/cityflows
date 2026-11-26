@@ -347,6 +347,7 @@ export function compile(city: City, deferWalk?: (finish: () => void) => void): C
     city.drivingSide,
     sourceNodes,
     roads.map(floor),
+    members,
   );
   for (const road of roads) {
     const trim = trims[road.idx]!;
