@@ -21,6 +21,9 @@ import { MEDIAN_M } from '../src/importers/osm/corridors';
 import { ATTACH_GAP_M, laneEdges, roadWidth, shiftAt } from '../src/network/lanes';
 
 const hasShift = (road: CRoad) => road.startShift.length > 0 || road.endShift.length > 0;
+import { areaD } from 'clipper2-ts';
+import { crossingArms } from '../src/network/crossings';
+import { groupSurface, nodeSurface, roadStrip } from '../src/render/layers/nodes';
 import { drawRoad } from '../src/render/layers/roads';
 import { style } from '../src/render/style';
 import type { City, Road, RoadClass } from '../src/schema';
@@ -988,12 +991,13 @@ export function junctionShapeAudit(
   city: City,
   net: CompiledCity,
   node: CNode,
+  incident = roadEnds(net, node),
 ): JunctionShape | null {
   if (!node.outline.length) return null;
   const outline = closed(node.outline);
   // TASK-083: the curbs are part of the outline.
   const curbs: Vec2[][] = [];
-  const ends = roadEnds(net, node).map((end) => {
+  const ends = incident.map((end) => {
     const d = outward(city, end.road, end.atEnd);
     return { ...end, angle: Math.atan2(d.y, d.x), d };
   });
@@ -1595,14 +1599,19 @@ function bends(points: readonly Vec2[]) {
  * different road ends is a curb: from where it leaves the first end's edge to where it meets the
  * second's (the outline runs out along a road edge to a curb's tangent point and back), with
  * `CORNER_EDGE_M` of each road edge beyond, as drawn. */
-export function cornerAudit(city: City, net: CompiledCity, node: CNode): CornerSharpness[] {
+export function cornerAudit(
+  city: City,
+  net: CompiledCity,
+  node: CNode,
+  incident = roadEnds(net, node),
+): CornerSharpness[] {
   if (!node.outline.length) return [];
   // A dead end (every road end within 30 degrees of one direction, as measure 6) has a cap.
-  const outwards = roadEnds(net, node).map((end) => outward(city, end.road, end.atEnd));
+  const outwards = incident.map((end) => outward(city, end.road, end.atEnd));
   if (outwards.every((d) => d.x * outwards[0]!.x + d.y * outwards[0]!.y > ALONG)) return [];
   const ring = closed(node.outline).slice(0, -1);
   const n = ring.length;
-  const corners = roadEnds(net, node).flatMap((end) => {
+  const corners = incident.flatMap((end) => {
     const [l, r] = surfaceEdges(end.road);
     const edges = end.atEnd ? [[...l].reverse(), [...r].reverse()] : [l, r];
     // Each corner's place on the outline: the corner, or where its edge comes out from under the
@@ -1622,7 +1631,7 @@ export function cornerAudit(city: City, net: CompiledCity, node: CNode): CornerS
   const groups = new Map<number, typeof corners>();
   for (const c of corners) if (c.k >= 0) groups.set(c.k, [...(groups.get(c.k) ?? []), c]);
   const order = [...groups.keys()].sort((a, b) => a - b).map((k) => groups.get(k)!);
-  const surfaces = roadEnds(net, node).map((end) => preparePolygon(closed(end.road.surface), 0.01));
+  const surfaces = incident.map((end) => preparePolygon(closed(end.road.surface), 0.01));
   const inOutline = preparePolygon(closed(node.outline), 0);
   const out: CornerSharpness[] = [];
   const direction = (edge: Vec2[], s: number) => {
@@ -1732,6 +1741,66 @@ export function cornerAudit(city: City, net: CompiledCity, node: CNode): CornerS
 }
 
 // ---------------------------------------------------------------------------------------------
+// 11. Drawn junctions (TASK-347)
+
+/** The junctions as drawn, for measures 6 and 10: a node drawn as road (`roadStrip`) is measured
+ * by its strip; a junction group by its one surface (its largest outer ring; the medians inside
+ * are not measured) as one junction of its entries and exits, named by its members joined with
+ * `+`; any other node by its outline. */
+export function drawnJunctions(net: CompiledCity) {
+  const out: { node: CNode; ends: ReturnType<typeof roadEnds> }[] = [];
+  for (const node of net.nodes) {
+    if (node.group === undefined) {
+      out.push({ node: { ...node, outline: nodeSurface(net, node) }, ends: roadEnds(net, node) });
+      continue;
+    }
+    const group = net.groups![node.group]!;
+    if (group.nodes[0] !== node.idx) continue;
+    const outer = groupSurface(net, node.group)
+      .filter((ring) => areaD(ring) > 0)
+      .sort((a, b) => areaD(b) - areaD(a))[0];
+    const inner = new Set(group.innerRoads);
+    out.push({
+      node: {
+        ...node,
+        id: group.nodes.map((n) => net.nodes[n]!.id).join('+') as never,
+        outline: outer ?? [],
+      },
+      ends: group.nodes.flatMap((n) =>
+        roadEnds(net, net.nodes[n]!).filter((end) => !inner.has(end.road.idx)),
+      ),
+    });
+  }
+  return out;
+}
+
+export interface DegreeTwoNode {
+  node: string;
+  /** Its arms (`crossingArms`): two for a node of kinds a to d, more where two ways join the same
+   * two neighbours (a loop, a service road beside the street). */
+  arms: number;
+  /** Drawn as a junction: an outline drawn as one, not as road. */
+  junction: boolean;
+}
+
+/** The lead's census (2026-11-25): nodes whose roads lead to exactly two other nodes, with an
+ * outline, and whether they are still drawn as junctions. */
+export function degreeTwoCensus(net: CompiledCity): DegreeTwoNode[] {
+  const others = net.nodes.map(() => new Set<number>());
+  for (const road of net.roads) {
+    others[road.from]!.add(road.to);
+    others[road.to]!.add(road.from);
+  }
+  return net.nodes
+    .filter((node) => node.outline.length && others[node.idx]!.size === 2)
+    .map((node) => ({
+      node: node.id,
+      arms: crossingArms(net, node).length,
+      junction: !roadStrip(net, node),
+    }));
+}
+
+// ---------------------------------------------------------------------------------------------
 // The audit
 
 export interface GeometryAudit {
@@ -1747,6 +1816,7 @@ export interface GeometryAudit {
   endOverlaps: EndOverlap[];
   corners: CornerSharpness[];
   voids: CorridorVoid[];
+  degreeTwo: DegreeTwoNode[];
   /** Marking lengths (TASK-074/079's measure) of the whole city; null for a case. */
   lengths: ReturnType<typeof markingLengths> | null;
   /** Every width sample's error, for percentiles over a set of roads (not written to JSON). */
@@ -1761,6 +1831,7 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     return audit;
   });
   const zones = new Map(widths.map((w) => [w.road, w.zones]));
+  const drawn = drawnJunctions(net);
   return {
     widths,
     gaps: directionPairs(city, net).map(({ a, b, kind }) => {
@@ -1771,12 +1842,13 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     folds: net.lanes.map((lane) => laneFoldAudit(city, net, lane)),
     through: net.nodes.flatMap((node) => throughAudit(city, net, node) ?? []),
     overlaps: unrelatedOverlaps(city, net),
-    junctions: net.nodes.flatMap((node) => junctionShapeAudit(city, net, node) ?? []),
+    junctions: drawn.flatMap(({ node, ends }) => junctionShapeAudit(city, net, node, ends) ?? []),
     joins: net.nodes.flatMap((node) => joinAudit(net, node) ?? []),
     markings: net.roads.flatMap((road) => markingAudit(net, road) ?? []),
     laneOverlaps: laneOverlaps(city, net),
     endOverlaps: endOverlaps(city, net),
-    corners: net.nodes.flatMap((node) => cornerAudit(city, net, node)),
+    corners: drawn.flatMap(({ node, ends }) => cornerAudit(city, net, node, ends)),
+    degreeTwo: degreeTwoCensus(net),
     voids: corridorVoids(city, net),
     lengths: markingLengths(net),
     widthErrors,
@@ -1863,6 +1935,8 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
     cornersUnder2m: curbs.filter((c) => c.kind === 'corner' && c.radiusM < 1.9).length,
     nosesSquare: noses.filter((c) => c.sharp).length,
     noses: noses.length,
+    degreeTwoJunctions: audit.degreeTwo.filter((d) => d.junction).length,
+    degreeTwoTwoArmJunctions: audit.degreeTwo.filter((d) => d.junction && d.arms === 2).length,
     lineOutsideM: audit.lengths?.lineOutsideM ?? null,
     markingOutsideM: audit.lengths?.markingOutsideM ?? null,
   };
@@ -2142,12 +2216,13 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
     folds: audit.folds.filter((f) => roads.has(f.lane.split('#')[0]!)),
     through: audit.through.filter((t) => nodes.has(t.node)),
     overlaps: audit.overlaps.filter((o) => pair(o.roads)),
-    junctions: audit.junctions.filter((j) => nodes.has(j.node)),
+    junctions: audit.junctions.filter((j) => j.node.split('+').some((id) => nodes.has(id))),
     joins: audit.joins.filter((j) => nodes.has(j.node)),
     markings: audit.markings.filter((m) => roads.has(m.road)),
     laneOverlaps: audit.laneOverlaps.filter((o) => pair(o.roads)),
     endOverlaps: audit.endOverlaps.filter((o) => nodes.has(o.node)),
-    corners: audit.corners.filter((c) => nodes.has(c.node)),
+    corners: audit.corners.filter((c) => c.node.split('+').some((id) => nodes.has(id))),
+    degreeTwo: audit.degreeTwo.filter((d) => nodes.has(d.node)),
     voids: audit.voids.filter((v) => pair(v.roads)),
     lengths: null,
     widthErrors: new Map([...audit.widthErrors].filter(([id]) => roads.has(id))),
@@ -2170,7 +2245,9 @@ function entities(audit: GeometryAudit) {
   const corners = audit.corners.filter((c) => c.sharp || c.radiusM < 1.9);
   const endOverlaps = audit.endOverlaps.filter((o) => o.areaM2 > 0);
   const voids = audit.voids;
+  const degreeTwo = audit.degreeTwo.filter((d) => d.junction);
   return {
+    degreeTwo,
     widths,
     gaps,
     folds,
@@ -2248,6 +2325,12 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
     );
     lines.push(
       `  sharp corners turn deg/radius m: ${top.corners.map((c) => `${c.node} ${c.kind} ${c.roads} ${c.turnDeg}/${c.radiusM}`).join(', ')}`,
+    );
+    lines.push(
+      `  degree-two nodes drawn as junctions (arms): ${audit.degreeTwo
+        .filter((d) => d.junction)
+        .map((d) => `${d.node} (${d.arms})`)
+        .join(', ')}`,
     );
     for (const c of geometryCases.filter((c) => c.city === name)) {
       const restricted = caseAudit(net, audit, c);
