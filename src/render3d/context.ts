@@ -15,7 +15,7 @@ import {
   Vector2,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { mergeVertices } from './merge-vertices';
+import { computeVertexNormals, mergeVertices } from './buffers';
 import { areaD, booleanOpD, ClipType, FillRule } from 'clipper2-ts';
 import Flatbush from 'flatbush';
 import { parallelOffset, pointInPolygon } from '../geo/polyline';
@@ -86,7 +86,7 @@ function facade(feature: Building, low: number, high: number) {
     'position',
     new Float32BufferAttribute(positions, 3),
   );
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   geometry.setAttribute(
     'uv',
     new Float32BufferAttribute(new Float32Array((positions.length / 3) * 2), 2),

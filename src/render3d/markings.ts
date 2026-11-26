@@ -34,6 +34,7 @@ import type { CityGeometry } from '../render/types';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { heightAt, levelRoad, once, roadStation, roadSurfaceAt, type cityHeights } from './heights';
 import { drape } from './terrain';
+import { computeVertexNormals } from './buffers';
 
 export function goreHeight(
   city: CompiledCity,
@@ -245,7 +246,7 @@ export function buildMarkings(
     draped.dispose();
   }
   geometry.userData.markingCounts = counts;
-  geometry.computeVertexNormals();
+  computeVertexNormals(geometry);
   return geometry;
 }
 

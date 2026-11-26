@@ -8,6 +8,7 @@ import type { CompiledCity, CWalkLink } from '../network';
 import type { CityGeometry } from '../render/types';
 import { cumulativeLengths, distance, nearestOnPolyline, pointInPolygon } from '../geo/polyline';
 import type { Vec2 } from '../geo/vec2';
+import { computeVertexNormals } from './buffers';
 
 type Heights = ReturnType<typeof cityHeights>;
 const paving = 0.14;
@@ -358,23 +359,30 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
     const curvedHeight = roadHeight
       ? roadHeight.fromM !== roadHeight.deckM || roadHeight.toM !== roadHeight.deckM
       : fromGrade !== deck || toGrade !== deck;
-    // The corners in order; on a ramp split at the longest edge (the first of equals) down to 2 m.
-    const emit = (p: Vec2, q: Vec2, r: Vec2) => {
+    // The corners with their heights; on a ramp split at the longest edge (the first of equals)
+    // down to 2 m, each new corner's height looked up once and passed down.
+    const emit = (p: Vec2, q: Vec2, r: Vec2, zp: number, zq: number, zr: number) => {
       if (curvedHeight) {
         const pq = distance(p, q),
           qr = distance(q, r),
           rp = distance(r, p);
         if (pq >= qr && pq >= rp ? pq > 2 : qr >= rp ? qr > 2 : rp > 2) {
-          const [a, b, c] = pq >= qr && pq >= rp ? [p, q, r] : qr >= rp ? [q, r, p] : [r, p, q];
+          const [a, b, c, za, zb, zc] =
+            pq >= qr && pq >= rp
+              ? [p, q, r, zp, zq, zr]
+              : qr >= rp
+                ? [q, r, p, zq, zr, zp]
+                : [r, p, q, zr, zp, zq];
           const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          emit(a, mid, c);
-          emit(mid, b, c);
+          const zm = z(mid);
+          emit(a, mid, c, za, zm, zc);
+          emit(mid, b, c, zm, zb, zc);
           return;
         }
       }
-      target.push(r.x, z(r), r.y, q.x, z(q), q.y, p.x, z(p), p.y);
+      target.push(r.x, zr, r.y, q.x, zq, q.y, p.x, zp, p.y);
     };
-    for (const tri of shape.polygons) emit(tri[0]!, tri[1]!, tri[2]!);
+    for (const [p, q, r] of shape.polygons) emit(p!, q!, r!, z(p!), z(q!), z(r!));
     for (const [a, b] of shape.hatches) {
       const dx = b!.x - a!.x,
         dy = b!.y - a!.y,
@@ -394,7 +402,7 @@ export function buildWalk(city: CompiledCity, source: CityGeometry, heights: Hei
   }
   const buffer = (data: number[]) => {
     const g = new BufferGeometry().setAttribute('position', new Float32BufferAttribute(data, 3));
-    g.computeVertexNormals();
+    computeVertexNormals(g);
     return g;
   };
   const surface = (raised: number[], land: number[], offset: number) => {

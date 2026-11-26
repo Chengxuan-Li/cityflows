@@ -1,7 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute } from 'three';
 import { mergeVertices as threeMergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { describe, expect, test } from 'vitest';
-import { mergeVertices } from './merge-vertices';
+import { computeVertexNormals, mergeVertices } from './buffers';
 
 // TASK-357: the 3D build's mergeVertices keeps three's result exactly.
 describe('mergeVertices', () => {
@@ -34,5 +34,35 @@ describe('mergeVertices', () => {
       expect(Array.from(actual.getAttribute(name).array)).toEqual(
         Array.from(expected.getAttribute(name).array),
       );
+  });
+});
+
+describe('computeVertexNormals', () => {
+  test('matches three for triangle soup and for indexed geometry with repeated corners', () => {
+    let seed = 11;
+    const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+    const positions = Array.from({ length: 3000 * 3 }, () => Math.round(random() * 50) * 0.37);
+    const soup = new BufferGeometry().setAttribute(
+      'position',
+      new Float32BufferAttribute(positions, 3),
+    );
+    const indexed = mergeVertices(soup.clone());
+    // A degenerate triangle with a repeated corner.
+    indexed.setIndex([...Array.from(indexed.getIndex()!.array), 0, 0, 1]);
+    for (const geometry of [soup, indexed]) {
+      const expected = geometry.clone(),
+        actual = geometry.clone();
+      expected.computeVertexNormals();
+      computeVertexNormals(actual);
+      expect(Array.from(actual.getAttribute('normal').array)).toEqual(
+        Array.from(expected.getAttribute('normal').array),
+      );
+      // Again over existing normals, which both reset.
+      expected.computeVertexNormals();
+      computeVertexNormals(actual);
+      expect(Array.from(actual.getAttribute('normal').array)).toEqual(
+        Array.from(expected.getAttribute('normal').array),
+      );
+    }
   });
 });
