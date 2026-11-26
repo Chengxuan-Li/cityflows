@@ -124,11 +124,13 @@ export const realPlaceBuilds: Record<string, () => Promise<string>> = {
 
 /** TASK-284: bundles available by `?city=<id>` while their showcase gates are pending.
  * TASK-354: Heathrow joined the panel on the owner's word (2026-11-25), improved in parallel.
- * Boston is byte-pinned to TASK-303's apron-rule archive until that importer rule lands.
- * TASK-351: Zurich passes the showcase gate since a public part a map entry feeds and an exit
- * drains counts as circulation, and joins the panel. */
+ * Boston is byte-pinned to TASK-303's apron-rule archive until that importer rule lands. */
 export const heldOutOfPanel: Record<string, string> = {
   'boston-logan': 'Airport throughput gate',
+  // TASK-302: its showcase morning (0.15, mode choice on) ended with 2 trips gridlocked and a
+  // 10,260 s visit on Flughafenstrasse. TASK-351: no gridlock, no stalled head, worst visit 249 s
+  // and 0.3% parking failures, but 11 trips from Kloten homes find no route to a map exit.
+  'zurich-airport': 'showcase gate: 11 trips without a route',
 };
 
 /** The committed bundled project, opened as the app opens it. */
