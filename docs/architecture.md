@@ -1139,15 +1139,17 @@ routing, demand, the timetable or simulation state.
   names and classes, else a continuation by TASK-071's rule; its crossing stays where the
   junction's floor put it (half the road plus 1 m from the node, over the mapped walkway), the
   stop line before it, so the approach's storage is unchanged.
-  (3) Off in the merge-rule variant (2026-11-26; `ONE_WAY_CONTINUATIONS`: Munich's full demand +5.3%, fixed
-  time): a continuation node would also cover a one-way road continuing one direction of a two-way street
-  straight on (within 10 degrees) at a node of their own, where the street's other direction has
-  no movement: that direction starts or ends at the node outside the layout; the one-way road's
-  lanes line up with the direction they continue (TASK-093's lane step where it applies, else the
-  one-way road jogs onto it, since a direction of a two-way street never moves), and its surface
-  takes the other direction's width on over its taper (`ContinuationEnd.widenOverM`), so the width
-  change is drawn as a lane taper, not a junction. Corners over 30 degrees stay drawing-only
-  (TASK-347) and the 30 m smoothing exclusion around plain degree-two nodes is kept.
+  (3) TASK-364: an uncontrolled node outside a junction group where a one-way road continues
+  exactly one direction of a two-way street straight on (within 10 degrees), with all its lanes
+  connected one-to-one in order, can be a continuation. The other direction starts or ends at the
+  node without a movement. If TASK-093 already lines up the lanes, keep its cuts and curbside
+  stations. TASK-347 draws that seam as a strip. Otherwise the one-way road jogs onto the direction
+  it continues, since a direction of a two-way street never moves. Its surface takes on the other
+  direction's width over the full TASK-080 speed-scaled taper (`ContinuationEnd.widenOverM`).
+  That taper must fit within half the
+  one-way road after the far cut. Otherwise it stays a junction, as do group members whose
+  crossing length and inner-link storage are part of group admission. Corners over 30 degrees
+  stay drawing-only (TASK-347) and the 30 m smoothing exclusion around plain degree-two nodes is kept.
 
 ### 5.2 Movement generation
 

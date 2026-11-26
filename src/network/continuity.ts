@@ -21,6 +21,7 @@ import {
   smootherstep,
   MIN_LANE_M,
   taperLength,
+  taperTargetM,
   trimScale,
   type ContinuationEnd,
   type RoadContinuity,
@@ -157,12 +158,6 @@ export function defaultSlice(
 
 /** TASK-348: the most a one-way road may turn into the two-way street it continues. */
 const ONE_WAY_TURN = Math.PI / 18;
-/** TASK-348: the shortest one-way road that takes the street's lanes on (TASK-080's 15 m taper). */
-const MIN_TAPER_ROAD_M = 15;
-/** TASK-348 rule 3, off: one-way to two-way continuations moved Munich's full demand (fixed time,
- * mean of seeds 1 to 5: +5.3% delay, 111 fewer trips) and its 0.15 actuated morning with mode
- * choice (+4.6%, seeds 1 to 5) past the owner's merge rule; off, Munich compiles as on main. */
-const ONE_WAY_CONTINUATIONS = false;
 
 /** Movement topology determines eligibility; road geometry orders physical branch slices. */
 export function continuationLayout(
@@ -175,6 +170,7 @@ export function continuationLayout(
   side: 'left' | 'right',
   sourceNodes: Node[],
   floors: readonly number[],
+  members: ReadonlySet<string>,
 ) {
   centerlineLengths = new Map();
   laneFloors = floors;
@@ -211,15 +207,17 @@ export function continuationLayout(
       components.push([...group].map((i) => roads[i]!));
       for (const i of group) remaining.delete(i);
     }
-    // TASK-348 (owner decision 1, architecture 5.1): a one-way road continuing one direction of a
-    // two-way street straight on (within `ONE_WAY_TURN`), with its lanes, at a node of their own (Freiburg n:224,
-    // n:695; Munich n:347, n:40). The street's other direction has no movement there: it is left
-    // out of the layout and starts or ends at the node. The one-way road jogs onto the direction it
-    // continues, which keeps its line (no ray, no taper), and takes the other direction's width on
-    // over its taper (`widenM`), so the width change reads as a lane taper, not a junction.
+    // TASK-348/TASK-364 (architecture 5.1): the unconnected direction starts or ends at the node.
+    // The one-way road jogs onto the direction it continues and takes on the other direction's
+    // width over its taper. A group member keeps its movement length and inner-link storage.
     let widening: { road: CRoad; lone: CRoad; street: CRoad } | undefined;
     const lone = components.filter((g) => g.length === 1);
-    if (ONE_WAY_CONTINUATIONS && lone.length === 1 && incident.length === 3) {
+    if (
+      node.control === 'uncontrolled' &&
+      !members.has(node.id) &&
+      lone.length === 1 &&
+      incident.length === 3
+    ) {
       const single = lone[0]![0]!;
       const street = sources[single.idx]!.streetGroupId;
       const opposite = incident.find(
@@ -234,9 +232,17 @@ export function continuationLayout(
         oneWay &&
         sources[oneWay.idx]!.streetGroupId === null &&
         !sources[oneWay.idx]!.corridorId &&
+        // A TASK-093 lane step already joins the lanes. Keep its cuts and curbside stations.
+        !(oneWay.to === node.idx ? oneWay.endShift : oneWay.startShift).length &&
         oneWay.lanes.length === opposite.lanes.length &&
-        // Room for TASK-080's shortest taper: Freiburg's 7.4 m r:1751 bent its end at n:1747.
-        polylineLength(sources[oneWay.idx]!.centerline) >= MIN_TAPER_ROAD_M &&
+        legal.length === oneWay.lanes.length &&
+        legal.every(
+          (m) => m.turn === 'through' && lanes[m.fromLane]!.lane === lanes[m.toLane]!.lane,
+        ) &&
+        // Do not shorten the taper to squeeze it in, or let it reach the one-way road's far end.
+        oneWay.lengthM -
+          cutAt(nodes[oneWay.from === node.idx ? oneWay.to : oneWay.from]!, roads, oneWay) >=
+          2 * taperTargetM(sources[oneWay.idx]!) &&
         (oneWay.to === node.idx) !== (opposite.to === node.idx) &&
         Math.cos(heading(oneWay) - heading(opposite)) >= Math.cos(ONE_WAY_TURN)
       ) {
@@ -379,18 +385,11 @@ export function continuationLayout(
         sharedWidth.push(reused.reduce((sum, [i]) => sum + trunkSource.lanes[i]!.widthM, 0));
         const [firstTrunk, firstBranch] = matches[0]!;
         const offsetM = laneOffset(trunkSource, firstTrunk) - laneOffset(source, firstBranch);
-        // TASK-348: where TASK-093's lane step lines the one-way road up already (its converging
-        // shift at the node), nothing moves.
-        const stepped =
-          widening &&
-          (widening.road.to === node.idx ? widening.road.endShift : widening.road.startShift)
-            .length > 0;
-        const applied = stepped ? 0 : offsetM;
         // A direction of a two-way street never moves (architecture 5): where a carriageway
         // continues into one at a node of its own (TASK-131 keeps Benzstrasse's splits n:867 and
         // n:902 apart), lining the lanes up would lay it over its other direction; the node stays
         // a junction. TASK-348: a one-way road continuing a two-way street jogs onto it instead.
-        if (source.streetGroupId !== null && Math.abs(applied) > 0.01) {
+        if (source.streetGroupId !== null && Math.abs(offsetM) > 0.01) {
           if (trunk !== widening?.road) {
             valid = false;
             break;
@@ -414,14 +413,14 @@ export function continuationLayout(
             roadPair(from, to),
             new Set(matches.map(([a, b]) => (split ? `${a}:${b}` : `${b}:${a}`))),
           );
-        if (trunkJogs) trunkOffsetM = -applied;
+        if (trunkJogs) trunkOffsetM = -offsetM;
         const outside = (lanes: number[]) =>
           lanes.reduce((sum, i) => sum + trunkSource.lanes[i]!.widthM, 0);
         const trunkUsed = matches.map(([a]) => a);
         layout.set(branch.idx, {
           [split ? 'start' : 'end']: {
             heading,
-            offsetM: trunkJogs ? 0 : applied,
+            offsetM: trunkJogs ? 0 : offsetM,
             tapers: branch.lanes.map((_, i) => i).filter((i) => !usedBranch.has(i)),
             holdM: 0,
             taperM: 0,
@@ -499,9 +498,6 @@ export function continuationLayout(
       });
       const road = widening.road;
       const end = layout.get(road.idx)![road.to === node.idx ? 'end' : 'start']!;
-      // Lined up by its lane step already, the one-way road keeps its line too.
-      if ((road.to === node.idx ? road.endShift : road.startShift).length)
-        Object.assign(end, { holdM: 0, taperM: 0 });
       const width = roadWidth(sources[widening.lone.idx]!);
       end.widenM = side === 'right' ? [width, 0] : [0, width];
       end.widenOverM = taperLength(sources[road.idx]!);
