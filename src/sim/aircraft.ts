@@ -143,12 +143,18 @@ const ENTRY_QUEUE_M = 300;
 const MULTI_LINEUP_M = 200;
 /** TASK-360 rule switches, read when a fleet is created (the gate ladder's variants): the env
  * T360=<letters>, i intersection take-offs by performance, r line-up behind a passing roll, m
- * multiple line-ups; all three by default, T360= (empty) for the line-up choice before them. */
+ * multiple line-ups, a rule 1 also on runways that cross others; i, r and m by default, T360=
+ * (empty) for the line-up choice before them. */
 function t360Rules() {
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
   const rules = env?.T360 ?? 'irm';
-  return { T360I: rules.includes('i'), T360R: rules.includes('r'), T360M: rules.includes('m') };
+  return {
+    T360I: rules.includes('i'),
+    T360R: rules.includes('r'),
+    T360M: rules.includes('m'),
+    T360A: rules.includes('a'),
+  };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
@@ -761,7 +767,7 @@ function alignStart(
 }
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
-  const { T360I, T360R, T360M } = t360Rules();
+  const { T360I, T360R, T360M, T360A } = t360Rules();
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -2818,6 +2824,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const towardEnd1 = end === 0;
     const reach = balloonReach(p.minTurnRadiusM);
     const need = p.takeoffRollM + p.rotationSpeedMps * 3;
+    // On a runway that crosses no other, as rules 2 and 3 (and TASK-330's line-up behind a roll):
+    // on Boston's crossing runways the rule changed a dozen take-offs a day and the day lost
+    // (mean delay +14 % on two seeds, more go-arounds by arrival-side holds); `a` lifts it.
+    const idep = T360I && (T360A || independent(runway.idx));
     // Full-length entries first; then backtracks of up to BACKTRACK_M along the runway; then
     // intersection departures with a quarter of the take-off run to spare (TASK-312), before a
     // longer backtrack would hold the runway for minutes. TASK-360 rule 1: intersection
@@ -2838,11 +2848,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const full = u <= thresholdU + 1e-6;
       const goal = runwayArc(runway, i, towardEnd1);
       const lineUpU = u + Math.max(craft.lengthM / 2, p.minTurnRadiusM) + 5;
-      const spare = full ? 1 : T360I ? INTERSECTION_FACTOR : 1.25;
+      const spare = full ? 1 : idep ? INTERSECTION_FACTOR : 1.25;
       if (goal < 0 || runway.lengthM - lineUpU < need * spare) continue;
       if (arcsFrom(graph, node).length < 2) continue;
       ranked.push({
-        rank: full ? 0 : T360I ? 1 : 2,
+        rank: full ? 0 : idep ? 1 : 2,
         goal,
         lineUpU,
         entryU: u,
@@ -2860,7 +2870,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const q = pointAtDistance(line, cumulative, reach);
       const heading = (runway.ends[end]!.heading + Math.PI) % (2 * Math.PI);
       ranked.push({
-        rank: u - reach <= BACKTRACK_M ? (T360I ? 2 : 1) : 3,
+        rank: u - reach <= BACKTRACK_M ? (idep ? 2 : 1) : 3,
         goal,
         lineUpU: reach,
         entryU: u,
@@ -2873,7 +2883,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     }
     // TASK-360 rule 1: where an intersection take-off fits, the full-length entries join that
     // choice; where none fits, the full-length entry is taken as before.
-    if (T360I && ranked.some((o) => o.rank === 1))
+    if (idep && ranked.some((o) => o.rank === 1))
       for (const o of ranked) if (o.rank === 0) o.rank = 1;
     // A stable sort keeps the station order within a rank.
     const options = ranked.sort((a, b) => a.rank - b.rank);

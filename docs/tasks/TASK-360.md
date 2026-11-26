@@ -155,3 +155,41 @@ lined-up PC24; the PC24 rolls first, the E175 75 s or more later), and the same 
 The 27 backtrack test (kept as it was) and six other tests that test something else on the pre-rule line-up choice (closed holds,
 crossing holds, the pavement gate, an editor re-route) run with `withRules('')`; one test's stop condition now waits
 for all three arrivals to park; the synthetic airport's parallel layout asserts no backtrack instead of the 27 end.
+
+**Rung 1–2: Heathrow 06:00–08:00 (drain to 09:00), `--checks`, main (after TASK-353) → branch.** `T360=` reproduces
+main exactly (seed 1 and 2 JSON identical to `fo-lhr-p1/p2` but for `wallS`); its runs give main's take-off figures.
+All departures in the window use 27R; arrivals 27L.
+
+| seed | completed | landed/departed | go-arounds | overlaps | rwyConflictsReal | gridlock | mean delay s | 27R take-offs/h, median gap | multiple line-ups |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 120 → 143 | 50/71 → 61/90 | 8 → 5 | 0 → 3 | 0 → 0 | none | 1,699 → 1,643 | 22.5, 120 s → 30.5, 75 s | 18 |
+| 2 | 123 → 130 | 60/69 → 56/79 | 1 → 2 | 0 → 0 | 0 → 0 | none | 1,639 → 1,628 | 22.5, 135 s → 29.5, 75 s | 12 |
+| 3 | 121 → 133 | 56/67 → 55/82 | 5 → 0 | 0 → 0 | 0 → 0 | none | 1,566 → 1,442 | MAIN3 → 25.5, 81 s | 13 |
+| 4 | 124 → 134 | 64/61 → 64/74 | 5 → 4 | 0 → 0 | 0 → 0 | none | 1,795 → 1,846 | MAIN4 → 25.5, 79 s | 11 |
+| 5 | 129 → 136 | 60/70 → 52/85 | 2 → 7 | 0 → 0 | 0 → 0 | none | 1,609 → 1,685 | MAIN5 → 29, 75 s | 21 |
+| sum | 617 → 676 | 290/338 → 288/410 | 21 → 18 | 0 → 3 | 0 → 0 | | | | 75 |
+
+Light rung first (seed 1): rule 1 alone (`T360=i`) 143 (58/92, 5 go-arounds, 0 overlaps), take-offs 29.5/h with a
+107 s median gap; all three rules 143 (61/90) with a 75 s median gap (the 75 s departure interval: the runway now runs
+at its separation whenever departures are queued). Rule 1 alone at seed 2: 132 (53/84, 5 go-arounds).
+
+The three overlaps (seed 1, 08:16:26–28) are a helicopter (A139 G-VMKV) climbing off its helipad while an A380 under
+tow (G-TXFW) passes 36 m from it: the helipad-to-tow separation TASK-358 is working on, met on a different trajectory;
+no departure is involved.
+
+Take-offs from an intersection (entry more than 150 m past the threshold; Heathrow 27R's A1/A2, 86 and 103 m from its
+dead end, count as full length), seeds 2–5 (seed 1 ran before the counter split them): INTSHARE. No backtracks.
+
+Multiple line-ups: 75 in the five windows (18/12/13/11/21), typically a heavy lined up at A4 (404 m in) with a
+narrowbody behind it at A1/A2 (the owner's case at the east end of the north runway), or one lined up far down the
+runway at an intermediate entry with another behind it. Landings held by them: 0 (Heathrow's runways are segregated:
+no arrival on 27R in the window; `arrivalHeldByMultiS` and `landingsHeldByMulti` both 0). Line-ups granted ahead of a
+rolling departure's start (rule 2): 176.
+
+Landings: 290 → 288 in sum (seed 1 +11, seeds 2 and 5 −4 and −8). The head of the 27L queue is held almost the whole
+window in both (10,605 → 10,600 s at seed 1, 9,865 → 9,770 s at seed 2), so landings follow the mix of its holds, not
+the departure rule: the causes are final spacing (about 40 %), a queued arrival ordered before it, its stand or way off
+taken (tows, parked aircraft: seed 5's 1,880 s waiting for a parked aircraft not yet started), and gaps left for
+aircraft crossing 27L (seed 2: departures waiting to cross 27L from the south 385 → 575 s, more departures). All 18
+go-arounds are landing commitments refused by a ground aircraft on the way off: arrivals (13), tows (3), and a
+departure taxiing across it (2, seeds 1 and 4); none is a departure on 27R.
