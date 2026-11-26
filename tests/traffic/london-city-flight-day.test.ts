@@ -89,10 +89,13 @@ test.for([1, 2, 3])(
     expect(day.vehicleAircraftOverlaps).toBe(0);
     // TASK-316 / TASK-350: visits served and pushes with a vehicle tug (seeds 1 to 3: 91 to 93%
     // and 78 to 81%; before TASK-350 64 to 73% and 54 to 59%, with vehicles holding one another
-    // off where parked tails cover the apron road).
+    // off where parked tails cover the apron road). TASK-356: tows away on parking announced and
+    // the first departures' tugs at their stands from the start: 90 to 97% with a vehicle tug,
+    // none unannounced.
     expect(day.vehicles.served).toBeGreaterThanOrEqual(0.85 * day.vehicles.visits);
-    const { pushbacks, tugsMissing } = day.vehicles;
-    expect(pushbacks - tugsMissing).toBeGreaterThanOrEqual(0.75 * pushbacks);
+    const { pushbacks, tugsMissing, unannounced } = day.vehicles;
+    expect(pushbacks - tugsMissing).toBeGreaterThanOrEqual(0.88 * pushbacks);
+    expect(unannounced).toBe(0);
   },
 );
 

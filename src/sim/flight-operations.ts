@@ -102,7 +102,8 @@ export interface FlightBoard {
  * stands at the stand it departs from (no tow follows) and is ready to push at `readyS`; it comes
  * on landing (`arrived`), after its last tow, or for one parked before the start. `off-block`: it
  * leaves for its departure. `tow-planned`: the aircraft is towed from its stand at `timeS` (or
- * as soon after as the way is free). TASK-319's ready-for-pushback can stand in for `readyS`. */
+ * as soon after as the way is free), or (`arriving`) as soon as it parks there. TASK-319's
+ * ready-for-pushback can stand in for `readyS`. */
 export type TurnaroundEvent =
   | {
       kind: 'on-block';
@@ -114,7 +115,16 @@ export type TurnaroundEvent =
       arrived: boolean;
     }
   | { kind: 'off-block'; id: number; timeS: number }
-  | { kind: 'tow-planned'; id: number; stand: number; typeId: string; timeS: number };
+  | {
+      kind: 'tow-planned';
+      id: number;
+      stand: number;
+      typeId: string;
+      timeS: number;
+      /** TASK-356: announced as the arrival is released; it is towed away as it parks there,
+       * about `timeS` (its touchdown). */
+      arriving?: boolean;
+    };
 
 export interface FlightOperationsOptions {
   /** Configurations and time-of-day concepts in place of the airport's own table. */
@@ -550,6 +560,49 @@ export function createFlightOperations(
     return false;
   }
 
+  /** Where a turn on its arrival stand (service `out`) is towed away to at `timeS`, and its
+   * service after the tow; null when it stays. */
+  function towAway(
+    turn: Turn,
+    timeS: number,
+  ): { targets: number[]; service: 'away' | 'done'; overnight: boolean } | null {
+    const { flight } = turn;
+    const remote = findStands(turn, ['remote']);
+    if (
+      flight.overnight &&
+      flight.standKind !== 'remote' &&
+      flight.departureS - timeS > returnLeadS * 2
+    )
+      return { targets: [...remote, ...maintenanceStands(turn)], service: 'away', overnight: true };
+    if (flight.maintenance && flight.departureS - timeS > returnLeadS)
+      return { targets: maintenanceStands(turn), service: 'away', overnight: false };
+    if ((!flight.overnight && flight.departureS - timeS > returnLeadS * 2) || flight.irregularTow)
+      return {
+        targets: flight.irregularTow ? [...remote, ...arrivalStands(turn)] : remote,
+        service: 'done',
+        overnight: false,
+      };
+    return null;
+  }
+
+  /** TASK-356: a turn to be towed away as it parks is announced when its arrival is released
+   * (`timeS`), for the touchdown the approach takes, so a tug waits at the nose. Nothing else
+   * changes: the tow is still decided, and started, on parking. */
+  function announceTowAway(turn: Turn, timeS: number) {
+    if (turn.service !== 'out' || turn.stand < 0) return;
+    const { typeId } = turn.flight;
+    const landS = timeS + fleet.arrivalLeadS(typeId);
+    if (!towAway(turn, landS)?.targets.length) return;
+    turnarounds.push({
+      kind: 'tow-planned',
+      id: turn.id!,
+      stand: turn.stand,
+      typeId,
+      timeS: landS,
+      arriving: true,
+    });
+  }
+
   function serviceStand(turn: Turn, timeS: number) {
     const { flight } = turn;
     if (turn.towAtS !== undefined && timeS < turn.towAtS) return;
@@ -558,25 +611,11 @@ export function createFlightOperations(
       if (tow(turn, [...first, ...arrivalStands(turn)])) turn.service = 'back';
       else if (!flight.overnight) turn.service = 'done';
     } else if (turn.service === 'out' && turn.stand >= 0) {
-      const remote = findStands(turn, ['remote']);
       turn.leftStand = turn.stand;
-      if (
-        flight.overnight &&
-        flight.standKind !== 'remote' &&
-        flight.departureS - timeS > returnLeadS * 2
-      ) {
-        if (tow(turn, [...remote, ...maintenanceStands(turn)])) {
-          turn.service = 'away';
-          turn.returnS = flight.departureS - returnLeadS;
-        }
-      } else if (flight.maintenance && flight.departureS - timeS > returnLeadS) {
-        if (tow(turn, maintenanceStands(turn))) turn.service = 'away';
-      } else if (
-        (!flight.overnight && flight.departureS - timeS > returnLeadS * 2) ||
-        flight.irregularTow
-      ) {
-        if (tow(turn, flight.irregularTow ? [...remote, ...arrivalStands(turn)] : remote))
-          turn.service = 'done';
+      const away = towAway(turn, timeS);
+      if (away && tow(turn, away.targets)) {
+        turn.service = away.service;
+        if (away.overnight) turn.returnS = flight.departureS - returnLeadS;
       }
     }
   }
@@ -669,7 +708,10 @@ export function createFlightOperations(
     for (const turn of active) {
       if (turn.phase !== 'scheduled' && turn.phase !== 'holding') continue;
       const carryIn = turn.flight.arrivalS < startS;
-      if (requestArrival(turn, carryIn)) continue;
+      if (requestArrival(turn, carryIn)) {
+        if (!carryIn) announceTowAway(turn, timeS);
+        continue;
+      }
       if (!turn.wasHeld) {
         turn.wasHeld = true;
         held++;
