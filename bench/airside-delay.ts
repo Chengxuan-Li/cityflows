@@ -215,6 +215,7 @@ const ground =
     : null;
 let vehicleAircraftOverlaps = 0;
 let vehicleOverlaps = 0;
+const vehicleOverlapExamples: (ReturnType<typeof groundOverlaps> & { timeS: number })[] = [];
 console.info({ airport: graph.icao, seed, fromH, toH, endH: endS / 3600, ...operations.metrics() });
 for (let step = startS * 10; step < endS * 10; step++) {
   timeS = step / 10;
@@ -227,6 +228,11 @@ for (let step = startS * 10; step < endS * 10; step++) {
     const found = groundOverlaps(ground.snapshot(), poses);
     vehicleAircraftOverlaps += found.withAircraft.length;
     vehicleOverlaps += found.withVehicles.length;
+    if (
+      vehicleOverlapExamples.length < 5 &&
+      (found.withAircraft.length || found.withVehicles.length)
+    )
+      vehicleOverlapExamples.push({ timeS, ...found });
   }
   const seen = new Set<number>();
   for (const pose of poses) {
@@ -271,6 +277,7 @@ for (let step = startS * 10; step < endS * 10; step++) {
   if (timeS % 3600 === 0 && timeS > startS) {
     // TASK-330 / TASK-339: the order's counters, for the log.
     console.error('PROGRESSIVE', timeS / 3600, JSON.stringify(fleet.orderCounters()));
+    const vehicles = ground?.metrics();
     console.info(
       JSON.stringify({
         h: timeS / 3600,
@@ -280,6 +287,16 @@ for (let step = startS * 10; step < endS * 10; step++) {
         queued: metrics.queuedArrivals,
         stuck: metrics.stuck,
         stuck5,
+        ...(vehicles && {
+          groundVehicles: {
+            active: vehicles.active,
+            queued: vehicles.stuck,
+            served: vehicles.served,
+            visits: vehicles.visits,
+            tugsMissing: vehicles.tugsMissing,
+            queueRelief: vehicles.queueRelief,
+          },
+        }),
       }),
     );
   }
@@ -376,7 +393,7 @@ const summary = {
   }),
   ...(ground && {
     groundVehicles: ground.metrics(),
-    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps }),
+    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps, vehicleOverlapExamples }),
   }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
