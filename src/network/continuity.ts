@@ -206,7 +206,7 @@ export function continuationLayout(
       for (const i of group) remaining.delete(i);
     }
     // TASK-348 (owner decision 1, architecture 5.1): a one-way road continuing one direction of a
-    // two-way street straight on (within `ONE_WAY_TURN`) at a node of their own (Freiburg n:224,
+    // two-way street straight on (within `ONE_WAY_TURN`), with its lanes, at a node of their own (Freiburg n:224,
     // n:695; Munich n:347, n:40). The street's other direction has no movement there: it is left
     // out of the layout and starts or ends at the node. The one-way road jogs onto the direction it
     // continues, which keeps its line (no ray, no taper), and takes the other direction's width on
@@ -228,6 +228,7 @@ export function continuationLayout(
         oneWay &&
         sources[oneWay.idx]!.streetGroupId === null &&
         !sources[oneWay.idx]!.corridorId &&
+        oneWay.lanes.length === opposite.lanes.length &&
         (oneWay.to === node.idx) !== (opposite.to === node.idx) &&
         Math.cos(heading(oneWay) - heading(opposite)) >= Math.cos(ONE_WAY_TURN)
       ) {
