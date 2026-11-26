@@ -159,6 +159,10 @@ export function defaultSlice(
 const ONE_WAY_TURN = Math.PI / 18;
 /** TASK-348: the shortest one-way road that takes the street's lanes on (TASK-080's 15 m taper). */
 const MIN_TAPER_ROAD_M = 15;
+/** TASK-348 rule 3, off: one-way to two-way continuations moved Munich's full demand (fixed time,
+ * mean of seeds 1 to 5: +5.3% delay, 111 fewer trips) and its 0.15 actuated morning with mode
+ * choice (+4.6%, seeds 1 to 5) past the owner's merge rule; off, Munich compiles as on main. */
+const ONE_WAY_CONTINUATIONS = false;
 
 /** Movement topology determines eligibility; road geometry orders physical branch slices. */
 export function continuationLayout(
@@ -215,7 +219,7 @@ export function continuationLayout(
     // over its taper (`widenM`), so the width change reads as a lane taper, not a junction.
     let widening: { road: CRoad; lone: CRoad; street: CRoad } | undefined;
     const lone = components.filter((g) => g.length === 1);
-    if (lone.length === 1 && incident.length === 3) {
+    if (ONE_WAY_CONTINUATIONS && lone.length === 1 && incident.length === 3) {
       const single = lone[0]![0]!;
       const street = sources[single.idx]!.streetGroupId;
       const opposite = incident.find(

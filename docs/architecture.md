@@ -1139,7 +1139,8 @@ routing, demand, the timetable or simulation state.
   names and classes, else a continuation by TASK-071's rule; its crossing stays where the
   junction's floor put it (half the road plus 1 m from the node, over the mapped walkway), the
   stop line before it, so the approach's storage is unchanged.
-  (3) A continuation node also covers a one-way road continuing one direction of a two-way street
+  (3) Off (lead, 2026-11-26; `ONE_WAY_CONTINUATIONS`: it moved Munich's full demand by +5.3%, fixed
+  time): a continuation node would also cover a one-way road continuing one direction of a two-way street
   straight on (within 10 degrees) at a node of their own, where the street's other direction has
   no movement: that direction starts or ends at the node outside the layout; the one-way road's
   lanes line up with the direction they continue (TASK-093's lane step where it applies, else the

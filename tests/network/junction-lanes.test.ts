@@ -84,7 +84,8 @@ describe('TASK-348 junction lanes', () => {
     }
   });
 
-  it('a one-way road continuing a two-way street is a continuation with a lane taper', () => {
+  // Rule 3 is off (`ONE_WAY_CONTINUATIONS`): it moved Munich's full demand past the merge rule.
+  it.skip('a one-way road continuing a two-way street is a continuation with a lane taper', () => {
     const { net } = compiled(
       osm([
         {
