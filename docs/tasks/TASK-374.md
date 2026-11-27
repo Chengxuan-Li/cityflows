@@ -1,6 +1,6 @@
 # TASK-374 — Boston morning probe crash in ground vehicles
 
-Status: started 2026-11-27 (lead). Owner: Codex (gpt-6.2-sol, high). Base: main.
+Status: merged 2026-11-27 (`c30aa94c`): a canceled ground vehicle still at its depot got an empty return path (regression from TASK-361 `676d3faa`); airside and cities identical. Owner: Codex (gpt-6.2-sol, high). Base: main.
 
 ## Finding (TASK-372)
 
