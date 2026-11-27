@@ -98,6 +98,31 @@ test(
 );
 
 test(
+  'Boston: a ground vehicle whose visit expires at its depot can turn in without driving',
+  { timeout: limit(90_000) },
+  async () => {
+    const project = await openBundled('boston-logan');
+    const result = compile(project.city);
+    if (!result.ok || !result.compiled.airside) throw new Error('Boston must compile');
+    const startS = 7 * 3600;
+    const fleet = createAircraftFleet(result.compiled.airside, 1);
+    const operations = createFlightOperations(fleet, 1, startS);
+    const ground = createGroundVehicles(result.compiled, {
+      snapshot: () => fleet.snapshot(),
+      movementSpace: () => fleet.movementSpace(),
+      drainTurnarounds: () => operations.drainTurnarounds(),
+    });
+    for (let tick = 0; tick < 36_000; tick++) {
+      const timeS = startS + tick * 0.1;
+      operations.step(timeS);
+      fleet.step(timeS);
+      ground.step(timeS);
+    }
+    expect(ground.metrics().droppedBy['aircraft-hold']).toBeGreaterThan(0);
+  },
+);
+
+test(
   'Zurich: a tug takes the short road route to a remote stand',
   { timeout: limit(60_000) },
   async () => {
