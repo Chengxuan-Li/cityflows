@@ -222,6 +222,7 @@ const wakeOf = (type: AircraftType): Wake =>
 /** Swept bodies are sampled for the order at most this far apart (bodies are 15 m and more
  * long): a wait stops one sample short. */
 const SAMPLE_M = 6;
+const WAIT_SHORT_M = 0.5;
 /** TASK-320: a parked aircraft's last metre on the stand line in front of its centre, so its
  * heading there is the line's; and how far off the stand heading a line counts as on it. */
 const STAND_MARGIN_M = 1;
@@ -402,6 +403,7 @@ interface Leg {
   mode: 'taxi' | 'pushback' | 'tow';
   pushStand?: number;
   path: AircraftPath;
+  tightTurnStations: number[];
   pieces: Piece[];
   /** Path ranges on a runway. */
   runwayRanges: [number, number, number][];
@@ -667,6 +669,7 @@ function rounded(raw: Vec2[], radiusM: number, startM = 0, endM = 0) {
   const points: Vec2[] = [raw[0]!];
   const rawBreaks = [0];
   const breaks: { index: number }[] = [{ index: 0 }];
+  const tightChords: number[] = [];
   const rawStations = cumulativeLengths(raw);
   for (let i = 1; i < raw.length - 1; i++) {
     const a = raw[i - 1]!,
@@ -710,6 +713,10 @@ function rounded(raw: Vec2[], radiusM: number, startM = 0, endM = 0) {
       points.push({ x: entry.x + along * ux - across * uy, y: entry.y + along * uy + across * ux });
     }
     points.push({ x: b.x + tangent * vx, y: b.y + tangent * vy });
+    // When a sweep step is longer than the turn radius, it can skip much of the rotation.
+    // Sample each chord's heading so a wing or tail swinging through that gap counts too.
+    if (radius < SAMPLE_M)
+      for (let j = points.length - steps - 1; j < points.length - 1; j++) tightChords.push(j);
     rawBreaks.push(rawStations[i]! + tangent);
     breaks.push({ index: points.length - 1 });
   }
@@ -726,7 +733,8 @@ function rounded(raw: Vec2[], radiusM: number, startM = 0, endM = 0) {
     const t = span > 0 ? (rawM - rawBreaks[i - 1]!) / span : 0;
     return mapped[i - 1]! + Math.max(0, Math.min(1, t)) * (mapped[i]! - mapped[i - 1]!);
   };
-  return { path, map };
+  const tightTurnStations = tightChords.map((i) => (stations[i]! + stations[i + 1]!) / 2);
+  return { path, map, tightTurnStations };
 }
 
 /** TASK-320: a line that ends at a stand's stop ends on the stand's line (through the stop on
@@ -1143,7 +1151,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         turnM,
         stopShift(craft, startStand),
       );
-    const { path, map } = rounded(
+    const { path, map, tightTurnStations } = rounded(
       line.raw,
       turnM,
       startStand ? straightM : 0,
@@ -1216,6 +1224,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return {
       mode,
       path,
+      tightTurnStations,
       pieces,
       runwayRanges: runwayRanges.sort((a, b) => a[0] - b[0] || a[1] - b[1]),
       endM: path.lengthM - craft.lengthM / 2,
@@ -1466,15 +1475,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     publish(craft);
   }
 
-  function sweep(craft: Craft, leg: Leg, fromM = craft.lengthM / 2, spacingM = 2) {
+  function sweepBody(craft: Craft, leg: Leg, m: number) {
     const { points, stationsM } = leg.path;
+    const heading =
+      headingAtDistance(points, stationsM, m) + (leg.mode === 'pushback' ? Math.PI : 0);
+    return bodyAt(craft, pointAtDistance(points, stationsM, m), heading);
+  }
+
+  function sweep(craft: Craft, leg: Leg, fromM = craft.lengthM / 2, spacingM = 2) {
     const count = Math.max(1, Math.ceil((leg.endM - fromM) / spacingM));
-    return Array.from({ length: count + 1 }, (_, i) => {
-      const m = fromM + (i / count) * (leg.endM - fromM);
-      const heading =
-        headingAtDistance(points, stationsM, m) + (leg.mode === 'pushback' ? Math.PI : 0);
-      return bodyAt(craft, pointAtDistance(points, stationsM, m), heading);
-    });
+    return Array.from({ length: count + 1 }, (_, i) =>
+      sweepBody(craft, leg, fromM + (i / count) * (leg.endM - fromM)),
+    );
   }
 
   const sweepCache = new WeakMap<Leg, Map<string, SweepPoint[]>>();
@@ -1845,6 +1857,42 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return bodiesTouch(a.body, b.body) ? (follow ? 2 : 1) : 0;
   }
 
+  const tightTurnBodies = new WeakMap<Leg, { m: number; body: Body }[]>();
+
+  /** Refine the ordinary wait only if the body at that stop is in the way of a tight turn.
+   * The moving body's heading is constant on each short chord, even between sweep samples. */
+  function clearTurnWait(
+    craft: Craft,
+    leg: Leg,
+    firstM: number,
+    other: Craft,
+    route: Leg,
+    fromM: number,
+    toM: number,
+  ) {
+    if (!route.tightTurnStations.length) return firstM;
+    let stopM = firstM - SAMPLE_M - WAIT_SHORT_M;
+    if (stopM < leg.startM) return firstM;
+    let turns = tightTurnBodies.get(route);
+    if (!turns) {
+      turns = route.tightTurnStations
+        .filter((m) => m >= route.startM && m <= route.endM)
+        .map((m) => ({ m, body: sweepBody(other, route, m) }));
+      tightTurnBodies.set(route, turns);
+    }
+    const relevant = turns.filter(({ m }) => m >= fromM && m <= toM);
+    if (!relevant.length) return firstM;
+    const touches = (m: number) => {
+      const body = sweepBody(craft, leg, m);
+      // A tight chord is shorter than 0.53 m. This covers the distance from its midpoint.
+      return relevant.some((turn) => bodiesTouch(body, turn.body, 0.27));
+    };
+    if (!touches(stopM)) return firstM;
+    do stopM -= 1;
+    while (stopM >= leg.startM && touches(stopM));
+    return stopM + SAMPLE_M + WAIT_SHORT_M;
+  }
+
   /** Where the swept bodies of `own` meet another aircraft's remaining movement: stretches of
    * own stations (gaps of up to 10 m joined) with the other's stations they meet, in conflict or
    * following on the same arcs. */
@@ -1905,6 +1953,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         }
         if (otherNow)
           for (const a of near3(incoming, otherNow)) if (a.stationM >= fromM) record(a, otherNow);
+        const firstPairConflict = found.length;
         touching.forEach((map, kind) => {
           let current: Conflict | undefined;
           for (const m of [...map.keys()].sort((p, q) => p - q)) {
@@ -1928,6 +1977,29 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             }
           }
         });
+        for (let i = firstPairConflict; i < found.length; i++) {
+          const c = found[i]!;
+          if (c.follow) continue;
+          const b1 = clearTurnWait(
+            craft,
+            leg,
+            c.b1,
+            other,
+            route,
+            Math.max(passedM, c.x1 - SAMPLE_M),
+            c.x2 + SAMPLE_M,
+          );
+          c.x1 = clearTurnWait(
+            other,
+            route,
+            c.x1,
+            craft,
+            leg,
+            Math.max(fromM, c.b1 - SAMPLE_M),
+            c.b2 + SAMPLE_M,
+          );
+          c.b1 = b1;
+        }
       }
     }
     return found;
@@ -4001,6 +4073,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const check = standCheck(craft, stand);
     if (check) return { ok: false, reason: check };
     const leg = standLeg(craft, stand);
+    // A carry-in appears in place, so its parked pose must be clear now and throughout any
+    // pushback already underway, including a tow that has released its origin stand.
+    const pose = poseAt(leg, leg.endM);
+    if (!sweepClear(craft, [bodyAt(craft, pose.position, pose.headingRad)]))
+      return { ok: false, reason: 'parked position is not clear' };
     crafts.push(craft);
     park(craft, leg, stand, timeS);
     return { ok: true, id: craft.id };
@@ -5277,7 +5354,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (gate) stop = Math.min(stop, gate.holdM);
     // Claims end at the leg's end, where the next leg takes over, or at its order's stop.
     if (craft.claimHi < capHi - 1e-6) stop = Math.min(stop, craft.claimHi - margin - half);
-    stop = Math.max(Math.min(stop, cap - 0.5), s);
+    stop = Math.max(Math.min(stop, cap - WAIT_SHORT_M), s);
     // A stop moved back by a new order is still within braking reach (canWaitAt), and so is a
     // stop on a re-routed leg, whose plan the re-route dropped while moving (TASK-320: Zurich
     // after the 21:00 concept switch).

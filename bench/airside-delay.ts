@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+import { nearestOnPolyline } from '../src/geo/polyline';
 import { compile } from '../src/network';
 import { compileAirside } from '../src/network/airside';
 import { openProject } from '../src/project/open';
@@ -202,6 +203,7 @@ const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
 // TASK-345: without the pairs the owner approved as sharing a runway by design.
 const checkRunwayConflictsReal = runwayConflictCheck(graph);
 let overlapCount = 0;
+const overlapSamples: { timeS: number; pairs: ReturnType<typeof overlaps> }[] = [];
 let runwayConflicts = 0;
 let runwayConflictsReal = 0;
 let peakStuck = 0;
@@ -278,9 +280,39 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    // TASK-352: which aircraft overlap, and when (the log).
+    // TASK-352 / TASK-370: which aircraft overlap, and their state and location.
     const found = overlaps(poses);
-    if (found.length) console.error('OVERLAP', timeS, JSON.stringify(found));
+    if (found.length) {
+      overlapSamples.push({ timeS, pairs: found });
+      const involved = poses.filter((p) => found.some((pair) => pair.includes(p.registration)));
+      console.error('OVERLAP', timeS, JSON.stringify(found));
+      console.error(
+        'OVERLAP_POSES',
+        timeS,
+        JSON.stringify(
+          involved.map(({ route, ...pose }) => ({
+            ...pose,
+            visual: undefined,
+            route: route.slice(0, 4).map((i) => graph.edges[i]!.id),
+            nearestEdges: graph.edges
+              .map(({ id, ref, kind, line }) => ({
+                id,
+                ref,
+                kind,
+                away: nearestOnPolyline(line, pose).away,
+              }))
+              .sort((a, b) => a.away - b.away)
+              .slice(0, 3),
+            nearestHold: graph.holds
+              .map(({ id, ref, node }) => {
+                const { x, y } = graph.nodes[node]!.pos;
+                return { id, ref, away: Math.hypot(x - pose.x, y - pose.y) };
+              })
+              .sort((a, b) => a.away - b.away)[0],
+          })),
+        ),
+      );
+    }
     overlapCount += found.length;
     runwayConflicts += checkRunwayConflicts(poses);
     // TASK-363: which aircraft are in a real runway conflict, and when (the log).
@@ -423,6 +455,7 @@ const summary = {
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
   ...(checks && {
     overlapCount,
+    overlapSamples,
     parkedBlockS: Math.round(fleet.parkedBlockS()),
     runwayConflicts,
     runwayConflictsReal,
