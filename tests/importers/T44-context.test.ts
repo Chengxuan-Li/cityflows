@@ -100,9 +100,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
             '2abb5c641d1414e595d9ef53a3d56934e7ff1561335bdb2f2ff82d878b1703b2',
           ];
-    // V114 adds a display-only setting; retain the original network hash.
-    const { markingTheme, ...originalCity } = off.city;
-    expect(markingTheme).toBe('de');
+    // TASK-372's German country metadata and V114's display setting leave this network unchanged.
+    const { markingTheme, country, ...originalCity } = off.city;
+    expect([markingTheme, country]).toEqual(['de', 'de']);
     expect(hash(originalCity)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);
     expect(on.city.context?.features.length).toBeGreaterThan(0);

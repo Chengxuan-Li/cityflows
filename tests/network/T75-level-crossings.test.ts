@@ -130,8 +130,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
       const { crossing, ...rest } = n;
       return { ...rest, ...(crossing?.kind === 'tram' ? { kind: 'plain' } : {}) };
     };
-    const { markingTheme, ...source } = r.city;
-    expect(markingTheme).toBe('de');
+    const { markingTheme, country, ...source } = r.city;
+    expect([markingTheme, country]).toEqual(['de', 'de']);
     const oldCity = {
       ...source,
       rail: {

@@ -3,6 +3,9 @@ import { buildCity } from '../../src/fixtures/build-city';
 import type { CompiledCity } from '../../src/network';
 import type { City, CrossingMarking, Scenario, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { createVehicles } from '../../src/sim/vehicle';
+import { createWalkers } from '../../src/sim/walkers';
 import { sampleCrossings } from './crossing-safety';
 import { scenario as baseScenario, setup } from './fixtures';
 
@@ -194,11 +197,10 @@ describe('TASK-279 v2: traffic crawling below walking pace', () => {
 });
 
 /** A mapped crossing way midblock on the west street, with OSM's marking (TASK-257). */
-function mapped(marking: CrossingMarking | undefined) {
-  const { city } = tStreet(true);
+function addMapped(city: City, marking: CrossingMarking | undefined, x = -150) {
   const provenance = { source: 'osm' as const };
-  const a = { x: -150, y: -9 },
-    b = { x: -150, y: 9 };
+  const a = { x, y: -9 },
+    b = { x, y: 9 };
   city.walk = {
     nodes: {
       'w:1': { id: 'w:1', pos: a, layer: 0, provenance },
@@ -217,6 +219,11 @@ function mapped(marking: CrossingMarking | undefined) {
       },
     },
   } as NonNullable<City['walk']>;
+}
+
+function mapped(marking: CrossingMarking | undefined) {
+  const { city } = tStreet(true);
+  addMapped(city, marking);
   // The way is split where it meets the sidewalks; every piece over the road is a crossing.
   const links = setup(city).walk.links.filter((l) => l.id.startsWith('wl:1') && l.crossing);
   expect(links.length).toBeGreaterThan(0);
@@ -228,4 +235,80 @@ test('TASK-279: a mapped crossing is unmarked where OSM says so, a zebra otherwi
   expect(mapped('none')).toBe('unmarked');
   expect(mapped('zebra')).toBe('zebra');
   expect(mapped(undefined)).toBe('zebra');
+});
+
+/** One approaching driver can brake for the crossing but is too near for the walker to
+ * step off the kerb yet. Does the waiting walker hold the driver before the crossing? */
+function kerbHold(country: City['country'], turn: boolean, mappedX?: number) {
+  const { city } = tStreet(true);
+  city.country = country;
+  if (mappedX !== undefined) addMapped(city, 'none', mappedX);
+  const compiled = setup(city);
+  const link =
+    mappedX !== undefined
+      ? compiled.walk.links.find((l) => l.id.startsWith('wl:1') && l.crossing?.spans.length)!
+      : eastCrossing(compiled)[0]!;
+  expect(link.crossing!.control).toBe('unmarked');
+  const span = link.crossing!.spans.find((s) =>
+    compiled.lanes[s.lane]!.out.some((i) => compiled.movements[i]!.turn === 'through'),
+  )!;
+  const lane = compiled.lanes[span.lane]!;
+  const movement = lane.out.find((i) =>
+    turn
+      ? ['left', 'right'].includes(compiled.movements[i]!.turn)
+      : compiled.movements[i]!.turn === 'through',
+  )!;
+  expect(movement).toBeDefined();
+  const vehicles = createVehicles(1, compiled.lanes.length, compiled.movements.length);
+  const params = DEFAULT_SIM_PARAMS;
+  const speed = 6;
+  const gap = (speed * speed) / (2 * params.idm.bMps2) + params.idm.minGapM / 2;
+  const edge = span.atM - span.halfM;
+  vehicles.insert(0, lane.idx, edge - gap);
+  vehicles.speed[0] = speed;
+  vehicles.movement[0] = movement;
+  const walkers = createWalkers(compiled, baseScenario(1), params, vehicles, true)!;
+  const walker = walkers.spawn(
+    {
+      route: {
+        links: [link.idx],
+        legs: [{ link: link.idx, fromM: 0, toM: link.lengthM }],
+        lengthM: link.lengthM,
+        costS: 0,
+      },
+      timeS: 100,
+      fromPlaceId: 'p:1',
+      toPlaceId: 'p:2',
+      personId: 'person',
+      tripId: 'trip',
+      tripLeg: 'walk',
+    },
+    () => {},
+  );
+  walkers.step(100);
+  expect(walkers.inspect(walker)?.state).toBe('waiting');
+  return { hold: walkers.hold(0, lane, null), edge };
+}
+
+test('TASK-372: GB drivers turning out yield to a waiting walker, but straight drivers do not', () => {
+  const turn = kerbHold('gb', true);
+  expect(turn.hold).toBe(turn.edge);
+  expect(kerbHold('gb', false).hold).toBe(Infinity);
+});
+
+test('TASK-372: US straight drivers yield at an unmarked junction crossing but not midblock', () => {
+  for (const x of [undefined, -10]) {
+    const junction = kerbHold('us', false, x);
+    expect(junction.hold).toBe(junction.edge);
+  }
+  for (const x of [-25, -150]) expect(kerbHold('us', false, x).hold).toBe(Infinity);
+});
+
+test('TASK-372: DE keeps the default rule, including straight and turning-out traffic', () => {
+  const priority = (country?: string) => [
+    kerbHold(country, false).hold,
+    kerbHold(country, true).hold,
+  ];
+  expect(priority('de')).toEqual([Infinity, Infinity]);
+  for (const country of [undefined, 'ch', 'fr']) expect(priority(country)).toEqual(priority('de'));
 });

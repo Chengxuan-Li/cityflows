@@ -17,6 +17,7 @@ import type { City, WalkKind } from '../schema';
 import {
   crossingArms,
   crossingCentreM,
+  crossingDefault,
   crossingEnabled,
   crossingLine,
   crossingPlacement,
@@ -53,9 +54,10 @@ export interface CWalkLink {
   crossing?: {
     road: number;
     end: 'start' | 'end' | 'midblock';
-    /** TASK-279: `unmarked`, an unsignalised crossing that draws no zebra: walkers have no
-     * priority there (StVO §25(3)) but over drivers turning into the arm (§9(3)). */
+    /** TASK-279: `unmarked` is an unsignalised crossing that draws no zebra. */
     control: CrossingControl;
+    /** TASK-372: local additions to the default turn-in yield, independent of paint. */
+    priority?: 'turn-out' | 'all';
     /** TASK-111: the node and its arm (`crossingArms` index) the crossing serves; -1 for a
      * midblock zebra. */
     node: number;
@@ -718,6 +720,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           spans: [],
         },
       };
+      setUsPriority(source, city, link.crossing!);
       if (repair) repairs.push({ a: a.s, b: b.s, link });
       else add(link);
     }
@@ -1087,7 +1090,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       return group === undefined || neededInfill.has(group);
     }),
   );
-  addCrossingSpans(city, graph, layerOf);
+  addCrossingSpans(city, graph, layerOf, source.country);
   for (const a of anchors) {
     const idx = nodeAt(a.pos, a.layer);
     if (a.type === 'connectors') graph.connectors.set(a.id, idx);
@@ -1098,6 +1101,20 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
     }
   }
   return graph;
+}
+
+/** TASK-372: use the same junction definition as generated crossings (not a lot-aisle split). */
+function setUsPriority(
+  source: City,
+  city: CompiledCity,
+  crossing: NonNullable<CWalkLink['crossing']>,
+) {
+  if (
+    source.country === 'us' &&
+    crossing.control === 'unmarked' &&
+    crossingDefault(city, city.roads[crossing.road]!, crossing.end === 'end')
+  )
+    crossing.priority = 'all';
 }
 
 /** TASK-140: a mapped crossing farther than this from the stripes of a road end it crosses is
@@ -1229,7 +1246,10 @@ function anchorMappedCrossings(
       [a, b] = [b, a];
     }
     for (const link of chain) removed.add(link);
-    added.push({ ...start, sourceEnds: undefined, line: [a, ...centre, b] });
+    // Only a mapped crossing anchored to the junction is a US junction crosswalk.
+    const crossing = { ...start.crossing! };
+    setUsPriority(source, city, crossing);
+    added.push({ ...start, crossing, sourceEnds: undefined, line: [a, ...centre, b] });
     for (const [i, end] of [a, b].entries()) {
       const kerb = kerbs[i]!;
       added.push({
@@ -1340,7 +1360,12 @@ function crossingSpans(
  * lanes of its arm's roads (both directions of a street, any carriageways of the arm); a mapped
  * one the lanes its line meets, or the extension of its arm's lanes (`crossingSpans`). The vehicle
  * network is not touched. */
-function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRoad) => number) {
+function addCrossingSpans(
+  city: CompiledCity,
+  graph: WalkGraph,
+  layerOf: (r: CRoad) => number,
+  country: City['country'],
+) {
   const arms = new Map<number, ReturnType<typeof crossingArms>>();
   for (const link of graph.links) {
     if (!link.crossing) continue;
@@ -1368,6 +1393,8 @@ function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRo
       ...link.crossing,
       spans: [...spans.values()].sort((a, b) => a.lane - b.lane),
     };
+    if (country === 'gb' && link.crossing.control === 'unmarked' && ends)
+      link.crossing.priority = 'turn-out';
   }
 }
 

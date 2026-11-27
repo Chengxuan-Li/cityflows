@@ -232,6 +232,7 @@ interface City {
   version: number;         // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
+  country?: string;        // TASK-372: ISO 3166-1 alpha-2, lowercase
   geo: (GeoReference & {
     bbox: [number, number, number, number];
     boundary?: [number, number][]; // TASK-198: a polygon import's ring, [lon, lat], open
@@ -451,6 +452,12 @@ OSM import without `ImportOptions.drivingSide` drives on the left where the them
 `uk`, on the right elsewhere; the import wizard proposes the same from the area.
 The Layers “Marking style” choice is undoable; its history patch uses `null` to restore an
 absent override. A pure marking-style edit retains the city version and compiled object.
+
+TASK-372 adds optional `City.country` without a schema or history version bump. New OSM
+imports infer `de`, `ch`, `gb` or `us` from the centre of `City.geo` using coarse offline
+country boxes, not road tags, marking style or driving side. The boxes approximate borders.
+Outside the boxes it is omitted. Old projects still open without it and retain the default
+crossing rule. The field is saved with the city, not edited by a history command.
 
 TASK-111 adds optional `SignalProgram.phases[].walk` without a schema-version bump: the
 crossings with walk green in that phase, each named by a road end of its arm (section 5.4).
@@ -1359,6 +1366,16 @@ imported road where OSM maps no crossing, or one whose mapped crossings say `mar
 and a mapped crossing way OSM marks `none`. A crossing drawn as a zebra or with a signal's lines
 stays a zebra; so does a mapped way without a marking (it draws as one). Spans are derived, never
 saved, and change no lane, movement or stop position.
+
+TASK-372 derives unsignalised walker priority separately from a crossing's paint and
+control kind. At the crossed arm's node, `gb` adds a yield by drivers turning out of the arm
+(UK Highway Code rules H2 and 170). `us` gives walkers zebra-like priority at unmarked
+junction crossings (the generated junction crossing or a mapped crossing anchored there,
+with at least three arms excluding lot aisles), but not at midblock unmarked crossings
+(Uniform Vehicle Code §§11-502 and 11-503,
+75 Pa.C.S. §3542, Massachusetts General Laws ch. 89 §11). `de` stays as before
+(StVO §§9(3), 25(3), 26), as do `ch` (SVG Art. 49, VRV Art. 47) and absent or
+unsupported codes. Marked and signal crossings do not change.
 
 `CSignal.phases[].walk` lists the node's signal crossing links with walk green, compiled after
 the walk graph (`compileSignalWalk`). Explicit entries select the arms whose road end they
@@ -2816,6 +2833,12 @@ the walker reaches the span's far edge plus `walkClearanceS` (a gap). While wait
 crossed lanes for traffic crawling below `walkSpeedMps` (v2: a creeping queue otherwise came to
 stand on the crossing), and in such a gap also for turning drivers; on the crossing it holds them
 as on a zebra.
+
+TASK-372: on `gb` crossings, an approaching driver whose plan turns left, right or back
+out of the crossed arm at its node counts as yielding traffic. The walker holds that driver in
+a gap in the other traffic, as it does a driver turning in. On `us` unmarked junction crossings
+there is no gap check. All traffic yields with the same braking and occupancy checks as a zebra.
+The crossing still draws and reports as unmarked.
 
 A waiting walker that would step out but for the traffic (any zebra walker; a signal walker
 with enough walk green), and a crossing walker for each span it has not passed by

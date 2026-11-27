@@ -328,6 +328,7 @@ export interface City {
   version: number; // bumps on every committed edit; caches key on it
   name: string;
   drivingSide: DrivingSide;
+  country?: string; // ISO 3166-1 alpha-2, lowercase
   geo:
     | (GeoReference & {
         bbox: [number, number, number, number];
