@@ -249,7 +249,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // destination streets (the place repair no longer moves them out).
     // TASK-351: rebuilt; the Schwabentorring's part, fed by a map entry and drained by an exit, is
     // circulation, so three car parks on it (pk:2627, pk:2647, pk:2831) leave by their own streets.
-    'e80ca097f05c15908d65981c37c83e38b1eb7b3f61a9c10e5e4733b5fbadb034',
+    // TASK-372: the country field, with the same crossing rule.
+    '2196f2e511b9b6a52ca101cfb63c8f95aade5de384f4696e371b20bc1db04ade',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).

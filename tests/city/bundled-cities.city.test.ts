@@ -32,12 +32,12 @@ test('the panel lists every bundled real place not held out of it, and each has 
 // Heathrow's pk:11441 gains exits on r:11590. No new place entrance on a lot's aisle: Heathrow's
 // places and garages on r:12293 and r:11893 leave by streets.
 // TASK-364: Zurich rebuilt with two one-way to two-way seams laid out as continuations.
+// TASK-372: every real archive has a country, including the pinned Boston layout.
 test.for([
-  ['london-city-airport', '41e898110f9da0db81c60ca1ec90066652c5bb30274d359fbf45f266bc9abad9'],
-  ['zurich-airport', 'e229de92f1e1a2d7a0e52c3a4fc2eab4b086c6f70c4f6efa430dcd3166740a9a'],
-  ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
-  // TASK-348 + TASK-351: rebuilt on the merged code (both changes above).
-  ['heathrow', 'd1739a1c11c80e53a4219ad647c3f237d0a3f9d73e532825a9fbc06ac3bc1403'],
+  ['london-city-airport', '2c0b4f9c2aa119f469e88ec33906e41b1fafc2c892b823a4f339bb9538b6b97c'],
+  ['zurich-airport', '95a573d6440863992d9901848f0583c30b6520977dbb1850126ef5a5cf211d67'],
+  ['boston-logan', '87847dd4cd5e29629bfccc7766921f3b11d63108fd6c8a322d31dac72f9b56a5'],
+  ['heathrow', '7ef57ec8a7559d7f54d5d571e4666bad2c36d7ba35495fdaa1dda71b9e50279a'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
   expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);
@@ -46,11 +46,11 @@ test.for([
 // TASK-284: the driving side is the importer's inference from the location (TASK-268), not an
 // option of the build: York, the first left-hand place, drives on the left with UK markings.
 test.for([
-  ['luebeck', 'right', 'de'],
-  ['york', 'left', 'uk'],
-] as const)('%s drives on the %s, inferred', async ([id, side, theme]) => {
+  ['luebeck', 'right', 'de', 'de'],
+  ['york', 'left', 'uk', 'gb'],
+] as const)('%s drives on the %s, inferred', async ([id, side, theme, country]) => {
   const { city } = await openBundled(id);
-  expect([city.drivingSide, city.markingTheme]).toEqual([side, theme]);
+  expect([city.drivingSide, city.markingTheme, city.country]).toEqual([side, theme, country]);
 });
 
 // The staleness test: a bundled archive must be what its builder makes of the committed extract

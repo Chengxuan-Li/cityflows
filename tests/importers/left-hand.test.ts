@@ -37,6 +37,19 @@ function imported(xml: string, drivingSide?: City['drivingSide']): City {
 }
 
 test.each([
+  [53.96, -1.08, 'gb'],
+  [48.14, 11.53, 'de'],
+  [47.46, 8.55, 'ch'],
+  [39.95, -75.165, 'us'],
+  [43.65, -79.38, undefined],
+] as const)('TASK-372: import at %s, %s sets country %s from geo', (lat, lon, country) => {
+  const tags = '<relation id="9"><tag k="addr:country" v="US"/></relation>';
+  const city = imported(crossroads(lat, lon, tags), 'left');
+  expect(city.country).toBe(country);
+  if (country === undefined) expect(city).not.toHaveProperty('country');
+});
+
+test.each([
   ['York, by location', crossroads(...york), undefined, 'left'],
   ['Munich, by location', crossroads(...munich), undefined, 'right'],
   ['Philadelphia, by location', crossroads(39.95, -75.165), undefined, 'right'],
