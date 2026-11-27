@@ -1,4 +1,5 @@
 import { createRandom } from '../geo/random';
+import { markRings, type AircraftDebug, type WaitLink } from './debug-snapshot';
 import {
   boxOf,
   cumulativeLengths,
@@ -5656,6 +5657,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     );
   }
 
+  /** TASK-373: for the debug views: each aircraft's claim radius and claimed stretches, and the
+   * wait-for links (TASK-339) between aircraft. Read only. */
+  function debugSnapshot(): { aircraft: AircraftDebug[]; waits: WaitLink[] } {
+    const aircraft: AircraftDebug[] = [];
+    const waits: WaitLink[] = [];
+    for (const craft of crafts) {
+      if (craft.mode === 'done') continue;
+      const ahead = new Set<number>();
+      for (const wait of craft.waits)
+        if (wait.pred.mode !== 'done' && !passed(wait)) ahead.add(wait.pred.id);
+      for (const to of ahead) if (to !== craft.id) waits.push({ from: craft.id, to, ring: false });
+      if (!craft.pose || craft.mode === 'queued') continue;
+      aircraft.push({
+        id: craft.id,
+        radiusM: craft.pose.heightM > 0.01 ? 0 : craft.lengthM / 2 + margin,
+        reserved: craft.claimed.map(({ edge, lo, hi }) => ({ edge, fromM: lo, toM: hi })),
+      });
+    }
+    return { aircraft, waits: markRings(waits) };
+  }
+
   function snapshot(): AircraftPoseSnapshot[] {
     const result: AircraftPoseSnapshot[] = [];
     for (const craft of crafts) {
@@ -5858,6 +5880,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     requestHoverTaxi,
     step,
     snapshot,
+    debugSnapshot,
     airfield,
     setActiveEnds,
     metrics,

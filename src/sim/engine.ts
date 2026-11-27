@@ -35,6 +35,7 @@ import { createRerouter, vehicleRouteRequest } from './reroute';
 import { createWalkers } from './walkers';
 import { createRailCrossings } from './rail-crossings';
 import { createAircraftFleet, type AircraftFleet } from './aircraft';
+import { markRings, type DebugRequest, type DebugSnapshot, type WaitLink } from './debug-snapshot';
 import type { AirportWind } from './runway-configuration';
 import { createAirsideGiveWay } from './airside-give-way';
 import {
@@ -1595,7 +1596,129 @@ function createRun({
     };
   }
 
-  function snapshot(): VehicleSnapshot {
+  /** TASK-373: the physical leader `prepareTravel` follows and the gap to its rear, read again
+   * without side effects (a copy of its search, so the travel step is untouched). */
+  function debugLeader(id: number): [leader: number, gapM: number] {
+    const field = vehicles.lane[id]!;
+    const lane = field >= 0 ? compiled.lanes[field] : undefined;
+    const path = lane ? null : compiled.movements[-field - 1]!;
+    const movement =
+      vehicles.movement[id] === -1 ? undefined : compiled.movements[vehicles.movement[id]!];
+    let leader = vehicles.previous[id]!;
+    let offset = 0;
+    if (leader === -1 && path) {
+      leader = vehicles.last(path.toLane);
+      offset = path.lengthM;
+    } else if (leader === -1 && lane && arrival[id] === -1) {
+      offset = lane.lengthM;
+      for (const idx of lane.out) {
+        const occupant = vehicles.last(-idx - 1);
+        if (
+          occupant !== -1 &&
+          (leader === -1 ||
+            vehicles.position[occupant]! - profile(occupant).lengthM <
+              vehicles.position[leader]! - profile(leader).lengthM)
+        )
+          leader = occupant;
+      }
+      if (leader === -1 && movement) {
+        leader = vehicles.last(movement.toLane);
+        offset += movement.lengthM;
+      }
+    }
+    if (leader === -1) return [-1, NaN];
+    return [
+      leader,
+      offset + vehicles.position[leader]! - profile(leader).lengthM - vehicles.position[id]!,
+    ];
+  }
+
+  /** TASK-373: the debug views' sim state, only when a snapshot asks for it. */
+  function debugSnapshot(request: DebugRequest, ids: Uint32Array): DebugSnapshot {
+    const debug: DebugSnapshot = {};
+    if (request.aircraft || request.gridlock) {
+      const aircraft = fleet?.debugSnapshot();
+      if (request.aircraft) debug.aircraft = aircraft?.aircraft ?? [];
+      if (request.gridlock) debug.aircraftWaits = aircraft?.waits ?? [];
+    }
+    if (!request.vehicles && !request.gridlock) return debug;
+    if (request.vehicles) debug.vehicles = [];
+    const waits: WaitLink[] = [];
+    const near = idm.minGapM + 0.5;
+    const stopped = (car: number) => vehicles.speed[car]! < 0.1;
+    for (const publicId of ids) {
+      const id = publicId - 1;
+      const state = vehicles.state[id]!;
+      const onRoad = state === DRIVING && !parking.moving[id];
+      const field = vehicles.lane[id]!;
+      const lane = onRoad && field >= 0 ? compiled.lanes[field] : undefined;
+      const path = onRoad && field < 0 ? compiled.movements[-field - 1] : undefined;
+      const movement =
+        vehicles.movement[id] === -1 ? undefined : compiled.movements[vehicles.movement[id]!];
+      const [leader, gapM] = onRoad ? debugLeader(id) : [-1, NaN];
+      const head =
+        !!lane && !!movement && vehicles.previous[id] === -1 && intersections.grants[id] === -1;
+      if (debug.vehicles) {
+        const route = vehicles.route[id];
+        const step = vehicles.routeStep[id]!;
+        const ahead =
+          onRoad && route && !route.movements.includes(-1)
+            ? route.movements.slice(step, step + 8)
+            : [];
+        let wantsLane = -1;
+        const targets = route?.targetLanes[step];
+        if (lane && waitingForLane[id] && targets?.length) {
+          const toward = compiled.lanes[targets[0]!]!.lane - lane.lane;
+          wantsLane = toward < 0 ? lane.left : toward > 0 ? lane.right : -1;
+        }
+        debug.vehicles.push({
+          id: publicId,
+          leader: leader + 1,
+          gapM,
+          wait:
+            state === IN_LOT || parking.moving[id]
+              ? 4
+              : state === QUEUED_DESTINATION
+                ? 5
+                : !stopped(id)
+                  ? 0
+                  : vehicles.jamS[id]! > 0
+                    ? 3
+                    : head
+                      ? 2
+                      : 1,
+          route: ahead,
+          wantsLane,
+        });
+      }
+      if (!request.gridlock || !onRoad || !stopped(id)) continue;
+      const blockers = new Set<number>();
+      if (leader !== -1 && gapM <= near && stopped(leader)) blockers.add(leader);
+      // A head held at its junction (not by a red) waits for the cars on the movements that
+      // conflict with its own, and for the tail of its exit lane when that has no room.
+      const crossing = head && lane!.stopM - vehicles.position[id]! <= near ? movement : path;
+      if (crossing && !intersections.red(crossing.idx)) {
+        for (const idx of crossing.conflicts)
+          for (let car = vehicles.first(-idx - 1); car !== -1; car = vehicles.next[car]!)
+            if (stopped(car)) blockers.add(car);
+        const tail = vehicles.last(crossing.toLane);
+        if (
+          tail !== -1 &&
+          stopped(tail) &&
+          vehicles.position[tail]! - profile(tail).lengthM < profile(id).lengthM + near
+        )
+          blockers.add(tail);
+      }
+      const requester = lane ? laneChanges.yieldingTo[id]! : -1;
+      if (requester !== -1 && stopped(requester)) blockers.add(requester);
+      blockers.delete(id);
+      for (const car of blockers) waits.push({ from: publicId, to: car + 1, ring: false });
+    }
+    if (request.gridlock) debug.vehicleWaits = markRings(waits);
+    return debug;
+  }
+
+  function snapshot(debug?: DebugRequest): VehicleSnapshot {
     const { respawnS, fadeS } = params.gridlock;
     const count = accounting.trips.driving + accounting.trips.queuedDestination;
     const snapshot: VehicleSnapshot = {
@@ -1652,6 +1775,8 @@ function createRun({
       snapshot.fade[i] = fadeS > 0 ? Math.min(1, (respawnS - vehicles.jamS[id]!) / fadeS) : 1;
       i++;
     }
+    if (debug && (debug.vehicles || debug.aircraft || debug.gridlock))
+      snapshot.debug = debugSnapshot(debug, snapshot.id);
     return snapshot;
   }
 
@@ -2131,7 +2256,7 @@ export function createEngine() {
     step(n = 1) {
       loaded().step(n);
     },
-    snapshot: () => loaded().snapshot(),
+    snapshot: (debug?: DebugRequest) => loaded().snapshot(debug),
     metrics: () => loaded().metrics(),
     flightBoard: () => loaded().flightBoard(),
     setAirportWind: (wind: AirportWind) => loaded().setAirportWind(wind),

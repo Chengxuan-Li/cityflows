@@ -1,6 +1,7 @@
 import type { Metrics, PersonDetail, VehicleDetail, WalkerDetail } from '../sim/types';
 import type { FlightBoard } from '../sim/flight-operations';
 import type { AirportWind } from '../sim/runway-configuration';
+import type { DebugRequest } from '../sim/debug-snapshot';
 import type { CompiledCity } from '../network';
 import type { RoadStats, TrajectoryRecord, TripRecord } from '../project/export-csv';
 import type {
@@ -26,7 +27,8 @@ export interface EngineClient {
   setSpeed(multiplier: number): Promise<void>;
   step(steps: number): Promise<void>;
   restart(): Promise<void>;
-  snapshot(): Promise<HostSnapshot>;
+  /** `debug` (TASK-373): also the debug views' sim state; it changes nothing in the run. */
+  snapshot(debug?: DebugRequest): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
   flightBoard(): Promise<FlightBoard | null>;
   /** TASK-300: sets the airport's wind; a change past the runway limits reconfigures. */
@@ -55,7 +57,8 @@ export function createEngineClient(worker: Worker): EngineClient {
   const pending = new Map<number, (reply: HostReply) => void>();
   const listeners = new Set<(event: HostEvent) => void>();
   let nextId = 1;
-  let snapshotInFlight: Promise<HostSnapshot> | undefined;
+  // Concurrent requests asking for the same debug state share one reply.
+  const snapshotsInFlight = new Map<string, Promise<HostSnapshot>>();
   let closed: string | undefined;
   let retired = false;
 
@@ -134,10 +137,17 @@ export function createEngineClient(worker: Worker): EngineClient {
     setSpeed: (multiplier) => send({ type: 'setSpeed', multiplier }),
     step: (steps) => send({ type: 'step', steps }),
     restart: () => send({ type: 'restart' }),
-    snapshot() {
-      return (snapshotInFlight ??= send<HostSnapshot>({ type: 'snapshot' }).finally(() => {
-        snapshotInFlight = undefined;
-      }));
+    snapshot(debug) {
+      const wanted = debug && (debug.vehicles || debug.aircraft || debug.gridlock) ? debug : null;
+      const key = wanted ? JSON.stringify(wanted) : '';
+      let reply = snapshotsInFlight.get(key);
+      if (!reply) {
+        reply = send<HostSnapshot>({ type: 'snapshot', ...(wanted && { debug: wanted }) }).finally(
+          () => snapshotsInFlight.delete(key),
+        );
+        snapshotsInFlight.set(key, reply);
+      }
+      return reply;
     },
     metrics: () => send({ type: 'metrics' }),
     flightBoard: () => send({ type: 'flightBoard' }),

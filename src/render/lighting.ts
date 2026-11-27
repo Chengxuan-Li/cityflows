@@ -58,6 +58,8 @@ export interface VisualSettings {
   /** Times the device pixel ratio (itself capped at 2). */
   renderScale: RenderScale;
   dropLines: boolean;
+  /** TASK-373: shows the sidebar's Debug section. */
+  developerTools: boolean;
 }
 
 export const lightingModes: readonly LightingMode[] = ['day', 'evening', 'night', 'clock', 'fixed'];
@@ -153,6 +155,7 @@ export const defaultVisual: VisualSettings = {
   colourVariation: 0.3,
   renderScale: 1,
   dropLines: true,
+  developerTools: false,
 };
 
 type PresetFields = Pick<
@@ -374,6 +377,7 @@ export function parseVisual(value: unknown): VisualSettings {
     colourVariation: finite(v.colourVariation, 0, 1, d.colourVariation),
     renderScale: oneOf(v.renderScale, [1, 1.5, 2] as const, d.renderScale),
     dropLines: typeof v.dropLines === 'boolean' ? v.dropLines : d.dropLines,
+    developerTools: v.developerTools === true,
   };
 }
 

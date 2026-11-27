@@ -137,6 +137,9 @@ function tones(kit: TreeKit, look: TreeLook) {
   );
 }
 
+/** Trees are drawn as kit models while the camera is nearer its target than this, else as blobs. */
+export const treeDetailM = 1200;
+
 export function buildVegetation(
   trees: readonly Tree[],
   groundAt: (p: Vec2) => number = groundHeight,
@@ -205,8 +208,8 @@ export function buildVegetation(
   for (const mesh of meshes) mesh.castShadow = look.castShadow;
   // Only visibility changes during camera motion; instance buffers stay immutable.
   const update = (distance: number) => {
-    for (const near of details) near.visible = distance < 1200;
-    for (const far of blobs) far.visible = distance >= 1200;
+    for (const near of details) near.visible = distance < treeDetailM;
+    for (const far of blobs) far.visible = distance >= treeDetailM;
   };
   update(0);
   const counts = Object.fromEntries(

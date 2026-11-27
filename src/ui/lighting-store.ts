@@ -1,4 +1,11 @@
 import { create } from 'zustand';
+import {
+  debugFromUrl,
+  defaultDebug,
+  parseDebug,
+  type DebugOverlay,
+  type DebugSettings,
+} from '../render/debug-settings';
 import { defaultVisual, parseVisual, type VisualSettings } from '../render/lighting';
 
 /** TASK-163, TASK-341: the scene lighting and render quality are a per-viewer view preference,
@@ -48,3 +55,40 @@ export const useVisual = create<{
     set({ visual });
   },
 }));
+
+/** TASK-373: the debug views' choices, a per-viewer preference like the visual settings. */
+export const debugKey = 'cityflows.debug';
+
+export function loadDebug(storage: Storage | undefined): DebugSettings {
+  try {
+    const raw = storage?.getItem(debugKey);
+    return raw ? parseDebug(JSON.parse(raw)) : defaultDebug;
+  } catch {
+    return defaultDebug;
+  }
+}
+
+export const useDebug = create<{
+  debug: DebugSettings;
+  /** `?debug` in the address: developer tools are on for this visit, the switch aside. */
+  fromUrl: boolean;
+  setDebug: (next: Partial<DebugSettings>) => void;
+  setOverlay: (key: DebugOverlay, on: boolean) => void;
+}>((set, get) => ({
+  debug: loadDebug(browserStorage()),
+  fromUrl: typeof location !== 'undefined' && debugFromUrl(location.search),
+  setDebug: (next) => {
+    const debug = parseDebug({ ...get().debug, ...next });
+    try {
+      browserStorage()?.setItem(debugKey, JSON.stringify(debug));
+    } catch {
+      // Storage blocked: the choice lasts for this visit.
+    }
+    set({ debug });
+  },
+  setOverlay: (key, on) => get().setDebug({ overlays: { ...get().debug.overlays, [key]: on } }),
+}));
+
+/** Whether developer tools are on: the Visual quality switch, or `?debug`. */
+export const developerTools = () =>
+  useVisual.getState().visual.developerTools || useDebug.getState().fromUrl;
