@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
+import { openBundled } from '../../bench/bundled-cities';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { syntheticAirport, syntheticAirportBacktrack } from '../../src/fixtures/synthetic-airport';
+import { compileAirside } from '../../src/network/airside';
 import { routeAirside, arcEdge, createAirsideRouteFinder } from '../../src/routing/airside';
 import { aircraftCodes, aircraftTypes } from '../../src/schema/aircraft';
 import {
@@ -67,6 +69,74 @@ const kinds = (events: { kind: string; id: number }[], id: number) =>
   events.filter((e) => e.id === id).map((e) => e.kind);
 const states = (poses: AircraftPoseSnapshot[]) =>
   poses.map((p) => p.state).filter((s, i, all) => s !== all[i - 1]);
+
+test('a parked spawn waits until the tow pushing out past its stand has cleared', () => {
+  const sharedStand = 'st:99000';
+  const { fleet, stands } = fleetOf(undefined, (city) => {
+    const airport = city.airport!;
+    const source = Object.values(airport.stands).find(({ ref }) => ref === 'E1')!;
+    const lead = airport.edges[source.leadIn[0]!]!;
+    const stop = { x: source.pos.x, y: 245 };
+    const node = 'an:99000';
+    const edge = 'ae:99000';
+    airport.nodes[node] = { ...airport.nodes[lead.to]!, id: node, pos: stop };
+    airport.edges[edge] = {
+      ...lead,
+      id: edge,
+      to: node,
+      line: [lead.line[0]!, stop],
+      stand: sharedStand,
+    };
+    airport.stands[sharedStand] = { ...source, id: sharedStand, pos: stop, leadIn: [edge] };
+  });
+  const tow = fleet.spawnParked({ typeId: 'E190', stand: stands.E1 });
+  if (!tow.ok) throw new Error(tow.reason);
+  expect(fleet.requestTow(tow.id, { stand: stands.L1 }).ok).toBe(true);
+  const parked = { typeId: 'PC24', stand: sharedStand };
+  let attempted = false;
+  run(
+    fleet,
+    600,
+    () => fleet.idle(tow.id),
+    () => {
+      if (attempted || fleet.statusOf(tow.id) !== 'pushback') return;
+      attempted = true;
+      expect(fleet.spawnParked(parked).ok).toBe(false);
+      expect(fleet.snapshot()).toHaveLength(1);
+    },
+  );
+  expect(attempted).toBe(true);
+  expect(fleet.idle(tow.id)).toBe(true);
+  expect(fleet.spawnParked(parked).ok).toBe(true);
+  expect(overlaps(fleet.snapshot())).toEqual([]);
+});
+
+test('a waiting departure leaves room for the wing sweep on the tight turn into Boston A5', async () => {
+  const { city } = await openBundled('boston-logan');
+  const graph = compileAirside(city.airport!, city, {
+    roads: [],
+    lanes: [],
+    movements: [],
+    index: {
+      node: new Map(),
+      road: new Map(),
+      lane: new Map(),
+      movement: new Map(),
+      place: new Map(),
+      connector: new Map(),
+      parking: new Map(),
+    },
+  });
+  const fleet = createAircraftFleet(graph, 3);
+  const stand = (ref: string) => graph.stands.find((s) => s.ref === ref)!.id;
+  const departure = fleet.spawnParked({ typeId: 'B738', stand: stand('A21') });
+  const arrival = fleet.requestArrival({ typeId: 'B738', runwayEnd: '22L', stand: stand('A5') });
+  if (!departure.ok || !arrival.ok) throw new Error('Both aircraft must be scheduled');
+  expect(fleet.requestDeparture(departure.id, '22R').ok).toBe(true);
+  run(fleet, 1000, () => fleet.idle(arrival.id) && fleet.metrics().departed === 1);
+  expect(fleet.metrics()).toMatchObject({ landed: 1, departed: 1 });
+  expect(fleet.idle(arrival.id)).toBe(true);
+});
 
 // TASK-360: on main's line-up choice (the 27 end); rule 1 would take the x = 300 entry.
 test.each(['09', null])('a departure at a closed hold recovers with target %s', (target) =>
