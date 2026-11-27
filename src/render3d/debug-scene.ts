@@ -197,7 +197,12 @@ export function detailRanges({
       if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
       box.copy(object.geometry.boundingBox!).applyMatrix4(object.matrixWorld);
     }
-    if (box.isEmpty()) return;
+    // City-wide merged meshes (ground, roads, buildings) span the view and tell nothing.
+    if (
+      box.isEmpty() ||
+      Math.max(box.max.x - box.min.x, box.max.z - box.min.z) > 3 * cameraDistance
+    )
+      return;
     const { min, max } = box;
     const p = (x: number, y: number, z: number): P3 => ({ x, y: z, z: y });
     const bottom = [

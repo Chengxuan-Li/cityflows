@@ -227,7 +227,6 @@ function lanes(city: CompiledCity, heights: DebugHeights) {
       ink: 'teal',
       width: 1,
       arrow: true,
-      minScale: 0.6,
       target: { label: `Lane ${lane.id}`, pick: { kind: 'lane', lane: lane.idx, road: lane.road } },
     });
     if (!lane.out.length) continue;
