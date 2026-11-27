@@ -648,11 +648,14 @@ function helicopterProfile(
   });
 }
 
+/** Height a helicopter climbs vertically from its pad before it moves off (and descends to it). */
+export const HELICOPTER_PAD_CLEARANCE_M = 15;
+
 /** The pad is the first point of a departure path. */
 export function helicopterTakeoffProfile(
   path: AircraftPath,
   p: HelicopterPerformance,
-  padClearanceM = 15,
+  padClearanceM = HELICOPTER_PAD_CLEARANCE_M,
 ) {
   return helicopterProfile(path, p, padClearanceM, false);
 }
@@ -661,7 +664,7 @@ export function helicopterTakeoffProfile(
 export function helicopterLandingProfile(
   path: AircraftPath,
   p: HelicopterPerformance,
-  padClearanceM = 15,
+  padClearanceM = HELICOPTER_PAD_CLEARANCE_M,
 ) {
   return helicopterProfile(path, p, padClearanceM, true);
 }

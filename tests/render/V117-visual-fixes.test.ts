@@ -205,7 +205,8 @@ const pins = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    compile: 'a218755f4870a1591d2611861e6bc21634470999700d34655cdf6a466b62ac97',
+    // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
+    compile: '4e5020e454f3bf741d286c87c7d102884dcc1410d638f9ef28e6f403442fb394',
     lamps: 'e6ec57e8fa1239190122a425614fcc3957e5bd0fec8c2895a1e67d288d9f7777',
     // TASK-190: the curbs open at each bay, and six bays are gone.
     // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
@@ -245,7 +246,8 @@ const pins = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    compile: '249401dfe79a8392f2b379483652931468bc5b2889f9c20c761d0c3ccb1e7065',
+    // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
+    compile: '429ecf0942872ad598d70d87b3e5558ebc5b4e632fa9b3b978f9a73a1e9234e1',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     lamps: '4cb04c240a77c3c0f3cc71a27ebb6edc8a3f2fc0710ac19af31b44255c590bc4',

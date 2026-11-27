@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
+import { openBundled } from '../../bench/bundled-cities';
 import { defaultScenario } from '../../src/fixtures/scenarios';
 import { syntheticAirport, syntheticAirportBacktrack } from '../../src/fixtures/synthetic-airport';
+import { compileAirside } from '../../src/network/airside';
 import { routeAirside, arcEdge, createAirsideRouteFinder } from '../../src/routing/airside';
 import { aircraftCodes, aircraftTypes } from '../../src/schema/aircraft';
 import {
@@ -10,7 +12,7 @@ import {
 } from '../../src/sim/aircraft';
 import { createEngine } from '../../src/sim/engine';
 import { exemptRunwayPair, overlaps, runwayConflictCheck } from './aircraft-checks';
-import { airportFixture } from './airside-fixture';
+import { airportFixture, withRules } from './airside-fixture';
 import { setup } from './fixtures';
 
 // TASK-298: aircraft on an inline airport (tests/sim/airside-fixture.ts).
@@ -68,88 +70,161 @@ const kinds = (events: { kind: string; id: number }[], id: number) =>
 const states = (poses: AircraftPoseSnapshot[]) =>
   poses.map((p) => p.state).filter((s, i, all) => s !== all[i - 1]);
 
-test.each(['09', null])('a departure at a closed hold recovers with target %s', (target) => {
-  const { fleet, stands, graph } = fleetOf(undefined, (city) => {
-    // A long unsplit connector puts the fallback hold less than half an edge from the turn.
+test('a parked spawn waits until the tow pushing out past its stand has cleared', () => {
+  const sharedStand = 'st:99000';
+  const { fleet, stands } = fleetOf(undefined, (city) => {
     const airport = city.airport!;
-    const hold = Object.values(airport.holdingPositions).find(
-      ({ node }) => airport.nodes[node]!.pos.x === 1500,
-    )!;
-    const toward = airport.edges[hold.toward!]!;
-    const other = Object.values(airport.edges).find(({ from }) => from === hold.node)!;
-    toward.to = other.to;
-    toward.line = [toward.line[0]!, other.line.at(-1)!];
-    delete airport.edges[other.id];
-    delete airport.holdingPositions[hold.id];
-    delete airport.nodes[hold.node];
+    const source = Object.values(airport.stands).find(({ ref }) => ref === 'E1')!;
+    const lead = airport.edges[source.leadIn[0]!]!;
+    const stop = { x: source.pos.x, y: 245 };
+    const node = 'an:99000';
+    const edge = 'ae:99000';
+    airport.nodes[node] = { ...airport.nodes[lead.to]!, id: node, pos: stop };
+    airport.edges[edge] = {
+      ...lead,
+      id: edge,
+      to: node,
+      line: [lead.line[0]!, stop],
+      stand: sharedStand,
+    };
+    airport.stands[sharedStand] = { ...source, id: sharedStand, pos: stop, leadIn: [edge] };
   });
-  fleet.setRunwayConfiguration({ id: '27', arrivalEnds: ['27'], departureEnds: ['27'] });
-  const departure = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
-  if (!departure.ok) throw new Error(departure.reason);
-  expect(fleet.requestDeparture(departure.id, '27').ok).toBe(true);
-  let closed = false;
-  const { poses, events } = run(
+  const tow = fleet.spawnParked({ typeId: 'E190', stand: stands.E1 });
+  if (!tow.ok) throw new Error(tow.reason);
+  expect(fleet.requestTow(tow.id, { stand: stands.L1 }).ok).toBe(true);
+  const parked = { typeId: 'PC24', stand: sharedStand };
+  let attempted = false;
+  run(
     fleet,
-    1200,
-    () => closed && (fleet.idle(departure.id) || fleet.metrics().departed > 0),
-    (step) => {
-      if (step === 1000)
-        expect(fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 }).ok).toBe(
-          true,
-        );
-      if (closed || fleet.statusOf(departure.id) !== 'holding') return;
-      closed = true;
-      fleet.setRunwayConfiguration(
-        target ? { id: target, arrivalEnds: [target], departureEnds: [target] } : null,
-        step / 10,
-      );
+    600,
+    () => fleet.idle(tow.id),
+    () => {
+      if (attempted || fleet.statusOf(tow.id) !== 'pushback') return;
+      attempted = true;
+      expect(fleet.spawnParked(parked).ok).toBe(false);
+      expect(fleet.snapshot()).toHaveLength(1);
     },
   );
-  expect(closed).toBe(true);
-  const track = poses.get(departure.id)!;
-  if (target) {
-    expect(kinds(events, departure.id)).toEqual(['off-block', 'departed']);
-    expect(track.find((pose) => pose.state === 'takeoff-roll')?.runwayEnd).toBe(target);
-    expect(fleet.metrics().rerouted).toBe(1);
-  } else {
-    expect(kinds(events, departure.id)).toEqual(['off-block', 'returned']);
-    expect(fleet.idle(departure.id)).toBe(true);
-    const stand = graph.index.stand.get(track.at(-1)!.stand!)!;
-    expect(track.at(-1)?.state).toBe('parked');
-    expect(fleet.standOccupant(stand)).toBe(departure.id);
-    expect(events.at(-1)).toMatchObject({ id: departure.id, kind: 'returned', stand });
-    expect(track.some((pose) => pose.state === 'takeoff-roll')).toBe(false);
-  }
+  expect(attempted).toBe(true);
+  expect(fleet.idle(tow.id)).toBe(true);
+  expect(fleet.spawnParked(parked).ok).toBe(true);
+  expect(overlaps(fleet.snapshot())).toEqual([]);
 });
 
-test('departures queued at a hold can clear it after the runway closes', () => {
-  const { fleet, stands } = fleetOf();
-  fleet.setRunwayConfiguration({ id: '27', arrivalEnds: ['27'], departureEnds: ['27'] });
-  const first = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
-  const second = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E1 });
-  if (!first.ok || !second.ok) throw new Error('Two departures must park');
-  expect(fleet.requestDeparture(first.id, '27').ok).toBe(true);
-  let closed = false;
-  const { events } = run(
-    fleet,
-    1800,
-    () => closed && fleet.idle(first.id) && fleet.idle(second.id),
-    (step) => {
-      if (step === 30) expect(fleet.requestDeparture(second.id, '27').ok).toBe(true);
-      if (step === 1000)
-        expect(fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 }).ok).toBe(
-          true,
-        );
-      if (closed || fleet.statusOf(first.id) !== 'holding') return;
-      expect(fleet.statusOf(second.id)).toBe('taxi');
-      closed = true;
-      fleet.setRunwayConfiguration(null, step / 10);
+test('a waiting departure leaves room for the wing sweep on the tight turn into Boston A5', async () => {
+  const { city } = await openBundled('boston-logan');
+  const graph = compileAirside(city.airport!, city, {
+    roads: [],
+    lanes: [],
+    movements: [],
+    index: {
+      node: new Map(),
+      road: new Map(),
+      lane: new Map(),
+      movement: new Map(),
+      place: new Map(),
+      connector: new Map(),
+      parking: new Map(),
     },
-  );
-  expect(closed).toBe(true);
-  expect(kinds(events, first.id)).toEqual(['off-block', 'returned']);
-  expect(kinds(events, second.id)).toEqual(['off-block', 'returned']);
+  });
+  const fleet = createAircraftFleet(graph, 3);
+  const stand = (ref: string) => graph.stands.find((s) => s.ref === ref)!.id;
+  const departure = fleet.spawnParked({ typeId: 'B738', stand: stand('A21') });
+  const arrival = fleet.requestArrival({ typeId: 'B738', runwayEnd: '22L', stand: stand('A5') });
+  if (!departure.ok || !arrival.ok) throw new Error('Both aircraft must be scheduled');
+  expect(fleet.requestDeparture(departure.id, '22R').ok).toBe(true);
+  run(fleet, 1000, () => fleet.idle(arrival.id) && fleet.metrics().departed === 1);
+  expect(fleet.metrics()).toMatchObject({ landed: 1, departed: 1 });
+  expect(fleet.idle(arrival.id)).toBe(true);
 });
+
+// TASK-360: on main's line-up choice (the 27 end); rule 1 would take the x = 300 entry.
+test.each(['09', null])('a departure at a closed hold recovers with target %s', (target) =>
+  withRules('', () => {
+    const { fleet, stands, graph } = fleetOf(undefined, (city) => {
+      // A long unsplit connector puts the fallback hold less than half an edge from the turn.
+      const airport = city.airport!;
+      const hold = Object.values(airport.holdingPositions).find(
+        ({ node }) => airport.nodes[node]!.pos.x === 1500,
+      )!;
+      const toward = airport.edges[hold.toward!]!;
+      const other = Object.values(airport.edges).find(({ from }) => from === hold.node)!;
+      toward.to = other.to;
+      toward.line = [toward.line[0]!, other.line.at(-1)!];
+      delete airport.edges[other.id];
+      delete airport.holdingPositions[hold.id];
+      delete airport.nodes[hold.node];
+    });
+    fleet.setRunwayConfiguration({ id: '27', arrivalEnds: ['27'], departureEnds: ['27'] });
+    const departure = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
+    if (!departure.ok) throw new Error(departure.reason);
+    expect(fleet.requestDeparture(departure.id, '27').ok).toBe(true);
+    let closed = false;
+    const { poses, events } = run(
+      fleet,
+      1200,
+      () => closed && (fleet.idle(departure.id) || fleet.metrics().departed > 0),
+      (step) => {
+        if (step === 1000)
+          expect(
+            fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 }).ok,
+          ).toBe(true);
+        if (closed || fleet.statusOf(departure.id) !== 'holding') return;
+        closed = true;
+        fleet.setRunwayConfiguration(
+          target ? { id: target, arrivalEnds: [target], departureEnds: [target] } : null,
+          step / 10,
+        );
+      },
+    );
+    expect(closed).toBe(true);
+    const track = poses.get(departure.id)!;
+    if (target) {
+      expect(kinds(events, departure.id)).toEqual(['off-block', 'departed']);
+      expect(track.find((pose) => pose.state === 'takeoff-roll')?.runwayEnd).toBe(target);
+      expect(fleet.metrics().rerouted).toBe(1);
+    } else {
+      expect(kinds(events, departure.id)).toEqual(['off-block', 'returned']);
+      expect(fleet.idle(departure.id)).toBe(true);
+      const stand = graph.index.stand.get(track.at(-1)!.stand!)!;
+      expect(track.at(-1)?.state).toBe('parked');
+      expect(fleet.standOccupant(stand)).toBe(departure.id);
+      expect(events.at(-1)).toMatchObject({ id: departure.id, kind: 'returned', stand });
+      expect(track.some((pose) => pose.state === 'takeoff-roll')).toBe(false);
+    }
+  }),
+);
+
+// TASK-360: on main's line-up choice (the 27 end); rule 1 would take the x = 300 entry.
+test('departures queued at a hold can clear it after the runway closes', () =>
+  withRules('', () => {
+    const { fleet, stands } = fleetOf();
+    fleet.setRunwayConfiguration({ id: '27', arrivalEnds: ['27'], departureEnds: ['27'] });
+    const first = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
+    const second = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E1 });
+    if (!first.ok || !second.ok) throw new Error('Two departures must park');
+    expect(fleet.requestDeparture(first.id, '27').ok).toBe(true);
+    let closed = false;
+    const { events } = run(
+      fleet,
+      1800,
+      () => closed && fleet.idle(first.id) && fleet.idle(second.id),
+      (step) => {
+        if (step === 30) expect(fleet.requestDeparture(second.id, '27').ok).toBe(true);
+        if (step === 1000)
+          expect(
+            fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 }).ok,
+          ).toBe(true);
+        if (closed || fleet.statusOf(first.id) !== 'holding') return;
+        expect(fleet.statusOf(second.id)).toBe('taxi');
+        closed = true;
+        fleet.setRunwayConfiguration(null, step / 10);
+      },
+    );
+    expect(closed).toBe(true);
+    expect(kinds(events, first.id)).toEqual(['off-block', 'returned']);
+    expect(kinds(events, second.id)).toEqual(['off-block', 'returned']);
+  }));
 
 test('an arrival appears 10 km out, lands, vacates at the first usable exit and parks', () => {
   const { fleet, stands, graph } = fleetOf();
@@ -214,126 +289,135 @@ test('an arrival parks on its stand heading clear of the apron road and pushes b
   expect(off(moving!.heading - parked.heading)).toBeLessThan((0.5 * Math.PI) / 180);
 });
 
-test('a departure pushes back, taxis, holds for a landing, lines up and climbs out', () => {
-  const { fleet, stands } = fleetOf();
-  const parked = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
-  if (!parked.ok) throw new Error(parked.reason);
-  expect(fleet.requestDeparture(parked.id, '27').ok).toBe(true);
-  // A landing on 27 booked as the departure nears the hold holds it there until it has vacated.
-  const { poses } = run(
-    fleet,
-    1200,
-    () => fleet.metrics().departed === 1,
-    (step) => {
-      if (step === 1000)
-        fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 });
-    },
-  );
-  const track = poses.get(parked.id)!;
-  expect(states(track)).toEqual([
-    'ready-for-pushback',
-    'pushback',
-    'taxi',
-    'holding',
-    'line-up',
-    'takeoff-roll',
-    'rotation',
-    'climb',
-  ]);
-  // Pushed back with engines starting, a stop for the tug, then taxi.
-  expect(track.find((p) => p.state === 'pushback')!.enginesRunning).toBe(true);
-  // It holds with its nose at the 27 hold (x = 1500, y = 100), 19 m behind which is its centre.
-  const holding = track.find((p) => p.state === 'holding')!;
-  expect(holding.x).toBeCloseTo(1500, 0);
-  expect(holding.y).toBeCloseTo(100 + 38.7 / 2, 0);
-  expect(holding.onRunway).toBe(false);
-  // Lined up at the end and off along the runway heading west, gear up once climbing.
-  const roll = track.find((p) => p.state === 'takeoff-roll')!;
-  expect(Math.abs(Math.cos(roll.heading) + 1)).toBeLessThan(1e-3);
-  const last = track.at(-1)!;
-  expect(last.x).toBeLessThan(-1500 - 9000);
-  expect(last.gearDown).toBe(false);
-  expect(fleet.metrics()).toMatchObject({ departed: 1, landed: 1, stuck: 0 });
-});
+// TASK-360: on main's line-up choice (the 27 end); rule 1 would take the x = 300 entry.
+test('a departure pushes back, taxis, holds for a landing, lines up and climbs out', () =>
+  withRules('', () => {
+    const { fleet, stands } = fleetOf();
+    const parked = fleet.spawnParked({ typeId: 'BCS3', stand: stands.E2 });
+    if (!parked.ok) throw new Error(parked.reason);
+    expect(fleet.requestDeparture(parked.id, '27').ok).toBe(true);
+    // A landing on 27 booked as the departure nears the hold holds it there until it has vacated.
+    const { poses } = run(
+      fleet,
+      1200,
+      () => fleet.metrics().departed === 1,
+      (step) => {
+        if (step === 1000)
+          fleet.requestArrival({ typeId: 'E190', runwayEnd: '27', stand: stands.C1 });
+      },
+    );
+    const track = poses.get(parked.id)!;
+    expect(states(track)).toEqual([
+      'ready-for-pushback',
+      'pushback',
+      'taxi',
+      'holding',
+      'line-up',
+      'takeoff-roll',
+      'rotation',
+      'climb',
+    ]);
+    // Pushed back with engines starting, a stop for the tug, then taxi.
+    expect(track.find((p) => p.state === 'pushback')!.enginesRunning).toBe(true);
+    // It holds with its nose at the 27 hold (x = 1500, y = 100), 19 m behind which is its centre.
+    const holding = track.find((p) => p.state === 'holding')!;
+    expect(holding.x).toBeCloseTo(1500, 0);
+    expect(holding.y).toBeCloseTo(100 + 38.7 / 2, 0);
+    expect(holding.onRunway).toBe(false);
+    // Lined up at the end and off along the runway heading west, gear up once climbing.
+    const roll = track.find((p) => p.state === 'takeoff-roll')!;
+    expect(Math.abs(Math.cos(roll.heading) + 1)).toBeLessThan(1e-3);
+    const last = track.at(-1)!;
+    expect(last.x).toBeLessThan(-1500 - 9000);
+    expect(last.gearDown).toBe(false);
+    expect(fleet.metrics()).toMatchObject({ departed: 1, landed: 1, stuck: 0 });
+  }));
 
 test.each([
   { code: 'E', roller: 'B77W', towAt: 400 },
   { code: 'C', roller: 'E175', towAt: 150 },
 ] as const)(
   'a crossing hold clears a rolling aircraft on a code $code runway',
-  ({ code, roller, towAt }) => {
-    const holdX = -900;
-    const holdY = 25;
-    const target = 'an:9000';
-    const crossingType = aircraftTypes.find(({ id }) => id === 'E175')!;
-    const { fleet, stands, graph } = fleetOf(undefined, (city) => {
-      const airport = city.airport!;
-      airport.runways['rw:1']!.maxCode = code;
-      const hold = Object.values(airport.holdingPositions).find(
-        ({ node }) => airport.nodes[node]!.pos.x === holdX,
-      )!;
-      const holdNode = airport.nodes[hold.node]!;
-      holdNode.pos.y = holdY;
-      const toward = airport.edges[hold.toward!]!;
-      for (const edge of Object.values(airport.edges)) {
-        if (edge.from === hold.node) edge.line[0] = holdNode.pos;
-        if (edge.to === hold.node) edge.line[edge.line.length - 1] = holdNode.pos;
-      }
-      const stop = { x: holdX, y: -200 };
-      airport.nodes[target] = { ...holdNode, id: target, pos: stop };
-      airport.edges['ae:9000'] = {
-        ...toward,
-        id: 'ae:9000',
-        to: target,
-        line: [toward.line[0]!, stop],
-      };
-    });
-    const departure = fleet.spawnParked({ typeId: roller, stand: stands.L1 });
-    const crossing = fleet.spawnParked({ typeId: crossingType.id, stand: stands.C1 });
-    if (!departure.ok) throw new Error(departure.reason);
-    if (!crossing.ok) throw new Error(crossing.reason);
-    // TASK-346: a departure holds the runway from its line-up, not while it taxis, so the tow is
-    // asked for once the departure is on its way, to reach the hold while it rolls past.
-    expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
-    const { poses } = run(
-      fleet,
-      900,
-      () => fleet.metrics().departed === 1 && fleet.metrics().towed === 1,
-      (step) => {
-        if (step === towAt)
-          expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(
-            true,
-          );
-      },
-    );
-    const pass = poses.get(departure.id)!.find((p) => p.state === 'takeoff-roll' && p.x >= holdX)!;
-    const waiting = poses.get(crossing.id)!.find((p) => p.timeS === pass.timeS)!;
-    expect(waiting.speedMps).toBe(0);
-    expect(waiting.x).toBeCloseTo(holdX);
-    expect(overlaps([pass, waiting])).toEqual([]);
-    const mappedStopY = holdY + crossingType.lengthM / 2;
-    if (code === 'E') expect(waiting.y).toBeGreaterThan(mappedStopY);
-    else expect(waiting.y).toBeCloseTo(mappedStopY);
-    expect(fleet.metrics()).toMatchObject({ departed: 1, towed: 1, stuck: 0 });
-  },
+  // TASK-360: on main's line-up choice (the roller from the 09 end, timed for the tow).
+  ({ code, roller, towAt }) =>
+    withRules('', () => {
+      const holdX = -900;
+      const holdY = 25;
+      const target = 'an:9000';
+      const crossingType = aircraftTypes.find(({ id }) => id === 'E175')!;
+      const { fleet, stands, graph } = fleetOf(undefined, (city) => {
+        const airport = city.airport!;
+        airport.runways['rw:1']!.maxCode = code;
+        const hold = Object.values(airport.holdingPositions).find(
+          ({ node }) => airport.nodes[node]!.pos.x === holdX,
+        )!;
+        const holdNode = airport.nodes[hold.node]!;
+        holdNode.pos.y = holdY;
+        const toward = airport.edges[hold.toward!]!;
+        for (const edge of Object.values(airport.edges)) {
+          if (edge.from === hold.node) edge.line[0] = holdNode.pos;
+          if (edge.to === hold.node) edge.line[edge.line.length - 1] = holdNode.pos;
+        }
+        const stop = { x: holdX, y: -200 };
+        airport.nodes[target] = { ...holdNode, id: target, pos: stop };
+        airport.edges['ae:9000'] = {
+          ...toward,
+          id: 'ae:9000',
+          to: target,
+          line: [toward.line[0]!, stop],
+        };
+      });
+      const departure = fleet.spawnParked({ typeId: roller, stand: stands.L1 });
+      const crossing = fleet.spawnParked({ typeId: crossingType.id, stand: stands.C1 });
+      if (!departure.ok) throw new Error(departure.reason);
+      if (!crossing.ok) throw new Error(crossing.reason);
+      // TASK-346: a departure holds the runway from its line-up, not while it taxis, so the tow is
+      // asked for once the departure is on its way, to reach the hold while it rolls past.
+      expect(fleet.requestDeparture(departure.id, '09').ok).toBe(true);
+      const { poses } = run(
+        fleet,
+        900,
+        () => fleet.metrics().departed === 1 && fleet.metrics().towed === 1,
+        (step) => {
+          if (step === towAt)
+            expect(fleet.requestTow(crossing.id, { node: graph.index.node.get(target)! }).ok).toBe(
+              true,
+            );
+        },
+      );
+      const pass = poses
+        .get(departure.id)!
+        .find((p) => p.state === 'takeoff-roll' && p.x >= holdX)!;
+      const waiting = poses.get(crossing.id)!.find((p) => p.timeS === pass.timeS)!;
+      expect(waiting.speedMps).toBe(0);
+      expect(waiting.x).toBeCloseTo(holdX);
+      expect(overlaps([pass, waiting])).toEqual([]);
+      const mappedStopY = holdY + crossingType.lengthM / 2;
+      if (code === 'E') expect(waiting.y).toBeGreaterThan(mappedStopY);
+      else expect(waiting.y).toBeCloseTo(mappedStopY);
+      expect(fleet.metrics()).toMatchObject({ departed: 1, towed: 1, stuck: 0 });
+    }),
 );
 
-test('with no taxiway to the 27 end a departure backtracks and turns round on the runway', () => {
-  const { fleet, stands } = fleetOf({ backtrack: true });
-  const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
-  if (!parked.ok) throw new Error(parked.reason);
-  fleet.requestDeparture(parked.id, '27');
-  const { poses } = run(fleet, 900);
-  const track = poses.get(parked.id)!;
-  const lineUp = track.filter((p) => p.state === 'line-up');
-  // Onto the runway at x = 1400 heading east, round the loop near the end, then west.
-  expect(Math.max(...lineUp.map((p) => p.x))).toBeGreaterThan(1450);
-  expect(lineUp.some((p) => Math.cos(p.heading) > 0.99 && p.onRunway)).toBe(true);
-  const roll = track.find((p) => p.state === 'takeoff-roll')!;
-  expect(Math.cos(roll.heading)).toBeLessThan(-0.999);
-  expect(roll.x).toBeGreaterThan(1400);
-  expect(fleet.metrics().departed).toBe(1);
-});
+// TASK-360: on main's line-up choice; under rule 1 the E190 takes the x = 300 entry and a
+// B77W backtracks (the rule 1 test below).
+test('with no taxiway to the 27 end a departure backtracks and turns round on the runway', () =>
+  withRules('', () => {
+    const { fleet, stands } = fleetOf({ backtrack: true });
+    const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
+    if (!parked.ok) throw new Error(parked.reason);
+    fleet.requestDeparture(parked.id, '27');
+    const { poses } = run(fleet, 900);
+    const track = poses.get(parked.id)!;
+    const lineUp = track.filter((p) => p.state === 'line-up');
+    // Onto the runway at x = 1400 heading east, round the loop near the end, then west.
+    expect(Math.max(...lineUp.map((p) => p.x))).toBeGreaterThan(1450);
+    expect(lineUp.some((p) => Math.cos(p.heading) > 0.99 && p.onRunway)).toBe(true);
+    const roll = track.find((p) => p.state === 'takeoff-roll')!;
+    expect(Math.cos(roll.heading)).toBeLessThan(-0.999);
+    expect(roll.x).toBeGreaterThan(1400);
+    expect(fleet.metrics().departed).toBe(1);
+  }));
 
 test.each([
   { intersectionX: -900, waits: false },
@@ -479,7 +563,7 @@ function busy(fleet: AircraftFleet, stands: ReturnType<typeof airportFixture>['s
 test('one aircraft on the runway at a time; every movement completes', () => {
   const { fleet, stands } = fleetOf();
   busy(fleet, stands);
-  run(fleet, 3600, () => fleet.metrics().departed === 3 && fleet.metrics().active === 3);
+  run(fleet, 3600, () => fleet.metrics().departed === 3 && fleet.parked().length === 3);
   expect(fleet.metrics()).toMatchObject({ departed: 3, landed: 3, stuck: 0, queuedArrivals: 0 });
   expect(fleet.parked().length).toBe(3);
 });
@@ -619,13 +703,118 @@ test.each([
     expect(fleet.parked().map((p) => p.id)).toEqual([arrival.id]);
     const lineUp = poses.get(e190.id)!.filter((p) => p.state === 'line-up');
     // With one midfield entrance (x = 1400) the 27 departure taxis east along the runway to
-    // the end (x = 2800) and turns round; with the parallel taxiway it enters at the end.
+    // the end (x = 2800) and turns round; with the parallel taxiway it enters heading west, at
+    // the end or (TASK-360 rule 1) at an entry nearer its route that its run fits, never
+    // backtracking.
     if (layout === 'backtrack') {
       expect(lineUp.some((p) => p.onRunway && Math.cos(p.heading) > 0.99 && p.x < 2600)).toBe(true);
       expect(Math.max(...lineUp.map((p) => p.x))).toBeGreaterThan(2780);
-    } else expect(lineUp.every((p) => p.x > 2600)).toBe(true);
+    } else expect(lineUp.some((p) => p.onRunway && Math.cos(p.heading) > 0.5)).toBe(false);
     // The widebody takes only code E edges.
     for (const p of poses.get(a333.id)!)
       for (const e of p.route) expect(graph.edges[e]!.maxCode).toBeGreaterThanOrEqual(4);
   },
 );
+
+// TASK-360: departures' three rules (`withRules`).
+test('rule 1: a departure takes the intersection nearest its route that its run fits; a B77W backtracks', () => {
+  withRules('irm', () => {
+    const { fleet, stands } = fleetOf({ backtrack: true });
+    const e190 = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
+    const b77w = fleet.spawnParked({ typeId: 'B77W', stand: stands.E1 });
+    if (!e190.ok || !b77w.ok) throw new Error('parked');
+    fleet.requestDeparture(e190.id, '27');
+    const { poses } = run(
+      fleet,
+      1500,
+      () => fleet.metrics().departed === 2,
+      (step) => {
+        if (step === 600) fleet.requestDeparture(b77w.id, '27');
+      },
+    );
+    // The E190 (run 1.4 km, 15 % spare) enters at x = 300, 1.2 km from the 27 end, heading west:
+    // 1.8 km ahead. The B77W's run does not fit there; it backtracks from x = 1400 to the end.
+    const e190Up = poses.get(e190.id)!.filter((p) => p.state === 'line-up');
+    expect(Math.max(...e190Up.map((p) => p.x))).toBeLessThan(330);
+    expect(e190Up.some((p) => p.onRunway && Math.cos(p.heading) > 0.5)).toBe(false);
+    const b77wUp = poses.get(b77w.id)!.filter((p) => p.state === 'line-up');
+    expect(Math.max(...b77wUp.map((p) => p.x))).toBeGreaterThan(1450);
+    expect(fleet.departureCounts().takeoffsByType).toMatchObject({
+      E190: { intersection: 1, full: 0, backtrack: 0 },
+      B77W: { intersection: 0, full: 0, backtrack: 1 },
+    });
+    expect(fleet.metrics()).toMatchObject({ departed: 2, stuck: 0 });
+  });
+});
+
+/** TASK-360 rules 2 and 3 on the inline airport, departing 27: an E190 enters at x = 300; a PC24
+ * at x = -300, 600 m further down the runway; then an E175 at x = 300 again. */
+function threeDepartures() {
+  const { fleet, stands } = fleetOf();
+  const ids = (
+    [
+      ['E190', stands.C2],
+      ['PC24', stands.E1],
+      ['E175', stands.C1],
+    ] as const
+  ).map(([typeId, stand]) => {
+    const parked = fleet.spawnParked({ typeId, stand });
+    if (!parked.ok) throw new Error(parked.reason);
+    return parked.id;
+  });
+  const { poses } = run(
+    fleet,
+    1500,
+    () => fleet.metrics().departed === 3,
+    (step) => {
+      if (step === 0) fleet.requestDeparture(ids[0]!, '27');
+      if (step === 300) fleet.requestDeparture(ids[1]!, '27');
+      if (step === 600) fleet.requestDeparture(ids[2]!, '27');
+    },
+  );
+  const tracks = ids.map((id) => poses.get(id)!);
+  const first = (track: (typeof tracks)[0], state: string) => track.find((p) => p.state === state)!;
+  return { fleet, tracks, first };
+}
+
+test('rule 2: a departure lines up ahead of a roll once the roller is past its entry', () => {
+  withRules('irm', () => {
+    const { fleet, tracks, first } = threeDepartures();
+    const [e190, pc24] = tracks as [(typeof tracks)[0], (typeof tracks)[0]];
+    const lineUp = first(pc24, 'line-up');
+    expect(lineUp.x).toBeCloseTo(-300, -1);
+    // It enters while the E190, which started at x = 300, rolls on west of it.
+    const roller = e190.find((p) => p.timeS === lineUp.timeS)!;
+    expect(['takeoff-roll', 'rotation', 'climb']).toContain(roller.state);
+    expect(roller.x).toBeLessThan(-300 - 50);
+    expect(fleet.departureCounts().lineUpsAheadOfRoll).toBeGreaterThanOrEqual(1);
+  });
+});
+
+test('rule 3: two departures stand lined up at two entries; the front one goes first', () => {
+  withRules('irm', () => {
+    const { fleet, tracks, first } = threeDepartures();
+    const [, pc24, e175] = tracks as [(typeof tracks)[0], (typeof tracks)[0], (typeof tracks)[0]];
+    // The E175 lines up at x = 300 while the PC24 stands lined up at x = -300.
+    const both = e175.filter(
+      (p) =>
+        p.state === 'line-up' &&
+        pc24.find((q) => q.timeS === p.timeS)?.state === 'line-up' &&
+        p.onRunway,
+    );
+    expect(both.length).toBeGreaterThan(0);
+    expect(fleet.departureCounts().multiLineUps).toBe(1);
+    // The PC24 rolls first; the E175 once the PC24 is off the runway and 75 s have run.
+    const frontRoll = first(pc24, 'takeoff-roll');
+    const rearRoll = first(e175, 'takeoff-roll');
+    expect(rearRoll.timeS - frontRoll.timeS).toBeGreaterThanOrEqual(75);
+    expect(fleet.metrics()).toMatchObject({ departed: 3, stuck: 0 });
+  });
+});
+
+test('without the rules the PC24 waits for the E190 to clear and the E175 for the PC24', () => {
+  withRules('', () => {
+    const { fleet } = threeDepartures();
+    expect(fleet.departureCounts()).toMatchObject({ multiLineUps: 0, lineUpsAheadOfRoll: 0 });
+  });
+});

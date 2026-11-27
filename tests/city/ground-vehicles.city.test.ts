@@ -3,6 +3,7 @@ import { openBundled } from '../../bench/bundled-cities';
 import { compile } from '../../src/network';
 import { createAircraftFleet } from '../../src/sim/aircraft';
 import { createFlightOperations } from '../../src/sim/flight-operations';
+import type { TurnaroundEvent } from '../../src/sim/flight-operations';
 import { createGroundVehicles } from '../../src/sim/ground-vehicles';
 import { groundOverlaps } from '../sim/ground-vehicle-checks';
 import { limit } from '../timeouts';
@@ -74,6 +75,16 @@ test(
           expect(visit.arrivedS).toBeLessThan(visit.leaveS);
     // Vehicles held short of zones aircraft were coming through.
     expect(metrics.yields).toBeGreaterThan(0);
+    expect(Object.values(metrics.missingTugsBy).reduce((n, count) => n + count, 0)).toBe(
+      metrics.tugsMissing,
+    );
+    expect(Object.values(metrics.droppedBy).reduce((n, count) => n + count, 0)).toBe(
+      metrics.dropped,
+    );
+    expect(Object.values(metrics.lateBy).reduce((n, count) => n + count, 0)).toBe(
+      metrics.late + metrics.missed,
+    );
+    expect(Object.values(metrics.queuedBy).reduce((n, count) => n + count, 0)).toBe(metrics.stuck);
     expect(run.withVehicles).toBe(0);
     expect(run.withAircraft).toBe(0);
     // A few wait long for an aircraft whose due push or tow is late (report).
@@ -83,5 +94,38 @@ test(
     expect(again.groundHash).toBe(run.groundHash);
     const alone = await morning(false);
     expect(alone.fleetHash).toBe(run.fleetHash);
+  },
+);
+
+test(
+  'Zurich: a tug takes the short road route to a remote stand',
+  { timeout: limit(60_000) },
+  async () => {
+    const project = await openBundled('zurich-airport');
+    const result = compile(project.city);
+    if (!result.ok || !result.compiled.airside) throw new Error('Zurich must compile');
+    const graph = result.compiled.airside;
+    const fleet = createAircraftFleet(graph, 1);
+    const stand = 'st:21356';
+    const typeId = 'E190';
+    const parked = fleet.spawnParked({ typeId, stand });
+    if (!parked.ok) throw new Error('The test aircraft must fit its stand');
+    const events: TurnaroundEvent[] = [
+      {
+        kind: 'tow-planned',
+        id: parked.id,
+        stand: graph.index.stand.get(stand)!,
+        typeId,
+        timeS: 300,
+      },
+    ];
+    const ground = createGroundVehicles(result.compiled, {
+      snapshot: () => fleet.snapshot(),
+      movementSpace: () => [],
+      drainTurnarounds: () => events.splice(0),
+    });
+    // The geographically nearest depot is over 7 km away by road. Another needs only about 1.3 km.
+    for (let step = 0; step <= 3_000; step++) ground.step(step / 10);
+    expect(ground.metrics().served).toBe(1);
   },
 );

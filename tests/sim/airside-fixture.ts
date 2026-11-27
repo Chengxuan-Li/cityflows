@@ -12,7 +12,8 @@ import type { Airport, AirsideEdge, StandKind } from '../../src/schema/airport';
 // instead (departures from 27 backtrack). `road`: a two-way service road crossing the link at
 // y = 300. `hook` (TASK-320): a stand K whose lead-in runs 45 m south from the taxiway at x = 700
 // and turns back 25 m to the north-west, as London City's stands do, on an apron with an apron
-// service road (closed to cars) along y = 250 behind it.
+// service road (closed to cars) along y = 250 behind it. `far` (TASK-363): a code E stand J south
+// of the taxiway at x = 1000, east of K, reached from the runway's exits along the taxiway past K.
 
 const generated = { source: 'generated' as const };
 
@@ -20,8 +21,15 @@ export function airportFixture({
   backtrack = false,
   road = false,
   hook = false,
+  far = false,
   intersectionX,
-}: { backtrack?: boolean; road?: boolean; hook?: boolean; intersectionX?: number } = {}) {
+}: {
+  backtrack?: boolean;
+  road?: boolean;
+  hook?: boolean;
+  far?: boolean;
+  intersectionX?: number;
+} = {}) {
   const { city, node, road: addRoad, place } = buildCity('Inline airport', 298);
   const airport: Airport = {
     name: 'Inline',
@@ -99,6 +107,7 @@ export function airportFixture({
   // The parallel taxiway, split at every junction.
   const taxiXs = [-1500, -1000, -900, -800, -600, -300, -150, -50, 50, 150, 300];
   if (hook) taxiXs.push(700);
+  if (far) taxiXs.push(1000);
   taxiXs.push(backtrack ? 1400 : 1500);
   for (let i = 1; i < taxiXs.length; i++) {
     const [a, b] = [taxiXs[i - 1]!, taxiXs[i]!];
@@ -151,6 +160,7 @@ export function airportFixture({
           K: stand('K', p(700, 200), p(681.8, 227.9), 'C', 'remote', [p(700, 245)]),
         }
       : {}),
+    ...(far ? { J: stand('J', p(1000, 200), p(1000, 290), 'E', 'contact') } : {}),
   };
   if (hook) {
     airport.surfaces.push({
@@ -264,4 +274,18 @@ export function airportFixture({
     city,
     stands: stands as typeof stands & Partial<Record<'South' | 'West' | 'East', string>>,
   };
+}
+
+/** TASK-360: runs `body` with the departure rules `rules` (the env T360, read when a fleet is
+ * created: i intersection take-offs, r line-up behind a passing roll, m multiple line-ups; empty
+ * for the line-up choice before them). */
+export function withRules<T>(rules: string, body: () => T): T {
+  const before = process.env.T360;
+  process.env.T360 = rules;
+  try {
+    return body();
+  } finally {
+    if (before === undefined) delete process.env.T360;
+    else process.env.T360 = before;
+  }
 }

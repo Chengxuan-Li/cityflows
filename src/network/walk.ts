@@ -20,6 +20,7 @@ import {
   crossingEnabled,
   crossingLine,
   crossingPlacement,
+  crossingStyle,
   UNMARKED_CENTRE_M,
   type CrossedEnd,
 } from './crossings';
@@ -52,7 +53,9 @@ export interface CWalkLink {
   crossing?: {
     road: number;
     end: 'start' | 'end' | 'midblock';
-    control: 'zebra' | 'signal';
+    /** TASK-279: `unmarked`, an unsignalised crossing that draws no zebra: walkers have no
+     * priority there (StVO §25(3)) but over drivers turning into the arm (§9(3)). */
+    control: CrossingControl;
     /** TASK-111: the node and its arm (`crossingArms` index) the crossing serves; -1 for a
      * midblock zebra. */
     node: number;
@@ -61,6 +64,7 @@ export interface CWalkLink {
     spans: CrossingSpan[];
   };
 }
+export type CrossingControl = 'zebra' | 'signal' | 'unmarked';
 /** TASK-111: a crossing link over one lane. `atM` is along the lane where the link meets its
  * centreline, `halfM` half the stripes' extent along the lane; `linkM` and `linkHalfM` the same
  * along the link for the lane's width. */
@@ -473,7 +477,12 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         const node = city.nodes[atEnd ? road.to : road.from]!;
         const end =
           Math.min(near.along, length - near.along) > 30 ? 'midblock' : atEnd ? 'end' : 'start';
-        const control = node.signal && distance(node.pos, p) < 40 ? 'signal' : 'zebra';
+        const control: CrossingControl =
+          node.signal && distance(node.pos, p) < 40
+            ? 'signal'
+            : link.marking === 'none'
+              ? 'unmarked'
+              : 'zebra';
         const junction = end !== 'midblock' || control === 'signal';
         crossing = {
           road: road.idx,
@@ -645,7 +654,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       const served = arm.find(
         (e) =>
           crossingEnabled(city, e.road, e.atEnd, source) &&
-          crossingPlacement(city, e.road, e.atEnd).stripes.length,
+          crossingPlacement(city, e.road, e.atEnd, source).stripes.length,
       );
       if (!served) continue;
       const { road, atEnd } = served,
@@ -694,7 +703,16 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         crossing: {
           road: road.idx,
           end: atEnd ? 'end' : 'start',
-          control: node.signal ? 'signal' : 'zebra',
+          // TASK-279: unmarked where no end of the arm draws paint (`crossingStyle` 'none').
+          control: node.signal
+            ? 'signal'
+            : arm.some(
+                  (e) =>
+                    crossingEnabled(city, e.road, e.atEnd, source) &&
+                    crossingStyle(city, e.road, e.atEnd, source) !== 'none',
+                )
+              ? 'zebra'
+              : 'unmarked',
           node: node.idx,
           arm: i,
           spans: [],

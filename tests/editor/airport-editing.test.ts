@@ -12,7 +12,7 @@ import type { Airport } from '../../src/schema/airport';
 import { airportSchema } from '../../src/schema/airport.schema';
 import { scenarioSchema, type City, type Command } from '../../src/schema';
 import { createAircraftFleet } from '../../src/sim/aircraft';
-import { airportFixture } from '../sim/airside-fixture';
+import { airportFixture, withRules } from '../sim/airside-fixture';
 
 // TASK-305: airport edits through the editor: each command, its undo, the recompiled airside.
 
@@ -197,9 +197,10 @@ describe('taxiways', () => {
     const { city, stands } = airportFixture();
     city.nextId = 10_000;
     const editor = createEditor(city);
+    // TASK-360: to the 09 end, the line-up choice before rule 1 (which enters at x = -300).
     const departureRoute = () => {
       const graph = editor.compiled.airside!;
-      const fleet = createAircraftFleet(graph, 1);
+      const fleet = withRules('', () => createAircraftFleet(graph, 1));
       const parked = fleet.spawnParked({ typeId: 'E190', stand: stands.C2 });
       if (!parked.ok) throw new Error(parked.reason);
       expect(fleet.requestDeparture(parked.id, '09').ok).toBe(true);

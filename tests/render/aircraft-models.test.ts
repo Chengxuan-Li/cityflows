@@ -12,7 +12,6 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { aircraftLivery, type AircraftLivery } from '../../src/render/aircraft-livery';
 import { boardingDoor, modelSection } from '../../src/render/aircraft-outline';
 import type { AircraftPose } from '../../src/render/types';
 import { Aircraft3D } from '../../src/render3d/aircraft';
@@ -20,9 +19,12 @@ import { gearBudget, gearLayout, tyreBands } from '../../src/render3d/aircraft-m
 import {
   AircraftModels,
   lodPixels,
+  liveryStyles,
   modelBody,
   modelGear,
   modelInfo,
+  paintOf,
+  paintSlot,
   selectLod,
   type AircraftModel,
 } from '../../src/render3d/aircraft-models';
@@ -68,7 +70,7 @@ function points(model: AircraftModel, lod: 0 | 1) {
 
 function bodyMesh(model: AircraftModel) {
   const mesh = new Mesh(
-    modelBody(model, 0, aircraftLivery('G-TEST')) as BufferGeometry,
+    modelBody(model, 0) as BufferGeometry,
     new MeshBasicMaterial({ side: DoubleSide }),
   );
   mesh.updateMatrixWorld();
@@ -151,7 +153,7 @@ describe('the common types have real models', () => {
     expect(navTail[0]).toBeLessThan(-0.4 * type.lengthM);
     expect(beacon[1]).toBeGreaterThan(taxi[1]);
     // On the surface: within 40 cm of the nearest triangle.
-    const surface = modelBody(model, 0, aircraftLivery('G-TEST')).getAttribute('position');
+    const surface = modelBody(model, 0).getAttribute('position');
     const triangle = new Triangle();
     const closest = new Vector3();
     for (const mount of [navRight, navTail, beacon]) {
@@ -181,25 +183,19 @@ it('docks the jet bridge at the real fuselage side', async () => {
 
 it('paints the livery onto the fuselage, fin and engines', async () => {
   const model = await load('B738');
-  const key = (c: Color) => [c.r, c.g, c.b].map((v) => v.toFixed(3)).join();
-  const schemes = new Map<string, AircraftLivery>();
-  for (let i = 0; schemes.size < 5 && i < 200; i++) {
-    const livery = aircraftLivery(`G-T${i}`);
-    schemes.set(`${livery.style}:${livery.trim}`, livery);
+  // TASK-359: one body per level for every livery, each vertex painted per style.
+  const body = modelBody(model, 0);
+  expect(modelBody(model, 0)).toBe(body);
+  const codes = body.getAttribute('liveryCode');
+  for (const style of liveryStyles) {
+    const slots = new Set<number>();
+    for (let i = 0; i < codes.count; i++) slots.add(paintOf(codes.getX(i), style));
+    expect(slots.has(paintSlot.tail)).toBe(true);
+    expect(slots.has(paintSlot.engines)).toBe(true);
+    // Pinstripes are cast strips, painted only in the styles that have them.
+    expect(slots.has(paintSlot.trim)).toBe(style !== 'crown' && style !== 'tail');
   }
-  for (const livery of schemes.values()) {
-    const body = modelBody(model, 0, livery);
-    expect(modelBody(model, 0, livery)).toBe(body);
-    const colors = body.getAttribute('color');
-    const seen = new Set<string>();
-    for (let i = 0; i < colors.count; i++)
-      seen.add(key(new Color(colors.getX(i), colors.getY(i), colors.getZ(i))));
-    expect(seen.has(key(new Color(livery.tail)))).toBe(true);
-    // Pinstripes are cast strips, drawn only where the scheme has them.
-    if (livery.trim !== null && livery.style !== 'crown' && livery.style !== 'tail')
-      expect(seen.has(key(new Color(livery.trim)))).toBe(true);
-    expect(model.lods[0]!.parts.some((p) => p.name === 'band-cheatline')).toBe(true);
-  }
+  expect(model.lods[0]!.parts.some((p) => p.name === 'band-cheatline')).toBe(true);
 });
 
 it('switches levels by on-screen size, with hysteresis', () => {

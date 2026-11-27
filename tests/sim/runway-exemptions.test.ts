@@ -3,11 +3,11 @@ import type { AircraftPoseSnapshot } from '../../src/sim/aircraft';
 import { exemptRunwayPair } from './aircraft-checks';
 
 // TASK-345: the runway sharing the owner approved on 2026-11-24.
-const pose = (state: string, x: number, heading = 0): AircraftPoseSnapshot =>
+const pose = (state: string, x: number, heading = 0, runwayEnd: string | null = null) =>
   ({
     id: 1,
     registration: state + x,
-    typeId: 'A320',
+    typeId: 'A20N',
     x,
     y: 0,
     heightM: 0,
@@ -19,7 +19,7 @@ const pose = (state: string, x: number, heading = 0): AircraftPoseSnapshot =>
     airborne: false,
     gearDown: true,
     stand: null,
-    runwayEnd: null,
+    runwayEnd,
     route: [],
   }) as unknown as AircraftPoseSnapshot;
 
@@ -35,6 +35,22 @@ describe('exemptRunwayPair', () => {
   it('lets a departure line up behind one rolling away', () => {
     expect(exemptRunwayPair(pose('line-up', 0), pose('takeoff-roll', 80))).toBe(true);
     expect(exemptRunwayPair(pose('line-up', 100), pose('takeoff-roll', 0))).toBe(false);
+  });
+  it('lets a departure line up behind a roll that started behind its entry (TASK-360 rule 2)', () => {
+    // The roller passed the line-up at x = 0 and is 400 m on; one rolling toward it is a conflict.
+    expect(exemptRunwayPair(pose('line-up', 0), pose('takeoff-roll', 400))).toBe(true);
+    expect(exemptRunwayPair(pose('line-up', 0), pose('takeoff-roll', -400))).toBe(false);
+    expect(exemptRunwayPair(pose('takeoff-roll', 0), pose('takeoff-roll', 400))).toBe(false);
+    expect(exemptRunwayPair(pose('takeoff-roll', 0), pose('rotation', 400, Math.PI))).toBe(false);
+  });
+  it('lets two departures stand lined up one behind the other (TASK-360 rule 3)', () => {
+    const lined = (x: number, end: string | null = '09') => pose('line-up', x, 0, end);
+    expect(exemptRunwayPair(lined(0), lined(300))).toBe(true);
+    expect(exemptRunwayPair(lined(300), lined(0))).toBe(true);
+    // Nose past the other's tail (two A20N, 37.6 m long), other ends, or no end: not exempt.
+    expect(exemptRunwayPair(lined(0), lined(30))).toBe(false);
+    expect(exemptRunwayPair(lined(0), lined(300, '27'))).toBe(false);
+    expect(exemptRunwayPair(lined(0, null), lined(300, null))).toBe(false);
   });
   it('does not exempt a crossing ahead of a take-off roll', () => {
     expect(exemptRunwayPair(pose('taxi', 300), pose('takeoff-roll', 0))).toBe(false);

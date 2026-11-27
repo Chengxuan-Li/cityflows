@@ -1155,8 +1155,11 @@ export function createRailCrossings(
       return best;
     },
     /** TASK-222: the movement whose red stop line, inside the clear zone beyond the tracks, held
-     * `id` at its last `hold`, or -1. */
-    holdRed: (id: number) => holdRecords[id * 2 + 1]!,
+     * `id` at its last `hold`, or -1. With `stopM`, only count a hold at that same stop line. */
+    holdRed: (id: number, stopM?: number) =>
+      stopM === undefined || Math.abs(holdRecords[id * 2]! - stopM) < 0.5
+        ? holdRecords[id * 2 + 1]!
+        : -1,
     binding(id: number, binding: boolean) {
       if (!binding) holds[id] = 0;
     },

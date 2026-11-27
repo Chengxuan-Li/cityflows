@@ -1509,7 +1509,7 @@ export function crossingStripes(
 ): Vec2[][] {
   const mapped = mappedStripes(city, road, atEnd, source);
   if (!crossingEnabled(city, road, atEnd, source)) return mapped;
-  const { stripes } = crossingPlacement(city, road, atEnd);
+  const { stripes } = crossingPlacement(city, road, atEnd, source);
   const style = crossingStyle(city, road, atEnd, source);
   return [
     ...(style === 'zebra' ? stripes : style === 'signal' ? signalLines(stripes) : []),
@@ -1629,7 +1629,7 @@ function paintedMapped(
   if (!hits.length || road.group !== undefined) return [];
   const ownCrossing =
     crossingEnabled(city, road, atEnd, source) &&
-    crossingPlacement(city, road, atEnd).stripes.length > 0;
+    crossingPlacement(city, road, atEnd, source).stripes.length > 0;
   return [...new Set(hits.map((h) => h.link))].flatMap((link) => {
     const own = hits.filter((h) => h.link === link);
     const at = new Map(own.map((h) => [h.lane, h.atM]));

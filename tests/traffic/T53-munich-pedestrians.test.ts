@@ -11,7 +11,9 @@ import { limit } from '../timeouts';
 
 // TASK-111 gates 4 and 5 on Munich: the traffic gate's morning at 0.15, 07:00 to 08:00, with the
 // test source at 2 000 walkers per hour over ten crossing pairs (four over signals, among them
-// Landsberger Straße at the Donnersbergerbrücke, six over zebras), sampled at every step.
+// Landsberger Straße at the Donnersbergerbrücke, six over unsignalised crossings), sampled at every
+// step. TASK-279: of those, n:85's are zebras; n:79, n:189, n:421 and n:212 draw no paint and are
+// unmarked (walkers cross in a gap).
 
 // TASK-131: place ids re-rooted to the places of the same OSM sources (the import no longer
 // merges nodes, so place ids moved; main's p:1677 is now mostly p:1664). The signals main had at
@@ -21,12 +23,12 @@ export const munichWalkerPairs: [string, string][] = [
   ['p:1836', 'p:1558'],
   ['p:1566', 'p:1814'], // signal n:328, Landsberger Straße and Schrenkstraße
   ['p:1566', 'p:1804'], // signal n:328
-  ['p:1698', 'p:1662'], // zebras at n:79
+  ['p:1698', 'p:1662'], // unmarked at n:79
   ['p:1794', 'p:1798'], // zebras at n:85
-  ['p:1560', 'p:1794'], // zebras at n:189
+  ['p:1560', 'p:1794'], // unmarked at n:189
   ['p:1750', 'p:1660'], // zebra at n:859 (TASK-119 removed street-side parking place p:1667)
-  ['p:1562', 'p:1656'], // zebra at n:421
-  ['p:1664', 'p:1698'], // zebra at n:212
+  ['p:1562', 'p:1656'], // unmarked at n:421
+  ['p:1664', 'p:1698'], // unmarked at n:212
 ];
 
 let compiled: CompiledCity;
@@ -70,6 +72,7 @@ test('T53 Munich: no vehicle body over a crossing span a walker is inside', () =
   expect(walkers.dropped).toBe(0);
   expect(walkers.completed).toBeGreaterThan(1500);
   expect(walkers.crossings.zebra).toBeGreaterThan(0);
+  expect(walkers.crossings.unmarked).toBeGreaterThan(0);
   expect(walkers.crossings.signal).toBeGreaterThan(0);
 });
 
