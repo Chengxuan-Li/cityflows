@@ -19,7 +19,7 @@ import {
 } from 'three';
 import type { DebugShading } from '../render/debug-settings';
 
-/** TASK-375: the 3D debug shadings and the wireframe, as variants of each drawn material that
+/** TASK-376: the 3D debug shadings and the wireframe, as variants of each drawn material that
  * keep its vertex stage (instancing, the models' own shader patches) and replace its colour. */
 type Mode = Exclude<DebugShading, 'normal'> | 'wireframe';
 

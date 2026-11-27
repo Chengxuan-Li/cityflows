@@ -21,7 +21,7 @@ import { heightAt, type cityHeights } from './heights';
 
 type Heights = ReturnType<typeof cityHeights>;
 
-/** TASK-375: the 3D scene's surface heights for the debug overlays, by the compiled city's
+/** TASK-376: the 3D scene's surface heights for the debug overlays, by the compiled city's
  * indices (the scene's painted city keeps them). */
 export function sceneHeights(city: CompiledCity, heights: Heights): DebugHeights {
   const { roads, nodes, terrain } = heights;
@@ -111,7 +111,7 @@ export function projector3D(
 const box = new Box3();
 const toP3 = (v: Vector3): P3 => ({ x: v.x, y: v.z, z: v.y });
 
-/** TASK-375 Detail ranges: the shadow map's ground coverage (TASK-341's shading range), the
+/** TASK-376 Detail ranges: the shadow map's ground coverage (TASK-341's shading range), the
  * tree and car-model detail distances, and the bounding box of every drawn mesh. */
 export function detailRanges({
   content,

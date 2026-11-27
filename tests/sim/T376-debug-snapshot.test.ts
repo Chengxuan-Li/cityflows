@@ -7,10 +7,10 @@ import { createEngine } from '../../src/sim/engine';
 import { createFlightOperations } from '../../src/sim/flight-operations';
 import { scenario, setup, trips } from './fixtures';
 
-// TASK-375: the debug views' sim state is read only: asking for it leaves the run, its hashes and
+// TASK-376: the debug views' sim state is read only: asking for it leaves the run, its hashes and
 // its snapshots as they are.
 
-test('T375 debug snapshots leave the run and its hashes unchanged', () => {
+test('T376 debug snapshots leave the run and its hashes unchanged', () => {
   const city = grid5x5();
   const input = { compiled: setup(city), scenario: scenario(), trips: trips(city, 80, 1) };
   const plain = createEngine();
@@ -41,7 +41,7 @@ test('T375 debug snapshots leave the run and its hashes unchanged', () => {
   expect(leaders).toBeGreaterThan(0);
 });
 
-test('T375 aircraft debug state leaves the fleet unchanged', () => {
+test('T376 aircraft debug state leaves the fleet unchanged', () => {
   const result = setup(syntheticAirport(1));
   const schedule = [0, 300, 600].map((arrivalS, i) => ({
     id: `flight:${i}`,
@@ -71,7 +71,7 @@ test('T375 aircraft debug state leaves the fleet unchanged', () => {
   expect(reserved).toBeGreaterThan(0);
 });
 
-test('T375 wait-for links on a closed ring are marked, chains into it are not', () => {
+test('T376 wait-for links on a closed ring are marked, chains into it are not', () => {
   const link = (from: number, to: number): WaitLink => ({ from, to, ring: false });
   const links = markRings([link(1, 2), link(2, 3), link(3, 1), link(4, 1), link(5, 4), link(6, 7)]);
   expect(links.map((l) => l.ring)).toEqual([true, true, true, false, false, false]);
