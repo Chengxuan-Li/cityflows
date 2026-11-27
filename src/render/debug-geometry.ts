@@ -667,7 +667,8 @@ export function heightsLayer(
     }
   if (low > high) return items;
   high = Math.max(high, low + 10);
-  const colour = (z: number) => rampColour(ramp, (z - low) / (high - low));
+  // Twenty steps on the ramp, so a road's segments of one step draw as one line.
+  const colour = (z: number) => rampColour(ramp, Math.round((20 * (z - low)) / (high - low)) / 20);
   city.roads.forEach((road, i) => {
     const points = roadPoints[i]!;
     const widthM = road.lanes.reduce((sum, lane) => sum + city.lanes[lane]!.widthM, 0);
@@ -675,12 +676,11 @@ export function heightsLayer(
       tunnel = road.grade < 0;
     if (fill && bridge)
       items.push({ kind: 'line', points, ink: 'grey', width: 3, widthM: widthM + 2 });
-    for (let j = 1; j < points.length; j++)
+    for (const run of colourRuns(points, colour))
       items.push({
         kind: 'line',
-        points: [points[j - 1]!, points[j]!],
+        ...run,
         ink: 'grey',
-        colour: colour((points[j - 1]!.z + points[j]!.z) / 2),
         width: fill ? 1.5 : 2.5,
         widthM: fill ? widthM : undefined,
         dash: tunnel,
@@ -699,17 +699,22 @@ export function heightsLayer(
   });
   for (const track of city.rail?.tracks ?? []) {
     const points = track.line.map((p, i) => at(p, heights.rail(track.idx, track.cumulative[i]!)));
-    for (let j = 1; j < points.length; j++)
-      items.push({
-        kind: 'line',
-        points: [points[j - 1]!, points[j]!],
-        ink: 'grey',
-        colour: colour((points[j - 1]!.z + points[j]!.z) / 2),
-        width: 2,
-        dash: track.tunnel,
-      });
+    for (const run of colourRuns(points, colour))
+      items.push({ kind: 'line', ...run, ink: 'grey', width: 2, dash: track.tunnel });
   }
   return items;
+}
+
+/** A polyline split where its segments' colour changes, each run sharing its end points. */
+function colourRuns(points: P3[], colour: (z: number) => number) {
+  const runs: { points: P3[]; colour: number }[] = [];
+  for (let j = 1; j < points.length; j++) {
+    const c = colour((points[j - 1]!.z + points[j]!.z) / 2);
+    const run = runs.at(-1);
+    if (run?.colour === c) run.points.push(points[j]!);
+    else runs.push({ points: [points[j - 1]!, points[j]!], colour: c });
+  }
+  return runs;
 }
 
 export function rampColour(ramp: readonly number[], t: number) {

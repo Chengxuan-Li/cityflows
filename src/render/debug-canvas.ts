@@ -220,7 +220,9 @@ export class DebugCanvas {
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
       });
-      if (xs.length < 4 || Math.max(maxX - minX, maxY - minY) < 2) continue;
+      // A line under 2 px is left out, but not a stretch of a ramp-coloured road (a gap).
+      if (xs.length < 4 || (item.colour === undefined && Math.max(maxX - minX, maxY - minY) < 2))
+        continue;
       if (maxX < -width || maxY < -width || minX > view.width + width || minY > view.height + width)
         continue;
       let bucket = buckets.get(key);
