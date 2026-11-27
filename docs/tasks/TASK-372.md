@@ -1,6 +1,6 @@
 # TASK-372 — Walker priority by country: UK turning-out yield (Highway Code H2), US unmarked crosswalks
 
-Status: started 2026-11-27 (owner: "start both"; city work merges under the traffic merge rule). Owner: Codex
+Status: parked 2026-11-27 (branch `task/372-walker-country` at `ec1ebd5d`): London City gridlocks one trip and its worst visit is 1,472.7 s against the 900 s limit with the UK rule. The US part passes and goes on in TASK-373. Owner said "start both"; city work merges under the traffic merge rule. Owner: Codex
 (gpt-6.2-sol, high). Base: main `5f172cb6`.
 
 ## Finding (TASK-279)
