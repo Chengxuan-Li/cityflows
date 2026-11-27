@@ -33,7 +33,7 @@ function debugPalette(): DebugPalette {
 }
 
 /**
- * TASK-373: the debug views in the map's frame loop: the active view's settings, the overlay
+ * TASK-375: the debug views in the map's frame loop: the active view's settings, the overlay
  * canvas, the stats readout, the hover tooltip and the data attributes. Nothing is created and
  * no scene changes until developer tools are turned on.
  */

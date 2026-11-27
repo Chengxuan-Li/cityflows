@@ -17,7 +17,7 @@ import {
 import { parseVisual } from '../../src/render/lighting';
 import { setup } from '../sim/fixtures';
 
-// TASK-373: the developer debug views' settings and their shared overlay geometry.
+// TASK-375: the developer debug views' settings and their shared overlay geometry.
 
 describe('debug settings', () => {
   test('parse each field on its own and fall back to the defaults', () => {
