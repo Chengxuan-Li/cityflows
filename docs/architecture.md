@@ -1353,8 +1353,12 @@ width. A generated crossing crosses the lanes of its arm's roads (both direction
 any carriageway of the arm); a mapped one the same-grade lanes its line meets, or, in a
 junction mouth, the straight 12 m extension of a lane of its arm, the span then sitting at that
 lane end. Crossings near a signal (generated at a signalized node, mapped within 40 m) are
-`signal` crossings; all others are zebras. Spans are derived, never saved, and change no lane,
-movement or stop position.
+`signal` crossings; all others are zebras, except (TASK-279) `unmarked` ones: a generated
+crossing whose arm draws no paint (every end with a crossing has `crossingStyle` 'none': an
+imported road where OSM maps no crossing, or one whose mapped crossings say `marking: 'none'`),
+and a mapped crossing way OSM marks `none`. A crossing drawn as a zebra or with a signal's lines
+stays a zebra; so does a mapped way without a marking (it draws as one). Spans are derived, never
+saved, and change no lane, movement or stop position.
 
 `CSignal.phases[].walk` lists the node's signal crossing links with walk green, compiled after
 the walk graph (`compileSignalWalk`). Explicit entries select the arms whose road end they
@@ -1409,7 +1413,8 @@ or prevent compilation; re-import repairs the source portals.
 carry position, layer, incident link indices and mapped source IDs. Dense bidirectional links
 carry a polyline, cumulative metres, length, width, grade, kind and `generated`. Sidewalk links
 name their compiled road and travel-relative side; corners name their node. Crossings name
-their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`signal` control.
+their road, `start`/`end` (or `midblock` for mapped crossings) and `zebra`/`signal`/`unmarked`
+control (section 5.4, TASK-279).
 `places`, `parking`, `connectors` and `sourceNodes` maps expose walk-node access indices.
 TASK-198: `compile(city, deferWalk)` hands this step (and the signals' walk phases) to the
 caller instead of running it; the graph is empty until the caller runs it, then filled in place.
@@ -2801,6 +2806,17 @@ zebra); a walker waits at its kerb (state waiting) and steps out (state crossing
   to spare; a vehicle over the span, or that turned off the lane with its rear still over a span
   at the lane end, keeps the walker waiting.
 
+TASK-279: at an `unmarked` crossing a walker has no priority (StVO §25(3)) but over drivers
+turning into the arm (§9(3): a left, right or U-turn movement at the crossing's node into a
+crossed lane, or a vehicle on that lane that entered by one, read from its route). Of the
+vehicles the second rule reads, every turning driver must meet that rule; every other one must
+have passed the span, stand, crawl below `walkSpeedMps` able to stop before the span at its
+`bMps2` (v2, as in a jam's creeping queue), or reach the span at its current speed no sooner than
+the walker reaches the span's far edge plus `walkClearanceS` (a gap). While waiting it holds the
+crossed lanes for traffic crawling below `walkSpeedMps` (v2: a creeping queue otherwise came to
+stand on the crossing), and in such a gap also for turning drivers; on the crossing it holds them
+as on a zebra.
+
 A waiting walker that would step out but for the traffic (any zebra walker; a signal walker
 with enough walk green), and a crossing walker for each span it has not passed by
 `crossingClearM` (1 m), hold those lanes: the span's near edge is a standing obstacle for every
@@ -2825,7 +2841,7 @@ crossing legs).
 Once a walker has spawned, the hash appends, per spawned walker in id order, `[id, state, leg,
 round(position along leg or run * 100)]`, with the trip-leg code for person walkers. `Metrics.walkers` reports
 spawned, completed, dropped and active walkers, mean walk time, mean wait and crossings by
-crossing kind, vehicles that came to a stop for a walker and the time they lost against desired
+crossing kind (zebra, signal, unmarked), vehicles that came to a stop for a walker and the time they lost against desired
 speed while yielding (zebra; signal), hard stops and peak active walkers. Snapshots carry
 `walkers` (id, position 0.35 m right of the walking direction, heading, state, grade,
 `tripLeg`: 0 test, 1 access, 2 egress, 3 whole walk); `inspectWalker(id)` returns route,

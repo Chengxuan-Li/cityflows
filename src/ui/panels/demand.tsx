@@ -308,20 +308,24 @@ export function DemandPanel() {
           )}
           {walkers && (
             <dl className="details" aria-label="Pedestrian crossings">
-              <dt>Crossings at zebras, at signals</dt>
+              <dt>Crossings at zebras, unmarked, at signals</dt>
               <dd>
                 {walkers.crossings.zebra.toLocaleString()},{' '}
+                {walkers.crossings.unmarked.toLocaleString()},{' '}
                 {walkers.crossings.signal.toLocaleString()}
               </dd>
-              <dt>Vehicles stopped at zebras, at signals</dt>
+              <dt>Vehicles stopped at zebras, unmarked, at signals</dt>
               <dd>
                 {walkers.vehicleStops.zebra.toLocaleString()},{' '}
+                {walkers.vehicleStops.unmarked.toLocaleString()},{' '}
                 {walkers.vehicleStops.signal.toLocaleString()}
               </dd>
               <dt>Vehicle delay at crossings</dt>
               <dd>
                 {Math.round(
-                  walkers.vehicleDelayS.zebra + walkers.vehicleDelayS.signal,
+                  walkers.vehicleDelayS.zebra +
+                    walkers.vehicleDelayS.unmarked +
+                    walkers.vehicleDelayS.signal,
                 ).toLocaleString()}{' '}
                 s
               </dd>
