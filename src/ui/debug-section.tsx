@@ -2,7 +2,7 @@ import { only3D, overlayGroups, shadings, type DebugOverlay } from '../render/de
 import { useDebug } from './lighting-store';
 import { useAppStore } from './store';
 
-/** TASK-379: the developer debug views, shown in the sidebar while developer tools are on. */
+/** TASK-380: the developer debug views, shown in the sidebar while developer tools are on. */
 export function DebugSection() {
   const { debug, setDebug, setOverlay } = useDebug();
   const view3d = useAppStore((state) => state.viewMode === '3d');

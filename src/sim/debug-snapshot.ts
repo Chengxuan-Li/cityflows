@@ -1,4 +1,4 @@
-/** TASK-379: sim state for the developer debug views, computed only when a snapshot request asks
+/** TASK-380: sim state for the developer debug views, computed only when a snapshot request asks
  * for it. It only reads the run's state: normal runs, their hashes and their snapshots are the
  * same with or without it. */
 export interface DebugRequest {
