@@ -1,7 +1,7 @@
-# TASK-381 — Debug views: overlays and shading for developers
+# TASK-382 — Debug views: overlays and shading for developers
 
 Status: PR open 2026-11-27 (Claude). First written as TASK-362 on `task/362-debug-views` (2026-11-26); renumbered
-TASK-381 as main took TASK-362 (two-controls signal fix) and TASK-373 to TASK-380 meanwhile. Work stays on
+TASK-382 as main took TASK-362 (two-controls signal fix) and TASK-373 to TASK-381 meanwhile. Work stays on
 `task/362-debug-views`; the lead reviews. A first Codex run was stopped by the owner; its unreviewed partial work is on `wip/362-debug-views-codex`.
 
 ## Why

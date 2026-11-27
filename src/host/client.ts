@@ -27,7 +27,7 @@ export interface EngineClient {
   setSpeed(multiplier: number): Promise<void>;
   step(steps: number): Promise<void>;
   restart(): Promise<void>;
-  /** `debug` (TASK-381): also the debug views' sim state; it changes nothing in the run. */
+  /** `debug` (TASK-382): also the debug views' sim state; it changes nothing in the run. */
   snapshot(debug?: DebugRequest): Promise<HostSnapshot>;
   metrics(): Promise<Metrics>;
   flightBoard(): Promise<FlightBoard | null>;

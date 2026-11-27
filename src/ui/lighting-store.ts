@@ -56,7 +56,7 @@ export const useVisual = create<{
   },
 }));
 
-/** TASK-381: the debug views' choices, a per-viewer preference like the visual settings. */
+/** TASK-382: the debug views' choices, a per-viewer preference like the visual settings. */
 export const debugKey = 'cityflows.debug';
 
 export function loadDebug(storage: Storage | undefined): DebugSettings {
