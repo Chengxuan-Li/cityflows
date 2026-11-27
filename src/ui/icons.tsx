@@ -19,6 +19,9 @@ const strokes = {
   close: 'M5 5l6 6M11 5l-6 6',
   more: 'M3.5 4.5 7 8l-3.5 3.5M8.5 4.5 12 8l-3.5 3.5',
   restart: 'M2.5 8.5a5.5 5.5 0 1 0 1.65-3.93M2.25 2.25v3h3',
+  // The Capture panel's video camera (cinematic-captures branch only).
+  capture:
+    'M2.75 4.25h6.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5h-6.5a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5ZM10.75 7l3.5-2v6l-3.5-2',
 };
 
 const fills = {

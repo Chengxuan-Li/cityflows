@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useState,
@@ -30,6 +32,12 @@ import { useAppStore } from './store';
 import { TopBar } from './top-bar';
 import { useVisual } from './lighting-store';
 import { NodeTopologyActions } from './tools/topology-actions';
+
+// The Capture panel (cinematic-captures branch only), in dev and test builds.
+const CapturePanel =
+  import.meta.env.DEV || import.meta.env.MODE === 'test'
+    ? lazy(() => import('../../capture/panel/capture-panel'))
+    : null;
 
 function Inspector() {
   const selectedRoads = useAppStore((state) => state.selectedRoads);
@@ -309,6 +317,11 @@ function AppContent() {
       <Onboarding />
       <CommandMenu />
       <ShortcutSheet />
+      {CapturePanel && (
+        <Suspense fallback={null}>
+          <CapturePanel />
+        </Suspense>
+      )}
     </div>
   );
 }

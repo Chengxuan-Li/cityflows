@@ -1,0 +1,102 @@
+{
+  "location": "freiburg",
+  "project": "bundled:freiburg",
+  "fps": 30,
+  "duration": 4,
+  "focus": {
+    "x": 464,
+    "y": -39
+  },
+  "sim": {
+    "start": "08:00:00",
+    "rate": [
+      {
+        "t": 0,
+        "rate": 2
+      }
+    ]
+  },
+  "light": {
+    "exposure": 1,
+    "date": "2026-06-21",
+    "sun": {
+      "from": "19:50:00",
+      "to": "20:35:00"
+    },
+    "visual": {
+      "dropLines": false
+    }
+  },
+  "map": {
+    "basemap": false,
+    "labels": false,
+    "places": false,
+    "buildingDetails": true
+  },
+  "title": {
+    "text": "Freiburg",
+    "subtitle": "Altstadt and the Münster",
+    "version": "auto",
+    "colour": "#fff6ea",
+    "fade": [
+      2.5,
+      3.5
+    ],
+    "y": 120
+  },
+  "formats": {
+    "landscape": {
+      "width": 1920,
+      "height": 1080,
+      "canvasHeight": 1080,
+      "fov": 36,
+      "titleX": 960
+    },
+    "portrait": {
+      "width": 1080,
+      "height": 1920,
+      "canvasHeight": 1920,
+      "fov": 51,
+      "titleX": 540
+    }
+  },
+  "keys": [
+    {
+      "t": 0,
+      "x": 476.4,
+      "y": -47.21,
+      "zoom": 6,
+      "pitch": 45,
+      "bearing": 200
+    },
+    {
+      "t": 4,
+      "x": 430,
+      "y": -20,
+      "zoom": 3.5,
+      "pitch": 22,
+      "bearing": 235
+    }
+  ],
+  "layers": {
+    "windows": {},
+    "trees": {},
+    "water": {},
+    "tracks": {
+      "kinds": [
+        "tram",
+        "rail"
+      ]
+    },
+    "fences": {
+      "airport": false
+    },
+    "plants": {},
+    "airfield": {},
+    "surfaces": {},
+    "shore": {},
+    "curtainWalls": {},
+    "parking": {},
+    "atmosphere": {}
+  }
+}

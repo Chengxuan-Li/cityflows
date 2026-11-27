@@ -1,0 +1,87 @@
+{
+  "location": "london-city-airport",
+  "project": "node_modules/.cache/cityflows/capture/london-city-airport/project.cityflows.json",
+  "fps": 30,
+  "duration": 13,
+  "focus": { "x": 539, "y": 247 },
+  "sim": {
+    "cue": { "t": 7.5, "clock": "09:03:17" },
+    "rate": [
+      { "t": 0.8, "rate": 1 },
+      { "t": 2.5, "rate": 6 },
+      { "t": 5.5, "rate": 6 },
+      { "t": 7, "rate": 3 }
+    ]
+  },
+  "light": {
+    "exposure": 2,
+    "date": "2026-12-21",
+    "sun": { "from": "08:35:00", "to": "07:30:00", "start": 7 },
+    "visual": { "dropLines": false }
+  },
+  "map": { "basemap": false, "labels": false, "places": false, "buildingDetails": true },
+  "title": {
+    "text": "CityFlows",
+    "subtitle": "An open testbed for the city in motion",
+    "version": "auto",
+    "colour": "#fff6ea",
+    "fade": [9, 10.5],
+    "y": "horizon",
+    "subtitleFont": "node_modules/.cache/cityflows/capture/fonts/cormorant-garamond-italic-full.ttf"
+  },
+  "formats": {
+    "landscape": {
+      "width": 1920,
+      "height": 1080,
+      "canvasHeight": 1620,
+      "fov": 36,
+      "titleX": 1350,
+      "window": { "from": 0.5, "to": 0, "start": 0.8, "end": 5.5 }
+    },
+    "portrait": {
+      "width": 1080,
+      "height": 1920,
+      "canvasHeight": 1920,
+      "fov": 51,
+      "titleX": 540,
+      "keys": [
+        { "t": 0, "x": 576, "y": 249, "zoom": 13, "pitch": 85, "bearing": 90 },
+        { "t": 5.5, "x": 479.22, "y": 239.56, "zoom": 10, "pitch": 27.11, "bearing": 81.73 },
+        { "t": 9.5, "x": 115.705, "y": 128.105, "zoom": 3.4, "pitch": 10, "bearing": 73.3 }
+      ]
+    }
+  },
+  "keys": [
+    { "t": 0, "x": 576, "y": 249, "zoom": 13, "pitch": 85, "bearing": 90 },
+    { "t": 5.5, "x": 479.22, "y": 239.56, "zoom": 13, "pitch": 27.11, "bearing": 81.73 },
+    { "t": 9.5, "x": 115.705, "y": 128.105, "zoom": 5.153, "pitch": 10, "bearing": 73.3 }
+  ],
+  "layers": {
+    "windows": {},
+    "trees": {},
+    "water": {},
+    "tracks": {
+      "kinds": ["light_rail"],
+      "names": ["Docklands Light Railway"],
+      "area": [-650, 75, 920, 320],
+      "formation": [320, 215, 785, 282],
+      "crossovers": ["rt:9909", "rt:9911"],
+      "sideY": 249,
+      "thirdRail": true
+    },
+    "fences": {},
+    "plants": { "area": [-355, 100, 815, 430], "fenceLines": ["Docklands Light Railway"] },
+    "airfield": {},
+    "surfaces": { "pavingAxis": [0.995, 0.1], "shedRoof": [10.3, -41.1], "yard": [-2, 40] },
+    "shore": {},
+    "curtainWalls": {},
+    "parking": {},
+    "traffic": {
+      "routes": [
+        ["r:1091", "r:1757", "r:1759", "r:1405"],
+        ["r:1406", "r:1760", "r:1758", "r:1092"]
+      ]
+    },
+    "atmosphere": {}
+  }
+}
