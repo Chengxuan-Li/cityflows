@@ -53,7 +53,7 @@ const striped = () =>
   net.roads.flatMap((r) =>
     [false, true].flatMap((atEnd) => {
       if (!crossingEnabled(net, r, atEnd, city)) return [];
-      const placement = crossingPlacement(net, r, atEnd);
+      const placement = crossingPlacement(net, r, atEnd, city);
       return placement.stripes.length ? [{ road: r, atEnd, placement }] : [];
     }),
   );
@@ -391,7 +391,7 @@ test('D1: a crossing at a signal paints the broken lines of a signalised crossin
     for (const atEnd of [false, true]) {
       if (net.nodes[atEnd ? r.to : r.from]!.signal === null) continue;
       if (!crossingEnabled(net, r, atEnd, city)) continue;
-      const { stripes } = crossingPlacement(net, r, atEnd);
+      const { stripes } = crossingPlacement(net, r, atEnd, city);
       if (!stripes.length) continue;
       ends++;
       expect(crossingStyle(net, r, atEnd, city)).toBe('signal');
@@ -424,7 +424,7 @@ test('D1: a default crossing where OSM maps none is unmarked, and stays where it
     expect(crossingEnabled(net, r, atEnd, city), id).toBe(true);
     expect(crossingStyle(net, r, atEnd, city), id).toBe('none');
     expect(crossingStripes(net, r, atEnd, city), id).toEqual([]);
-    expect(crossingPlacement(net, r, atEnd).stripes.length, id).toBeGreaterThan(0);
+    expect(crossingPlacement(net, r, atEnd, city).stripes.length, id).toBeGreaterThan(0);
     // It keeps its span: parking strips and walk links treat it as before.
     expect(crossingSpan(net, net.lanes[r.lanes[0]!]!, atEnd, city), id).not.toBeNull();
   }
@@ -499,16 +499,26 @@ test('TASK-239: zebras mapped only as nodes cross their streets and paint (n:211
   const n1139 = osm(47.997331, 7.8436884);
   expect(paintNear(city, n1139, 4).length).toBeGreaterThanOrEqual(4);
   expect(paintNear(without, n1139, 4)).toEqual([]);
-  // 2479358348 at n:211: the arm's band, 4.4 m along the street from the mapped node (the band
-  // keeps its place, as for every mapped crossing: TASK-217's move cost traffic).
+  // 2479358348 at n:211: TASK-265, the arm's band lies on the mapped node, where the ground zebra
+  // is (main drew it 4.2 m along the street, by TASK-091's curb rule), with all six stripes (the
+  // node lies inside the drawn curb returns).
   const n211 = osm(47.9975169, 7.8428582);
-  expect(paintNear(city, n211, 6).length).toBeGreaterThanOrEqual(4);
+  expect(paintNear(city, n211, 4)).toHaveLength(6);
   expect(paintNear(without, n211, 6)).toEqual([]);
   for (const id of ['r:1945', 'r:1946']) {
     const r = road(id);
     const atEnd = net.nodes[r.to]!.id === 'n:211';
     expect(crossingStyle(net, r, atEnd, city), id).toBe('zebra');
     expect(crossingStyle(net, r, atEnd, without), id).toBe('none');
+    for (const i of r.lanes) {
+      const l = net.lanes[i]!;
+      const span = crossingSpan(net, l, atEnd, city)!;
+      const along = nearestOnPolyline(l.polyline, n211).along;
+      expect(Math.abs((span.nearM + span.farM) / 2 - along), l.id).toBeLessThan(0.5);
+      // Without the node the band falls back to the curb rule, about 4 m farther out.
+      const curb = crossingSpan(net, l, atEnd, without)!;
+      expect(Math.abs((curb.nearM + curb.farM) / 2 - along), l.id).toBeGreaterThan(3.5);
+    }
   }
 });
 

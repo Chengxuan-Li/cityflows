@@ -18,7 +18,7 @@ import type { CLane, CompiledCity, CNode, CRoad } from './types';
 // the span it covers along each lane, shared by the renderer and the stop positions.
 
 /** The canonical roads, which carry the crossing overrides (TASK-091), and the mapped walk
- * network, whose crossing ways choose a crossing's paint (TASK-217, `crossingStyle`). */
+ * network, whose crossing links guide placement (TASK-265) and paint (TASK-217). */
 export type CrossingSource = { roads?: City['roads']; walk?: City['walk'] };
 
 /** The surface edges of a road end, outward from the node. */
@@ -194,26 +194,76 @@ interface MappedCrossing {
   line: Vec2[];
   box: Box;
   grade: number;
+  /** TASK-265: a crossing mapped only as a node of the road (TASK-239's `addNodeCrossings`): the
+   * link and both its end nodes carry that one node's OSM id. */
+  node: boolean;
   marking?: CrossingMarking;
 }
-const mappedSets = new WeakMap<object, MappedCrossing[]>();
-/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. */
-function mappedCrossings(source?: CrossingSource): MappedCrossing[] {
+const mappedSets = new WeakMap<CompiledCity, WeakMap<object, MappedCrossing[]>>();
+/** The mapped crossing ways of a city (walk links of kind `crossing`), with their grades. Cached
+ * per compiled city (TASK-265): the importer compiles the city before it adds the node crossings
+ * to the same walk links (TASK-239's `addNodeCrossings`), so a list cached by the links alone left
+ * them out of every later compile in that process, and a fresh import placed and painted
+ * differently from a cached one. */
+function mappedCrossings(city: CompiledCity, source?: CrossingSource): MappedCrossing[] {
   const walk = source?.walk;
   if (!walk) return [];
-  let set = mappedSets.get(walk.links);
+  let byLinks = mappedSets.get(city);
+  if (!byLinks) mappedSets.set(city, (byLinks = new WeakMap()));
+  let set = byLinks.get(walk.links);
   if (!set) {
     set = Object.values(walk.links)
       .filter((l) => l.kind === 'crossing')
-      .map((l) => ({
-        line: l.line,
-        box: boxOf(l.line),
-        grade: l.layer ?? walk.nodes[l.from]!.layer,
-        ...(l.marking ? { marking: l.marking } : {}),
-      }));
-    mappedSets.set(walk.links, set);
+      .map((l) => {
+        const osm = l.provenance.osmIds;
+        return {
+          line: l.line,
+          box: boxOf(l.line),
+          ...(l.marking ? { marking: l.marking } : {}),
+          grade: l.layer ?? walk.nodes[l.from]!.layer,
+          node:
+            osm?.length === 1 &&
+            [l.from, l.to].every((id) => walk.nodes[id]!.provenance.osmIds?.[0] === osm[0]),
+        };
+      });
+    byLinks.set(walk.links, set);
   }
   return set;
+}
+
+/**
+ * TASK-265: where OSM maps a crossing node on a road end, in metres from its cut: the link the
+ * importer makes of a crossing mapped only as a node of the road (TASK-239), at the mean of the
+ * points where it meets the end's lane centrelines within `MAPPED_M` of the cut and in the half
+ * of the lane nearer the node (as `mappedArm`); of several, the one nearest the cut. Null where
+ * OSM maps none there. Crossing ways keep TASK-140's anchoring onto the curb rule's band: moving
+ * the band onto them too (the first version) moved 98 Munich zebra ends, most of them about 4 m
+ * nearer the junction, into the drawn curb returns, and Munich 0.15 seed 1 (choice off) lost about
+ * 10% in both signal modes.
+ */
+function mappedCentreM(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): number | null {
+  let best: number | null = null;
+  for (const link of mappedCrossings(city, source)) {
+    if (!link.node || link.grade !== road.grade) continue;
+    const along: number[] = [];
+    for (const i of road.lanes) {
+      const lane = city.lanes[i]!;
+      if (!boxesMeet(link.box, laneBox(lane))) continue;
+      for (const hit of polylineCrossings(link.line, lane.polyline)) {
+        const s = atEnd ? lane.lengthM - hit.alongB : hit.alongB;
+        if (s <= MAPPED_M && s <= lane.lengthM / 2) along.push(s);
+      }
+    }
+    if (!along.length) continue;
+    const s = along.reduce((sum, a) => sum + a, 0) / along.length;
+    if (best === null || s < best) best = s;
+  }
+  return best;
 }
 
 const laneBoxes = new WeakMap<readonly Vec2[], Box>();
@@ -227,7 +277,7 @@ function laneBox(lane: CLane): Box {
  * within `MAPPED_M` of its cut, in the half of the lane nearer the node (so a crossing on a short
  * road belongs to one of its ends). */
 function mappedArm(city: CompiledCity, road: CRoad, atEnd: boolean, source?: CrossingSource) {
-  const links = mappedCrossings(source);
+  const links = mappedCrossings(city, source);
   if (!links.length) return [];
   const node = city.nodes[atEnd ? road.to : road.from]!;
   const arm = crossingArms(city, node).find((a) =>
@@ -296,7 +346,7 @@ function endStyle(
   const unmarked = leading.length > 0 && !painted.length && !edited;
   if (painted.length) {
     if (painted.every((link) => link.marking === 'lines')) return 'signal';
-    const points = crossingPlacement(city, road, atEnd).stripes.flat();
+    const points = crossingPlacement(city, road, atEnd, source).stripes.flat();
     const centre = points.length
       ? {
           x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
@@ -325,6 +375,10 @@ const CROSSING_M = 2.5;
 /** TASK-091: the near edge lies this far beyond the point where the curb return meets the road
  * edge, and no stripe comes closer to a curb return. */
 const CURB_CLEAR_M = 1;
+/** TASK-265: at a mapped crossing a stripe keeps this far from a drawn curb return, just under
+ * its 0.225 m inset from the straight kerb, so the band may run up to a curb that starts to curve,
+ * as the ground zebra at Freiburg n:211 does. */
+const MAPPED_CURB_CLEAR_M = 0.2;
 /** A crossing needs this much of its lanes beyond its near edge (TASK-072's 10 m lane, whose
  * crossing started 0.25 m from the cut). */
 const CROSSING_ROAD_M = 9.75;
@@ -342,23 +396,52 @@ const MOVE_OUT_M = 6;
  * do not move out (their stop line follows the crossing, and each metre out is a metre less
  * storage and a longer start at green: Munich at 0.15 gridlocked 75 times with the move-out, 41
  * without); their stop line lies behind the crossing (`populateStops`), and where it would fall
- * in a lane's first half the end has no stripes and keeps TASK-072's stop.
+ * in a lane's first half the end has no stripes and keeps TASK-072's stop. TASK-265: where OSM
+ * maps a crossing node within the curb clearance of an outlined junction's end
+ * (`mappedCentreM`), the band is centred on that node (no nearer than 0.25 m from the cut,
+ * no move-out), so the stripes, walk link
+ * (`crossingCentreM`), walker conflict zone and stop line stand where it is mapped. A node inside
+ * the drawn curb returns keeps the band there, its stripes only 0.2 m clear of the curb. Where
+ * that leaves no stripe, or a served signal's stop line in a lane's first half, the curb rule
+ * places the band.
  */
-export function crossingPlacement(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
-  let cached = placements.get(road);
-  if (!cached) placements.set(road, (cached = []));
-  const placement = (cached[+atEnd] ??= placeCrossing(city, road, atEnd));
-  const clamped =
+export function crossingPlacement(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): Placement {
+  const key = source?.walk?.links ?? noMapped;
+  let byRoad = placements.get(key);
+  if (!byRoad) placements.set(key, (byRoad = new WeakMap()));
+  let cached = byRoad.get(road);
+  if (!cached) byRoad.set(road, (cached = []));
+  const placement = (cached[+atEnd] ??= placeCrossing(city, road, atEnd, source));
+  return placement.stripes.length &&
+    stopInFirstHalf(city, road, atEnd, placement.nearM, placement.farM)
+    ? { ...placement, stripes: [] }
+    : placement;
+}
+
+/** TASK-094: whether a served signal's stop line, 0.5 m behind a crossing whose far edge lies
+ * `farM` from the cut, would fall in the first half of one of the approach's lanes. */
+function stopInFirstHalf(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  nearM: number,
+  farM: number,
+) {
+  return (
     atEnd &&
     servedSignal(city, road) &&
     road.lanes.some((i) => {
       const lane = city.lanes[i]!;
       // TASK-348: at a plain signalised crossing, half of the lane before its stripes' floor.
-      const before =
-        lane.lengthM - (city.nodes[road.to]!.outline.length ? 0 : placement.nearM - 0.25);
-      return lane.lengthM - placement.farM - STOP_CLEAR_M < before / 2;
-    });
-  return clamped && placement.stripes.length ? { ...placement, stripes: [] } : placement;
+      const before = lane.lengthM - (city.nodes[road.to]!.outline.length ? 0 : nearM - 0.25);
+      return lane.lengthM - farM - STOP_CLEAR_M < before / 2;
+    })
+  );
 }
 
 interface Placement {
@@ -367,10 +450,17 @@ interface Placement {
   farM: number;
 }
 
-/** Placements by compiled road (static geometry: the default and overrides do not move them). */
-const placements = new WeakMap<CRoad, Placement[]>();
+/** Placements by mapped walk links and compiled road (static geometry: the default and overrides
+ * do not move them). */
+const placements = new WeakMap<object, WeakMap<CRoad, Placement[]>>();
+const noMapped = {};
 
-function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placement {
+function placeCrossing(
+  city: CompiledCity,
+  road: CRoad,
+  atEnd: boolean,
+  source?: CrossingSource,
+): Placement {
   const node = city.nodes[atEnd ? road.to : road.from]!;
   // TASK-348: a signalised crossing laid out as a plain node keeps its crossing.
   if (!node.outline.length && !isSignalCrossing(node)) return { stripes: [], nearM: 0, farM: 0 };
@@ -416,17 +506,17 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
   // TASK-287: a curb return whose box lies over the clearance (and a micrometre) away passes
   // without its segments.
   const curbBoxes = curbs.map((c) => boxOf(c.curve!));
-  const clearOfCurbs = (p: Vec2) =>
+  const clearOfCurbs = (p: Vec2, clear: number) =>
     curbs.every((c, k) => {
       const box = curbBoxes[k]!;
       const dx = Math.max(box.minX - p.x, 0, p.x - box.maxX),
         dy = Math.max(box.minY - p.y, 0, p.y - box.maxY);
       return (
-        dx * dx + dy * dy > (CURB_CLEAR_M + 1e-6) ** 2 ||
-        c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= CURB_CLEAR_M)
+        dx * dx + dy * dy > (clear + 1e-6) ** 2 ||
+        c.curve!.every((q, i) => i === 0 || segmentDistance(p, c.curve![i - 1]!, q) >= clear)
       );
     });
-  const at = (from: number) => {
+  const at = (from: number, clear = CURB_CLEAR_M) => {
     const stripes: Vec2[][] = [];
     for (let side = 0.225; side + STRIPE_M <= width; side += STRIPE_PITCH_M) {
       let edge = 0;
@@ -442,10 +532,20 @@ function placeCrossing(city: CompiledCity, road: CRoad, atEnd: boolean): Placeme
         local(from + CROSSING_M, side + STRIPE_M),
         local(from, side + STRIPE_M),
       ];
-      if (stripe.every((p) => onSurface(p) && outside(p) && clearOfCurbs(p))) stripes.push(stripe);
+      if (stripe.every((p) => onSurface(p) && outside(p) && clearOfCurbs(p, clear)))
+        stripes.push(stripe);
     }
     return stripes;
   };
+  // Keep TASK-348's crossing floor and approach storage at a plain signalised crossing.
+  const mapped = node.outline.length ? mappedCentreM(city, road, atEnd, source) : null;
+  const from = mapped === null ? near : Math.max(0.25, mapped - CROSSING_M / 2);
+  // Only correct crossings that the curb-clearance rule would push away from the junction.
+  if (from < near) {
+    const stripes = at(from, MAPPED_CURB_CLEAR_M);
+    if (stripes.length && !stopInFirstHalf(city, road, atEnd, from, from + CROSSING_M))
+      return { stripes, nearM: from, farM: from + CROSSING_M };
+  }
   const full = Math.floor((width - 0.225) / STRIPE_PITCH_M + 0.5);
   let best = { stripes: at(near), nearM: near, farM: near + CROSSING_M };
   // A served signal's approach stays where the curb return puts it (TASK-094).
@@ -491,7 +591,7 @@ export function crossingSpan(
 ): { nearM: number; farM: number } | null {
   const road = city.roads[lane.road]!;
   if (!crossingEnabled(city, road, atEnd, source)) return null;
-  const { stripes, nearM, farM } = crossingPlacement(city, road, atEnd);
+  const { stripes, nearM, farM } = crossingPlacement(city, road, atEnd, source);
   if (!stripes.length) return null;
   return atEnd ? { nearM: lane.lengthM - nearM, farM: lane.lengthM - farM } : { nearM, farM };
 }
@@ -516,7 +616,7 @@ export function crossingCentreM(
 ): number | null {
   if (road.group !== undefined) return null;
   if (crossingEnabled(city, road, atEnd, source)) {
-    const { stripes, nearM, farM } = crossingPlacement(city, road, atEnd);
+    const { stripes, nearM, farM } = crossingPlacement(city, road, atEnd, source);
     if (stripes.length) return (nearM + farM) / 2;
   }
   return atEnd && servedSignal(city, road) && road.lanes.every((i) => city.lanes[i]!.lengthM >= 10)

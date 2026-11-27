@@ -46,6 +46,7 @@ import {
   approachProfile,
   goAroundAttitude,
   groundAttitude,
+  HELICOPTER_PAD_CLEARANCE_M,
   helicopterLandingProfile,
   helicopterTakeoffProfile,
   hoverTaxiProfile,
@@ -182,6 +183,9 @@ const ARRIVAL_PAD_S = 5;
  * this long before its threshold (not DECISION_S), and the runway must be clear by then. */
 const CLEAR_BEFORE_S = 5;
 const RETRY_S = 5;
+/** TASK-358: a helicopter below this height (the low bodies of the pushback sweep check) on or
+ * near a helipad is kept clear of aircraft on the ground, and they of it. */
+const HELI_CLEAR_M = 20;
 /** TASK-329: a ring of waits lasting this long is broken. */
 const RING_S = 60;
 /** TASK-330 progressive order: a conflict is ordered only once one of the two aircraft is
@@ -447,6 +451,9 @@ interface Air {
   clearM: number;
   decided: boolean;
   touched: boolean;
+  /** TASK-358: a helicopter coming down to a pad: seconds into its descent at which it would go
+   * below HELI_CLEAR_M; it hovers there (`decided` false) until its way down is clear. */
+  holdS?: number;
   /** TASK-330: committed, waiting for a runway still held by an aircraft predicted clear in time. */
   claimPending?: boolean;
 }
@@ -1552,12 +1559,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
   /** A wait with `predM` Infinity lasts while the other is on that leg or parked at its end. */
   const passed = ({ pred, predLeg, predM }: Wait) =>
-    predM === Infinity
-      ? !(pred.leg === predLeg && (pred.mode === 'parked' || pred.mode === 'ground')) &&
-        !stillUses(pred, predLeg)
-      : pred.mode === 'ground' && pred.leg === predLeg
-        ? pred.stationM > predM
-        : !stillUses(pred, predLeg);
+    pred.type.performance.kind === 'helicopter'
+      ? !heliActive(pred)
+      : predM === Infinity
+        ? !(pred.leg === predLeg && (pred.mode === 'parked' || pred.mode === 'ground')) &&
+          !stillUses(pred, predLeg)
+        : pred.mode === 'ground' && pred.leg === predLeg
+          ? pred.stationM > predM
+          : !stillUses(pred, predLeg);
   /** The station on `leg` its centre stays short of while an aircraft before it has to pass;
    * `passing`: leaving out those it goes before as it starts. */
   function waitCap(craft: Craft, leg: Leg, passing?: Set<Craft>) {
@@ -2008,9 +2017,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const theirs: { owner: Craft; wait: Wait }[] = [];
     for (const other of crafts) {
       if (other === craft || other.mode === 'done') continue;
+      // TASK-358: a helicopter at a pad, or low on its way onto or off one: wait short of it
+      // until it has climbed clear.
+      if (other.type.performance.kind === 'helicopter') {
+        const bodies = heliActive(other) ? heliFootprint(other) : null;
+        const at = bodies && bodyConflict(craft, own, bodies);
+        if (!at) continue;
+        if (!canWaitAt(craft, at.leg, at.m - SAMPLE_M)) return null;
+        mine.push({
+          leg: at.leg,
+          atM: at.m - SAMPLE_M,
+          pred: other,
+          predLeg: other.leg!,
+          predM: Infinity,
+        });
+        continue;
+      }
       const otherSpans = remaining(other);
-      // An aircraft parked in the way (at a stand, TASK-329 a helipad, TASK-339 a tow's rest
-      // point): wait short of it until it has left.
+      // An aircraft parked in the way (at a stand, TASK-339 a tow's rest point): wait short of it
+      // until it has left.
       if (other.mode === 'parked' && !other.admission && other.pose) {
         const at = parkedConflict(craft, own, other);
         if (!at) continue;
@@ -2308,6 +2333,31 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       const own = remaining(craft);
       for (const other of crafts) {
         if (other === craft || other.mode === 'done') continue;
+        if (other.type.performance.kind === 'helicopter') {
+          // TASK-358: a helicopter at a pad, or low on its way onto or off one, now within the
+          // horizon: wait short of it until it has climbed clear. A wait on one whose footprint
+          // has since left its way (the low part of a landing, once on the pad) lapses.
+          const bodies = heliActive(other) ? heliFootprint(other) : null;
+          const at = bodies && bodyConflict(craft, own, bodies);
+          const waiting = craft.waits.some((w) => w.pred === other && !passed(w));
+          if (waiting && !at) craft.waits = craft.waits.filter((w) => w.pred !== other);
+          else if (
+            !waiting &&
+            at &&
+            along(own, at.leg, at.m) <= ORDER_HORIZON_M &&
+            canWaitAt(craft, at.leg, at.m - SAMPLE_M)
+          ) {
+            craft.waits.push({
+              leg: at.leg,
+              atM: at.m - SAMPLE_M,
+              pred: other,
+              predLeg: other.leg!,
+              predM: Infinity,
+            });
+            late.decided++;
+          }
+          continue;
+        }
         if (other.mode === 'parked' && other.pose) {
           // An aircraft parked in the way, now within the horizon: wait short of it until it has
           // left (with a request or not).
@@ -2453,26 +2503,116 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   function parkedConflict(craft: Craft, own: Span[], other: Craft) {
     return bodyConflict(craft, own, bodyAt(other, other.pose!.position, other.pose!.headingRad));
   }
-  /** The first own station whose swept body touches `body`. */
-  function bodyConflict(craft: Craft, own: Span[], body: Body) {
+  /** The first own station whose swept body touches `body` (or one of `body`). */
+  function bodyConflict(craft: Craft, own: Span[], body: Body | Body[]) {
+    const bodies = Array.isArray(body) ? body : [body];
     for (const { leg, fromM } of own) {
       const box = sweepBox.get(leg) ?? (sweptLeg(craft, leg), sweepBox.get(leg)!);
-      const reach = Math.max(body.length, body.span) + cellM;
-      if (
-        body.x < box.minX - reach ||
-        body.x > box.maxX + reach ||
-        body.y < box.minY - reach ||
-        body.y > box.maxY + reach
-      )
-        continue;
+      const near = bodies.filter((b) => {
+        const reach = Math.max(b.length, b.span) + cellM;
+        return (
+          b.x >= box.minX - reach &&
+          b.x <= box.maxX + reach &&
+          b.y >= box.minY - reach &&
+          b.y <= box.maxY + reach
+        );
+      });
+      if (!near.length) continue;
       let first = Infinity;
       for (const bucket of sweptLeg(craft, leg).values())
         for (const a of bucket)
-          if (a.stationM >= fromM && a.stationM < first && bodiesTouch(a.body, body, 0))
+          if (
+            a.stationM >= fromM &&
+            a.stationM < first &&
+            near.some((b) => bodiesTouch(a.body, b, 0))
+          )
             first = a.stationM;
       if (first < Infinity) return { leg, m: first };
     }
     return null;
+  }
+
+  // ----- TASK-358: helicopters at helipads and aircraft on the ground. A helicopter on a pad, or
+  // below HELI_CLEAR_M on its way onto or off one, is a body in the way for the fixed-wing order,
+  // as one parked (TASK-339): they wait short of it until it has climbed clear. A helicopter does
+  // not start its departure or hover-taxi, nor come down from its hover point on a landing, while
+  // a fixed-wing body stands in that way or one moving cannot stop short of it; those that can
+  // are ordered to wait.
+  /** Where a helicopter is, or is to be, below HELI_CLEAR_M on its pad and its way onto or off
+   * it (bodies a sample apart): the low part of its landing or departure (its requested one when
+   * parked), a hover-taxi's whole way. Null for one with none (cruise, departed). */
+  function heliFootprint(h: Craft): Body[] | null {
+    const p = h.type.performance;
+    if (p.kind !== 'helicopter' || !h.pose) return null;
+    const runM =
+      ((HELI_CLEAR_M - HELICOPTER_PAD_CLEARANCE_M) * p.transitionSpeedMps) / p.verticalClimbMps;
+    const off = (from: Vec2, heading: number, m: number) => ({
+      x: from.x + m * Math.cos(heading),
+      y: from.y + m * Math.sin(heading),
+    });
+    const way = (a: Vec2, b: Vec2) => {
+      const lengthM = Math.hypot(b.x - a.x, b.y - a.y);
+      const heading = lengthM > 0 ? Math.atan2(b.y - a.y, b.x - a.x) : h.pose!.headingRad;
+      const n = Math.max(1, Math.ceil(lengthM / SAMPLE_M));
+      return Array.from({ length: n + 1 }, (_, i) =>
+        bodyAt(h, { x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n }, heading),
+      );
+    };
+    if (h.mode === 'parked') {
+      const pad = h.pose.position;
+      const r = h.request;
+      if (r?.kind === 'helicopter-departure') return way(pad, off(pad, r.heading, runM));
+      if (r?.kind === 'hover') return way(pad, graph.helipads[r.helipad]!.pos);
+      return [bodyAt(h, pad, h.pose.headingRad)];
+    }
+    if (h.mode !== 'air' || h.air?.kind !== 'helicopter') return null;
+    const { points } = h.air.path;
+    const from = points[0]!;
+    const to = points.at(-1)!;
+    if (h.next[0]?.kind === 'rest') {
+      if (h.pose.phase === 'hover-taxi') return way(h.pose.position, to);
+      return way(off(to, Math.atan2(to.y - from.y, to.x - from.x), -runM), to);
+    }
+    if (h.pose.heightM >= HELI_CLEAR_M) return null;
+    return way(from, off(from, Math.atan2(to.y - from.y, to.x - from.x), runM));
+  }
+  /** Whether fixed-wing aircraft keep clear of a helicopter's footprint: one on a pad, coming
+   * down past its hover point or hover-taxiing, or climbing off a pad below HELI_CLEAR_M. */
+  function heliActive(h: Craft) {
+    if (!h.pose) return false;
+    if (h.mode === 'parked') return h.helipad >= 0;
+    if (h.mode !== 'air' || h.air?.kind !== 'helicopter') return false;
+    return h.next[0]?.kind === 'rest' ? h.air.decided : h.pose.heightM < HELI_CLEAR_M;
+  }
+  /** Whether a helicopter may start its departure or hover-taxi, or come down from its hover
+   * point: no fixed-wing body (low) touches its footprint and none moving there that has not
+   * been ordered behind it is past its last place to stop. Those that can stop short are
+   * ordered to wait for it (until it has climbed clear). Those already waiting for it (they
+   * wait short of its pad) do not hold it, or neither would move. */
+  function heliClear(h: Craft) {
+    const bodies = heliFootprint(h)!;
+    const waits: { owner: Craft; wait: Wait }[] = [];
+    for (const other of crafts) {
+      if (other === h || other.mode === 'done' || other.type.performance.kind === 'helicopter')
+        continue;
+      if (other.waits.some((w) => w.pred === h && !passed(w))) continue;
+      const pose = other.pose;
+      if (pose && pose.heightM < HELI_CLEAR_M) {
+        const body = bodyAt(other, pose.position, pose.headingRad);
+        if (bodies.some((b) => bodiesTouch(b, body))) return false;
+      }
+      const own = remaining(other);
+      const at = own.length ? bodyConflict(other, own, bodies) : null;
+      if (!at) continue;
+      const atM = at.m - SAMPLE_M;
+      if (inside(other, at.leg, atM) || !canWaitAt(other, at.leg, atM)) return false;
+      waits.push({
+        owner: other,
+        wait: { leg: at.leg, atM, pred: h, predLeg: h.leg!, predM: Infinity },
+      });
+    }
+    commitOrder(h, { mine: [], theirs: waits }, false);
+    return true;
   }
 
   /** TASK-339: the leg at whose end an aircraft's movement ends parked (a stand, or a tow's rest
@@ -3285,13 +3425,16 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       ) {
         if (lineUp && (T360R || T360M)) {
           // TASK-360: every aircraft holding the runway is rolling away beyond the line-up
-          // (rule 2) or lined up ahead of it (rule 3), not only the last to claim it.
+          // (rule 2) or lined up ahead of it (rule 3), not only the last to claim it. TASK-365:
+          // at most two lined up at once (one ahead of this one): CAP 493's multiple line-ups
+          // are a pair at two points, and a third behind them stood in the second's way.
+          let ahead = 0;
           for (const o of crafts) {
             if (o.id === except || !o.runwayClaims.some((u) => u.resource === resource)) continue;
             if (rollingAway(o, lineUp)) {
               const fromU = graph.runways[o.runway]!.lengthM - o.air!.clearM;
               if (lineUp.lineUpU > fromU + 1 && sharedBy !== 'multi') sharedBy = 'roll';
-            } else if (linedUpAhead(o, lineUp)) sharedBy = 'multi';
+            } else if (linedUpAhead(o, lineUp) && ++ahead < 2) sharedBy = 'multi';
             else return false;
           }
         } else if (!behind(occupant)) return false;
@@ -4068,7 +4211,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const block = waits.some(
       (w) =>
         w.predM === Infinity &&
-        w.pred.mode === 'parked' &&
+        // TASK-358: or a helicopter coming down onto a pad there.
+        (w.pred.mode === 'parked' || (w.pred.mode === 'air' && w.pred.next[0]?.kind === 'rest')) &&
         !w.pred.admission &&
         !w.pred.request &&
         !(w.leg === legs[0] && legs[0].mode === 'pushback') &&
@@ -4347,9 +4491,17 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         y: pad.y - FINAL_M * Math.sin(request.heading),
       };
       const path = aircraftPath([start, pad]);
+      const profile = helicopterLandingProfile(path, p);
+      // TASK-358: the hover point, where its height comes down to HELI_CLEAR_M.
+      let [lo, hi] = [0, profile.durationS];
+      while (hi - lo > 0.05) {
+        const mid = (lo + hi) / 2;
+        if (profile.sample(mid).heightM > HELI_CLEAR_M) lo = mid;
+        else hi = mid;
+      }
       craft.air = {
         kind: 'helicopter',
-        profile: helicopterLandingProfile(path, p),
+        profile,
         path,
         startS: timeS,
         crossings: [],
@@ -4357,8 +4509,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         thresholdM: 0,
         touchdownM: 0,
         clearM: 0,
-        decided: true,
+        decided: false,
         touched: true,
+        holdS: lo,
       };
       craft.mode = 'air';
       craft.helipad = request.helipad;
@@ -4368,6 +4521,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return;
     }
     if (craft.mode !== 'parked' || !request) return;
+    // TASK-358: not while its way off the pad is not clear of aircraft on the ground.
+    if (timeS - craft.retryS < RETRY_S) return;
+    if (!heliClear(craft)) {
+      craft.retryS = timeS;
+      return;
+    }
     const pad = graph.helipads[craft.helipad]!.pos;
     if (request.kind === 'helicopter-departure') {
       events.push({ timeS, id: craft.id, kind: 'off-block' });
@@ -4847,8 +5006,23 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   // ----- Stepping.
   function stepAir(craft: Craft, timeS: number) {
     const air = craft.air!;
-    const elapsed = timeS - air.startS;
-    const pose = air.profile.sample(elapsed);
+    let elapsed = timeS - air.startS;
+    // TASK-358: a helicopter coming down to a pad hovers at its hover point until its way down
+    // is clear of aircraft on the ground.
+    let hovering = false;
+    if (air.holdS !== undefined && !air.decided && elapsed >= air.holdS) {
+      if (timeS - craft.retryS >= RETRY_S) {
+        air.decided = heliClear(craft);
+        if (!air.decided) craft.retryS = timeS;
+      }
+      if (!air.decided) {
+        air.startS = timeS - air.holdS;
+        elapsed = air.holdS;
+        hovering = true;
+      }
+    }
+    const sampled = air.profile.sample(elapsed);
+    const pose = hovering ? { ...sampled, speedMps: 0 } : sampled;
     craft.pose = pose;
     craft.stationM = pose.stationM;
     craft.speedMps = pose.speedMps;

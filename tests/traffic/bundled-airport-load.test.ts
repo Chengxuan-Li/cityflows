@@ -13,30 +13,33 @@ import { limit } from '../timeouts';
 // TASK-351 re-pins the compiled graphs of the three airports it rebuilds (their car entrances and
 // parking exits) and the startup states that follow. TASK-348 + TASK-351 (merge): Zurich's and
 // Heathrow's graphs (crossings outside junction groups laid out as plain nodes) and Heathrow's state.
+// TASK-265 re-pins the four compiled graphs (zebra bands on their mapped crossing nodes; startup states
+// unchanged). TASK-360 re-pins Heathrow's startup state and board (intersection take-offs and line-ups).
+// TASK-364 re-pins Zurich's graph (two one-way to two-way seams laid out as continuations; state unchanged).
 const pins = [
   {
     id: 'london-city-airport',
-    compiled: 'e76955d8a627e065dec27fbe4b91f7b3a9082821f9e34156b8236e2dfe9d8d8c',
+    compiled: '895ee06205542168ff630a36e90cccaaa835fbc02fb52b8daa12a879caa920c1',
     state: [193940800, 1229324366],
     board: 'b1c98cc15570f53d5c02f8cf2828b09879337d4d04325b68fcb4eebfe15f180c',
   },
   {
     id: 'zurich-airport',
-    compiled: 'fb9a6f683dbc57b56f7381df6780aa64b8abb1b5a72781d751d66258057feb2e',
+    compiled: 'c85804e889cf51b0a76bca9f52c93d99123539f7f1d6fe1015d2a746642df106',
     state: [1233058347, 420095907],
     board: 'f0b7bc5b71b5e04b1cad6b1849863054b40c4b809fc960a0d72f7b80f1204ffe',
   },
   {
     id: 'boston-logan',
-    compiled: '7fc43beb08028dfce7bd50c989b8c7051dd3031c2af238390ac28f0a04d3bece',
+    compiled: 'd27d57724ca7da110fe08988b269acaf3965d8de606a736b6a00767726ed5a49',
     state: [3509028583, 2047946547],
     board: 'fd7da6fa26993fa5da7501a6aab4159f8acf350f63799f2d24aeeb1644d461fb',
   },
   {
     id: 'heathrow',
-    compiled: '29c4a6bff6e9ca9edf7b26a97156860d803d9e6262df1ad0ab51b734013d1991',
-    state: [3394981357, 646132797],
-    board: '03695df6916ac1950720e1a2469fa7e69dbc0c6561f3acc516b76313114cd26f',
+    compiled: '413ad78a52e98925f61e2ffcbc6ea51e789096e7f68f6a87f9853c5ea8ebf95f',
+    state: [3553834081, 114319433],
+    board: '435dc959537475c17c6bf90a6934b8882ab64c0773940341c03a49d4c60e3e98',
   },
 ];
 
