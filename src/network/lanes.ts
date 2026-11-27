@@ -62,8 +62,11 @@ export function smootherstep(t: number): number {
 
 /** TASK-080 (B37): every taper is short and scaled by speed, at most half the road. */
 export function taperLength(road: Road): number {
-  const kmh = road.speedLimitMps * 3.6;
-  return Math.min(polylineLength(road.centerline) / 2, Math.max(15, Math.min(40, 0.4 * kmh)));
+  return Math.min(polylineLength(road.centerline) / 2, taperTargetM(road));
+}
+
+export function taperTargetM(road: Road): number {
+  return Math.max(15, Math.min(40, 0.4 * (road.speedLimitMps * 3.6)));
 }
 
 const endLines = new WeakMap<Vec2[], Reference>();

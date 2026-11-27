@@ -27,11 +27,16 @@ function turn(overrides: Partial<ScheduledFlight> = {}): ScheduledFlight {
   };
 }
 
-function advance(fleet: ReturnType<typeof setup>, schedule: ScheduledFlight[], endS: number) {
-  const operations = createFlightOperations(fleet, 1, 0, schedule);
+function advance(
+  fleet: ReturnType<typeof setup>,
+  schedule: ScheduledFlight[],
+  endS: number,
+  startS = 0,
+) {
+  const operations = createFlightOperations(fleet, 1, startS, schedule);
   let occupied = new Set<string>();
   const stops: string[] = [];
-  for (let timeS = 0; timeS <= endS; timeS++) {
+  for (let timeS = startS; timeS <= endS; timeS++) {
     operations.step(timeS);
     fleet.step(timeS);
     const current = new Set<string>();
@@ -106,6 +111,43 @@ describe('flight operations on the synthetic airport', () => {
     const day = advance(fleet, [turn({ overnight: true, departureS: 25 * 3600 })], 26 * 3600);
     expect(day.stops).toEqual(['4', 'R2', '4']);
     expect(day.tows).toBe(2);
+    expect(day.completed).toBe(1);
+    expect(fleet.metrics().departed).toBe(1);
+  });
+
+  // TASK-353: one parked away overnight at the run's start left no stand of its own; it is towed
+  // to the nearest free contact stand in time for its departure, or departs from the remote
+  // stand it stands on when no contact stand is free.
+  test('tows one parked away at the start to the nearest free contact stand', () => {
+    const fleet = setup();
+    const flight = turn({ overnight: true, arrivalS: 0, departureS: 3600 + 3000 });
+    const day = advance(fleet, [flight], 3600 + 3600, 3600);
+    expect(day.stops).toHaveLength(2);
+    const [away, back] = day.stops.map((ref) => fleet.graph.stands.find((s) => s.ref === ref)!);
+    expect(away!.kind).toBe('remote');
+    expect(back!.kind).toBe('contact');
+    const contact = fleet.graph.stands.filter(
+      (s) => s.kind === 'contact' && fleet.standAdmits(s.idx, 'E190'),
+    );
+    const distance = (s: (typeof contact)[number]) =>
+      Math.hypot(s.pos.x - away!.pos.x, s.pos.y - away!.pos.y);
+    expect(distance(back!)).toBe(Math.min(...contact.map(distance)));
+    expect(day.tows).toBe(1);
+    expect(day.completed).toBe(1);
+  });
+
+  test('departs from the remote stand when no contact stand is free at its return', () => {
+    const fleet = setup();
+    for (const stand of fleet.graph.stands.filter(
+      (s) => s.kind === 'contact' && fleet.standAdmits(s.idx, 'E190'),
+    ))
+      expect(fleet.spawnParked({ typeId: 'E190', stand: stand.id }).ok).toBe(true);
+    const flight = turn({ overnight: true, arrivalS: 0, departureS: 3600 + 3000 });
+    const day = advance(fleet, [flight], 3600 + 3600, 3600);
+    expect(day.stops).toHaveLength(7);
+    const kinds = day.stops.map((ref) => fleet.graph.stands.find((s) => s.ref === ref)!.kind);
+    expect(kinds.filter((kind) => kind === 'remote')).toHaveLength(1);
+    expect(day.tows).toBe(0);
     expect(day.completed).toBe(1);
     expect(fleet.metrics().departed).toBe(1);
   });

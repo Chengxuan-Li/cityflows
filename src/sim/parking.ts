@@ -10,6 +10,8 @@ import type { CParkingSpace, CompiledCity } from '../network';
 import { laneHeightAt } from '../network/heights';
 import { keepClearZones } from '../network/keep-clear';
 import { lotPath } from '../network/lot-paths';
+import { carService } from '../network/car-service';
+import { createRouteProvider, freeFlowLinkCosts } from '../routing';
 import { departureMisses, parkingConnectorPermitted } from '../network/parking';
 import { lanesNear } from '../network/walk';
 import { vehicleClasses, type Scenario, type SimParams, type TripRequest } from '../schema';
@@ -442,6 +444,41 @@ export function createParking(
         .sort((a, b) => a.key - b.key || a.id - b.id)
         .map(({ id }) => id)
     : chronology.filter((id) => trips[id]!.mode === 'car' && previous[id] === -1);
+  const service = carService(compiled);
+  // TASK-351: a car bound for a map exit starts only where the router finds it a way there:
+  // Zurich's terminal loop on Flughafenstrasse reaches the rest of the landside only by lane
+  // changes no route makes, which `carService` does not judge.
+  const router = createRouteProvider({ laneChangeDistanceM: params.laneChangeDistanceM });
+  const freeFlow = freeFlowLinkCosts(compiled);
+  const routable = new Map<string, boolean>();
+  const routes = (id: number, f: CompiledCity['parking'][number], to: number) => {
+    const destination = compiled.places[to]!;
+    if (destination.kind !== 'gateway') return true;
+    const { vehicleClass, purpose } = trips[id]!;
+    const key = `${f.idx}:${to}:${vehicleClass}:${purpose}`;
+    let ok = routable.get(key);
+    if (ok === undefined)
+      routable.set(
+        key,
+        (ok = f.connectorsOut.some((c) => {
+          const { lane, positionM } = compiled.connectors[c]!;
+          return destination.connectorsIn.some(
+            (toConnector) =>
+              router.route(compiled, freeFlow, {
+                fromLane: lane,
+                fromPosM: positionM,
+                toConnector,
+                vehicleClass,
+                purpose,
+                desiredSpeedFactor: 1,
+                noise: 0,
+                seed: 0,
+              }).ok,
+          );
+        })),
+      );
+    return ok;
+  };
   for (const id of firsts) {
     const trip = trips[id]!;
     const place = compiled.index.place.get(trip.originPlaceId);
@@ -454,14 +491,21 @@ export function createParking(
     const street =
       small(id) && prefersStreet(id) ? nearHome(place!).filter((f) => f.kind !== 'garage') : [];
     if (!carsLeft.has(place!)) carsLeft.set(place!, carsAt(place!, own));
+    // TASK-351: where the public network splits inside the map, a street space near home may lie
+    // in a part with no road to the trip's destination (Zurich: Kloten and the airport landside);
+    // the first facility that reaches it is taken, else the first as before.
+    const destination = compiled.index.place.get(trip.destinationPlaceId)!;
+    const candidates = [...street, ...own, ...(small(id) ? nearHome(place!) : [])];
+    const usable = (f: CompiledCity['parking'][number]) =>
+      departure(id).facilities[f.idx] &&
+      available[f.idx]! > 0 &&
+      (small(id) || f.kind === 'garage') &&
+      (f.kind === 'garage' || usableSpaces(f).some(ours));
     const facility =
-      [...street, ...own, ...(small(id) ? nearHome(place!) : [])].find(
-        (f) =>
-          departure(id).facilities[f.idx] &&
-          available[f.idx]! > 0 &&
-          (small(id) || f.kind === 'garage') &&
-          (f.kind === 'garage' || usableSpaces(f).some(ours)),
+      candidates.find(
+        (f) => usable(f) && service.leaves(f.idx, destination) && routes(id, f, destination),
       ) ??
+      candidates.find(usable) ??
       // Neighbours may have taken the street cars moved out of this home's garage; an
       // inferred home garage stands in for parking OSM does not map and admits every car,
       // so a resident's car starts there while the home has residents' cars left (lead,

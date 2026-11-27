@@ -27,10 +27,10 @@ const realPlaces = [
   { id: 'york', name: 'York city centre' },
   { id: 'london-city-airport', name: 'London City Airport' },
   { id: 'heathrow', name: 'London Heathrow Airport' },
+  { id: 'zurich-airport', name: 'Zurich Airport' },
 ];
 /** Boston has scene-load checks while its throughput gate is pending. */
 const heldOut = [{ id: 'boston-logan', name: 'Boston Logan Airport' }];
-const zurich = { id: 'zurich-airport', name: 'Zurich Airport' };
 
 const opened = async (page: Page, name: string, timeout = 60_000) => {
   // Sindelfingen's first frame takes 8 to 13 s on a busy machine (its rail clipping), longer than
@@ -75,8 +75,9 @@ for (const [width, height] of [
         );
         await page.screenshot({ path: info.outputPath(`new-city-${width}.png`) });
       }
-      // Heathrow's 180 s to open, as in its render check below.
-      const timeout = id === 'heathrow' ? 180_000 : undefined;
+      // Heathrow's and Zurich's 180 s to open, as in their render check below (TASK-302: Zurich
+      // ready 31 to 42 s on a quiet machine).
+      const timeout = id === 'heathrow' || id === 'zurich-airport' ? 180_000 : undefined;
       await place.click();
       await opened(page, name, timeout);
       await page.goto(`/?city=${id}`);
@@ -103,9 +104,10 @@ for (const { id, name } of heldOut)
     expect(errors).toEqual([]);
   });
 
-for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freiburg'), zurich])
+for (const { id, name } of realPlaces.filter((place) => place.id !== 'freiburg'))
   test(`${name} renders in 2D and 3D while its morning plays`, async ({ page }, info) => {
-    test.setTimeout(240_000);
+    // Heathrow's 3D scene on a CI runner's software GPU outlasts 4 min (Full 45836124508).
+    test.setTimeout(id === 'heathrow' && process.env.CI ? 480_000 : 240_000);
     const sample = process.env.CI ? { frames: 12, warm: 2 } : { frames: 180, warm: 30 };
     const p95 = (values: number[]) =>
       [...values].sort((a, b) => a - b)[
@@ -114,7 +116,7 @@ for (const { id, name } of [...realPlaces.filter((place) => place.id !== 'freibu
     const errors = pageErrors(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/?city=${id}`);
-    // Zurich is held out of the panel for its load time (TASK-302); CI runners need longer.
+    // Zurich's and Heathrow's archives load longest (TASK-302); CI runners need longer.
     await opened(page, name, id === 'zurich-airport' || id === 'heathrow' ? 180_000 : undefined);
     // TASK-295: an airport's airside is drawn as paving (aprons, taxiways, the runway).
     if (id === 'london-city-airport' || id === 'zurich-airport')

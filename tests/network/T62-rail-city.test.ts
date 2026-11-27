@@ -42,7 +42,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-290: Sindelfingen's lane connector lists move c:1449 from r:97 to r:954.
           // TASK-294: lot pk:1490, reached only through the works' private roads, gains its bay departures.
           // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-          '9580f25148577a9c6fb1ed06c1980f52c6c9f9d3a75f846368d15c13ab099bb3',
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+          '7216a2c2e099624542857c348752ea4eaf6d573292585b6555bb2c2bba118d16',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

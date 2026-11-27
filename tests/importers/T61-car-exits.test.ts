@@ -4,6 +4,7 @@ import { compile, type CompiledCity } from '../../src/network';
 import { parkingEgress } from '../../src/network/parking-egress';
 import { placeConnector, connectCarExits } from '../../src/importers/osm/places';
 import { addImplicitGarages } from '../../src/network/parking';
+import { carService } from '../../src/network/car-service';
 import { createHash } from 'node:crypto';
 import { loadAuditCity } from '../../bench/junction-audit';
 import { tierCities } from '../tier';
@@ -370,8 +371,9 @@ test.each(
       '157532339433f59745bc4d1d9acf5a9e50bd9b906fa3a8d8c977c320271ad30e',
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
       '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
-      31,
-      703,
+      // TASK-351: Entenseestraße's loop, fed by a map entry and drained by an exit, is circulation.
+      21,
+      513,
     ],
   ] as const),
 )(
@@ -427,3 +429,86 @@ test('T61 saved trap connectors produce warnings naming the owner, connector and
     compile(city).diagnostics.filter((d) => ['place_no_exit', 'parking_no_exit'].includes(d.code)),
   ).toEqual([]);
 });
+
+// TASK-351: Zurich's public network splits inside the map (Kloten and the airport landside meet only
+// on airport roads); each part a map entry feeds and a map exit drains is circulation, not only the
+// largest.
+test.each([true, false])(
+  'T61 a smaller public part with a map entry and exit is one a car can leave (gateway %s)',
+  (gateway) => {
+    const { city, node, road, place } = network();
+    const a = node(1000, 0),
+      b = node(1150, 0),
+      c = node(1075, 150);
+    const town = [road(a, b), road(b, c), road(c, a)];
+    const entry = road(node(1000, -300), a),
+      exit = road(b, node(1150, -300));
+    if (gateway)
+      place('Edge', 'gateway', { x: 1075, y: -300 }, [
+        { road: entry, direction: 'out' },
+        { road: exit, direction: 'in' },
+      ]);
+    place('Town', 'work', { x: 1075, y: -10 }, [
+      { road: town[0]!, direction: 'both', positionM: 40 },
+    ]);
+    const net = compiled(city),
+      access = parkingEgress(net, 30);
+    const work = net.places.find((p) => city.places[p.id]!.name === 'Town')!;
+    expect(access.connectors[work.connectorsOut[0]!]).toBe(Number(gateway));
+    const lane = net.index.lane.get(`${town[1]!.id}#0`)!;
+    expect(access.earliestArrival(lane)).toBe(gateway ? 0 : Infinity);
+  },
+);
+
+test('T61 a trapped entrance moves no farther than the limit from its place', () => {
+  const { city, place, trap, barrier } = network(-1500);
+  barrier.lanes[0]!.allowed = ['bus'];
+  place('Far', 'work', { x: 100, y: -1500 }, [{ road: trap, direction: 'both', positionM: 40 }]);
+  const owner = Object.values(city.places)[0]!,
+    original = { ...owner.connectors[0]! };
+  connectCarExits(city, compiled(city));
+  expect(owner.connectors).toEqual([original]);
+});
+
+test.each([false, true])(
+  'T61 a car trip between parts that meet only beyond the map is not served (joined %s)',
+  (joined) => {
+    const { city, node, road, place, loop } = network();
+    const a = node(1000, 0),
+      b = node(1150, 0),
+      c = node(1075, 150);
+    const town = [road(a, b), road(b, c), road(c, a)];
+    if (joined) {
+      road(city.nodes[loop[0]!.to]!, a);
+      road(c, city.nodes[loop[1]!.to]!);
+    }
+    place('Edge', 'gateway', { x: 1075, y: -300 }, [
+      { road: road(node(1000, -300), a), direction: 'out' },
+      { road: road(b, node(1150, -300)), direction: 'in' },
+    ]);
+    place('Home', 'residential', { x: 100, y: 10 }, [
+      { road: loop[0]!, direction: 'both', positionM: 40 },
+    ]);
+    place('Town', 'work', { x: 1075, y: -10 }, [
+      { road: town[0]!, direction: 'both', positionM: 40 },
+    ]);
+    addImplicitGarages(city);
+    const net = compiled(city),
+      service = carService(net);
+    const [home, work] = ['Home', 'Town'].map(
+      (name) => net.places.find((p) => city.places[p.id]!.name === name)!.idx,
+    );
+    expect([service.served(home!, work!, true), service.served(work!, home!)]).toEqual([
+      joined,
+      joined,
+    ]);
+    const garage = net.parking.find((f) => f.place === home)!;
+    expect(service.leaves(garage.idx, work!)).toBe(joined);
+    // A trip to the map exit leaves by a connector its car can reach.
+    const edge = net.places.find((p) => p.kind === 'gateway')!;
+    const exit = net.connectors[garage.connectorsOut[0]!]!.lane;
+    expect(service.reachable(exit, edge.connectorsIn)).toHaveLength(Number(joined));
+    const townExit = net.connectors[net.places[work!]!.connectorsOut[0]!]!.lane;
+    expect(service.reachable(townExit, edge.connectorsIn)).toEqual(edge.connectorsIn);
+  },
+);

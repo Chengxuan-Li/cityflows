@@ -265,3 +265,17 @@ export function airportFixture({
     stands: stands as typeof stands & Partial<Record<'South' | 'West' | 'East', string>>,
   };
 }
+
+/** TASK-360: runs `body` with the departure rules `rules` (the env T360, read when a fleet is
+ * created: i intersection take-offs, r line-up behind a passing roll, m multiple line-ups; empty
+ * for the line-up choice before them). */
+export function withRules<T>(rules: string, body: () => T): T {
+  const before = process.env.T360;
+  process.env.T360 = rules;
+  try {
+    return body();
+  } finally {
+    if (before === undefined) delete process.env.T360;
+    else process.env.T360 = before;
+  }
+}

@@ -54,7 +54,8 @@ export interface AircraftMesh {
 }
 
 /** Bake rigid parts in the frame that moves them. Windows keep their compact pane instances,
- * and gear and rotors retain their own visibility and animation. */
+ * and gear and rotors retain their own visibility and animation. Returns each frame's batch and
+ * outline. */
 export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
   const { root, gear, noseGear, propellers, rotors } = mesh;
   const frames = new Set([root, gear, ...(noseGear ? [noseGear] : []), ...propellers, ...rotors]);
@@ -74,6 +75,7 @@ export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
   const material = new MeshLambertMaterial({ vertexColors: true });
   const local = new Matrix4();
   const geometries = new Set<BufferGeometry>();
+  const batches: { frame: Group; batch: Mesh; contour: Mesh | null }[] = [];
   for (const [frame, parts] of rigid) {
     const inverse = frame.matrixWorld.clone().invert();
     const body: BufferGeometry[] = [];
@@ -113,12 +115,14 @@ export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
     const batch = new Mesh(mergeGeometries(body)!, material);
     batch.matrixAutoUpdate = false;
     frame.add(batch);
+    let contour: Mesh | null = null;
     if (rim.length) {
-      const contour = new Mesh(mergeGeometries(rim)!, outline);
+      contour = new Mesh(mergeGeometries(rim)!, outline);
       contour.userData.outline = true;
       contour.matrixAutoUpdate = false;
       frame.add(contour);
     }
+    batches.push({ frame, batch, contour });
     for (const geometry of [...body, ...rim]) geometry.dispose();
   }
   for (const geometry of geometries) geometry.dispose();
@@ -130,6 +134,7 @@ export function batchAircraftMesh(mesh: AircraftMesh, outline: ShaderMaterial) {
   for (const object of empty) object.removeFromParent();
   root.updateMatrixWorld(true);
   root.matrixAutoUpdate = false;
+  return batches;
 }
 
 /** Adjacent rings share vertices for smooth normals. Endpoints cap the rings or form a cone. */
@@ -675,17 +680,14 @@ const noFold: GearFold = {
   tilt: 0,
 };
 
-/** TASK-331: the material of an aircraft's landing gear batches. Each vertex folds by its own
- * retraction (`GearFold`, as vertex attributes) as `extension` goes from 1 (down) to 0
- * (stowed), turning rigidly about its leg's pivot: no part is scaled. Geometry without the
- * attributes (TASK-307's gear) does not move. One material per aircraft, one shared program. */
+/** TASK-331: the material of the landing gear batches. Each vertex folds by its own retraction
+ * (`GearFold`, as vertex attributes) as the aircraft's `gearExtension` (TASK-359: per instance)
+ * goes from 1 (down) to 0 (stowed), turning rigidly about its leg's pivot: no part is scaled.
+ * Geometry without the attributes (TASK-307's gear) does not move. */
 export function gearFoldMaterial() {
-  const extension = { value: 1 };
   const material = new MeshLambertMaterial({ vertexColors: true });
-  material.userData.extension = extension;
   material.customProgramCacheKey = () => 'gear-fold';
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.gearExtension = extension;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -695,7 +697,7 @@ export function gearFoldMaterial() {
         attribute vec3 gearShift;
         attribute vec2 gearMove;
         attribute vec3 gearTiltPivot;
-        uniform float gearExtension;`,
+        attribute float gearExtension;`,
       )
       .replace(
         '#include <beginnormal_vertex>',

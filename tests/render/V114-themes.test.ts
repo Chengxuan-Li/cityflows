@@ -75,7 +75,9 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-290: Sindelfingen's garage entrance changes keep-clear paint on r:97 and r:954.
           // TASK-347: lines run on across nodes drawn as road (`roadStrip`).
           // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
-          '9dfccd480d8f8964d8993dbc809828c005f5b47e9009aa59e85db9a07a73968e',
+          // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
+          // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
+          '4243da1886f93632ff601988f81d3844c48c8303379ee84503f72879c49cb169',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },

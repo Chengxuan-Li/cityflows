@@ -68,7 +68,9 @@ export const onRunway = (poses: readonly AircraftPoseSnapshot[]) =>
  * occupied elsewhere along it. */
 /** TASK-345: pairs on one runway the owner approved as sharing it by design (2026-11-24): two
  * crossing aircraft; a crossing aircraft at least 150 m behind a landing roll along its heading; an
- * aircraft lining up behind a departure rolling away (take-off roll, rotation or climb). */
+ * aircraft lining up behind a departure rolling away (take-off roll, rotation or climb), wherever
+ * that one started (TASK-360 rule 2). TASK-360 rule 3: two aircraft lined up for the same runway
+ * end, one behind the other along the front one's heading (a multiple line-up). */
 export function exemptRunwayPair(a: AircraftPoseSnapshot, b: AircraftPoseSnapshot) {
   const crossing = (p: AircraftPoseSnapshot) => p.state === 'taxi' || p.state === 'tow';
   const behind = (p: AircraftPoseSnapshot, ahead: AircraftPoseSnapshot) =>
@@ -80,6 +82,13 @@ export function exemptRunwayPair(a: AircraftPoseSnapshot, b: AircraftPoseSnapsho
   }
   const rolling = (p: AircraftPoseSnapshot) =>
     p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
+  if (a.state === 'line-up' && b.state === 'line-up') {
+    if (a.runwayEnd === null || a.runwayEnd !== b.runwayEnd) return false;
+    const [rear, front] = behind(a, b) >= 0 ? [a, b] : [b, a];
+    const lengthOf = (p: AircraftPoseSnapshot) =>
+      aircraftTypes.find((t) => t.id === p.typeId)!.lengthM;
+    return behind(rear, front) >= (lengthOf(rear) + lengthOf(front)) / 2;
+  }
   const [lineUp, roll] = a.state === 'line-up' ? [a, b] : [b, a];
   return lineUp.state === 'line-up' && rolling(roll) && behind(lineUp, roll) >= 0;
 }

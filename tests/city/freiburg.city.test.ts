@@ -117,18 +117,19 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // south on Günterstalstraße, and the line from Kronenstraße; then (TASK-202) the Rotteckring
   // both ways, between Habsburgerstraße and Kronenstraße, and the Schwabentorschleife from the
   // east and back. TASK-214's rebuild of the project renumbers the rail nodes by one; TASK-270's
-  // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one.
+  // (one gateway and one connector fewer) by two down; TASK-281's (one lot driveway fewer) by one;
+  // TASK-351's (two car parks' split exits become one connector each) by two.
   expect(table.routes.map((r) => `${end(r.from)}>${end(r.to)}`)).toEqual([
-    'rn:12240>rn:12223',
-    'rn:12881>rn:12223',
-    'rn:12225>rn:12558',
-    'rn:12514>rn:12574',
-    'rn:12046>rn:12512',
-    'rn:12514>rn:12879',
-    'rn:12881>rn:12512',
-    'rn:12225>rn:12223',
+    'rn:12238>rn:12221',
+    'rn:12879>rn:12221',
+    'rn:12223>rn:12556',
+    'rn:12512>rn:12572',
+    'rn:12044>rn:12510',
+    'rn:12512>rn:12877',
+    'rn:12879>rn:12510',
+    'rn:12223>rn:12221',
   ]);
-  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12881'))
+  for (const route of table.routes.slice(0, 5).filter((r) => end(r.from) !== 'rn:12879'))
     expect(route.stops.map((s) => s.name)).toContain('Bertoldsbrunnen');
   expect(census.routes.map((r) => r.perHour)).toEqual([10, 10, 10, 10, 10, 10, 10, 10]);
   expect(table.periodS).toBe(720);
@@ -141,7 +142,8 @@ test('trams run the main lines through Bertoldsbrunnen, both ways', () => {
   // (ts:13306 to ts:13313); same routes, stops and headways.
   // TASK-270: the ids two down give other offsets; same routes, stops and headways.
   // TASK-281: the ids one further down, again other offsets; same routes, stops and headways.
-  expect(table.hash).toBe('15cc1c0e');
+  // TASK-351: the ids two further down, again other offsets; same routes, stops and headways.
+  expect(table.hash).toBe('773256d9');
   for (let time = 0; time < 86400; time += 5) {
     const used = new Set<number>();
     for (const tram of trainsAt(rail, table, time))
@@ -245,7 +247,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // TASK-290: nine mapped entrances link five garages, and Bahnhofsgarage keeps its old entry.
     // TASK-294: rebuilt; three places and their garages keep their driveways in pockets behind
     // destination streets (the place repair no longer moves them out).
-    '380c013e05a158bb723ac14e5ba0846abff97cd682498ccd11a93baa2cba5b29',
+    // TASK-351: rebuilt; the Schwabentorring's part, fed by a map entry and drained by an exit, is
+    // circulation, so three car parks on it (pk:2627, pk:2647, pk:2831) leave by their own streets.
+    'e80ca097f05c15908d65981c37c83e38b1eb7b3f61a9c10e5e4733b5fbadb034',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -294,12 +298,12 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // completed, 62.7 to 62.8 s).
   // TASK-348: the four signalised crossings outside junction groups laid out as plain nodes
   // (1,531 to 1,533 completed, 62.8 to 61.3 s).
-  // TASK-279: walkers at the crossings that draw no zebra cross in a gap, yielded to only by
-  // turning drivers and crawling traffic. On TASK-348's main: 1,533 to 1,482 completed, 19
-  // gridlocked from 07:50 at n:18 (r:1348 to r:1337): the tram crossing holds the head for n:39's
-  // red and the two actuated greens alternate (TASK-222 keeps a green for mutual waits
-  // only); seeds 2 to 6 pass.
-  expect(morning.stateHash).toBe(3906630995);
+  // TASK-351: three car parks on the Schwabentorring leave by their own streets (1,528 completed,
+  // 62.3 s).
+  // TASK-348 + TASK-351: both on main (1,533 to 1,528 completed, 61.3 to 62.5 s).
+  // TASK-265: the bands and walker spans at n:211 and n:254 move inside the curb clearance
+  // onto the mapped nodes (1,528 to 1,526 completed, 62.5 to 62.2 s).
+  expect(morning.stateHash).toBe(1465651370);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
