@@ -10,7 +10,7 @@ import { movementLight, signalHeads, signalLight } from './layers/signals';
 import { connectorPosition } from './picking';
 import type { CityGeometry, Pick, SignalStates, VehicleSnapshot } from './types';
 
-/** TASK-380: the debug overlays as plain drawing items in world metres (x east, y south, z up),
+/** TASK-381: the debug overlays as plain drawing items in world metres (x east, y south, z up),
  * built once per city or snapshot and drawn by the 2D and the 3D view alike (`debug-canvas.ts`).
  * Colours are named inks, resolved from the `--debug-*` tokens of the current appearance. */
 export const inks = ['blue', 'teal', 'green', 'amber', 'red', 'purple', 'pink', 'grey'] as const;
@@ -431,7 +431,7 @@ function airsideGraph(city: CompiledCity, heights: DebugHeights) {
   return items;
 }
 
-/** TASK-380: the glide path down to each runway end arrivals use (3D only). */
+/** TASK-381: the glide path down to each runway end arrivals use (3D only). */
 export function glidePaths(
   city: CompiledCity,
   heights: DebugHeights,
@@ -639,7 +639,7 @@ export function networkLayer(
   }
 }
 
-/** TASK-380 Heights and grades: each road's surface by elevation on the ramp (its width scaled
+/** TASK-381 Heights and grades: each road's surface by elevation on the ramp (its width scaled
  * when `fill`), bridge decks cased, tunnels dashed, its grade in per cent. */
 export function heightsLayer(
   city: CompiledCity,
