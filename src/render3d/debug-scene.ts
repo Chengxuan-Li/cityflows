@@ -67,8 +67,9 @@ export function projector3D(
   ).elements;
   const distance = camera.position.distanceTo(target);
   // The ground the view shows: where rays through the screen's edges meet the target's level,
-  // no farther than eight times the camera's distance (toward the horizon).
-  const reach = distance * 8;
+  // no farther than four times the camera's distance (toward the horizon: beyond, the overlays
+  // are too small to read).
+  const reach = distance * 4;
   const box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const add = (x: number, y: number) => {
     box.minX = Math.min(box.minX, x);

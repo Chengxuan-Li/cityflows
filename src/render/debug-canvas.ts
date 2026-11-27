@@ -75,7 +75,8 @@ export class DebugCanvas {
     const ctx = canvas.getContext('2d')!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, view.width, view.height);
-    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'bevel';
     this.drawn = [];
     this.used = 0;
     this.counts = [];
@@ -192,20 +193,42 @@ export class DebugCanvas {
       const width = item.widthM ? Math.max(item.width, item.widthM * view.scale) : item.width;
       const colour = this.colour(item, palette);
       const key = `${colour}|${width.toFixed(1)}|${item.dash ? 1 : 0}`;
+      // Projected, with vertices closer than 1.5 px to the last kept one left out (the far
+      // view holds thousands of lines a few pixels long); a run breaks behind the camera.
+      const xs: number[] = [];
+      const runs = new Set<number>();
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      let open = false;
+      const last = item.points.length - 1;
+      item.points.forEach((p, i) => {
+        if (!view.project(p.x, p.y, p.z, point)) {
+          open = false;
+          return;
+        }
+        const x = point[0]!,
+          y = point[1]!;
+        const n = xs.length;
+        if (open && i < last && Math.abs(x - xs[n - 2]!) + Math.abs(y - xs[n - 1]!) < 1.5) return;
+        if (!open) runs.add(n);
+        open = true;
+        xs.push(x, y);
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      });
+      if (xs.length < 4 || Math.max(maxX - minX, maxY - minY) < 2) continue;
+      if (maxX < -width || maxY < -width || minX > view.width + width || minY > view.height + width)
+        continue;
       let bucket = buckets.get(key);
       if (!bucket)
         buckets.set(key, (bucket = { path: new Path2D(), colour, width, dash: !!item.dash }));
-      const xs: number[] = [];
-      let drawing = false;
-      for (const p of item.points) {
-        if (!view.project(p.x, p.y, p.z, point)) {
-          drawing = false;
-          continue;
-        }
-        if (drawing) bucket.path.lineTo(point[0]!, point[1]!);
-        else bucket.path.moveTo(point[0]!, point[1]!);
-        drawing = true;
-        xs.push(point[0]!, point[1]!);
+      for (let i = 0; i < xs.length; i += 2) {
+        if (runs.has(i)) bucket.path.moveTo(xs[i]!, xs[i + 1]!);
+        else bucket.path.lineTo(xs[i]!, xs[i + 1]!);
       }
       if (item.arrow && xs.length >= 4) this.chevron(bucket.path, xs);
       if (item.target && xs.length >= 4) this.record(item.target, xs, 0);
@@ -214,7 +237,10 @@ export class DebugCanvas {
     ctx.setLineDash([]);
     ctx.strokeStyle = hex(palette.halo);
     ctx.globalAlpha = 0.85;
+    // Hairlines go without a casing: it would double the far view's raster work, and their
+    // ink alone keeps 3:1 on the canvas.
     for (const { path, width } of sorted) {
+      if (width < 1.5) continue;
       ctx.lineWidth = width + 2.5;
       ctx.stroke(path);
     }
@@ -261,22 +287,30 @@ export class DebugCanvas {
     view: DebugProjector,
     palette: DebugPalette,
   ) {
-    const buckets = new Map<string, { path: Path2D; colour: number; hollow: boolean }>();
+    // Small dots (through nodes, walk nodes, conflict points) go without a casing, as hairlines.
+    const buckets = new Map<
+      string,
+      { path: Path2D; colour: number; hollow: boolean; cased: boolean }
+    >();
     for (const item of items) {
       if (item.kind !== 'dot') continue;
       if (!view.project(item.at.x, item.at.y, item.at.z, point)) continue;
+      const [x, y] = [point[0]!, point[1]!];
+      if (x < -8 || y < -8 || x > view.width + 8 || y > view.height + 8) continue;
       const colour = this.colour(item, palette);
-      const key = `${colour}|${item.hollow ? 1 : 0}`;
+      const cased = item.radius > 2;
+      const key = `${colour}|${item.hollow ? 1 : 0}|${cased ? 1 : 0}`;
       let bucket = buckets.get(key);
       if (!bucket)
-        buckets.set(key, (bucket = { path: new Path2D(), colour, hollow: !!item.hollow }));
-      bucket.path.moveTo(point[0]! + item.radius, point[1]!);
-      bucket.path.arc(point[0]!, point[1]!, item.radius, 0, 2 * Math.PI);
-      if (item.target) this.record(item.target, [point[0]!, point[1]!], item.radius);
+        buckets.set(key, (bucket = { path: new Path2D(), colour, hollow: !!item.hollow, cased }));
+      bucket.path.moveTo(x + item.radius, y);
+      bucket.path.arc(x, y, item.radius, 0, 2 * Math.PI);
+      if (item.target) this.record(item.target, [x, y], item.radius);
     }
     ctx.globalAlpha = 0.85;
     ctx.strokeStyle = hex(palette.halo);
-    for (const { path, hollow } of buckets.values()) {
+    for (const { path, hollow, cased } of buckets.values()) {
+      if (!cased) continue;
       ctx.lineWidth = hollow ? 4 : 2.5;
       ctx.stroke(path);
     }
