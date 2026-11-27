@@ -1,6 +1,6 @@
 # TASK-373 — US walker priority at unmarked junction crosswalks, without the UK rule
 
-Status: started 2026-11-27 (lead default after TASK-372; city work merges under the traffic merge rule). Owner: Codex
+Status: merged 2026-11-27 (`8a6ef0d2`): de/ch/gb cities identical by hash, Philadelphia passes, airside identical. Started as the lead default after TASK-372; city work merges under the traffic merge rule). Owner: Codex
 (gpt-6.2-sol, high). Base: branch `task/372-walker-country` at `ec1ebd5d`.
 
 ## Finding (TASK-372)
