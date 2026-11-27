@@ -56,8 +56,8 @@ export interface CWalkLink {
     end: 'start' | 'end' | 'midblock';
     /** TASK-279: `unmarked` is an unsignalised crossing that draws no zebra. */
     control: CrossingControl;
-    /** TASK-372: local additions to the default turn-in yield, independent of paint. */
-    priority?: 'turn-out' | 'all';
+    /** US unmarked junction crossings have zebra priority without zebra paint. */
+    priority?: 'all';
     /** TASK-111: the node and its arm (`crossingArms` index) the crossing serves; -1 for a
      * midblock zebra. */
     node: number;
@@ -1090,7 +1090,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
       return group === undefined || neededInfill.has(group);
     }),
   );
-  addCrossingSpans(city, graph, layerOf, source.country);
+  addCrossingSpans(city, graph, layerOf);
   for (const a of anchors) {
     const idx = nodeAt(a.pos, a.layer);
     if (a.type === 'connectors') graph.connectors.set(a.id, idx);
@@ -1360,12 +1360,7 @@ function crossingSpans(
  * lanes of its arm's roads (both directions of a street, any carriageways of the arm); a mapped
  * one the lanes its line meets, or the extension of its arm's lanes (`crossingSpans`). The vehicle
  * network is not touched. */
-function addCrossingSpans(
-  city: CompiledCity,
-  graph: WalkGraph,
-  layerOf: (r: CRoad) => number,
-  country: City['country'],
-) {
+function addCrossingSpans(city: CompiledCity, graph: WalkGraph, layerOf: (r: CRoad) => number) {
   const arms = new Map<number, ReturnType<typeof crossingArms>>();
   for (const link of graph.links) {
     if (!link.crossing) continue;
@@ -1393,8 +1388,6 @@ function addCrossingSpans(
       ...link.crossing,
       spans: [...spans.values()].sort((a, b) => a.lane - b.lane),
     };
-    if (country === 'gb' && link.crossing.control === 'unmarked' && ends)
-      link.crossing.priority = 'turn-out';
   }
 }
 

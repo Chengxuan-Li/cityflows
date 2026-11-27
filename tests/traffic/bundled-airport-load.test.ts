@@ -18,12 +18,12 @@ import { limit } from '../timeouts';
 // TASK-364 re-pins Zurich's graph (two one-way to two-way seams laid out as continuations; state unchanged).
 // TASK-279 re-pins the walk controls. Zurich, Boston and Heathrow's first minute moves;
 // the archives, loaded state and flight boards are unchanged.
-// TASK-372 re-pins the GB and US graphs and Boston and Heathrow's first minute. Zurich and
-// the flight boards are unchanged.
+// TASK-373 re-pins Boston's graph and first minute for US junction priority. The GB graphs,
+// Zurich, and the flight boards stay as on main.
 const pins = [
   {
     id: 'london-city-airport',
-    compiled: '628c504597d2954bf47b817f25b322c0cc59df09ca7e3e0318a4f085873bbbb2',
+    compiled: 'b1e9997f9ca2904f7659e4eb9e2889b8eded2520697cedd0c580b32970bce898',
     state: [193940800, 1229324366],
     board: 'b1c98cc15570f53d5c02f8cf2828b09879337d4d04325b68fcb4eebfe15f180c',
   },
@@ -41,8 +41,8 @@ const pins = [
   },
   {
     id: 'heathrow',
-    compiled: '29ea62817a16d1be8fbef8ae468018a96a3772689bc2f61c9481c7e8812d1d74',
-    state: [3553834081, 114319433],
+    compiled: '01d51ca2d060e66af89ab129ead04f8f8d2562df13b42d463c581ad45ba58329',
+    state: [3553834081, 4040218530],
     board: '435dc959537475c17c6bf90a6934b8882ab64c0773940341c03a49d4c60e3e98',
   },
 ];

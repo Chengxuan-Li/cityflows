@@ -1367,15 +1367,14 @@ and a mapped crossing way OSM marks `none`. A crossing drawn as a zebra or with 
 stays a zebra; so does a mapped way without a marking (it draws as one). Spans are derived, never
 saved, and change no lane, movement or stop position.
 
-TASK-372 derives unsignalised walker priority separately from a crossing's paint and
-control kind. At the crossed arm's node, `gb` adds a yield by drivers turning out of the arm
-(UK Highway Code rules H2 and 170). `us` gives walkers zebra-like priority at unmarked
-junction crossings (the generated junction crossing or a mapped crossing anchored there,
-with at least three arms excluding lot aisles), but not at midblock unmarked crossings
-(Uniform Vehicle Code §§11-502 and 11-503,
-75 Pa.C.S. §3542, Massachusetts General Laws ch. 89 §11). `de` stays as before
-(StVO §§9(3), 25(3), 26), as do `ch` (SVG Art. 49, VRV Art. 47) and absent or
-unsupported codes. Marked and signal crossings do not change.
+TASK-373 derives unsignalised walker priority separately from a crossing's paint and
+control kind. `us` gives walkers zebra-like priority at unmarked junction crossings
+(the generated junction crossing or a mapped crossing anchored there, with at least three
+arms excluding lot aisles), but not at midblock unmarked crossings (Uniform Vehicle Code
+§§11-502 and 11-503, 75 Pa.C.S. §3542, Massachusetts General Laws ch. 89 §11).
+`gb`, `ch`, and absent or unsupported codes use the same default rule as `de`. Drivers
+turning out of a crossed arm do not yield just because of the turn. Marked and signal
+crossings do not change.
 
 `CSignal.phases[].walk` lists the node's signal crossing links with walk green, compiled after
 the walk graph (`compileSignalWalk`). Explicit entries select the arms whose road end they
@@ -2834,11 +2833,9 @@ crossed lanes for traffic crawling below `walkSpeedMps` (v2: a creeping queue ot
 stand on the crossing), and in such a gap also for turning drivers; on the crossing it holds them
 as on a zebra.
 
-TASK-372: on `gb` crossings, an approaching driver whose plan turns left, right or back
-out of the crossed arm at its node counts as yielding traffic. The walker holds that driver in
-a gap in the other traffic, as it does a driver turning in. On `us` unmarked junction crossings
-there is no gap check. All traffic yields with the same braking and occupancy checks as a zebra.
-The crossing still draws and reports as unmarked.
+TASK-373: on `us` unmarked junction crossings there is no gap check. All traffic yields
+with the same braking and occupancy checks as a zebra. The crossing still draws and
+reports as unmarked.
 
 A waiting walker that would step out but for the traffic (any zebra walker; a signal walker
 with enough walk green), and a crossing walker for each span it has not passed by

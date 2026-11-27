@@ -290,12 +290,6 @@ function kerbHold(country: City['country'], turn: boolean, mappedX?: number) {
   return { hold: walkers.hold(0, lane, null), edge };
 }
 
-test('TASK-372: GB drivers turning out yield to a waiting walker, but straight drivers do not', () => {
-  const turn = kerbHold('gb', true);
-  expect(turn.hold).toBe(turn.edge);
-  expect(kerbHold('gb', false).hold).toBe(Infinity);
-});
-
 test('TASK-372: US straight drivers yield at an unmarked junction crossing but not midblock', () => {
   for (const x of [undefined, -10]) {
     const junction = kerbHold('us', false, x);
@@ -304,11 +298,12 @@ test('TASK-372: US straight drivers yield at an unmarked junction crossing but n
   for (const x of [-25, -150]) expect(kerbHold('us', false, x).hold).toBe(Infinity);
 });
 
-test('TASK-372: DE keeps the default rule, including straight and turning-out traffic', () => {
+test('TASK-373: GB and DE use the same rule for straight and turning-out traffic', () => {
   const priority = (country?: string) => [
     kerbHold(country, false).hold,
     kerbHold(country, true).hold,
   ];
   expect(priority('de')).toEqual([Infinity, Infinity]);
-  for (const country of [undefined, 'ch', 'fr']) expect(priority(country)).toEqual(priority('de'));
+  for (const country of ['gb', 'ch', undefined, 'fr'])
+    expect(priority(country)).toEqual(priority('de'));
 });
