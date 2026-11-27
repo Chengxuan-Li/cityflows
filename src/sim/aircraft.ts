@@ -85,6 +85,9 @@ import type { RunwayConfiguration } from './runway-configuration';
 //   A ring of waits that still closes (through those parked in the way) is broken after 60 s.
 //   TASK-330: a queued arrival that cannot reach where it meets a departure or tow before that
 //   aircraft is past does not hold it at its stand: the starter goes before it.
+//   TASK-363 (switch T363=pk, on by default; T363= turns it off): a queued arrival whose way to its stand passes an
+//   aircraft parked across it steps out of the landing order until the way is clear; queued
+//   arrivals to one end keep the order in which they were first sequenced.
 //   TASK-330: arrivals are spaced on final (2.5 NM or the wake pair); one appears behind an
 //   arrival ahead to the same runway when that one will be clear of its way off the runway by its
 //   landing commitment, not only once it is.
@@ -156,6 +159,17 @@ function t360Rules() {
     T360M: rules.includes('m'),
     T360A: rules.includes('a'),
   };
+}
+/** TASK-363 rule switches, read when a fleet is created (the gate ladder's variants): the env
+ * T363=<letters>, p a queued arrival that cannot reach its stand past an aircraft parked across
+ * its way steps out of the landing order, k queued arrivals to one end keep their places in the
+ * approach sequence. Both on by default (owner 2026-11-27: Heathrow days up, go-arounds 51 to 71
+ * accepted); T363= turns them off. */
+function t363Rules() {
+  const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
+    ?.env;
+  const rules = env?.T363 ?? 'pk';
+  return { T363P: rules.includes('p'), T363K: rules.includes('k') };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
@@ -494,9 +508,14 @@ interface Craft {
   /** TASK-344: the reason its latest start try was refused, and when. */
   startWhy?: string;
   startWhyS?: number;
+  /** TASK-363: the reason its latest release try (a queued arrival) was refused (counters). */
+  releaseWhy?: string;
   admission: Admission | null;
   /** Its place in the order of admission (0: none yet). */
   rank: number;
+  /** TASK-363: a queued arrival's place in its end's approach sequence: its rank when first
+   * ordered, kept while it steps out of the landing order. */
+  seqRank?: number;
   waits: Wait[];
   towing: boolean;
   retryS: number;
@@ -775,6 +794,7 @@ function alignStart(
 
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const { T360I, T360R, T360M, T360A } = t360Rules();
+  const { T363P, T363K } = t363Rules();
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -2035,13 +2055,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       );
       // A re-routed aircraft, moving, goes before those not started.
       const first = craft.mode === 'ground' && unstarted(other);
+      // TASK-363 (`T363K`): two queued arrivals to one runway end go in their approach sequence
+      // (`seqRank`), which an arrival keeps while it steps out of the landing order.
+      const sequenced =
+        T363K &&
+        craft.mode === 'queued' &&
+        other.mode === 'queued' &&
+        craft.seqRank !== undefined &&
+        other.seqRank !== undefined &&
+        craft.runway === other.runway &&
+        craft.request?.kind === 'arrival' &&
+        other.request?.kind === 'arrival' &&
+        craft.request.end === other.request.end;
       let parker: Craft | null | undefined;
       for (const c of conflicts(craft, own, other)) {
         if (!nearEnough(own, c, otherSpans)) {
           late.deferred++;
           continue;
         }
-        const byRank = other.rank < craft.rank && !yields && !first;
+        const byRank = sequenced
+          ? other.seqRank! < craft.seqRank!
+          : other.rank < craft.rank && !yields && !first;
         const otherCanWait =
           !inside(other, c.otherLeg, c.x1 - SAMPLE_M) &&
           canWaitAt(other, c.otherLeg, c.x1 - SAMPLE_M);
@@ -2133,6 +2167,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const arrivalWhy = {
     goAround: {} as Record<string, number>,
     release: {} as Record<string, number>,
+    /** TASK-363: seconds queued arrivals were held out of the landing order, by stand. */
+    steppedOut: {} as Record<string, number>,
   };
   let releaseWhy = '';
   let commitWhy = '';
@@ -3501,18 +3537,36 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return refuse('closed');
     if (standOccupant[request.stand] !== -1) return refuse('stand');
     if (pushBlocksStand(craft, request.stand)) return refuse('push');
+    // TASK-363 (`T363P`): an arrival that cannot reach its stand while an aircraft stands parked
+    // across its way in, with no movement admitted or requested, steps out of the landing order:
+    // it is not ordered (or its order is dropped), so the arrivals behind it are not ordered to
+    // wait for it and land first; it keeps its place in the approach sequence (`T363K`) and is
+    // ordered once the way is clear. ICAO Doc 4444, 6.5.6.1.1 (the approach sequence facilitates
+    // the arrival of the maximum number of aircraft with the least average delay) and 6.5.6.1.4
+    // (an aircraft that holds for reasons of its own is re-sequenced so that others may land).
+    if (T363P && craft.admission && behindParked(craft.waits)) {
+      stepOut(craft);
+      return refuse('behindParked');
+    }
     if (!craft.admission) {
+      let blocked = false;
       for (const option of landings(craft, runway, request.end, request.stand)) {
         const landing = option();
         if (!landing) continue;
         craft.rank = ++admitted;
         const decided = order(craft, [{ leg: landing.leg, fromM: 0 }]);
         if (!decided) continue;
+        if (T363P && behindParked(decided.mine)) {
+          craft.seqRank ??= craft.rank;
+          blocked = true;
+          continue;
+        }
+        craft.seqRank ??= craft.rank;
         commitOrder(craft, decided);
         craft.admission = { legs: [landing.leg], next: [], landing };
         break;
       }
-      if (!craft.admission) return 'unordered';
+      if (!craft.admission) return blocked ? refuse('behindParked') : 'unordered';
     }
     const landing = craft.admission.landing!;
     const pass = passing(craft);
@@ -3541,7 +3595,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             ? ':otherEnd'
             : queue.indexOf(p.id) < queue.indexOf(craft.id)
               ? ':ahead'
-              : `:behind${p.admission ? '' : ':unadmitted'}${p.rank < craft.rank ? ':lowerRank' : ''}`;
+              : `:behind${p.admission ? '' : ':unadmitted'}${p.rank < craft.rank ? ':lowerRank' : ''}>${(p.releaseWhy ?? '?').split('>').at(-1)}`;
       return refuse(`unstarted:${roleOf(p)}${where}`);
     }
     const air = approachAir(craft, landing, timeS);
@@ -4168,6 +4222,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return block;
   }
 
+  /** TASK-363: a queued arrival's order is dropped, and with it the waits of others on it (they
+   * would hold again once it is ordered anew, after them). */
+  function stepOut(craft: Craft) {
+    dropAdmission(craft);
+    for (const o of crafts) if (o.waits.length) o.waits = o.waits.filter((w) => w.pred !== craft);
+  }
+  /** TASK-363: whether a queued arrival would wait for an aircraft parked or at rest across its
+   * way with no movement admitted or requested. */
+  function behindParked(waits: Wait[]) {
+    return waits.some(
+      (w) =>
+        w.predM === Infinity &&
+        w.pred.mode === 'parked' &&
+        !w.pred.admission &&
+        !w.pred.request &&
+        !passed(w),
+    );
+  }
+
   /** TASK-339: whether an aircraft moving on the ground, or TASK-340 on approach (and not ordered
    * after `craft`), is to come to rest with its body across `craft`'s legs beyond its pushback. */
   /** TASK-340: the leg at whose end an aircraft moving on the ground or on approach comes to
@@ -4603,6 +4676,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       craft.runway = runway.idx;
       craft.end = key & 1;
       craft.request = { ...request, end: key & 1 };
+      craft.seqRank = undefined;
       dropAdmission(craft);
       return;
     }
@@ -5035,6 +5109,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       craft.air = null;
       craft.pose = null;
       craft.request = { kind: 'arrival', end: craft.end, stand: craft.stand };
+      craft.seqRank = undefined;
       retargetArrival(craft);
       queue.push(craft.id);
       return;
@@ -5388,6 +5463,12 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         releaseWhy = '';
         const tried = trySpawnArrival(craft, request, timeS);
         if (tried === 'unordered') unordered.add(key);
+        craft.releaseWhy = tried === 'unordered' ? 'unordered' : releaseWhy;
+        if (tried !== true && releaseWhy === 'behindParked') {
+          const s = graph.stands[request.stand]!;
+          const at = `${endName(key)} ${s.ref ?? s.id}`;
+          arrivalWhy.steppedOut[at] = (arrivalWhy.steppedOut[at] ?? 0) + RETRY_S;
+        }
         // TASK-352: the head of its end's queue, held: RETRY_S to the cause.
         if (tried !== true && !heads.has(key) && headOf.get(key) === craft.id) {
           const why = `${endName(key)} ${tried === 'unordered' ? 'unordered' : releaseWhy || '?'}`;

@@ -283,7 +283,14 @@ for (let step = startS * 10; step < endS * 10; step++) {
     if (found.length) console.error('OVERLAP', timeS, JSON.stringify(found));
     overlapCount += found.length;
     runwayConflicts += checkRunwayConflicts(poses);
-    runwayConflictsReal += checkRunwayConflictsReal(poses);
+    // TASK-363: which aircraft are in a real runway conflict, and when (the log).
+    const real = checkRunwayConflictsReal(poses);
+    if (real) {
+      const on = poses.filter((p) => p.onRunway);
+      const who = on.map((p) => `${p.registration}:${p.state}:${p.runwayEnd ?? '-'}`);
+      console.error('RUNWAY', timeS, real, JSON.stringify(who));
+    }
+    runwayConflictsReal += real;
   }
   if (timeS % 3600 === 0 && timeS > startS) {
     // TASK-330 / TASK-339: the order's counters, for the log.
@@ -428,14 +435,15 @@ const summary = {
   fleet: fleet.metrics(),
   // TASK-352: go-arounds by cause, and seconds the head of each end's arrival queue was held.
   arrivalCauses: (() => {
-    const { goAround, release } = fleet.arrivalCauses();
+    const { goAround, release, steppedOut } = fleet.arrivalCauses();
     const sorted = (r: Record<string, number>) =>
       Object.fromEntries(
         Object.entries(r)
           .sort((a, b) => b[1] - a[1])
           .map(([k, v]) => [k, Math.round(v)]),
       );
-    return { goAround: sorted(goAround), release: sorted(release) };
+    // TASK-363: seconds queued arrivals were held out of the landing order, by stand.
+    return { goAround: sorted(goAround), release: sorted(release), steppedOut: sorted(steppedOut) };
   })(),
   arrivalStages: stages(arrivals, [
     'standWaitS',
