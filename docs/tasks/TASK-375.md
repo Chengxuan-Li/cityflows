@@ -1,6 +1,6 @@
 # TASK-375 — Audit lane overlap leaves out the group surface
 
-Status: started 2026-11-27 (owner: "Change the audit measure", after TASK-371). Owner: Codex (gpt-6.2-sol, high).
+Status: merged 2026-11-27 (`d45b208d`): measure 9 Munich 192.26 to 170.34 m², Freiburg 200.97 to 92.35 m², Sindelfingen unchanged; 22 pairs dropped, all under group surfaces; drawn-stub census 0 / 0 / 0; every other measure identical. Owner said "Change the audit measure" after TASK-371. Owner: Codex (gpt-6.2-sol, high).
 Base: main `211bbd18`.
 
 ## Finding (TASK-371)
