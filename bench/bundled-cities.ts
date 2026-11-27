@@ -1,16 +1,20 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
+import { geographicCountry } from '../src/importers/country';
+import type { Manifest } from '../src/project/manifest';
 import { openProject } from '../src/project/open';
 import type { Project } from '../src/project/types';
 import { importOsmCached } from './city-cache';
 import { buildFreiburgProject, showcaseProject } from './freiburg';
 import { loadAuditCity } from './junction-audit';
 
-// TASK-258: the builder of every bundled real place in the New city panel. Freiburg keeps its
+// TASK-258: the builder of every bundled real place. Freiburg keeps its
 // recipe and curation (`bench/freiburg.ts`); the other cities ship the raw import of their
 // committed extract with the options their own tests use (`loadAuditCity`), as the owner's
 // 2026-11-20 rule asks: no per-id curation. tests/city/bundled-cities.city.test.ts fails when an
-// archive no longer matches a fresh build, so after an importer change rebuild them all with
+// archive no longer matches a fresh build. Held-out Boston refreshes metadata on its pinned
+// layout. After an importer change rebuild them all with
 //   node --experimental-strip-types --import ./bench/register.ts bench/bundled-cities.ts
 // or some of them by id (`... bench/bundled-cities.ts munich sindelfingen`).
 
@@ -132,6 +136,23 @@ export const heldOutOfPanel: Record<string, string> = {
   'boston-logan': 'Airport throughput gate',
 };
 
+/** Refresh country metadata without replacing the pinned TASK-303 apron layout. */
+async function rebuildPinned(id: string): Promise<string> {
+  const json = readFileSync(projectFile(id), 'utf8');
+  const opened = await openProject(json);
+  if (!opened.ok) throw new Error(`${opened.file}: ${opened.error}`);
+  const country = geographicCountry(opened.project.city.geo);
+  if (opened.project.city.country === country) return json;
+  // Keep the pinned bytes of all other members, including fields the open path normalizes.
+  const archive = JSON.parse(json) as { manifest: Manifest; city: Project['city'] };
+  if (country === undefined) delete archive.city.country;
+  else archive.city.country = country;
+  archive.manifest.files['city.json'] = createHash('sha256')
+    .update(JSON.stringify(archive.city))
+    .digest('hex');
+  return JSON.stringify(archive);
+}
+
 /** The committed bundled project, opened as the app opens it. */
 export async function openBundled(id: string): Promise<Project> {
   const result = await openProject(readFileSync(projectFile(id), 'utf8'));
@@ -140,10 +161,14 @@ export async function openBundled(id: string): Promise<Project> {
 }
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('bench/bundled-cities.ts')) {
+  const builds: typeof realPlaceBuilds = {
+    ...realPlaceBuilds,
+    'boston-logan': () => rebuildPinned('boston-logan'),
+  };
   const ids = process.argv.slice(2);
-  for (const id of ids.length ? ids : Object.keys(realPlaceBuilds)) {
-    const build = realPlaceBuilds[id];
-    if (!build) throw new Error(`Unknown real place ${id}: ${Object.keys(realPlaceBuilds)}`);
+  for (const id of ids.length ? ids : Object.keys(builds)) {
+    const build = builds[id];
+    if (!build) throw new Error(`Unknown real place ${id}: ${Object.keys(builds)}`);
     const json = await build();
     writeFileSync(projectFile(id), json);
     console.info(`${projectFile(id)}: ${(json.length / 1e6).toFixed(2)} MB`);

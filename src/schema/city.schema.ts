@@ -380,6 +380,10 @@ const cityFields = {
   version: count,
   name: z.string(),
   drivingSide: z.enum(['right', 'left']),
+  country: z
+    .string()
+    .regex(/^[a-z]{2}$/)
+    .optional(),
   geo: geo.nullable(),
   nodes: z.record(nodeId, nodeSchema),
   roads: z.record(roadId, roadSchema),

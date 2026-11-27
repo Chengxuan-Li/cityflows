@@ -23,7 +23,7 @@ import { createVehicleProfiles, type Vehicles } from './vehicle';
  * TASK-279: at an unmarked crossing (StVO §25(3)) a walker has priority only over drivers turning
  * into the arm (§9(3)): it steps out in a gap of the other traffic (standing or crawling below
  * walking pace counts as one) and, while waiting, holds only crawling traffic and the turning
- * drivers.
+ * drivers. US unmarked junction crossings instead give walkers zebra priority.
  */
 
 export const WALKER_STATES = [
@@ -202,6 +202,7 @@ export function createWalkers(
   let runPos = new Float64Array(capacity);
   let runLength = new Float64Array(capacity);
   let runKind = new Uint8Array(capacity);
+  let needsGap = new Uint8Array(capacity);
   const runSpans: (RunSpan[] | null)[] = Array(capacity).fill(null);
   let waitS = new Float64Array(capacity);
   let currentWaitS = new Float64Array(capacity);
@@ -229,6 +230,7 @@ export function createWalkers(
     runPos = grow(runPos, capacity);
     runLength = grow(runLength, capacity);
     runKind = grow(runKind, capacity);
+    needsGap = grow(needsGap, capacity);
     waitS = grow(waitS, capacity);
     currentWaitS = grow(currentWaitS, capacity);
     arrivedS = grow(arrivedS, capacity, NaN);
@@ -368,6 +370,9 @@ export function createWalkers(
     runPos[id] = 0;
     runLength[id] = offset;
     runKind[id] = kindOf(city, legs, start, end);
+    needsGap[id] = Number(
+      runKind[id] === UNMARKED && link(legs[start]!.link).crossing!.priority !== 'all',
+    );
     yields[id] = Number(
       legs
         .slice(start, end)
@@ -472,7 +477,7 @@ export function createWalkers(
   let calls = new Map<number, number>();
   function greenEnough(id: number, timeS: number) {
     // TASK-279: at an unmarked crossing, the gap in the traffic that does not yield.
-    if (runKind[id] === UNMARKED)
+    if (needsGap[id])
       return runSpans[id]!.every((span) =>
         clear(span.lane, span.lo, span.hi, true, GAP, span.node, span.needS),
       );
@@ -496,7 +501,7 @@ export function createWalkers(
   const canStepOut = (id: number) =>
     green[id] === 1 &&
     runSpans[id]!.every((span) =>
-      clear(span.lane, span.lo, span.hi, true, runKind[id] === UNMARKED ? TURNING : ALL, span.node),
+      clear(span.lane, span.lo, span.hi, true, needsGap[id] ? TURNING : ALL, span.node),
     );
 
   function finish(id: number, timeS: number) {
@@ -592,7 +597,7 @@ export function createWalkers(
       // at a signal crossing no phase serves, where it waits for a gap (TASK-245). TASK-279: at
       // an unmarked crossing it holds traffic crawling below walking pace (v2: a creeping queue
       // otherwise stands on the crossing), and in a gap the drivers turning into the arm.
-      const waiting = s === WAITING && runKind[id] === UNMARKED;
+      const waiting = s === WAITING && needsGap[id];
       if (s === WAITING && !waiting && (!green[id] || yields[id])) continue;
       const position = s === CROSSING ? runPos[id]! : 0;
       for (const span of runSpans[id]!) {

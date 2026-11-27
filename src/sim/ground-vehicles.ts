@@ -1382,8 +1382,13 @@ export function createGroundVehicles(compiled: CompiledCity, source: GroundVehic
       if (!home) continue;
       const builder = new PathBuilder();
       addWay(builder, home.plan, here, home.depot);
-      const path = builder.build();
       drop(vehicle.visit!, delayCause(vehicle));
+      // A vehicle still at its depot has no return leg to drive.
+      if (!builder.points.length) {
+        remove(vehicle);
+        continue;
+      }
+      const path = builder.build();
       release(vehicle);
       vehicle.path = path;
       vehicle.detours = 0;

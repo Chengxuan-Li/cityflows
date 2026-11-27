@@ -17,6 +17,7 @@ import type { City, WalkKind } from '../schema';
 import {
   crossingArms,
   crossingCentreM,
+  crossingDefault,
   crossingEnabled,
   crossingLine,
   crossingPlacement,
@@ -53,9 +54,10 @@ export interface CWalkLink {
   crossing?: {
     road: number;
     end: 'start' | 'end' | 'midblock';
-    /** TASK-279: `unmarked`, an unsignalised crossing that draws no zebra: walkers have no
-     * priority there (StVO §25(3)) but over drivers turning into the arm (§9(3)). */
+    /** TASK-279: `unmarked` is an unsignalised crossing that draws no zebra. */
     control: CrossingControl;
+    /** US unmarked junction crossings have zebra priority without zebra paint. */
+    priority?: 'all';
     /** TASK-111: the node and its arm (`crossingArms` index) the crossing serves; -1 for a
      * midblock zebra. */
     node: number;
@@ -718,6 +720,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
           spans: [],
         },
       };
+      setUsPriority(source, city, link.crossing!);
       if (repair) repairs.push({ a: a.s, b: b.s, link });
       else add(link);
     }
@@ -1100,6 +1103,20 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
   return graph;
 }
 
+/** TASK-372: use the same junction definition as generated crossings (not a lot-aisle split). */
+function setUsPriority(
+  source: City,
+  city: CompiledCity,
+  crossing: NonNullable<CWalkLink['crossing']>,
+) {
+  if (
+    source.country === 'us' &&
+    crossing.control === 'unmarked' &&
+    crossingDefault(city, city.roads[crossing.road]!, crossing.end === 'end')
+  )
+    crossing.priority = 'all';
+}
+
 /** TASK-140: a mapped crossing farther than this from the stripes of a road end it crosses is
  * another crossing along the street (Munich n:16's lies 23 m beyond its stripes). */
 const ANCHOR_M = 12;
@@ -1229,7 +1246,10 @@ function anchorMappedCrossings(
       [a, b] = [b, a];
     }
     for (const link of chain) removed.add(link);
-    added.push({ ...start, sourceEnds: undefined, line: [a, ...centre, b] });
+    // Only a mapped crossing anchored to the junction is a US junction crosswalk.
+    const crossing = { ...start.crossing! };
+    setUsPriority(source, city, crossing);
+    added.push({ ...start, crossing, sourceEnds: undefined, line: [a, ...centre, b] });
     for (const [i, end] of [a, b].entries()) {
       const kerb = kerbs[i]!;
       added.push({
