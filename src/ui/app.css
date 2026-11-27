@@ -117,7 +117,7 @@
   --signal-idle: #8e8e93;
   --signal-served: #248a3d;
   --signal-conflict: #d70015;
-  /* TASK-382: debug overlay inks, each 3:1 on the map canvas, with a casing in --debug-halo;
+  /* TASK-383: debug overlay inks, each 3:1 on the map canvas, with a casing in --debug-halo;
      the ramp runs low to high (elevation, overdraw). */
   --debug-blue: #0a5fd6;
   --debug-teal: #00788a;
@@ -1200,7 +1200,7 @@ input[type='file']::file-selector-button {
   background: var(--canvas);
 }
 
-/* TASK-382: the debug overlays over both map canvases, and their hover tooltip. */
+/* TASK-383: the debug overlays over both map canvases, and their hover tooltip. */
 .debug-overlay {
   position: absolute;
   inset: 0;

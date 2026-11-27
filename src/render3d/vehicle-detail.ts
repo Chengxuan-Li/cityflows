@@ -28,7 +28,7 @@ export class VehicleDetailView {
   private camera!: PerspectiveCamera;
   active = false;
 
-  /** TASK-382: the camera depth within which cars are drawn as models, while active. */
+  /** TASK-383: the camera depth within which cars are drawn as models, while active. */
   get depthM() {
     return this.depth;
   }

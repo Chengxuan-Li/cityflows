@@ -70,7 +70,7 @@ const graphics: [string, string[]][] = [
     (series): [string, string[]] => [`--chart-${series}`, ['--sidebar']],
   ),
   ['--heat', ['--sidebar']],
-  // TASK-382: debug overlay inks on the map canvas and on their own casing.
+  // TASK-383: debug overlay inks on the map canvas and on their own casing.
   ...['blue', 'teal', 'green', 'amber', 'red', 'purple', 'pink', 'grey'].map(
     (ink): [string, string[]] => [`--debug-${ink}`, ['--canvas', '--debug-halo']],
   ),

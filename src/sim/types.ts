@@ -55,7 +55,7 @@ export interface TrafficEngine {
   patch(compiled: CompiledCity): PatchResult;
   step(n?: number): void;
   readonly timeS: number;
-  /** `debug` (TASK-382): add the debug views' sim state; it changes nothing in the run. */
+  /** `debug` (TASK-383): add the debug views' sim state; it changes nothing in the run. */
   snapshot(debug?: DebugRequest): VehicleSnapshot;
   metrics(): Metrics;
   inspect(vehicleId: number): VehicleDetail | null;
@@ -91,7 +91,7 @@ export interface ParkingClaimsSnapshot {
 }
 
 export interface VehicleSnapshot {
-  /** TASK-382: present only when the snapshot request asked for it. */
+  /** TASK-383: present only when the snapshot request asked for it. */
   debug?: DebugSnapshot;
   rail?: RailSnapshot;
   /** TASK-174: vehicles in service with the person ids aboard, by train pose id. */
