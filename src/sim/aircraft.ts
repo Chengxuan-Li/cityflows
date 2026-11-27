@@ -85,7 +85,7 @@ import type { RunwayConfiguration } from './runway-configuration';
 //   A ring of waits that still closes (through those parked in the way) is broken after 60 s.
 //   TASK-330: a queued arrival that cannot reach where it meets a departure or tow before that
 //   aircraft is past does not hold it at its stand: the starter goes before it.
-//   TASK-363 (switch T363=pk, off by default): a queued arrival whose way to its stand passes an
+//   TASK-363 (switch T363=pk, on by default; T363= turns it off): a queued arrival whose way to its stand passes an
 //   aircraft parked across it steps out of the landing order until the way is clear; queued
 //   arrivals to one end keep the order in which they were first sequenced.
 //   TASK-330: arrivals are spaced on final (2.5 NM or the wake pair); one appears behind an
@@ -163,12 +163,12 @@ function t360Rules() {
 /** TASK-363 rule switches, read when a fleet is created (the gate ladder's variants): the env
  * T363=<letters>, p a queued arrival that cannot reach its stand past an aircraft parked across
  * its way steps out of the landing order, k queued arrivals to one end keep their places in the
- * approach sequence. Off by default (the full-day rung did not pass: go-arounds up); T363=pk
- * turns both on. */
+ * approach sequence. Both on by default (owner 2026-11-27: Heathrow days up, go-arounds 51 to 71
+ * accepted); T363= turns them off. */
 function t363Rules() {
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
-  const rules = env?.T363 ?? '';
+  const rules = env?.T363 ?? 'pk';
   return { T363P: rules.includes('p'), T363K: rules.includes('k') };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */

@@ -1,6 +1,6 @@
 # TASK-363 — Heathrow arrivals: an arrival waiting for its stand does not hold the landing sequence
 
-Status: started 2026-11-26 (owner defaults; airside: merge on gates, realism changes allowed with a cited rule).
+Status: merged 2026-11-27, rules on by default (owner accepted the go-arounds trade-off, 2026-11-27).
 Owner: Claude subagent (Opus 5.5). Base: main after TASK-360.
 
 ## Finding
@@ -185,3 +185,12 @@ allocation pairing it with a neighbour whose parked body is across its way in (T
 skipped; build ok); `test:city` 77 files passed (291 tests, 1 skipped); `test:traffic:light` 5 passed, 1 expected
 fail; `test:e2e:light` 63 passed (ports 5388/5389). With the default off, `npm test` passes again (306 files, 2,188
 tests).
+
+## Owner decision (2026-11-27)
+
+TASK-366 and TASK-367 tried to remove the extra go-arounds with holds at release and commitment and with the admission
+order. Both lost landings: at a saturated runway a go-around costs about one landing slot, as a hold does. The owner
+accepted TASK-363 with the extra go-arounds ("Accept TASK-363"). `T363` is now `pk` by default; `T363=` turns it off.
+
+On main `861a9f20` with the default on, Zurich, Boston and London City days are identical to main. Heathrow peaks 676
+→ 689, full days 2,419 → 2,567, go-arounds over days 1–3 51 → 71, 0 real runway conflicts.
