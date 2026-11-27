@@ -51,7 +51,7 @@ const idOf = (value: object | null | undefined) => {
 };
 
 /**
- * TASK-376: the checked overlays of the active view, built from the city once and from each
+ * TASK-379: the checked overlays of the active view, built from the city once and from each
  * snapshot as it arrives, and drawn on one canvas over both map canvases.
  */
 export class DebugOverlays {
