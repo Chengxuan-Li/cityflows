@@ -31,9 +31,10 @@ test('the panel lists every bundled real place not held out of it, and each has 
 // City's car parks leave by their own entrances, Zurich's entrances stay by their buildings,
 // Heathrow's pk:11441 gains exits on r:11590. No new place entrance on a lot's aisle: Heathrow's
 // places and garages on r:12293 and r:11893 leave by streets.
+// TASK-364: Zurich rebuilt with two one-way to two-way seams laid out as continuations.
 test.for([
   ['london-city-airport', '41e898110f9da0db81c60ca1ec90066652c5bb30274d359fbf45f266bc9abad9'],
-  ['zurich-airport', '49e10df7abb53a6641b11308e1bfe4aedc246ba1d362a9c07af0a3f166f80017'],
+  ['zurich-airport', 'e229de92f1e1a2d7a0e52c3a4fc2eab4b086c6f70c4f6efa430dcd3166740a9a'],
   ['boston-logan', '35c3229d3a9ee56302cd5fcfbb7bf49398e72ab853b03e45021a4858104570da'],
   // TASK-348 + TASK-351: rebuilt on the merged code (both changes above).
   ['heathrow', 'd1739a1c11c80e53a4219ad647c3f237d0a3f9d73e532825a9fbc06ac3bc1403'],

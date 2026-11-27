@@ -15,6 +15,7 @@ import { limit } from '../timeouts';
 // Heathrow's graphs (crossings outside junction groups laid out as plain nodes) and Heathrow's state.
 // TASK-265 re-pins the four compiled graphs (zebra bands on their mapped crossing nodes; startup states
 // unchanged). TASK-360 re-pins Heathrow's startup state and board (intersection take-offs and line-ups).
+// TASK-364 re-pins Zurich's graph (two one-way to two-way seams laid out as continuations; state unchanged).
 const pins = [
   {
     id: 'london-city-airport',
@@ -24,7 +25,7 @@ const pins = [
   },
   {
     id: 'zurich-airport',
-    compiled: 'a0326f14e02c75cc725a1939c5e66cceaf9324981b28b114d0b345943329bf84',
+    compiled: 'c85804e889cf51b0a76bca9f52c93d99123539f7f1d6fe1015d2a746642df106',
     state: [1233058347, 420095907],
     board: 'f0b7bc5b71b5e04b1cad6b1849863054b40c4b809fc960a0d72f7b80f1204ffe',
   },
