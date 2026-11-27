@@ -245,8 +245,9 @@ const unrelated: Record<AuditCity, Record<string, number>> = {
     'r:735/r:925': 6.89,
   },
 };
-/** Corridor pairs whose lanes still overlap outside the outlines, and why. TASK-089 set the
- * carriageways meeting a node from one side only side by side there (`convergingShifts`); the
+/** Corridor pairs whose lanes still overlap outside the outlines and group surfaces, and why.
+ * TASK-089 set the carriageways meeting a node from one side only side by side there
+ * (`convergingShifts`); the
  * importer pushes the pairs whose continuation the network now lines up (r:1277/r:1362 at n:774,
  * r:1354/r:447 at n:382). */
 const corridorResiduals: Record<string, string> = {
@@ -254,8 +255,7 @@ const corridorResiduals: Record<string, string> = {
   // TASK-131: pairs that keep their OSM nodes.
   'r:1030/r:687':
     'Trappentreutunnel, set apart by pushOverlapping (no shared node), whose push eases to zero at its end at n:194 (2.2 m2).',
-  'r:1264/r:1265':
-    'Barthstraße, the 11.4 m inner road of n:2 and n:993: each direction continues r:3/r:4 across n:2 along its own heading ray (T35.1, 0.01 m2).',
+  // TASK-375: Barthstraße's r:1264/r:1265 sits inside the group surface and is no longer measured.
 };
 /** TASK-131: the Sindelfingen corridor pairs left, and why. Benzstraße's r:868/r:869 and
  * r:903/r:904 no longer overlap since 797678e; the A 81's unnamed carriageways (one ref) now pair
@@ -267,7 +267,7 @@ const sindelfingenResiduals: Record<string, string> = {
 };
 
 test.each(tierCities(auditCities))(
-  'T39.2: %s lane overlap outside the outlines (measure 9)',
+  'T39.2: %s lane overlap outside the outlines and group surfaces (measure 9)',
   (name) => {
     const { city, net } = load(name);
     const overlaps = laneOverlaps(city, net);

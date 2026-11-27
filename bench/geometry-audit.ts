@@ -1238,23 +1238,24 @@ export interface LaneOverlap {
 /** Edges shared by two lane surfaces (side by side lanes, a lane seam) are not overlap. */
 const LANE_TOUCH_M = 0.02;
 
-/** x-intervals of a closed ring on the cell rows (y = OFFSET_Y + k * CELL_M) it spans, by row,
+/** x-intervals of a surface's rings on the cell rows (y = OFFSET_Y + k * CELL_M) they span, by row,
  * shrunk by `inset` at each end (even-odd rule). */
-function rowIntervals(ring: readonly Vec2[], inset: number, out: Map<number, number[][]>) {
+function rowIntervals(rings: readonly Vec2[][], inset: number, out: Map<number, number[][]>) {
   const crossings = new Map<number, number[]>();
-  for (let i = 0; i < ring.length; i++) {
-    const a = ring[i]!,
-      b = ring[(i + 1) % ring.length]!;
-    if (a.y === b.y) continue;
-    const [lo, hi] = a.y < b.y ? [a, b] : [b, a];
-    for (let k = Math.ceil((lo.y - OFFSET_Y) / CELL_M); OFFSET_Y + k * CELL_M < hi.y; k++) {
-      const y = OFFSET_Y + k * CELL_M;
-      const x = lo.x + ((hi.x - lo.x) * (y - lo.y)) / (hi.y - lo.y);
-      const row = crossings.get(k);
-      if (row) row.push(x);
-      else crossings.set(k, [x]);
+  for (const ring of rings)
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i]!,
+        b = ring[(i + 1) % ring.length]!;
+      if (a.y === b.y) continue;
+      const [lo, hi] = a.y < b.y ? [a, b] : [b, a];
+      for (let k = Math.ceil((lo.y - OFFSET_Y) / CELL_M); OFFSET_Y + k * CELL_M < hi.y; k++) {
+        const y = OFFSET_Y + k * CELL_M;
+        const x = lo.x + ((hi.x - lo.x) * (y - lo.y)) / (hi.y - lo.y);
+        const row = crossings.get(k);
+        if (row) row.push(x);
+        else crossings.set(k, [x]);
+      }
     }
-  }
   for (const [k, xs] of crossings) {
     xs.sort((x, y) => x - y);
     const row = out.get(k) ?? [];
@@ -1292,12 +1293,12 @@ function outside(x0: number, x1: number, holes: number[][]): number[][] {
 }
 
 /** Measure 9. The area where the drawn lane surfaces (`laneEdges`, tapers included, each shrunk
- * by `LANE_TOUCH_M`) of two different roads of one grade overlap outside every node outline of
- * that grade (TASK-231), per road pair, except a movement's own from and to roads (their lanes meet end to end) when
- * they are not of one corridor. A u-turn exempts nothing: its two roads run side by side.
- * Same corridor pairs are marked. With `outsideOutlines` false the node outlines are not left out (a
- * lane lying on another under a junction polygon, as zebra stripes there show). Integrated along the 0.25 m cell rows; the nearest
- * node is taken over the midpoints of the overlapping row pieces. */
+ * by `LANE_TOUCH_M`) of two different roads of one grade overlap outside every node outline and
+ * drawn group surface of that grade (TASK-231, TASK-375), per road pair, except a movement's own
+ * from and to roads (their lanes meet end to end) when they are not of one corridor. A u-turn
+ * exempts nothing: its two roads run side by side. Same corridor pairs are marked. With
+ * `outsideOutlines` false the outlines and group surfaces do not mask overlap. Integrated along
+ * the 0.25 m cell rows; the nearest node is taken over the midpoints of the overlapping row pieces. */
 export function laneOverlaps(city: City, net: CompiledCity, outsideOutlines = true): LaneOverlap[] {
   return [...overlapPieces(city, net, outsideOutlines).values()]
     .map(({ a, b, pieces }) => {
@@ -1335,7 +1336,7 @@ function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, 
     for (const lane of roadLanes) {
       const { left, right } = laneEdges(lane, roadLanes);
       const rows = new Map<number, number[][]>();
-      rowIntervals([...left, ...right.reverse()], LANE_TOUCH_M, rows);
+      rowIntervals([[...left, ...right.reverse()]], LANE_TOUCH_M, rows);
       for (const [k, intervals] of rows) {
         const row = lanes.get(k) ?? [];
         for (const [a, b] of intervals) row.push([a!, b!, road.idx]);
@@ -1343,16 +1344,20 @@ function overlapPieces(city: City, net: CompiledCity, outsideOutlines: boolean, 
       }
     }
   }
-  // Outlines by grade: a junction above or below does not hide an overlap (a tunnel's lanes under
+  // Masks by grade: a junction above or below does not hide an overlap (a tunnel's lanes under
   // a street's junction, Munich's r:196/r:416 under n:204).
   const outlines = new Map<number, Map<number, number[][]>>();
-  if (outsideOutlines)
-    for (const node of net.nodes) {
-      if (node.outline.length < 3) continue;
-      const level = city.nodes[node.id]!.layer ?? 0;
+  if (outsideOutlines) {
+    const addOutline = (level: number, rings: Vec2[][]) => {
       if (!outlines.has(level)) outlines.set(level, new Map());
-      rowIntervals(node.outline, 0, outlines.get(level)!);
-    }
+      rowIntervals(rings, 0, outlines.get(level)!);
+    };
+    for (const node of net.nodes)
+      if (node.outline.length >= 3) addOutline(node.grade, [node.outline]);
+    // Scan each group's rings together so holes in its surface stay unmasked.
+    for (const group of net.groups ?? [])
+      addOutline(net.nodes[group.nodes[0]!]!.grade, groupSurface(net, group.idx));
+  }
   const joined = new Set(
     net.movements.flatMap((m) => {
       if (m.turn === 'uturn') return [];
