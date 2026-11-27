@@ -246,7 +246,8 @@ const pins = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    compile: '249401dfe79a8392f2b379483652931468bc5b2889f9c20c761d0c3ccb1e7065',
+    // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
+    compile: '429ecf0942872ad598d70d87b3e5558ebc5b4e632fa9b3b978f9a73a1e9234e1',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     lamps: '4cb04c240a77c3c0f3cc71a27ebb6edc8a3f2fc0710ac19af31b44255c590bc4',

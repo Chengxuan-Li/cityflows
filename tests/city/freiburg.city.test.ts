@@ -303,7 +303,9 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // TASK-348 + TASK-351: both on main (1,533 to 1,528 completed, 61.3 to 62.5 s).
   // TASK-265: the bands and walker spans at n:211 and n:254 move inside the curb clearance
   // onto the mapped nodes (1,528 to 1,526 completed, 62.5 to 62.2 s).
-  expect(morning.stateHash).toBe(1465651370);
+  // TASK-279: unmarked walkers wait for a gap. TASK-362's shared stop-line hold is in place,
+  // and the morning completes 1,527 trips without gridlock.
+  expect(morning.stateHash).toBe(55277987);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);
