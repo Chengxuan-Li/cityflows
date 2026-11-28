@@ -133,3 +133,59 @@ Every distance, area, corner, overlap (TASK-375's measure 9) and void measure is
 cases (J1–J6, B38, B39, G1, G2, R3, Mars). Only painted line metres outside node outlines move: Freiburg 14,517 →
 14,524 m, Munich 35,081 → 35,091 m, Sindelfingen 43,943 → 43,902 m, town 80,486 → 80,456 m (paint length, not a
 defect measure: lane lines run on where a trunk end lost its crossing).
+
+### Re-pins (old → new, first 12 characters)
+
+- `tests/city/freiburg.city.test.ts`: Freiburg 10:00 state hash 3918479990 → 2977102306; `city.json` digest
+  0bd5bef9a731 → a7371d1392cc.
+- `tests/city/bundled-cities.city.test.ts` archive bytes: London City 2c0b4f9c2aa1 → 9822ff33c7d4, Zurich 95a573d64408 →
+  23f765ad47d4, Heathrow 7ef57ec8a755 → 0e7f6e28989c (Boston unchanged).
+- `tests/render/V217-markings.city.test.ts` (TASK-257 dash counts): without the field 1,960 → 1,961, with it 2,044 →
+  2,045.
+- Compiled or canonical network hashes of Munich, Sindelfingen and the town fixture: T44 (a2e06370cf98 → 82dc815d243d,
+  f70841fe1adc → 7316b3aa912c, 0a1823624c13 → f2ae860eddd4, bbd681b2c1d6 → d80157a116a9), T49 (0a8d7ac7b16f →
+  c33a4c884430), T55 (0d954613c6e4 → c1d6c03d0f1a), T61 (907938549cb0 → 29df4f56dc18, 741cf5660bbb → 5fbe6831ef1c,
+  65cdef2fec6f → c3bcc9ed5d6b), T50 (78e8401f3bd3 → 0ae24706e6aa, a65a08527e39 → 988530d5d216), T62 (c639821c5e85 →
+  6f58292ecd02, 20a7843c3993 → 72b58659d02b), T75 (6fcdf8254276 → 635ca9da7b13, 2a1177263f24 → 94db0a66d4f7,
+  4c0f40e93de1 → 019e840c5a27, b1db199e1159 → d81a6fedc341), V106 (f70841fe1adc → 7316b3aa912c, bbd681b2c1d6 →
+  d80157a116a9), V107 (3595116920f0 → 1b11017975d9, 4e5020e454f3 → cd66fdb4dc4d, 8a0ceca11132 → d0575b21965a), V108
+  (22ed3b87ddab → 41395f496ab0, 97941451fe25 → e03d179f808a, 78c0c2119009 → cc0680611569), V114 (d44e26265478 →
+  16d38e8985a1, 1b9957c0e242 → b214ab20974c), V117 (compile, lamps, curbs and paint of town, Sindelfingen and Munich:
+  14 hashes), walk-height (Freiburg 1d78a8eea2fb → 0a58d2342425, Munich 85a9cdda5d90 → 752715a27656, Sindelfingen
+  69505d309e36 → 92ab9d0d1b3b).
+- Town simulations: T46 hash 1073880220 → 2840132711 (completed 207 unchanged, mean delay 45.3406 → 45.3401 s), T67
+  hashes 4260632795 / 558769496 / 1478634736 → 1063110051 / 2088598016 / 2022296578.
+- Archives rebuilt with `bench/bundled-cities.ts`: Freiburg, Munich, Sindelfingen, Lübeck, York, London City, Heathrow,
+  Zurich (Philadelphia and Boston byte-identical). No `bench/traffic-baseline.json`, gate floor, OSM or per-id change.
+
+### Close-ups (in the app, preview tooling, `docs/findings/2026-11-28-markings/`)
+
+- `group-entry-n768-2d.jpg`, `group-entry-n768-3d.jpg`: the signalised group entry at n:768, arrows of the turns through
+  the group, solid lane lines over the last metres before the stop line, the signalised crossing's broken lines.
+- `signal-approach-m7-band-n18-2d.jpg`, `signal-approach-m7-n18-3d.jpg`: n:18, the south approach's solid line between
+  the through and right lanes up to the stop line (M7).
+- `band-n18-north-main-2d.jpg` against `band-n18-north-branch-2d.jpg`: n:18's north arm, main's crossing stepped 2.0 m
+  between the two directions, the branch's one straight band (M5).
+- `crossing-pair-r1143-n1142-n664-2d.jpg`, `-3d.jpg`: Kronenbrücke r:1143, the signal crossing at n:1142 and the
+  crossing at n:664 7 m on, both kept (the doubled-crossing rule not taken; n:664's is a default crossing OSM does not
+  map, unpainted as on main).
+
+### Verification
+
+| Command | Final lines |
+| --- | --- |
+| `npm run check` | Test Files 310 passed, 1 skipped (311); Tests 2,253 passed, 2 skipped (2,255); built in 1.55 s; exit 0 |
+| `npm run test:city` (2 workers) | Test Files 77 passed (77); Tests 296 passed, 1 skipped (297); 1,121.6 s; exit 0 |
+| `npm run test:traffic:light` (1 worker) | Test Files 2 passed (2); Tests 5 passed, 1 expected fail (6); 196.8 s; exit 0 |
+| `npm run test:e2e:light` (`CITYFLOWS_TEST_PORT=5396`) | 63 passed (4.0 m); exit 0 |
+
+Files outside the listed scope: `src/network/walk.ts` and `src/ui/inspector/node.tsx` (as TASK-215: per-lane walk-link
+centres; the inspector's default with the source), `docs/architecture.md` (one bullet in section 11 describing M3 and
+M5), `docs/findings/2026-11-28-markings/` (close-ups), tests and re-pins, the rebuilt archives.
+
+Not done: M7 stays theme-agnostic (main applies it in the UK and US themes too; German practice would limit it to the
+`de` theme, a render-only follow-up). The RMS-1 section number is not cited: the text was not available offline (no
+downloads), so the code names the guideline and the StVO sign. Process notes: the city tier ran with two workers while
+the last full-demand run finished (three heavy processes for about 10 minutes); the record-only Boston showcase was
+stopped (own PID) to free a slot for the rebuild after the TASK-385 merge; `D:\cityflows\.claude\launch.json` carried
+two extra preview entries (branch and main worktrees) during the close-ups and was restored.
