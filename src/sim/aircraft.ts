@@ -172,12 +172,14 @@ function t363Rules() {
   const rules = env?.T363 ?? 'pk';
   return { T363P: rules.includes('p'), T363K: rules.includes('k') };
 }
-/** TASK-382 rule switch, read when a fleet is created: the env T382=<letters>, r a tow's route
- * keeps off the taxiways arrivals leave the runway by. */
+/** TASK-382 rule switches, read when a fleet is created: the env T382=<letters>, r a tow's route
+ * keeps off the taxiways arrivals leave the runway by, s a tow does not start while its way meets
+ * the way off of an arrival ordered to land. Both on by default (owner 2026-11-28: Heathrow days
+ * up, peak go-arounds 18 to 21 accepted); T382=0 turns them off. */
 function t382Rules() {
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
-  const rules = env?.T382 ?? '';
+  const rules = env?.T382 ?? 'rs';
   return { T382R: rules.includes('r'), T382S: rules.includes('s') };
 }
 /** An arrival claims its runway this long before its threshold, or goes around. */
@@ -819,8 +821,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     ?.env;
   // TASK-377: on by default (owner gate: airports not worse, tail stops 3 to 1); T377=0 turns it off.
   const reserveExitMargin = env?.T377 !== '0';
-  const finishVacating = reserveExitMargin && env?.T383 === '1';
-  const reserveBehindMovingLeader = reserveExitMargin && env?.T383 === '2';
+  // TASK-383: an arrival finishes vacating inside the claim it holds (1, on by default: owner
+  // 2026-11-28); T383=2 measures the reserve behind a moving leader instead; T383=0 neither.
+  const t383 = env?.T383 ?? '1';
+  const finishVacating = reserveExitMargin && t383 === '1';
+  const reserveBehindMovingLeader = reserveExitMargin && t383 === '2';
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
