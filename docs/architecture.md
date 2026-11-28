@@ -1980,7 +1980,15 @@ carry no persons and generate no road trips.
   centreline. A tow does not start while an arrival on final, or the next to appear on an end,
   would meet its route before that arrival's tail is off the runway, unless that arrival is
   already ordered to wait for the tow. Tows run at towbarless-tractor speeds (7 m/s, 6 m/s for
-  double-deckers).
+  double-deckers). An arrival leaving the runway whose claim would stop it short of its tail clear,
+  behind an ordered arrival standing on the same piece of the exit, finishes vacating to its safe
+  point inside the claim it already holds, the leader's rear margin still separating them
+  (TASK-383, ICAO Doc 4444 7.10; `T383=0` turns it off).
+- **Tows and the way off** (TASK-382, ICAO Doc 4444 7.6 and 7.10, Doc 9476). A tow's route keeps
+  off the taxiways arrivals have left the runway by, up to their tail clear, with the
+  parked-aircraft route cost. A tow does not start while its way meets the way off of any arrival
+  ordered to land, queued or on approach, unless that arrival waits for the tow; it waits at its
+  stand and plans again on a later try. `T382=0` turns both off.
 - **Departure flow** (TASK-330), on a runway that crosses no other: a departure is granted its
   line-up behind a departure that has started its roll from the same end (its tail well clear of
   its line-up point, which is not behind the new line-up: TASK-346, never ahead of a roll), and

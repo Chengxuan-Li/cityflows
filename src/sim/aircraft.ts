@@ -172,6 +172,16 @@ function t363Rules() {
   const rules = env?.T363 ?? 'pk';
   return { T363P: rules.includes('p'), T363K: rules.includes('k') };
 }
+/** TASK-382 rule switches, read when a fleet is created: the env T382=<letters>, r a tow's route
+ * keeps off the taxiways arrivals leave the runway by, s a tow does not start while its way meets
+ * the way off of an arrival ordered to land. Both on by default (owner 2026-11-28: Heathrow days
+ * up, peak go-arounds 18 to 21 accepted); T382=0 turns them off. */
+function t382Rules() {
+  const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
+    ?.env;
+  const rules = env?.T382 ?? 'rs';
+  return { T382R: rules.includes('r'), T382S: rules.includes('s') };
+}
 /** An arrival claims its runway this long before its threshold, or goes around. */
 const DECISION_S = 30;
 /** Spare time around runway bookings and grants. */
@@ -804,10 +814,18 @@ function alignStart(
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const { T360I, T360R, T360M, T360A } = t360Rules();
   const { T363P, T363K } = t363Rules();
+  const { T382R, T382S } = t382Rules();
+  /** TASK-382: edges arrivals have left the runway by, up to their tail clear of it. */
+  const wayOff = new Uint8Array(graph.edges.length);
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
   // TASK-377: on by default (owner gate: airports not worse, tail stops 3 to 1); T377=0 turns it off.
   const reserveExitMargin = env?.T377 !== '0';
+  // TASK-383: an arrival finishes vacating inside the claim it holds (1, on by default: owner
+  // 2026-11-28); T383=2 measures the reserve behind a moving leader instead; T383=0 neither.
+  const t383 = env?.T383 ?? '1';
+  const finishVacating = reserveExitMargin && t383 === '1';
+  const reserveBehindMovingLeader = reserveExitMargin && t383 === '2';
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -2209,6 +2227,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   function chargeStart(craft: Craft, timeS: number) {
     if (craft.startWhy === undefined) return;
     startRefusals[craft.startWhy]!.s += timeS - craft.startWhyS!;
+    const log = craft.request?.kind === 'tow' ? towOf.get(craft.id) : undefined;
+    if (log)
+      log.refusals[craft.startWhy] = (log.refusals[craft.startWhy] ?? 0) + timeS - craft.startWhyS!;
     craft.startWhy = undefined;
   }
   function refuseStart(craft: Craft, why: string, timeS: number) {
@@ -2249,6 +2270,27 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     /** TASK-366: time and distinct aircraft stopped before their tail clears the landing gate. */
     tailOnRunway: { s: 0, ids: [] as number[] },
   };
+  /** TASK-382: each tow, from its request to its parking (behaviour-neutral counter): start
+   * refusals by reason, seconds standing still on the ground by what it waits for and where, and
+   * seconds the head of an arrival queue was refused naming it, with those arrivals. */
+  interface TowLog {
+    registration: string;
+    typeId: string;
+    from: string;
+    to: string;
+    requestS: number;
+    startS?: number;
+    parkS?: number;
+    refusals: Record<string, number>;
+    stillS: Record<string, number>;
+    heldHeadS: number;
+    heldWhy: Record<string, number>;
+    heldArrivals: string[];
+  }
+  const towLogs: TowLog[] = [];
+  const towOf = new Map<number, TowLog>();
+  /** TASK-382: the aircraft `roleOf` last described (the blocker a refusal names). */
+  let roleSeen: Craft | null = null;
   let releaseWhy = '';
   let commitWhy = '';
   /** TASK-360 counters: take-offs by type and how they lined up; line-ups granted ahead of a
@@ -2273,6 +2315,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   let gapBy = '';
   /** What an aircraft is doing, for those counters. */
   function roleOf(p: Craft) {
+    roleSeen = p;
     if (p.mode === 'queued') return 'queued';
     if (p.mode === 'air') return p.air?.kind ?? 'air';
     if (p.mode === 'parked') return p.request ? `parked-${p.request.kind}` : 'parked';
@@ -2973,8 +3016,13 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (graph.edges[edge]!.kind === 'runway') return 1000;
     const dir = arcForward(arc) ? 1 : -1;
     const flow = flowFactor?.[arc] ?? 1;
+    // TASK-382 (`T382R`): a tow's route keeps off the taxiways arrivals leave the runway by, as
+    // off a parked aircraft (ICAO Doc 9476 SMGCS: towing routes are planned clear of the runway
+    // exits in use; Doc 4444 7.6: aerodrome control keeps the way off clear for landing traffic).
     const blocked =
-      parkedInTheWay(craft, edge) || (avoiding.length > 0 && avoidedOn(craft, edge))
+      parkedInTheWay(craft, edge) ||
+      (avoiding.length > 0 && avoidedOn(craft, edge)) ||
+      (T382R && wayOff[edge] === 1 && (craft.towing || craft.request?.kind === 'tow'))
         ? PARKED_FACTOR
         : 1;
     return edgeLocks[edge]!.some((l) => l.id !== craft.id && l.dir === -dir)
@@ -3643,6 +3691,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         craft.seqRank ??= craft.rank;
         commitOrder(craft, decided);
         craft.admission = { legs: [landing.leg], next: [], landing };
+        if (T382R || T382S) {
+          const safeM = safeOf(craft, landing.leg);
+          for (const p of landing.leg.pieces)
+            if (p.startM < safeM && graph.edges[p.edge]!.kind !== 'runway') wayOff[p.edge] = 1;
+        }
         break;
       }
       if (!craft.admission) return blocked ? refuse('behindParked') : 'unordered';
@@ -3951,6 +4004,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!own || own.gates[0]?.holdM !== -Infinity || exitEdge(own) !== exitEdge(leg)) continue;
       if (leaderPastS(o, own, pastM + o.lengthM / 2) <= exitS) leaving.add(o);
     }
+    const ignore = new Set([...yielding.keys(), ...leaving]);
     // ICAO Doc 4444 §7.10: vacate before holding on the exit. A stopped leader can be far
     // enough ahead to allow landing, but still hold a rear claim where the lander needs its
     // braking margin. Reserve through the actual taxi stop in that case, not just to its nose.
@@ -3966,8 +4020,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           Infinity
       )
         want = through;
+      else if (
+        reserveBehindMovingLeader &&
+        through > want &&
+        [...leaving].some(
+          (o) =>
+            o.mode === 'ground' &&
+            o.speedMps > 0.3 &&
+            o.lengthM < craft.lengthM &&
+            o.leg!.gates[0]?.holdM === -Infinity &&
+            !o.leg!.gates[0].released &&
+            exitEdge(o.leg!) === exitEdge(leg),
+        ) &&
+        firstConflict(craft, leg, want, through, ignore) === Infinity
+      ) {
+        // A shorter leader can be clear of the runway but still leave too little room for
+        // the longer follower to stop. Keep the extra room if no other claim needs it.
+        want = through;
+      }
     }
-    const ignore = new Set([...yielding.keys(), ...leaving]);
     // Ground aircraft whose claims reach into that stretch give way if they can still stop.
     for (
       let tries = 0;
@@ -4108,6 +4179,11 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   }
 
   function park(craft: Craft, leg: Leg, stand: number, timeS: number) {
+    const towLog = craft.towing ? towOf.get(craft.id) : undefined;
+    if (towLog) {
+      towLog.parkS = timeS;
+      towOf.delete(craft.id);
+    }
     craft.leg = leg;
     craft.mode = 'parked';
     craft.towing = false;
@@ -4196,6 +4272,23 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (stand < 0 && node < 0) return { ok: false, reason: 'no tow target' };
     if (!towLegs(craft, stand, node)) return { ok: false, reason: 'no route to tow target' };
     if (stand >= 0) standBound[stand] = craft.id;
+    const log: TowLog = {
+      registration: craft.registration,
+      typeId: craft.type.id,
+      from:
+        craft.stand >= 0
+          ? (graph.stands[craft.stand]!.ref ?? graph.stands[craft.stand]!.id)
+          : 'rest',
+      to: stand >= 0 ? (graph.stands[stand]!.ref ?? graph.stands[stand]!.id) : `node ${node}`,
+      requestS: nowS,
+      refusals: {},
+      stillS: {},
+      heldHeadS: 0,
+      heldWhy: {},
+      heldArrivals: [],
+    };
+    towLogs.push(log);
+    towOf.set(craft.id, log);
     craft.request = { kind: 'tow', stand, node };
     craft.requestedS = nowS;
     craft.retryS = -Infinity;
@@ -4323,6 +4416,24 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     return block;
   }
 
+  /** TASK-382: whether `legs` meet the way off the runway (to its tail clear of it) of an
+   * arrival ordered to land, queued or on approach. */
+  function meetsWayOff(craft: Craft, legs: Leg[]) {
+    const own = legs.map((leg) => ({ leg, fromM: 0 }));
+    return crafts.some((o) => {
+      const leg =
+        o.mode === 'queued'
+          ? o.admission?.landing?.leg
+          : o.mode === 'air' && o.air?.kind === 'approach' && o.next[0]?.kind === 'taxi'
+            ? o.next[0].leg
+            : undefined;
+      // One that waits for this tow (it would not appear before the tow has gone) does not
+      // hold it: neither would move.
+      if (!leg || o.waits.some((w) => w.pred === craft && !passed(w))) return false;
+      const safeM = safeOf(o, leg);
+      return conflicts(craft, own, o).some((c) => c.otherLeg === leg && c.x1 - SAMPLE_M < safeM);
+    });
+  }
   /** TASK-363: a queued arrival's order is dropped, and with it the waits of others on it (they
    * would hold again once it is ordered anew, after them). */
   function stepOut(craft: Craft) {
@@ -4387,8 +4498,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     if (timeS - craft.retryS < RETRY_S) return;
     craft.retryS = timeS;
     chargeStart(craft, timeS);
+    const towing = craft.request?.kind === 'tow';
     const why = startOnce(craft, timeS);
     if (why) refuseStart(craft, craft.request?.kind === 'tow' ? `tow ${why}` : why, timeS);
+    else if (towing && towOf.get(craft.id)) towOf.get(craft.id)!.startS = timeS;
   }
   /** TASK-344: what the first unpassed wait matching `test` waits for (a refusal's detail). */
   function blockerKind(craft: Craft, test: (w: Wait) => boolean) {
@@ -4436,6 +4549,10 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       // TASK-339: not while its way passes an aircraft parked or at rest across it with no
       // movement planned; it plans again on a later try.
       if (refuseBehindParked(decided.mine, legs)) return 'behindParked';
+      // TASK-382 (`T382S`): a tow does not start while its way meets the way off of an arrival
+      // ordered to land (Doc 4444 7.6 and 7.10: landing traffic has the way off; Doc 9476 SMGCS:
+      // towing is started when its route is clear); it plans again on a later try.
+      if (T382S && request.kind === 'tow' && meetsWayOff(craft, legs)) return 'wayOff';
       commitOrder(craft, decided);
       craft.admission = { legs, next: planned.next };
     }
@@ -5280,6 +5397,33 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     counts.goArounds++;
   }
 
+  /** The claim ends at the rear margin of an ordered arrival ahead on the same directed piece. */
+  function exitLeaderRear(craft: Craft, leg: Leg) {
+    const piece = leg.pieces.find((p) => p.startM <= craft.claimHi && craft.claimHi < p.endM);
+    if (!piece) return false;
+    const endE = edgeStation(piece, craft.claimHi);
+    return craft.waits.some(({ leg: on, pred, predLeg }) => {
+      if (
+        on !== leg ||
+        pred.mode !== 'ground' ||
+        pred.leg !== predLeg ||
+        pred.runway !== craft.runway ||
+        predLeg.gates[0]?.holdM !== -Infinity ||
+        pred.speedMps > 0.3 ||
+        pred.claimLo + margin > pred.stationM - pred.lengthM / 2 + 0.01
+      )
+        return false;
+      return predLeg.pieces.some(
+        (p) =>
+          p.edge === piece.edge &&
+          p.toE > p.fromE === piece.toE > piece.fromE &&
+          p.startM <= pred.claimLo &&
+          pred.claimLo < p.endM &&
+          Math.abs(edgeStation(p, pred.claimLo) - endE) <= 0.02,
+      );
+    });
+  }
+
   function stepGround(craft: Craft, timeS: number) {
     const leg = craft.leg!;
     const p = fixedWing(craft);
@@ -5377,7 +5521,24 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const gate = leg.gates.find((g) => !g.granted);
     if (gate) stop = Math.min(stop, gate.holdM);
     // Claims end at the leg's end, where the next leg takes over, or at its order's stop.
-    if (craft.claimHi < capHi - 1e-6) stop = Math.min(stop, craft.claimHi - margin - half);
+    if (craft.claimHi < capHi - 1e-6) {
+      let claimStop = craft.claimHi - margin - half;
+      const landing = leg.gates[0];
+      // ICAO Doc 4444 §7.10: a leader moving at commitment can stop before the follower has
+      // vacated. Finish clearing inside the claim already held, using the leader's rear margin
+      // for separation instead of stacking both margins. The runway gates and order still bind.
+      if (
+        finishVacating &&
+        landing?.holdM === -Infinity &&
+        !landing.released &&
+        claimStop < landing.vacateM + half &&
+        s + brake + WAIT_SHORT_M >= claimStop &&
+        craft.claimHi >= safeOf(craft, leg) + half &&
+        exitLeaderRear(craft, leg)
+      )
+        claimStop = safeOf(craft, leg);
+      stop = Math.min(stop, claimStop);
+    }
     stop = Math.max(Math.min(stop, cap - WAIT_SHORT_M), s);
     // A stop moved back by a new order is still within braking reach (canWaitAt), and so is a
     // stop on a re-routed leg, whose plan the re-route dropped while moving (TASK-320: Zurich
@@ -5573,6 +5734,14 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         // TASK-352: the head of its end's queue, held: RETRY_S to the cause.
         if (tried !== true && !heads.has(key) && headOf.get(key) === craft.id) {
           const why = `${endName(key)} ${tried === 'unordered' ? 'unordered' : releaseWhy || '?'}`;
+          const towBy =
+            roleSeen?.towing && releaseWhy.includes('tow') ? towOf.get(roleSeen.id) : undefined;
+          if (towBy) {
+            towBy.heldHeadS += RETRY_S;
+            towBy.heldWhy[releaseWhy] = (towBy.heldWhy[releaseWhy] ?? 0) + RETRY_S;
+            if (!towBy.heldArrivals.includes(craft.registration))
+              towBy.heldArrivals.push(craft.registration);
+          }
           arrivalWhy.release[why] = (arrivalWhy.release[why] ?? 0) + RETRY_S;
           if (T360M && releaseWhy.startsWith('booking') && multiOn(craft.runway))
             departureCounts.arrivalHeldByMultiS += RETRY_S;
@@ -5612,6 +5781,18 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
         }
       } else if (craft.mode === 'air') stepAir(craft, timeS);
       if (craft.mode === 'ground') stepGround(craft, timeS);
+    }
+    // TASK-382: a tow standing still on the ground: by what it waits for and the edge it is on.
+    for (const craft of crafts) {
+      if (craft.mode !== 'ground' || !craft.towing || craft.speedMps > 0) continue;
+      const log = towOf.get(craft.id);
+      if (!log) continue;
+      const w = craft.waits.find((v) => !passed(v));
+      const piece =
+        craft.leg!.pieces.find((p) => p.endM >= craft.stationM) ?? craft.leg!.pieces.at(-1)!;
+      const e = graph.edges[piece.edge]!;
+      const key = `${w ? `${roleOf(w.pred)} ${w.pred.registration}` : craft.runwayWait ? 'runway' : 'none'} @ ${e.id} ${e.kind}${e.ref ? ` ${e.ref}` : ''}`;
+      log.stillS[key] = (log.stillS[key] ?? 0) + dtS;
     }
     // TASK-339: time spent standing in a wait on an aircraft parked or at rest with no movement
     // admitted.
@@ -5986,6 +6167,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     /** TASK-352: go-arounds by cause; seconds the head of each end's arrival queue was held, by
      * cause. */
     arrivalCauses: () => structuredClone(arrivalWhy),
+    /** TASK-382: the tows requested, with their waits and the arrival-queue holds naming them. */
+    towLogs: () => structuredClone(towLogs),
     /** TASK-360: departure counters (take-offs by type and line-up, shared line-ups). */
     departureCounts: () => structuredClone(departureCounts),
     hash(word: (hash: number, value: number) => number, hash: number) {

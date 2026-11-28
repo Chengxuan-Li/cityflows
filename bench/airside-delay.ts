@@ -483,6 +483,9 @@ const summary = {
       tailOnRunway: { s: Math.round(tailOnRunway.s), n: tailOnRunway.ids.length },
     };
   })(),
+  // TASK-382: tows over 20 minutes from request to parking (or not parked), or naming an arrival
+  // queue head's refusal.
+  towLogs: fleet.towLogs().filter((t) => t.heldHeadS > 0 || (t.parkS ?? endS) - t.requestS > 1200),
   arrivalStages: stages(arrivals, [
     'standWaitS',
     'sequencingS',
