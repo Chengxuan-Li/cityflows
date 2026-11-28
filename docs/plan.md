@@ -6538,6 +6538,12 @@ each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6
 
 ## Owner decisions log
 
+- 2026-11-28 (owner): on the 10-hour run report, "1. accept 2. ok 3. ok". TASK-382's `rs` (peak go-arounds 18
+  to 21 for full-day gains; the day-2 departure line-up accepted), TASK-381's V2 (Munich actuated +7.9% for
+  London City and Boston) and TASK-383's `T383=1` (Heathrow day 3 +9 completed for +2 go-arounds) go on by
+  default and merge, with re-pins. These trade-offs are the owner's for these three rules, not a change to
+  the gates. Item 4 (TASK-254, 215, 207, TASK-367's checker) explained to the owner; still held.
+
 - 2026-11-28 (lead): report on the 10-hour unsupervised run (2026-11-27 14:29 to about 00:30; gates and
   merge rules unchanged: airside merges on gates, city work on the traffic merge rule and the audit
   tolerance). Every merge passed the four light tiers; CI on main green at `007c2d02`.
