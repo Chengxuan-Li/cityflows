@@ -406,6 +406,10 @@ assigned. "Owns" is the file surface the task may touch; two active tasks never 
 | [TASK-381](tasks/TASK-381.md) | sim | Queue reserves at unmarked crossings: why Munich needs them, one rule for all three cities | `sim/**`, `network/keep-clear.ts` | 378, 379 | owner merge rule, London City, Boston | parked 2026-11-27 (`606381fd`, Codex): Munich needs the reserve where exit queues cover crossings behind signal and tram holds (`n:180`/`n:197`, `n:189`); V2 London City 209.7 s, Boston gridlocks 39, Freiburg 59.6 s, Munich fixed −6.6% but actuated +7.9% (seeds 1–3); trade-off for the owner |
 | [TASK-382](tasks/TASK-382.md) | sim | Heathrow: A380 tows that wait 47–98 min and stand in the runway way off | `sim/aircraft.ts`, `flight-operations.ts`, `ground-vehicles.ts` | 353, 380 | owner ladder, cities identical | parked 2026-11-27 (`d7ae24fb`, Claude; `T382` off): rule `rs` peaks 689 to 724, landings 302 to 333, tow-held 27L queue 6,160 to 2,105 s; go-arounds 18 to 21 (behind the arrival ahead) fail the gate; full days (`d6d29541`): Heathrow 2,567 to 2,623, go-arounds 71 to 68, other airports identical, but one real runway conflict on Heathrow day 2 (departure line-up on 27R); owner decision |
 | [TASK-383](tasks/TASK-383.md) | sim | Heathrow day 3: the last tail stop on the runway | `sim/aircraft.ts` | 377 | tail stops 0, owner ladder | parked 2026-11-27 (`697a9b82`, Codex; `T383` off): leader still moving at commitment; `T383=1` clears the 26 s stop, day 3 836 vs 827 but go-arounds 28 to 30; `T383=2` peaks 687; main day refs with TASK-377 in `R/t383/m-*` |
+| [TASK-384](tasks/TASK-384.md) | sim | Runway checker: a departure turning onto the runway behind one lined up (TASK-367's widening) | `tests/sim/aircraft-checks.ts` | 367 | test fails without it, main refs unchanged, 382 day 2 | merged 2026-11-28 (`36c107a5`, Codex): main refs unchanged; TASK-382 day-2 sample exempted (1 to 0) |
+| [TASK-385](tasks/TASK-385.md) | 10 | TASK-254 to main: the audit reads mapped medians; the B 31 on-ramp bulge | `bench/geometry-audit.ts`, `roads.ts`, `corridors.ts` | 254 | merge rule, audit, rebuilds | started 2026-11-28 (Codex) |
+| [TASK-386](tasks/TASK-386.md) | 10 | TASK-215's markings without the doubled-crossing rule; solid lines before signals (M7) | `road-paint.ts`, `marking-geometry.ts`, `render3d/markings.ts`, `crossings.ts` | 215 | merge rule (12 seeds), marking counts, audit, close-ups | pending 2026-11-28 (Claude, after TASK-381) |
+| [TASK-387](tasks/TASK-387.md) | UI | Freiburg warnings F1 and F2: U-turns at dead-end lot aisles; lanes into a group's inner road | importers, lots | 207, 214 | warning codes, tram counts, merge rule | pending 2026-11-28 (Codex, after TASK-381) |
 | [TASK-400](tasks/TASK-400.md) | render | Developer debug overlays and shading in 2D and 3D | render/, render3d/, ui/, opt-in sim snapshot | 339, 341 | unchanged default hashes and rendering, interactive Munich 3D, debug views spec | merged 2026-11-28 (`ba372061`, Claude; first written as TASK-362 on `task/362-debug-views`, renumbered as main took 362 and 373 to 383, then TASK-400 by owner choice): developer tools switch or `?debug`, 13 overlays and 6 shadings; defaults, hashes and light e2e unchanged; Munich 3D all overlays 16.7 to 55.7 ms city-wide, 17.6 ms at street zoom; stopped Codex run left on `wip/362-debug-views-codex` |
 | [TASK-210](tasks/TASK-210.md) | render | Roof shapes in 3D: round, dome and onion (the Schwabentor), other flat fallbacks | `src/render3d/roofs.ts` | 201, 206 | fallback counts, shape tests, close-ups, frame budget | done 2026-11-19 |
 | [TASK-211](tasks/TASK-211.md) | 9 | Full-demand step time 15% faster, state hashes identical (TASK-187 follow-up) | `src/sim/**` performance | 187, 202, 204 | phase tables, identical hashes, interleaved timings | done 2026-11-19 (23.1% faster, hashes identical) |
@@ -6537,6 +6541,13 @@ Full run 44016934900 (lead, manual, on da7179c after TASK-188 to 192): every job
 each merge (44095d5, 60f2cdc, be205a5, 263ab29, da7179c); the city job took 29.6 min.
 
 ## Owner decisions log
+
+- 2026-11-28 (owner): "Take all suggestions. - another 9 hrs of autonomous work budget granted" (about 01:55 to
+  11:00 EST). TASK-254 merges once the audit counts a median the data place as a median and the B 31 on-ramp bulge
+  is fixed (TASK-385); TASK-215 merges without the doubled-crossing rule, with M7 solid lines before signals
+  (TASK-386); TASK-207's F1 and F2 go ahead, F2 after a check that tram service does not depend on road ids
+  (TASK-387); TASK-367's runway-checker widening goes to main alone (TASK-384). Gates and merge rules otherwise
+  unchanged.
 
 - 2026-11-28 (owner): on the 10-hour run report, "1. accept 2. ok 3. ok". TASK-382's `rs` (peak go-arounds 18
   to 21 for full-day gains; the day-2 departure line-up accepted), TASK-381's V2 (Munich actuated +7.9% for
