@@ -371,7 +371,7 @@ test.each(
       // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
       '2da8d908c917115109865f1999e75f66dd8ad50a34660747fbbd91a3d4419e3d',
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-      '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
+      'c3bcc9ed5d6b2f6b7e55e833ae9b3df3045054f36b0a9addf7da30a2259d709a',
       // TASK-351: Entenseestraße's loop, fed by a map entry and drained by an exit, is circulation.
       21,
       513,

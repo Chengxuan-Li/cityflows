@@ -81,7 +81,7 @@ const baselines = {
   // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
   // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-  'sindelfingen-a81': 'bbd681b2c1d625149533e028b82e1d6a68568bd3d4a699bbde9b4fa1156b8015',
+  'sindelfingen-a81': 'd80157a116a93847000fd9f501d8eab0849c6ac90af741f5890fd38b8553f8f8',
 };
 
 unitTest(

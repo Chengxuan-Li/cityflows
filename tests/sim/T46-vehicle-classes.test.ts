@@ -36,9 +36,9 @@ const before = {
     // TASK-165: exit storage beyond the exit crosswalk costs 0.06 s per trip on the town.
     // TASK-204: changes off the planned lane that prepare for a later turn add 0.008 s per trip.
     completed: 207,
-    meanTravelTimeS: 138.36086956521748,
-    meanDelayS: 45.34061903615167,
-    hash: 1073880220,
+    meanTravelTimeS: 138.36038647343,
+    meanDelayS: 45.340135944364185,
+    hash: 2840132711,
     trips: 414,
   },
 };

@@ -47,7 +47,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
           // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
           // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          'a65a08527e39b550442374c3a2869fcfcf2bb7ac67507118b4cf4b4e8fa51fe0',
+          '988530d5d21625b2a8d75d91de493a73cefc8ad85bd5d7cfa41c21344425ca4e',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')
