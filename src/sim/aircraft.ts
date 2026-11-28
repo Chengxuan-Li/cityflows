@@ -804,6 +804,10 @@ function alignStart(
 export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const { T360I, T360R, T360M, T360A } = t360Rules();
   const { T363P, T363K } = t363Rules();
+  const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
+    ?.env;
+  // TASK-377: on by default (owner gate: airports not worse, tail stops 3 to 1); T377=0 turns it off.
+  const reserveExitMargin = env?.T377 !== '0';
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -2242,6 +2246,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     release: {} as Record<string, number>,
     /** TASK-363: seconds queued arrivals were held out of the landing order, by stand. */
     steppedOut: {} as Record<string, number>,
+    /** TASK-366: time and distinct aircraft stopped before their tail clears the landing gate. */
+    tailOnRunway: { s: 0, ids: [] as number[] },
   };
   let releaseWhy = '';
   let commitWhy = '';
@@ -3930,7 +3936,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       return false;
     }
     // Room to stop with its tail off the runway (its safe point and its nose beyond).
-    const want = Math.min(leg.path.lengthM, safeM + craft.lengthM / 2, cap + craft.lengthM / 2);
+    const half = craft.lengthM / 2;
+    let want = Math.min(leg.path.lengthM, safeM + half, cap + half);
     // Arrivals ahead leaving by the same way off in time: their claims there do not count.
     const exitEdge = (l: Leg) => l.pieces.find((q) => graph.edges[q.edge]!.kind !== 'runway')?.edge;
     for (const o of crafts) {
@@ -3943,6 +3950,22 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
             : null;
       if (!own || own.gates[0]?.holdM !== -Infinity || exitEdge(own) !== exitEdge(leg)) continue;
       if (leaderPastS(o, own, pastM + o.lengthM / 2) <= exitS) leaving.add(o);
+    }
+    // ICAO Doc 4444 §7.10: vacate before holding on the exit. A stopped leader can be far
+    // enough ahead to allow landing, but still hold a rear claim where the lander needs its
+    // braking margin. Reserve through the actual taxi stop in that case, not just to its nose.
+    if (reserveExitMargin && leaving.size) {
+      const standing = new Set(
+        [...leaving].filter((o) => o.mode === 'ground' && o.speedMps <= 0.3),
+      );
+      const through = Math.min(leg.path.lengthM, want + margin, cap + half);
+      if (
+        standing.size &&
+        through > want &&
+        firstConflict(craft, leg, 0, through, new Set(crafts.filter((o) => !standing.has(o)))) <
+          Infinity
+      )
+        want = through;
     }
     const ignore = new Set([...yielding.keys(), ...leaving]);
     // Ground aircraft whose claims reach into that stretch give way if they can still stop.
@@ -5608,6 +5631,15 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       ) {
         parkedBlockS += dtS;
       }
+    for (const craft of crafts) {
+      if (craft.mode !== 'ground' || craft.speedMps > 0.3) continue;
+      const gate = craft.leg!.gates[0];
+      if (gate?.holdM !== -Infinity || gate.released) continue;
+      if (craft.stationM - craft.lengthM / 2 >= gate.vacateM) continue;
+      arrivalWhy.tailOnRunway.s += dtS;
+      if (!arrivalWhy.tailOnRunway.ids.includes(craft.id))
+        arrivalWhy.tailOnRunway.ids.push(craft.id);
+    }
     if (timeS - ringS >= RETRY_S) {
       ringS = timeS;
       extendOrder();
