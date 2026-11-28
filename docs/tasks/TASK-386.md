@@ -1,6 +1,6 @@
 # TASK-386 — TASK-215's lane markings without the doubled-crossing rule, and solid lines before signals (M7)
 
-Status: started 2026-11-28. Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Claude subagent (Opus 5.5). Base: main; carries
+Status: done 2026-11-28 (first version passes the merge rule; not merged). Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Claude subagent (Opus 5.5). Base: main; carries
 `archive/task/215-markings` (`3e5e33f7`).
 
 ## Finding (TASK-215)
@@ -86,7 +86,16 @@ Full demand, fixed time, choice off (completed / mean delay s / worst visit s / 
 | 5 | 3,468 / 2,006.3 / 10,215.6 / 152 / 4 | 3,187 / 1,996.9 / 10,023.3 / 184 / 5 |
 | mean | 1,931.1 s | 1,937.8 s (+0.34%) |
 
-Full demand actuated was not run (time and the two-process limit); the reference on main is fixed only (TASK-381).
+Full demand, actuated (all programs actuated), choice off, main and branch both run here:
+
+| seed | main | branch |
+| ---: | --- | --- |
+| 1 | 3,544 / 1,704.6 / 10,118.7 / 150 / 3 | 3,679 / 1,778.8 / 9,539.7 / 168 / 3 |
+| 2 | 3,641 / 1,943.2 / 10,342.1 / 140 / 1 | 3,885 / 1,708.3 / 10,227.6 / 142 / 3 |
+| 3 | 3,358 / 1,998.1 / 10,244.3 / 176 / 1 | 3,380 / 1,956.3 / 10,046.7 / 167 / 1 |
+| 4 | 3,151 / 1,761.6 / 10,386.4 / 160 / 1 | 3,413 / 1,879.0 / 10,375.9 / 161 / 1 |
+| 5 | 3,834 / 1,840.2 / 10,416.2 / 172 / 0 | 3,558 / 1,817.6 / 10,322.6 / 163 / 2 |
+| mean | 1,849.5 s | 1,828.0 s (−1.16%) |
 
 Showcases at 0.15, seed 1, choice on (completed / mean delay s / worst visit s / gridlocked); Freiburg, Sindelfingen,
 Lübeck and York on main `7322c8da` against the merged branch with rebuilt archives, the others' archives unchanged by
