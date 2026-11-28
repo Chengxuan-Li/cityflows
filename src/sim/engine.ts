@@ -309,7 +309,7 @@ function createRun({
     debugSkips,
   );
   // TASK-169: each lane's keep-clear zones, and where a head held short of one stands.
-  let keepClear = keepClearZones(compiled);
+  let keepClear = keepClearZones(compiled, true);
   // TASK-230: each connector's lane, read for every car each step (its destination's lane).
   let connectorLanes = Int32Array.from(compiled.connectors, (c) => c.lane);
   const keepClearStop = new Float64Array(trips.length).fill(Infinity);
@@ -1898,7 +1898,7 @@ function createRun({
       checkGranted: debugSkips,
     });
     laneChanges = createLaneChanges(next, vehicles, params, hasGrant, landingBlocked, debugSkips);
-    keepClear = keepClearZones(next);
+    keepClear = keepClearZones(next, true);
     connectorLanes = Int32Array.from(next.connectors, (c) => c.lane);
     allowedLanes = vehicleClasses.map((name) =>
       next.lanes.map((lane) => lane.allowed.includes(name)),
