@@ -57,7 +57,8 @@ const baseline = {
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-290: Sindelfingen's aisle-stripped city retains garage connector c:1449 on r:954.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
-    '45dfcd523e9e9f3155383a73dd339aeb683f124a2f79c8d61a9ca003e059c6ce',
+    // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+    'e6b7b9a4f2517a9e2bd1b3cf77491e9578d7eab9613ae5ca8cbfea31b59b3925',
     // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
     // TASK-194: generated signal programs are actuated (`actuated: true`).
@@ -69,7 +70,8 @@ const baseline = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    '1e9cd4f2600d9bc407309efef4a7c33571d19f0cc56c8960054979f7b1c76151',
+    // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+    'c8511e2e9bbdd1b2dd650df6c6da2031e809819611adb45573525bb9893745f4',
   ],
 };
 

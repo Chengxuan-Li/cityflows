@@ -44,7 +44,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
           // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
           // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-          '7216a2c2e099624542857c348752ea4eaf6d573292585b6555bb2c2bba118d16',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '20a7843c3993ed0143fac9dbfa297973512eff831dd79f37991eed4fa57bccee',
     );
     expect(rail!.tracks.length).toBeGreaterThan(10);
     expect(

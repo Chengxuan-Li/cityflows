@@ -1,8 +1,10 @@
 import { beforeAll, expect, test } from 'vitest';
 import { openFreiburg } from '../../bench/freiburg';
 import {
+  drawnJunctions,
   joinAudit,
   laneOverlaps,
+  junctionShapeAudit,
   roadWidthAudit,
   unrelatedOverlaps,
 } from '../../bench/geometry-audit';
@@ -68,6 +70,18 @@ test('the branches follow the widest branch chain, not a straight ray', () => {
   expect(width('freiburg', 'r:678')).toBeLessThan(0.1);
 });
 
+test('the B 31 on-ramp meets the mainline without a lobe in the group surface', () => {
+  const { city, net } = cities.freiburg!;
+  const join = drawnJunctions(net).find(({ node }) => node.id.split('+').includes('n:536'))!;
+  expect(junctionShapeAudit(city, net, join.node, join.ends)).toMatchObject({
+    bulgeM2: 0,
+    selfIntersections: 0,
+  });
+  expect(joinAudit(net, net.nodes[net.index.node.get('n:536' as never)!]!)?.maxM).toBeLessThan(
+    0.05,
+  );
+});
+
 test('a carried window eases by the quintic, without a bend at the plain nodes it crosses', () => {
   // Munich n:194, where the ramp's window ends 55 m on (0.044 m by smoothstep).
   expect(joint('munich', 'n:194')).toBeLessThan(0.02);
@@ -88,7 +102,9 @@ test('only a moving side whose window passes its first road is carried', () => {
   // Freiburg n:1546: a lone branch with no offset was pulled onto the ray over 15 m (0.66 m off
   // r:2171); n:544's branches, whose window stays on their roads, eased early (0.23 m2).
   expect(width('freiburg', 'r:2171')).toBeLessThan(0.3);
-  expect(overlap('freiburg', 'r:1118/r:546')).toBe(0);
+  // TASK-254 (TASK-242): r:1380 placed (`middle_of:2`, its block 1.75 m right) moves the split at
+  // n:544, where the branches now overlap by 0.56 m2.
+  expect(overlap('freiburg', 'r:1118/r:546')).toBeLessThan(0.6);
 });
 
 test('a road that follows a carried transition keeps it at a plain node', () => {

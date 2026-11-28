@@ -18,6 +18,95 @@ const speedKph: Record<RoadClass, number> = {
   ramp: 40,
 };
 
+/** The lane width where no width is tagged. */
+export const defaultLaneWidth = (roadClass: RoadClass) =>
+  roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+
+/**
+ * TASK-254 (TASK-242's `n:1146`): where a one-way road gains or drops lanes across a node of only
+ * its two ends, the network lines the lanes that run on up by their left edges and tapers in the
+ * gained ones; it draws no width taper for a lane that runs on, so lanes running on at another
+ * width turn the node into a junction fan. There tagged widths (`roadSpecs`) that would change
+ * the width of a lane running on are not read: the road keeps its class's default width, repeated
+ * until no such node is left. The tag describes its whole way, so the other roads of that way keep
+ * the default too (else they meet it at a step across the junction that split the way).
+ * Friedrichstraße `r:1148` (`width:lanes=2.5|3|3|3|2.5`) after the two 3.5 m lanes of `r:1175`
+ * drew a fan whose edge sagged up to 0.4 m onto the median's grass; `r:1149`, the same way beyond
+ * the Hauptbahnhof junction `n:1147`, then met it 3.5 m narrower.
+ */
+export function keepRunningLaneWidths(roads: OsmRoad[]): void {
+  const ends = new Map<string, Road[]>();
+  for (const { road } of roads)
+    for (const node of [road.from, road.to]) ends.set(node, [...(ends.get(node) ?? []), road]);
+  const widths = (road: Road) => road.lanes.map((lane) => lane.widthM);
+  const tagged = (road: Road) =>
+    road.lanes.some((lane) => lane.widthM !== defaultLaneWidth(road.roadClass));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const { road, wayId } of roads) {
+      if (road.streetGroupId !== null || !tagged(road)) continue;
+      const steps = [road.from, road.to].some((node) => {
+        const at = ends.get(node)!;
+        const other = at.find((o) => o !== road);
+        if (at.length !== 2 || !other || other.streetGroupId !== null) return false;
+        if ((node === road.to ? other.from : other.to) !== node) return false;
+        if (other.lanes.length === road.lanes.length) return false;
+        const [a, b] = [widths(road), widths(other)];
+        return a.some((w, i) => i < b.length && Math.abs(w - b[i]!) > 1e-9);
+      });
+      if (!steps) continue;
+      // The tag describes its whole way: every road of the way keeps the default.
+      for (const same of roads.filter((o) => o.wayId === wayId)) {
+        const width = defaultLaneWidth(same.road.roadClass);
+        same.road.lanes = same.road.lanes.map((lane) => ({ ...lane, widthM: width }));
+      }
+      changed = true;
+    }
+  }
+}
+
+/** A lane width read from `width` or `width:lanes` outside these bounds is not a lane's (a
+ * `width` that covers parking, cycle lanes or a hard shoulder, a typo), so the tag is ignored;
+ * motorways, trunk roads and ramps keep at least RAA's narrowest lanes. */
+function taggedLaneBounds(roadClass: RoadClass): { min: number; max: number } {
+  return roadClass === 'motorway' || roadClass === 'trunk' || roadClass === 'ramp'
+    ? { min: 3, max: 3.75 }
+    : { min: 2.5, max: 4.5 };
+}
+
+/** No street parking on either side: a carriageway `width` then covers the lanes alone; otherwise
+ * it includes the parking lanes the importer draws as strips beside them (TASK-218's variant:
+ * Munich's way 90400545, `width=7` with parking on both sides, is not two 3.5 m lanes). */
+function noStreetParking(tag: OsmTags): boolean {
+  const none = (side: 'left' | 'right') =>
+    [`parking:${side}`, 'parking:both', `parking:lane:${side}`, 'parking:lane:both'].some((key) =>
+      ['no', 'separate'].includes(tag[key] ?? ''),
+    );
+  return none('left') && none('right');
+}
+
+/** A length in metres (`4`, `4.5 m`), else undefined. */
+function metres(value: string | undefined): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)\s*m?$/.exec(value?.trim() ?? '');
+  return match ? Number(match[1]) : undefined;
+}
+
+/** TASK-242: a one-way way's `placement` (`left_of:N`, `middle_of:N`, `right_of:N`, lanes counted
+ * from the left in travel direction) as the lane block centre's offset from the way's line,
+ * positive to the right of travel, for lanes of `widths`. Undefined when the tag is absent,
+ * `transition`, or names a lane the road does not have (`placeRoads`). */
+export function placementOffset(value: string | undefined, widths: number[]): number | undefined {
+  const match = /^(left_of|middle_of|right_of):([1-9]\d*)$/.exec(value?.trim() ?? '');
+  const n = Number(match?.[2]);
+  if (!match || n > widths.length) return undefined;
+  const sum = (list: number[]) => list.reduce((total, w) => total + w, 0);
+  const lane = widths[n - 1]!;
+  const line =
+    sum(widths.slice(0, n - 1)) +
+    (match[1] === 'left_of' ? 0 : match[1] === 'right_of' ? lane : lane / 2);
+  return sum(widths) / 2 - line;
+}
+
 export interface OsmRoad {
   road: Road;
   wayId: number;
@@ -355,7 +444,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
   const hasSpeed = Number.isFinite(taggedSpeed) && taggedSpeed > 0;
   if (!hasSpeed && tag.maxspeed !== undefined) unsupported('maxspeed');
   if (osmLayer(tag) === undefined) unsupported('layer');
-  const widthM = roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
+  const widthM = defaultLaneWidth(roadClass);
   // TASK-233 (TASK-216 D6): a two-way way tagged `lanes=1` is one carriageway that oncoming cars
   // share, drawn without a centre line (`marking-geometry.ts`). Each direction keeps its default
   // width: TASK-231's 4.5 m (RASt 06, a car meeting a lorry) narrowed Freiburg's promenade, whose
@@ -364,7 +453,7 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
     directions.length === 2 &&
     ((total === 1 && forward === undefined && backward === undefined) || oneway === 'alternating');
 
-  return directions.map((direction) => {
+  const specs = directions.map((direction) => {
     const direct = direction === 'forward' ? forward : backward;
     const opposite = direction === 'forward' ? backward : forward;
     const splitTotal = total !== undefined && total >= 2 && directions.length === 2;
@@ -397,6 +486,38 @@ export function roadSpecs(way: OsmWay, roadClass: RoadClass, diagnostics: Diagno
       ),
       speedLimitMps: hasSpeed ? taggedSpeed : speedKph[roadClass] / 3.6,
       provenance: { source: 'osm' as const, osmIds: [id], inferred },
+    };
+  });
+
+  // TASK-242 (TASK-216 D3, D9; TASK-218's variant): tagged widths. `width:lanes` (per direction
+  // on a two-way way) gives each lane's width when it lists every lane within bounds; otherwise
+  // `width` (or `width:carriageway`), the carriageway's, is shared evenly by the lanes of both
+  // directions where the way tags no street parking. Estimated widths (`source:width=estimated`)
+  // are not read: Freiburg's run 1 to 3 m under the aerial imagery on five-lane roads
+  // (Bismarckallee `r:1171`, 14.5 m tagged against 17.5 m).
+  const bounds = taggedLaneBounds(roadClass);
+  const estimated = tag['source:width'] === 'estimated';
+  const inBounds = (w: number | undefined): w is number =>
+    !estimated && w !== undefined && w >= bounds.min && w <= bounds.max;
+  const lanesInAll = specs.reduce((n, { lanes }) => n + lanes.length, 0);
+  const carriageway = noStreetParking(tag)
+    ? metres(tag.width ?? tag['width:carriageway'])
+    : undefined;
+  const even =
+    carriageway !== undefined && inBounds(carriageway / lanesInAll)
+      ? carriageway / lanesInAll
+      : undefined;
+  return specs.map((spec) => {
+    const raw =
+      tag[`width:lanes:${spec.direction}`] ??
+      (directions.length === 1 ? tag['width:lanes'] : undefined);
+    const listed = raw?.split('|').map(metres);
+    const widths =
+      listed?.length === spec.lanes.length && listed.every(inBounds) ? listed : undefined;
+    if (!widths && even === undefined) return spec;
+    return {
+      ...spec,
+      lanes: spec.lanes.map((lane, i) => ({ ...lane, widthM: widths?.[i] ?? even! })),
     };
   });
 }
@@ -442,7 +563,9 @@ export function createRoads(
         layer,
         centerline: reversed ? centerline.reverse() : centerline,
         lateralOffsetM: paired
-          ? ((city.drivingSide === 'right' ? 1 : -1) * lanes.length * lanes[0]!.widthM) / 2
+          ? ((city.drivingSide === 'right' ? 1 : -1) *
+              lanes.reduce((width, lane) => width + lane.widthM, 0)) /
+            2
           : 0,
         lanes,
         speedLimitMps,

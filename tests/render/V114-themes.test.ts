@@ -77,7 +77,8 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
           // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
           // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-          '4243da1886f93632ff601988f81d3844c48c8303379ee84503f72879c49cb169',
+          // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+          '1b9957c0e2427a23a24ea6a6dcad80ce77234064e40ea152cec502284af95ca4',
     );
     expect(loadAuditCity(name).markingTheme).toBe('de');
   },
