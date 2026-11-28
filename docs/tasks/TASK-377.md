@@ -99,3 +99,18 @@ Heathrow seed 3 failed.
 `npm run check`, `test:city`, `test:traffic:light` and `test:e2e:light` were not run after the day failure.
 The focused traffic regression ended with `Test Files 1 passed (1)` and `Tests 1 passed (1)`.
 Bench JSON, traces and test logs are in `D:\cityflows-wt\330-pilot\R\t377`.
+
+## Lead completion (2026-11-27)
+
+The lead ran the two day runs Codex stopped before, with `T377=1` against main (`T377=0`):
+
+| Run | Main | Rule on |
+| --- | --- | --- |
+| Zurich day 3 (`--daily 730`) | 746 / 8 / 0 s | 746 / 8 / 0 s |
+| Boston day 3 | 996 / 49 / 0 s | 996 / 49 / 0 s |
+
+Every rung is then identical to main in completed, go-arounds, overlaps and real runway conflicts, with tail stops
+3 to 1 (Heathrow peak 5 and day 1 cleared; day 3 keeps 26 s). Under the airside gate (airports not worse) the rule is
+on by default. Tiers with it on: `npm run check` 2,213 passed, 2 skipped, built; `test:city` 292 passed, 1 skipped;
+`test:traffic:light` 5 passed, 1 expected fail; `test:e2e:light` 63 passed (4.0 min, port 5394). Cities do not run
+aircraft, so Munich and Freiburg are unchanged (their pins pass).

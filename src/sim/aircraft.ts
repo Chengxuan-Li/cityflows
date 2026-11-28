@@ -805,7 +805,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
   const { T363P, T363K } = t363Rules();
   const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process
     ?.env;
-  const reserveExitMargin = env?.T377 === '1';
+  // TASK-377: on by default (owner gate: airports not worse, tail stops 3 to 1); T377=0 turns it off.
+  const reserveExitMargin = env?.T377 !== '0';
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
