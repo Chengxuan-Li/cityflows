@@ -33,11 +33,13 @@ test('the panel lists every bundled real place not held out of it, and each has 
 // places and garages on r:12293 and r:11893 leave by streets.
 // TASK-364: Zurich rebuilt with two one-way to two-way seams laid out as continuations.
 // TASK-372: every real archive has a country, including the pinned Boston layout.
+// TASK-386: London City, Zurich and Heathrow rebuilt (trunk crossings and straight bands move
+// street strips).
 test.for([
-  ['london-city-airport', '2c0b4f9c2aa119f469e88ec33906e41b1fafc2c892b823a4f339bb9538b6b97c'],
-  ['zurich-airport', '95a573d6440863992d9901848f0583c30b6520977dbb1850126ef5a5cf211d67'],
+  ['london-city-airport', '9822ff33c7d4ef5bf32c64855c63bd1acf36471835090684ed8854e56d0d3a68'],
+  ['zurich-airport', '23f765ad47d4dd42236375708a767841dec1d825a43f87f28e3fdf2599ee3ad0'],
   ['boston-logan', '87847dd4cd5e29629bfccc7766921f3b11d63108fd6c8a322d31dac72f9b56a5'],
-  ['heathrow', '7ef57ec8a7559d7f54d5d571e4666bad2c36d7ba35495fdaa1dda71b9e50279a'],
+  ['heathrow', '0e7f6e28989ca1a6562da9d14175f552692583addf86e3c084885dfbd43df050'],
 ] as const)('%s retains the reference archive bytes', ([id, sha256]) => {
   const archive = readFileSync(projectFile(id));
   expect(createHash('sha256').update(archive).digest('hex')).toBe(sha256);

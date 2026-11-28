@@ -66,7 +66,7 @@ test.each(tierCities(['munich', 'sindelfingen'] as const))(
           // TASK-246: keep-clear boxes keep to the whole lane (r:654#3 and #4 left out).
           // TASK-290: Munich's garage entrance changes keep-clear paint on r:1070 and r:1071.
           // TASK-347: lines run on across nodes drawn as road (`roadStrip`).
-          'd44e262654781e598367dfdfa775e88c64c6f1725a6a324cc37f1046d660197b'
+          '16d38e8985a147deaa3b5d3704d3afb963b87bfc487529ca7b1606c9880aabb6'
         : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
           // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-240: arrows of the junction ahead on r:1057 and r:821.

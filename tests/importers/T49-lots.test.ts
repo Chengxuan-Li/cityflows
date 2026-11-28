@@ -47,7 +47,7 @@ const baseline = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's aisle-stripped compile places garage connector c:1911 on r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    '0a8d7ac7b16fd3e461e4b89bf4c27d122af2d48f69f820616651f9a528136e06',
+    'c33a4c8844303d78e65d025143d3b81acce0c618cb798fcb0e48b39d82343b67',
   ],
   'sindelfingen-a81': [
     // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

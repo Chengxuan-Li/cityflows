@@ -253,7 +253,7 @@ test('Freiburg passes its own gate at the showcase demand', () => {
     // circulation, so three car parks on it (pk:2627, pk:2647, pk:2831) leave by their own streets.
     // TASK-372: the country field, with the same crossing rule.
     // TASK-385: rebuilt with tagged road widths and placement, with a centred B 31 ramp join.
-    '0bd5bef9a73177f6d870d4b08fdfadb85032d21c3095aef11425ea9ae5cb3e75',
+    'a7371d1392ccc79025f0cee18465c7bb3e7a3c5b991882f6d8892d03373f9de2',
   );
   // TASK-204 re-pinned (group chains follow the route's planned movements; changes off the
   // planned lane prepare for a later turn).
@@ -311,7 +311,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // and the morning completes 1,527 trips without gridlock.
   // TASK-381: set-back unmarked exits release their queue reserve (1,528 trips, 59.6 s).
   // TASK-385: re-pinned with tagged widths and placement on top of TASK-381.
-  expect(morning.stateHash).toBe(3918479990);
+  // TASK-386: trunk crossings and straight bands (1,529 to 1,530 completed, 60.6 to 59.2 s).
+  expect(morning.stateHash).toBe(2977102306);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

@@ -36,7 +36,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
           // TASK-290: Munich's lane connector lists move c:1911 from r:1071 to r:1070.
-          'c639821c5e85efc3612696e5a9359556f6d5299c629bb409f99680a399f931a2'
+          '6f58292ecd0277b490dcfa5e19dd6fd0af4bb5db4bbe8a8744d37ae60c0b28b6'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's lane connector lists move c:1449 from r:97 to r:954.

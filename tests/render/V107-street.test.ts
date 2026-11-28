@@ -187,7 +187,7 @@ const baselines = {
   // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
   // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-  'munich-donnersberger': '4e5020e454f3bf741d286c87c7d102884dcc1410d638f9ef28e6f403442fb394',
+  'munich-donnersberger': 'cd66fdb4dc4d561c8fe41185bd63b370bf31423d248dfb7d486692e10d774269',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).

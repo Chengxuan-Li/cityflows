@@ -399,7 +399,7 @@ test.each(
         // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
         // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
         // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-        '0d954613c6e4c0035ff5f29a7d5ba927f1c5256b478a26a40ed322f1d72f8e17'
+        'c1d6c03d0f1a4e8d641d49dec2980d6a0a98c39c2794bfa7fcaeae7a3f1f8072'
       : // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
         // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
         // TASK-194: generated signal programs are actuated (`actuated: true`).

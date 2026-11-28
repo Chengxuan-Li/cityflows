@@ -637,9 +637,9 @@ test('TASK-257: crossings paint as OSM marks them; a project without the field p
   // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
   // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
   // 1,939 to 1,959 dashes; with it 2,023 to 2,043). TASK-254: Freiburg rebuilt with tagged widths
-  // and `placement`: one dash more (without the field 1,960; with it 2,044).
-  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1960 });
-  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2044 });
+  // and `placement`: one dash more (without the field 1,960; with it 2,044); TASK-386: one more each (1,961 and 2,045).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1961 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2045 });
   // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
   // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
   // junction's broken lines: now broken lines only.
@@ -671,13 +671,14 @@ test('M7: lane lines are solid over the last 30 m before a stop line', () => {
 });
 
 test('M7 (TASK-386): a stop sign’s approach keeps its dashes; only a signal’s is solid', () => {
-  const source = signalApproach();
-  for (const n of Object.values(source.nodes))
-    if (n.signal) Object.assign(n, { control: 'stop', signal: null });
-  const result = compile(source);
+  // The signal approach fixture with its junction turned into a stop-controlled one whose
+  // movements all give way (a stop line on every approach, as at a minor road's stop sign).
+  const result = compile(signalApproach());
   if (!result.ok) throw new Error('fixture');
   const n = result.compiled;
-  const centre = n.nodes.find((x) => x.control === 'stop')!;
+  const centre = n.nodes.find((x) => x.signal)!;
+  Object.assign(centre, { control: 'stop', signal: null });
+  for (const i of centre.movements) n.movements[i]!.priority = 0;
   let approaches = 0;
   for (const r of n.roads.filter((x) => x.to === centre.idx)) {
     if (!r.lanes.some((i) => approachMarkings(n, n.lanes[i]!).stop)) continue;

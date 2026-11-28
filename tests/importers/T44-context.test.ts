@@ -58,7 +58,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-233: Munich's 10 Trappentreustraße roads are shared lanes (sharedLane inferred, no centre line).
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
             // TASK-290: Munich's mapped garage entrance moves c:1911 from r:1071 to r:1070.
-            'a2e06370cf98fc75825ad8c06d4dfc3435eb2fa55401b24d2ebb7e457e4284b4',
+            '82dc815d243df3c49609f660abfbffd64e334bdcca18fc200792a0b104824db9',
             // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
             // removed every pin equals 3e9951a's.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
@@ -74,7 +74,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
             // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
             // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-            'f70841fe1adcf1f747263c8b99952482c3f17dd0bba768803f96f311df80a41b',
+            '7316b3aa912c46831e6bfe70ff42224638c6272928432e1721a9f15711ef6364',
           ]
         : [
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
