@@ -5689,7 +5689,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     );
   }
 
-  /** TASK-384: for the debug views: each aircraft's claim radius and claimed stretches, and the
+  /** TASK-400: for the debug views: each aircraft's claim radius and claimed stretches, and the
    * wait-for links (TASK-339) between aircraft. Read only. */
   function debugSnapshot(): { aircraft: AircraftDebug[]; waits: WaitLink[] } {
     const aircraft: AircraftDebug[] = [];

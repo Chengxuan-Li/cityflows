@@ -218,7 +218,7 @@ export class Scene3D {
   private readonly vehicleDetail = new VehicleDetailView();
   private shadowView = '';
   private compilePending = false;
-  // TASK-384: the developer debug views; null draws the scene exactly as without them.
+  // TASK-400: the developer debug views; null draws the scene exactly as without them.
   private debug: DebugSettings | null = null;
   private debugKey = '';
   private debugPasses: DebugPasses | undefined;
@@ -1587,7 +1587,7 @@ export class Scene3D {
     this.canvas.dataset.vehicles = String(this.vehicles.mesh.count);
   }
 
-  /** The scene draw: as it always was, unless a debug view changes it (TASK-384). Rendered view
+  /** The scene draw: as it always was, unless a debug view changes it (TASK-400). Rendered view
    *  off leaves the canvas plain; a shading draws every material's debug variant; the wireframe
    *  goes over either, or alone. */
   private drawScene() {
@@ -1626,7 +1626,7 @@ export class Scene3D {
     }
   }
 
-  /** TASK-384: the debug views' settings for this view (null: off). */
+  /** TASK-400: the debug views' settings for this view (null: off). */
   setDebug(settings: DebugSettings | null, palette: DebugPalette | null) {
     const key = settings
       ? `${JSON.stringify(settings)}|${palette?.ramp.join()}|${palette?.ink.blue}`
@@ -1639,7 +1639,7 @@ export class Scene3D {
     this.invalidate();
   }
 
-  /** TASK-384: where the debug overlays sit on this view. */
+  /** TASK-400: where the debug overlays sit on this view. */
   debugProjector() {
     return projector3D(
       this.camera,
@@ -1649,7 +1649,7 @@ export class Scene3D {
     );
   }
 
-  /** TASK-384: the scene's surface heights, by `city`'s indices. */
+  /** TASK-400: the scene's surface heights, by `city`'s indices. */
   debugHeights(city: CompiledCity): DebugHeights {
     const geometry = this.geometry;
     if (!geometry) return flatHeights;
@@ -1660,7 +1660,7 @@ export class Scene3D {
     return heights;
   }
 
-  /** TASK-384 Detail ranges, with a key that changes when they do. */
+  /** TASK-400 Detail ranges, with a key that changes when they do. */
   debugRanges() {
     const target = this.controls.target;
     const distance = this.camera.position.distanceTo(target);
@@ -1684,7 +1684,7 @@ export class Scene3D {
     return { items, key };
   }
 
-  /** TASK-384: the last frame's draws (every debug pass) and the GPU's resident resources. */
+  /** TASK-400: the last frame's draws (every debug pass) and the GPU's resident resources. */
   debugStats() {
     const { render, memory } = this.renderer.info;
     return {

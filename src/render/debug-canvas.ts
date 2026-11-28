@@ -34,7 +34,7 @@ interface Drawn {
 }
 
 /**
- * TASK-384: the debug overlays on a 2D canvas over the map, the same for the 2D and the 3D view:
+ * TASK-400: the debug overlays on a 2D canvas over the map, the same for the 2D and the 3D view:
  * marks keep their pixel width at any zoom, every mark has a casing in the halo colour so it
  * reads over the rendered scene and on the plain canvas, and labels make room for each other.
  * It redraws only when the view, the layers or the palette change.
