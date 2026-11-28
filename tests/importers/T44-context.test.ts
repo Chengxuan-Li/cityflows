@@ -84,7 +84,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
             // TASK-290: Sindelfingen's mapped garage entrance moves c:1449 from r:97 to r:954.
             // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
-            'bc761873313cb016c4f56f14e6d19252c907b54fd66d12d59769e5fe0c99193c',
+            // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+            '0a1823624c138488a75a1a4b9a3bb0142314b8fc17dab6f455ee3e7581b2319a',
             // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
             // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
             // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -98,7 +99,8 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
             // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
             // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-            '2abb5c641d1414e595d9ef53a3d56934e7ff1561335bdb2f2ff82d878b1703b2',
+            // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
+            'bbd681b2c1d625149533e028b82e1d6a68568bd3d4a699bbde9b4fa1156b8015',
           ];
     // TASK-372's German country metadata and V114's display setting leave this network unchanged.
     const { markingTheme, country, ...originalCity } = off.city;

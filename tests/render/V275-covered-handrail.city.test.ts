@@ -24,10 +24,11 @@ test(
     // Lead merge (TASK-273, 276, 278, 281, 282): the combined Freiburg rebuild splits one covered
     // piece in two (167 to 168, 529 to 534 m² of light canopy).
     // TASK-271 (lead merge): covered passages at grade split four covered pieces (168 to 172).
+    // TASK-254: Freiburg rebuilt with tagged widths and `placement`: one pier fewer (72 to 71).
     expect(counts).toMatchObject({
       bridges: 65,
       links: 230,
-      piers: 72,
+      piers: 71,
       canopies: 2,
       canopyPosts: 18,
       handrailLinks: 58,

@@ -70,6 +70,39 @@ function relayLanes(net: CompiledCity, road: CRoad, dx: number, dy: number) {
   }
 }
 
+test('measure 11 credits only the median opened by mapped offsets and lane widths', () => {
+  const { city, node, road } = buildCity('mapped median', 1);
+  const pair = { roadClass: 'motorway' as const, lanes: 2 };
+  const a = road(node(0, 0), node(100, 0), pair);
+  const b = road(node(100, -8.5), node(0, -8.5), pair);
+  a.lateralOffsetM = 1.75;
+  for (const lane of b.lanes) lane.widthM = 3.25;
+  for (const r of [a, b]) {
+    r.corridorId = 'divided';
+    r.provenance = { source: 'osm', inferred: [] };
+  }
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const net = result.compiled;
+  const measure = () => totals(auditGeometry(city, net));
+
+  // The drawn median is 3.5 m wide. The tags' 2 m delta is evidence for the mapped edge
+  // positions, not a cap on how much of the gap those positions explain.
+  expect(measure()).toMatchObject({ voidM2: 0, voidPairs: 0, mappedMedianM2: 273 });
+
+  // A further 0.75 m of separation is not in the source geometry.
+  relayLanes(net, net.roads[net.index.road.get(a.id)!]!, 0, 0.75);
+  expect(measure()).toMatchObject({ voidM2: 68.25, voidPairs: 1, mappedMedianM2: 273 });
+
+  // A gap of the mapped width in the wrong place still leaves an unexplained strip.
+  relayLanes(net, net.roads[net.index.road.get(b.id)!]!, 0, 0.75);
+  expect(measure()).toMatchObject({ voidM2: 68.25, voidPairs: 1, mappedMedianM2: 204.75 });
+
+  // The same canonical offset can be a synthetic adjustment, not mapped placement.
+  a.provenance.inferred = ['separated'];
+  expect(measure()).toMatchObject({ voidM2: 273, voidPairs: 1, mappedMedianM2: 0 });
+});
+
 test('T34.0: every measure is zero on clean geometry', () => {
   const { city, net } = fixture();
   const audit = auditGeometry(city, net);

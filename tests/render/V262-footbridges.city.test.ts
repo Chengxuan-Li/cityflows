@@ -19,7 +19,8 @@ test(
     const heights = cityHeights(compiled, city);
     const { counts, piers } = buildFootbridges(compiled, city, heights);
     // Lead merge with TASK-261: stair ends at their landings leave fewer raised spans (76 to 72).
-    expect(counts).toMatchObject({ bridges: 65, links: 230, piers: 72, canopies: 2 });
+    // TASK-254: Freiburg rebuilt with tagged widths and `placement`: one pier fewer (72 to 71).
+    expect(counts).toMatchObject({ bridges: 65, links: 230, piers: 71, canopies: 2 });
     // TASK-262b: none on a stair flight (three did after TASK-261's flights: (638, 239), (302,
     // 581), (637, 87)).
     const flights = walkGeometry(compiled, city)

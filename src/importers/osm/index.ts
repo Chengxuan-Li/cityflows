@@ -38,12 +38,20 @@ import { parseOsm } from './parse';
 import { addOsmGarages, addParkingEntranceConnectors, compileDroppingParking } from './parking';
 import { addGateways, addOsmPlaces, connectCarExits, gatewayDiagnostics } from './places';
 import { project } from './project';
-import { createRoads, isBridge, osmLayer, roadSpecs, type OsmRoad } from './roads';
+import {
+  createRoads,
+  isBridge,
+  keepRunningLaneWidths,
+  osmLayer,
+  roadSpecs,
+  type OsmRoad,
+} from './roads';
 import { smoothRoads } from './smooth';
 import {
   assignCorridors,
   mappedMedians,
   pairSameDirection,
+  placeRoads,
   sampleSameDirection,
   separateCoincident,
   separateDual,
@@ -345,6 +353,8 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     signals.map((n) => n.id),
   );
   // Corridors before the groups: a median crossing joins the two carriageways of one corridor.
+  keepRunningLaneWidths(roads);
+  placeRoads(city, roads, data);
   const coincident = assignCorridors(city, roads);
   const sameDirection = pairSameDirection(roads);
   const groupMaxM = options.junctionGroupMaxM ?? DEFAULT_JUNCTION_GROUP_MAX_M;
