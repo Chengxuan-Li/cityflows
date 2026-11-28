@@ -1,6 +1,6 @@
 # TASK-385 — TASK-254 to main: the audit reads mapped medians; the B 31 on-ramp bulge
 
-Status: started 2026-11-28. Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Codex (gpt-6.2-sol, high). Base: main; carries branch
+Status: merged 2026-11-28 (`b3ae4dc8`, TASK-254 branch with main): Sindelfingen counted voids 1,334.55 to 1,266.19 m² plus 808.19 m² mapped median; B 31 bulge 0; Freiburg 59.6 to 60.6 s, bulge +0.57 m² at `n:607`; Munich inputs identical; every showcase passes.
 `task/254-placement-widths` (`2e58a343`, on main `d510b589`).
 
 ## Finding (TASK-254)
