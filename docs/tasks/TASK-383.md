@@ -1,6 +1,6 @@
 # TASK-383 — Heathrow day 3: the last tail stop on the runway
 
-Status: parked 2026-11-27 (branch `task/383-tail-day3` at `697a9b82`, `T383` off): G-EAGX stops 3.81 m short of clear behind a leader that was still moving at commitment, so TASK-377 does not apply. `T383=1` (finish clearing within the existing claim) clears the stop but Heathrow day 3 go-arounds rise 28 to 30; `T383=2` (reserve at commitment behind a moving leader) peaks 689 to 687. Started by the lead in the 10 h unsupervised run; airside merges on gates. Owner: Codex (gpt-6.2-sol, high).
+Status: merged 2026-11-28 with TASK-382 (`7c81603f`, `T383=1` on by default; owner accepted): combined with `rs`, Heathrow day 3 861 with tail stops 0; otherwise identical to `rs` alone.
 Base: main `007c2d02` (TASK-377 on).
 
 ## Finding (TASK-377)
