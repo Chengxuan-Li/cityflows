@@ -19,7 +19,7 @@ const speedKph: Record<RoadClass, number> = {
 };
 
 /** The lane width where no width is tagged. */
-const defaultLaneWidth = (roadClass: RoadClass) =>
+export const defaultLaneWidth = (roadClass: RoadClass) =>
   roadClass === 'residential' || roadClass === 'service' ? 3 : 3.5;
 
 /**

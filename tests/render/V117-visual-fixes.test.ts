@@ -247,7 +247,8 @@ const pins = {
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
     // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-    compile: '429ecf0942872ad598d70d87b3e5558ebc5b4e632fa9b3b978f9a73a1e9234e1',
+    // TASK-385: the mapped A 81 placement opens the median between the carriageways.
+    compile: '8a0ceca1113293032313bd56b84428618385b1becf0406146717823eaf456371',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     lamps: '4cb04c240a77c3c0f3cc71a27ebb6edc8a3f2fc0710ac19af31b44255c590bc4',
@@ -257,7 +258,8 @@ const pins = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    curbs: 'dfa5d8eb80d56ed65989a069a22e8ec724487db62fc7fc1eb6541d231e0107f5',
+    // TASK-385: curbs follow the placed A 81 lane blocks.
+    curbs: '7206cc4a16d35769fb4994359da829a58cd265bca3e35b32a4e783fc16b9e1c2',
     // TASK-233: 8 Sindelfingen roads are shared lanes (sharedLane inferred, no centre line).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
@@ -268,7 +270,8 @@ const pins = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    de: 'd5d2bbc64526cf2de0e05e308988333d58191efc0bb0d2e1f27f2d44dac811ee',
+    // TASK-385: markings follow the placed A 81 lane blocks.
+    de: '3bdad2056eb211c7b53f459a03ae74f34965c805f0f3cb3883939a44293a18cc',
     // TASK-235 (TASK-221): lane transitions carried through plain nodes (Sindelfingen geometry moves by millimetres).
     // TASK-240: arrows of the junction ahead on r:1057 and r:821.
     // TASK-241: no hatch at lane gains (5 roads).
@@ -278,7 +281,8 @@ const pins = {
     // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
     // TASK-351: p:1408's and p:1410's garages move onto Entenseestraße's loop (driveway mouths).
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-    us: '171f7361ff074a2aad0de374629e4d846c809a9206f115fc1228c043ec5e0f0c',
+    // TASK-385: markings follow the placed A 81 lane blocks.
+    us: 'f4b471c868549822d89cdcb40314b3768dac3e42ac66c9c9c5646be98bbee885',
   },
 } as const;
 const hash = (value: unknown) =>

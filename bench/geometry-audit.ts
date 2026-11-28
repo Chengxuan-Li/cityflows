@@ -18,6 +18,7 @@ import {
 import type { Vec2 } from '../src/geo/vec2';
 import { compile, type CLane, type CompiledCity, type CNode, type CRoad } from '../src/network';
 import { MEDIAN_M } from '../src/importers/osm/corridors';
+import { defaultLaneWidth } from '../src/importers/osm/roads';
 import { ATTACH_GAP_M, laneEdges, roadWidth, shiftAt } from '../src/network/lanes';
 
 const hasShift = (road: CRoad) => road.startShift.length > 0 || road.endShift.length > 0;
@@ -1460,11 +1461,41 @@ export function endOverlaps(city: City, net: CompiledCity): EndOverlap[] {
 
 export interface CorridorVoid {
   roads: string;
-  /** Void beyond the median between the two carriageways where it is narrower than the gap
-   * limit, m2; the widest such gap and the length it spans. */
+  /** Void area (m²), maximum residual width plus the standard 0.5 m median, and run length. */
   areaM2: number;
   maxM: number;
   lengthM: number;
+}
+
+/** The median bounded by the two mapped lane blocks. A gap is evidenced only where the tags
+ * open it on the measuring ray. A synthetic separation cannot establish a mapped edge. */
+function mappedMedian(a: Road, b: Road, toward: number) {
+  if (
+    [a, b].some(
+      (r) => r.provenance.source !== 'osm' || r.provenance.inferred?.includes('separated'),
+    )
+  )
+    return null;
+  const nominal = (r: Road) => r.lateralOffsetM + (toward * roadWidth(r)) / 2;
+  const untagged = (r: Road) => (toward * r.lanes.length * defaultLaneWidth(r.roadClass)) / 2;
+  if (nominal(a) === untagged(a) && nominal(b) === untagged(b)) return null;
+  const edge = (r: Road, offset: (r: Road) => number) => parallelOffset(r.centerline, offset(r));
+  const placedA = edge(a, nominal),
+    placedB = edge(b, nominal);
+  const defaultA = edge(a, untagged),
+    defaultB = edge(b, untagged);
+  return (p: Vec2, n: Vec2, hit: number) => {
+    const interval = (a: Vec2[], b: Vec2[]) => {
+      const x = nearestTo(rayCrossings(p, n, a, ATTACH_GAP_M + 1), 0);
+      const y = nearestTo(rayCrossings(p, n, b, ATTACH_GAP_M + 1), hit);
+      return x === null || y === null ? null : ([x * toward, y * toward] as const);
+    };
+    const placed = interval(placedA, placedB);
+    const baseline = interval(defaultA, defaultB);
+    if (!placed || !baseline || placed[1] - placed[0] <= baseline[1] - baseline[0] + 1e-6)
+      return MEDIAN_M;
+    return Math.min(hit * toward, placed[1]) - Math.max(0, placed[0]);
+  };
 }
 
 /** Measure 11. For two opposite one-way carriageways of one corridor, stations every 0.5 m along
@@ -1472,8 +1503,10 @@ export interface CorridorVoid {
  * edge nearest A's, toward the median. A station counts where that gap is wider than the median
  * (by more than 0.1 m) and narrower than `ATTACH_GAP_M`, B's edge there runs within 20 degrees
  * of opposite, neither end of the ray lies under a node outline and no other road of the grade
- * crosses the ray (a road between them); its void is the gap less the median. */
-export function corridorVoids(city: City, net: CompiledCity): CorridorVoid[] {
+ * crosses the ray (a road between them). Where placement or tagged widths open the gap, the
+ * mapped edges bound the median. Only the part above the 0.5 m minimum is reported as mapped
+ * median area. Space beyond the mapped edges is still a void. */
+export function corridorGaps(city: City, net: CompiledCity) {
   const toward = net.drivingSide === 'left' ? 1 : -1;
   const outlines = net.nodes
     .filter((n) => n.outline.length > 2)
@@ -1489,16 +1522,19 @@ export function corridorVoids(city: City, net: CompiledCity): CorridorVoid[] {
       box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] as const,
     };
   });
-  const out: CorridorVoid[] = [];
+  const voids: CorridorVoid[] = [];
+  const medians: Pick<CorridorVoid, 'roads' | 'areaM2'>[] = [];
   for (const a of net.roads)
     for (const b of net.roads) {
       if (b.idx <= a.idx || a.streetGroupId !== null || b.streetGroupId !== null) continue;
       if (a.corridorId === null || a.corridorId !== b.corridorId) continue;
+      const mapped = mappedMedian(city.roads[a.id]!, city.roads[b.id]!, toward);
       const lineA = medianEdge(net, a),
         lineB = medianEdge(net, b);
       const lengths = cumulativeLengths(lineA);
       const g = rings[a.idx]!.grade;
       let area = 0,
+        medianArea = 0,
         widest = 0,
         length = 0;
       for (let s = STEP_M / 2; s < lengths.at(-1)!; s += STEP_M) {
@@ -1523,19 +1559,25 @@ export function corridorVoids(city: City, net: CompiledCity): CorridorVoid[] {
             ring.some((c, i) => i > 0 && properCrossing(p, q, ring[i - 1]!, c)),
         );
         if (between) continue;
-        area += (gap - MEDIAN_M) * STEP_M;
-        widest = Math.max(widest, gap);
+        const credited = Math.min(gap, Math.max(MEDIAN_M, mapped?.(p, n, hit) ?? MEDIAN_M));
+        medianArea += (credited - MEDIAN_M) * STEP_M;
+        const excess = gap - credited;
+        if (excess <= 0.1) continue;
+        area += excess * STEP_M;
+        widest = Math.max(widest, MEDIAN_M + excess);
         length += STEP_M;
       }
+      const roads = `${a.id}/${b.id}`;
+      if (medianArea > 0) medians.push({ roads, areaM2: round(medianArea, 2) });
       if (area > 0)
-        out.push({
-          roads: `${a.id}/${b.id}`,
+        voids.push({
+          roads,
           areaM2: round(area, 2),
           maxM: round(widest, 2),
           lengthM: round(length, 1),
         });
     }
-  return out;
+  return { voids, medians };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1858,6 +1900,7 @@ export interface GeometryAudit {
   endOverlaps: EndOverlap[];
   corners: CornerSharpness[];
   voids: CorridorVoid[];
+  medians: Pick<CorridorVoid, 'roads' | 'areaM2'>[];
   degreeTwo: DegreeTwoNode[];
   /** Marking lengths (TASK-074/079's measure) of the whole city; null for a case. */
   lengths: ReturnType<typeof markingLengths> | null;
@@ -1891,7 +1934,7 @@ export function auditGeometry(city: City, net: CompiledCity): GeometryAudit {
     endOverlaps: endOverlaps(city, net),
     corners: drawn.flatMap(({ node, ends }) => cornerAudit(city, net, node, ends)),
     degreeTwo: degreeTwoCensus(net),
-    voids: corridorVoids(city, net),
+    ...corridorGaps(city, net),
     lengths: markingLengths(net),
     widthErrors,
   };
@@ -1972,6 +2015,10 @@ export function totals(audit: GeometryAudit, roads?: Set<string>) {
       2,
     ),
     voidPairs: audit.voids.length,
+    mappedMedianM2: round(
+      sum(audit.medians, (m) => m.areaM2),
+      2,
+    ),
     cornersSharp: curbs.filter((c) => c.sharp).length,
     // 0.5 m samples read a 2 m arc as 1.97 m.
     cornersUnder2m: curbs.filter((c) => c.kind === 'corner' && c.radiusM < 1.9).length,
@@ -2266,6 +2313,7 @@ export function caseAudit(net: CompiledCity, audit: GeometryAudit, c: GeometryCa
     corners: audit.corners.filter((c) => c.node.split('+').some((id) => nodes.has(id))),
     degreeTwo: audit.degreeTwo.filter((d) => nodes.has(d.node)),
     voids: audit.voids.filter((v) => pair(v.roads)),
+    medians: audit.medians.filter((m) => pair(m.roads)),
     lengths: null,
     widthErrors: new Map([...audit.widthErrors].filter(([id]) => roads.has(id))),
   };
@@ -2286,7 +2334,7 @@ function entities(audit: GeometryAudit) {
     audit;
   const corners = audit.corners.filter((c) => c.sharp || c.radiusM < 1.9);
   const endOverlaps = audit.endOverlaps.filter((o) => o.areaM2 > 0);
-  const voids = audit.voids;
+  const { voids, medians } = audit;
   const degreeTwo = audit.degreeTwo.filter((d) => d.junction);
   return {
     degreeTwo,
@@ -2302,6 +2350,7 @@ function entities(audit: GeometryAudit) {
     endOverlaps,
     corners,
     voids,
+    medians,
   };
 }
 
@@ -2363,8 +2412,9 @@ if (process.argv[1]?.replaceAll('\\', '/').endsWith('/geometry-audit.ts')) {
         .join(', ')}`,
     );
     lines.push(
-      `  corridor voids m2 (max m, length m): ${audit.voids.map((v) => `${v.roads} ${v.areaM2} (${v.maxM}, ${v.lengthM})`).join(', ')}`,
+      `  corridor voids m2 (max normalized gap m, length m): ${audit.voids.map((v) => `${v.roads} ${v.areaM2} (${v.maxM}, ${v.lengthM})`).join(', ')}`,
     );
+    lines.push(`  mapped median m2: ${compact(audit.medians, 'roads', 'areaM2')}`);
     lines.push(
       `  sharp corners turn deg/radius m: ${top.corners.map((c) => `${c.node} ${c.kind} ${c.roads} ${c.turnDeg}/${c.radiusM}`).join(', ')}`,
     );

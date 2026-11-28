@@ -202,7 +202,8 @@ const baselines = {
   // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
-  'sindelfingen-a81': '429ecf0942872ad598d70d87b3e5558ebc5b4e632fa9b3b978f9a73a1e9234e1',
+  // TASK-385: the mapped A 81 placement opens the median between the carriageways.
+  'sindelfingen-a81': '8a0ceca1113293032313bd56b84428618385b1becf0406146717823eaf456371',
 };
 const lampCounts = {
   grid: [0, 0],

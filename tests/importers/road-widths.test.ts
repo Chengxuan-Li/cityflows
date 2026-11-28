@@ -246,4 +246,96 @@ describe('TASK-254 tagged road widths and placement', () => {
     const westLeft = q.y - west.lateralOffsetM + 5.25;
     expect(eastLeft - westLeft).toBeGreaterThan(MEDIAN_M - 0.05);
   });
+
+  it('keeps placement only where the ramp has room to meet its outer lane slice', () => {
+    const main = { highway: 'trunk', oneway: 'yes', name: 'Main' };
+    const run = (x: number, y: number, split = false) => {
+      const way = (points: [number, number][]): [number, number][] =>
+        split ? points.reverse().map(([x, y]) => [-x, y]) : points;
+      const city = load(
+        osm([
+          {
+            id: 1,
+            tags: { ...main, lanes: '2' },
+            points: way([
+              [-200, 0],
+              [0, 0],
+            ]),
+          },
+          {
+            id: 2,
+            tags: { ...main, lanes: '3', placement: 'left_of:2' },
+            points: way([
+              [0, 0],
+              [200, 0],
+            ]),
+          },
+          {
+            id: 3,
+            tags: { highway: 'trunk_link', oneway: 'yes', lanes: '1', placement: 'transition' },
+            points: way([
+              [x, y],
+              [0, 0],
+            ]),
+          },
+        ]),
+      );
+      return roadOf(city, 2).lateralOffsetM;
+    };
+
+    // An 11 m ramp could reach the centred road's outer lane, but not the extra 1.75 m.
+    expect(run(-11, 2)).toBe(0);
+    expect(run(-80, 14)).toBe(1.75);
+    // The same curb-side rule when a wide carriageway is approaching a sharp ramp exit.
+    expect(run(-25, 24, true)).toBe(0);
+    expect(run(-80, 14, true)).toBe(1.75);
+  });
+
+  it('checks ramp fit against placements that survive the ordinary seam check', () => {
+    const main = { highway: 'trunk', oneway: 'yes', name: 'Main' };
+    const ramp = { highway: 'trunk_link', oneway: 'yes', lanes: '1' };
+    for (const [wideId, rampId] of [
+      [2, 3],
+      [3, 2],
+    ] as const) {
+      const city = load(
+        osm([
+          {
+            id: 1,
+            tags: { ...main, lanes: '2' },
+            points: [
+              [-200, 0],
+              [0, 0],
+            ],
+          },
+          {
+            id: wideId,
+            tags: { ...main, lanes: '3', placement: 'left_of:2' },
+            points: [
+              [0, 0],
+              [200, 0],
+            ],
+          },
+          {
+            id: rampId,
+            tags: { ...ramp, placement: 'right_of:1' },
+            points: [
+              [-15, 4],
+              [0, 0],
+            ],
+          },
+          {
+            id: 4,
+            tags: ramp,
+            points: [
+              [-90, 24],
+              [-15, 4],
+            ],
+          },
+        ]),
+      );
+      expect(roadOf(city, rampId).lateralOffsetM).toBe(0);
+      expect(roadOf(city, wideId).lateralOffsetM).toBe(1.75);
+    }
+  });
 });

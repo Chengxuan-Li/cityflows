@@ -2,6 +2,7 @@ import {
   cumulativeLengths,
   nearestOnPolyline,
   pointAtDistance,
+  polylineLength,
   segmentsIntersect,
 } from '../../geo/polyline';
 import type { Vec2 } from '../../geo/vec2';
@@ -162,8 +163,39 @@ export function placeRoads(city: City, roads: OsmRoad[], data: OsmData): void {
     }
     return best && !transitions.has(best.road) ? best.road : undefined;
   };
-  for (let changed = true; changed;) {
-    changed = false;
+  // A lane-gain merge (or its reverse, a ramp split) has to meet the outer slice too. If
+  // placement makes the ramp's jog larger, keep the centred block when the ramp is not an
+  // acute continuation or even the full mapped link is too short for the jog. A smoothstep
+  // has peak slope 1.5 * offset / length; use the layout's 30-degree continuation limit.
+  const rampDoesNotFit = (road: Road, node: string, main: Road) => {
+    const at = ends.get(node)!;
+    if (at.length !== 3 || road.roadClass === 'ramp' || main.roadClass === 'ramp') return false;
+    const ramp = at.find((r) => r !== road && r !== main)!;
+    const merge = road.from === node;
+    if (
+      ramp.roadClass !== 'ramp' ||
+      ramp.streetGroupId !== null ||
+      (merge ? ramp.to : ramp.from) !== node ||
+      road.lanes.length !== main.lanes.length + ramp.lanes.length
+    )
+      return false;
+    const d = outward(road, node);
+    const r = outward(ramp, node);
+    const side = (merge ? 1 : -1) * Math.sign(d.x * r.y - d.y * r.x);
+    if (!side) return false;
+    const slice =
+      side > 0 ? road.lanes.slice(-ramp.lanes.length) : road.lanes.slice(0, ramp.lanes.length);
+    const centred = side * (halfBlock(road) - slice.reduce((w, l) => w + l.widthM, 0) / 2);
+    const jog = centred - (offsets.get(ramp) ?? ramp.lateralOffsetM);
+    const placedJog = Math.abs(jog + offsets.get(road)!);
+    return (
+      placedJog > Math.abs(jog) &&
+      (d.x * r.x + d.y * r.y > -cosine30 ||
+        1.5 * placedJog > polylineLength(ramp.centerline) * Math.tan(Math.PI / 6))
+    );
+  };
+  for (;;) {
+    let changed = false;
     for (const road of offsets.keys()) {
       const step = [road.from, road.to].some((node) => {
         const other = next(road, node);
@@ -173,6 +205,16 @@ export function placeRoads(city: City, roads: OsmRoad[], data: OsmData): void {
       offsets.delete(road);
       changed = true;
     }
+    if (changed) continue;
+    // Check the ramp against its surviving placement, then propagate any new seam steps.
+    const unfit = [...offsets.keys()].filter((road) =>
+      [road.from, road.to].some((node) => {
+        const other = next(road, node);
+        return other !== undefined && rampDoesNotFit(road, node, other);
+      }),
+    );
+    if (!unfit.length) break;
+    for (const road of unfit) offsets.delete(road);
   }
   for (const [road, offset] of offsets) road.lateralOffsetM = offset;
 }

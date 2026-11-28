@@ -1,8 +1,10 @@
 import { beforeAll, expect, test } from 'vitest';
 import { openFreiburg } from '../../bench/freiburg';
 import {
+  drawnJunctions,
   joinAudit,
   laneOverlaps,
+  junctionShapeAudit,
   roadWidthAudit,
   unrelatedOverlaps,
 } from '../../bench/geometry-audit';
@@ -65,9 +67,19 @@ test('the branches follow the widest branch chain, not a straight ray', () => {
   // 75 m window from n:194, Freiburg r:678 by 0.53 m.
   expect(width('munich', 'r:259')).toBeLessThan(0.1);
   expect(width('munich', 'r:416')).toBeLessThan(0.1);
-  // TASK-254 (TASK-242): r:538 beside it, placed (`left_of:2`, its block 1.75 m right of its line),
-  // moves the window's chain: r:678 runs 0.46 m off its corridor.
-  expect(width('freiburg', 'r:678')).toBeLessThan(0.5);
+  expect(width('freiburg', 'r:678')).toBeLessThan(0.1);
+});
+
+test('the B 31 on-ramp meets the mainline without a lobe in the group surface', () => {
+  const { city, net } = cities.freiburg!;
+  const join = drawnJunctions(net).find(({ node }) => node.id.split('+').includes('n:536'))!;
+  expect(junctionShapeAudit(city, net, join.node, join.ends)).toMatchObject({
+    bulgeM2: 0,
+    selfIntersections: 0,
+  });
+  expect(joinAudit(net, net.nodes[net.index.node.get('n:536' as never)!]!)?.maxM).toBeLessThan(
+    0.05,
+  );
 });
 
 test('a carried window eases by the quintic, without a bend at the plain nodes it crosses', () => {
