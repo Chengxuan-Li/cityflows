@@ -478,6 +478,9 @@ const summary = {
     // TASK-363: seconds queued arrivals were held out of the landing order, by stand.
     return { goAround: sorted(goAround), release: sorted(release), steppedOut: sorted(steppedOut) };
   })(),
+  // TASK-382: tows over 20 minutes from request to parking (or not parked), or naming an arrival
+  // queue head's refusal.
+  towLogs: fleet.towLogs().filter((t) => t.heldHeadS > 0 || (t.parkS ?? endS) - t.requestS > 1200),
   arrivalStages: stages(arrivals, [
     'standWaitS',
     'sequencingS',
