@@ -17,6 +17,7 @@ import type { City, WalkKind } from '../schema';
 import {
   crossingArms,
   crossingCentreM,
+  crossingCentres,
   crossingDefault,
   crossingEnabled,
   crossingLine,
@@ -671,7 +672,7 @@ export function compileWalk(source: City, city: CompiledCity): WalkGraph {
         city,
         arm.map((e) => ({
           ...e,
-          atM: crossingCentreM(city, e.road, e.atEnd, source) ?? UNMARKED_CENTRE_M,
+          atM: crossingCentres(city, e.road, e.atEnd, source) ?? UNMARKED_CENTRE_M,
         })),
       );
       const beyond = (p: Vec2, q: Vec2) => {
@@ -1112,7 +1113,7 @@ function setUsPriority(
   if (
     source.country === 'us' &&
     crossing.control === 'unmarked' &&
-    crossingDefault(city, city.roads[crossing.road]!, crossing.end === 'end')
+    crossingDefault(city, city.roads[crossing.road]!, crossing.end === 'end', source)
   )
     crossing.priority = 'all';
 }
@@ -1227,7 +1228,7 @@ function anchorMappedCrossings(
         marked = true;
         far ||= Math.abs(sum / count - centre) > ANCHOR_M;
       }
-      return { road, atEnd, atM: centre ?? sum / count };
+      return { road, atEnd, atM: crossingCentres(city, road, atEnd, source) ?? sum / count };
     });
     if (!marked || far) continue;
     let centre = crossingLine(city, across);

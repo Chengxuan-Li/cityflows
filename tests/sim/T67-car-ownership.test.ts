@@ -268,5 +268,5 @@ test('T67 homes of one person replay main: same trips and simulation hashes', ()
   expect(trips).toHaveLength(1614);
   // TASK-169 re-pinned (keep clear at crossings and garage mouths); TASK-204 re-pinned (changes
   // off the planned lane that prepare for a later turn).
-  expect(hashes).toEqual([4260632795, 558769496, 1478634736]);
+  expect(hashes).toEqual([1063110051, 2088598016, 2022296578]);
 });

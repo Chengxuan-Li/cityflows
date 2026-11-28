@@ -13,6 +13,7 @@ import {
 import type { Vec2 } from '../../src/geo/vec2';
 import { compile, type CompiledCity } from '../../src/network';
 import {
+  crossingArms,
   crossingEnabled,
   crossingPlacement,
   crossingSpan,
@@ -34,7 +35,7 @@ import type { City } from '../../src/schema';
 // TASK-215: the marking cases M1 to M6 of TASK-212's audit
 // (docs/findings/2026-11-19-geometry-audit/README.md), on the bundled Freiburg project; TASK-217:
 // crossings where OSM maps them (D1 of docs/findings/2026-11-19-aerial-check/) and solid lane
-// lines before stop lines (M7); TASK-229: N1 and N2 of TASK-224's re-check
+// lines before stop lines (M7); TASK-386: TASK-215's M3 and M5, M7 at signals only; TASK-229: N1 and N2 of TASK-224's re-check
 // (docs/findings/2026-11-19-aerial-recheck/); TASK-240: arrows of the junction ahead.
 
 let city: City;
@@ -347,6 +348,87 @@ test('M4: no keep-clear box on a crossing', () => expect(paintOnStripes().over).
 test('M4: no arrow on a crossing (r:467 at n:464)', () =>
   expect(paintOnStripes().arrows).toEqual([]));
 
+test('M3 (TASK-386): no default crossing over a trunk road, unless OSM maps one', () => {
+  // The B 31 at its ramps and T-nodes: n:446, n:78, n:79, n:242, n:913, n:1083.
+  const trunk = striped().filter((e) => e.road.roadClass === 'trunk');
+  expect(trunk.map((e) => e.road.id)).toEqual([]);
+  // A crossing way mapped over r:1692 at n:446, 5 m from the cut, keeps the crossing there.
+  const r = road('r:1692');
+  const [a, b] = [r.lanes[0]!, r.lanes.at(-1)!].map((i) => {
+    const l = net.lanes[i]!;
+    return pointAtDistance(l.polyline, l.cumulative, l.lengthM - 5);
+  }) as [Vec2, Vec2];
+  const out = (p: Vec2, q: Vec2) => ({ x: p.x + (p.x - q.x), y: p.y + (p.y - q.y) });
+  const [from, to] = [out(a, b), out(b, a)];
+  const node = (id: string, pos: Vec2) => ({ id, pos, layer: 0, provenance: { source: 'osm' } });
+  const mapped = {
+    roads: city.roads,
+    walk: {
+      nodes: { 'wn:1': node('wn:1', from), 'wn:2': node('wn:2', to) },
+      links: {
+        'wl:1': {
+          id: 'wl:1',
+          from: 'wn:1',
+          to: 'wn:2',
+          line: [from, to],
+          kind: 'crossing',
+          widthM: null,
+          provenance: { source: 'osm' },
+        },
+      },
+    },
+  } as unknown as Pick<City, 'roads' | 'walk'>;
+  expect(crossingEnabled(net, r, true, city)).toBe(false);
+  expect(crossingEnabled(net, r, true, mapped)).toBe(true);
+});
+
+test('M5 (TASK-386): a crossing is one straight band across its arm, and its walk link runs on it', () => {
+  // The audit's steps: n:11 4.1 m between the directions, n:276 2.3, n:18 2.0, n:4 1.6. Left as on
+  // main: n:403 (r:460, whose band would reach n:461's crossing: TASK-215 dropped one of the two,
+  // the doubled-crossing rule the owner declined), n:552 (r:1448, too short for a band clear of
+  // the far curb) and n:94, where a band costs an end stripes.
+  const steps = new Map<string, number>();
+  const ends = striped();
+  for (const node of net.nodes)
+    for (const arm of crossingArms(net, node)) {
+      const own = ends.filter((e) => arm.some((a) => a.road === e.road && a.atEnd === e.atEnd));
+      if (!own.length) continue;
+      const sum = arm.reduce((s, e) => ({ x: s.x + e.direction.x, y: s.y + e.direction.y }), {
+        x: 0,
+        y: 0,
+      });
+      const along = (p: Vec2) => (p.x * sum.x + p.y * sum.y) / Math.hypot(sum.x, sum.y);
+      const near = own.flatMap((e) =>
+        e.placement.stripes.map((s) =>
+          along({ x: (s[0]!.x + s[3]!.x) / 2, y: (s[0]!.y + s[3]!.y) / 2 }),
+        ),
+      );
+      const step = Math.max(...near) - Math.min(...near);
+      steps.set(node.id, Math.max(step, steps.get(node.id) ?? 0));
+    }
+  for (const id of ['n:11', 'n:276', 'n:18', 'n:4']) expect(steps.get(id), id).toBeLessThan(0.3);
+  expect(
+    [...steps]
+      .filter(([, step]) => step > 1)
+      .map(([id]) => id)
+      .sort(),
+  ).toEqual(['n:403', 'n:552', 'n:94']);
+  // A generated walk link crosses each lane at that lane's stripes (as T71.1, lane by lane).
+  let spans = 0;
+  for (const link of net.walk.links)
+    for (const span of link.generated ? (link.crossing?.spans ?? []) : []) {
+      const l = net.lanes[span.lane]!;
+      const r = net.roads[l.road]!;
+      const n = link.crossing!.node;
+      if (n < 0 || (r.from !== n && r.to !== n)) continue;
+      const stripes = crossingSpan(net, l, r.to === n, city);
+      if (!stripes) continue;
+      spans++;
+      expect(Math.abs(span.atM - (stripes.nearM + stripes.farM) / 2), l.id).toBeLessThan(0.3);
+    }
+  expect(spans).toBeGreaterThan(150);
+});
+
 test('M6: a stop line is one line across its approach, through every lane’s stop position', () => {
   let approaches = 0;
   for (const r of net.roads) {
@@ -555,9 +637,9 @@ test('TASK-257: crossings paint as OSM marks them; a project without the field p
   // (without the field 53 / 213 / 1,973 before TASK-255; with it 30 / 104 / 2,143).
   // TASK-348: the plain signalised crossings keep their crossings, drawn as lines (without the field
   // 1,939 to 1,959 dashes; with it 2,023 to 2,043). TASK-254: Freiburg rebuilt with tagged widths
-  // and `placement`: one dash more (without the field 1,960; with it 2,044).
-  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1960 });
-  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2044 });
+  // and `placement`: one dash more (without the field 1,960; with it 2,044); TASK-386: one more each (1,961 and 2,045).
+  expect(count({ roads: city.roads, walk: old })).toEqual({ ends: 44, zebra: 173, dashes: 1961 });
+  expect(count(city)).toEqual({ ends: 28, zebra: 97, dashes: 2045 });
   // The signalised crossing 648533265 over the Rotteckring at n:208, whose crossing nodes OSM
   // tags `crossing=traffic_signals` (the way itself is untagged), drew zebra stripes beside the
   // junction's broken lines: now broken lines only.
@@ -586,6 +668,30 @@ test('M7: lane lines are solid over the last 30 m before a stop line', () => {
     // Dashes before it, none shorter than its pattern's dash.
     expect(lines.length).toBeGreaterThan(5);
   }
+});
+
+test('M7 (TASK-386): a stop sign’s approach keeps its dashes; only a signal’s is solid', () => {
+  // The signal approach fixture with its junction turned into a stop-controlled one whose
+  // movements all give way (a stop line on every approach, as at a minor road's stop sign).
+  const result = compile(signalApproach());
+  if (!result.ok) throw new Error('fixture');
+  const n = result.compiled;
+  const centre = n.nodes.find((x) => x.signal)!;
+  Object.assign(centre, { control: 'stop', signal: null });
+  for (const i of centre.movements) n.movements[i]!.priority = 0;
+  let approaches = 0;
+  for (const r of n.roads.filter((x) => x.to === centre.idx)) {
+    if (!r.lanes.some((i) => approachMarkings(n, n.lanes[i]!).stop)) continue;
+    approaches++;
+    const { below, above } = roadMarkingGeometry(n, r);
+    const lines = [...below, ...above].filter((x) => x.role === 'lane' && x.kind === 'line');
+    expect(lines.length, r.id).toBeGreaterThan(5);
+    expect(
+      lines.every((x) => cumulativeLengths(x.points).at(-1)! <= 6.5),
+      r.id,
+    ).toBe(true);
+  }
+  expect(approaches).toBeGreaterThan(0);
 });
 
 test('M7: on Freiburg, solid lines start after a lane gain and run no more than 30 m', () => {

@@ -26,11 +26,11 @@ const pins = {
   // TASK-265: Freiburg's sidewalk openings follow the relocated crossings. Footways, steps
   // and footbridges are byte-identical to main's meshes.
   // TASK-385: the walk meshes follow Freiburg's tagged road widths and placement.
-  freiburg: '1d78a8eea2fb442e432c566a58d25ebb697db21b8c501e925629e31bb830e952',
-  munich: '85a9cdda5d900e047110a3f3713092910a1e164e5aebf30182bad1323eda1859',
+  freiburg: '0a58d2342425aadade26badd614b06d014969793382ac41bd06abc5389d65360',
+  munich: '752715a276569c898c3be085072de261d4cefe2d95320539cbe89c4ce55d6aea',
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
   // TASK-385: the A 81's placement shifts three lane blocks 1.75 m outward.
-  sindelfingen: '69505d309e36a450f38c81520066696f39afaa3b8288e181052258876ddc642a',
+  sindelfingen: '92ab9d0d1b3b9349812b5f71862be1e102a7dd4c98eb6015e3006941f6680446',
 };
 
 for (const [name, pin] of Object.entries(pins))

@@ -167,7 +167,7 @@ const baselines = {
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   grid: '94f4c0a0c54c607f58d079b290976c3b5429903d55353ac5f66bee1948e9aa5e',
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
-  town: '3595116920f094559c7d78b9cc1cfde9fa1b0773419b31a7df233ea8a4909e79',
+  town: '1b11017975d956b8794c1a515f41c1d981d4c344a1d1e39347d7c50276dcd860',
   // TASK-132: building passages (Munich 18 tracks, Sindelfingen 3) gain `covered`; with it
   // stripped every pin equals 2df05a1's.
   // TASK-152, TASK-156 and TASK-164 append 87 + 22 + 17 Munich bay departure connectors (lane connector lists too); with them
@@ -187,7 +187,7 @@ const baselines = {
   // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
   // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
-  'munich-donnersberger': '4e5020e454f3bf741d286c87c7d102884dcc1410d638f9ef28e6f403442fb394',
+  'munich-donnersberger': 'cd66fdb4dc4d561c8fe41185bd63b370bf31423d248dfb7d486692e10d774269',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -203,7 +203,7 @@ const baselines = {
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
   // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
   // TASK-385: the mapped A 81 placement opens the median between the carriageways.
-  'sindelfingen-a81': '8a0ceca1113293032313bd56b84428618385b1becf0406146717823eaf456371',
+  'sindelfingen-a81': 'd0575b21965a90c3be23ccc7508ce18e1d547a9417171d9acc5d72ede338a771',
 };
 const lampCounts = {
   grid: [0, 0],

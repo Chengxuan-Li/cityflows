@@ -357,8 +357,8 @@ test.each(
       // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
       // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
       // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
-      '907938549cb091bb1266ad22201525d50ccf19d09fce6ee40df594259191a814',
-      '741cf5660bbb6893febbfa55824038cf263df106c5fb3a863b64f3c8a6e9f64c',
+      '29df4f56dc1826af6d9af397b281eb5de7871c12c524020850e19a301de82208',
+      '5fbe6831ef1c0914ee0a0f6f4064e2ad9d2912e82a8d0a6fc4333e556151c120',
       14,
       79,
     ],
@@ -371,7 +371,7 @@ test.each(
       // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
       '2da8d908c917115109865f1999e75f66dd8ad50a34660747fbbd91a3d4419e3d',
       // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
-      '65cdef2fec6f763936f5ca07877a255044f303ecace9cf5db78f1cbf067ad10f',
+      'c3bcc9ed5d6b2f6b7e55e833ae9b3df3045054f36b0a9addf7da30a2259d709a',
       // TASK-351: Entenseestraße's loop, fed by a map entry and drained by an exit, is circulation.
       21,
       513,

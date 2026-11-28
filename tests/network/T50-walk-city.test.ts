@@ -38,7 +38,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-214: lanes through splits and merges (Munich: r:589, r:728, the n:27 and n:194 ramps).
           // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
           // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
-          '78e8401f3bd38a01a2d724d7909eafbd1692445a33a75f6f1d9f7c16a4f25325'
+          '0ae24706e6aa6fbc16cce5630154b1a594f0f895742e78b8ae2c7804edbd869f'
         : // TASK-214: lanes through splits and merges (Sindelfingen geometry moves by millimetres).
           // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
           // TASK-290: Sindelfingen's compiled garage connector c:1449 moves from r:97 to r:954.
@@ -47,7 +47,7 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
           // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
           // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
           // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-          'a65a08527e39b550442374c3a2869fcfcf2bb7ac67507118b4cf4b4e8fa51fe0',
+          '988530d5d21625b2a8d75d91de493a73cefc8ad85bd5d7cfa41c21344425ca4e',
     );
     const g = result.compiled.walk;
     const expected = name.startsWith('munich')

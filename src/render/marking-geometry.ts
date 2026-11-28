@@ -181,14 +181,21 @@ export function keepClearBoxes(
   if (sharedCarriageway(city.roads[lane.road]!, source)) return [];
   const crosswalks = [false, true].flatMap((atEnd) => {
     const span = crossingSpan(city, lane, atEnd, source);
-    return span
-      ? [
-          {
-            fromM: Math.min(span.nearM, span.farM) - LINE_CLEAR_M,
-            toM: Math.max(span.nearM, span.farM) + LINE_CLEAR_M,
-          },
-        ]
-      : [];
+    if (!span) return [];
+    // TASK-386: a band oblique to the lane (TASK-215's M5) reaches past its span at the
+    // centreline (Munich r:601), so the extent along the lane of the stripes on it counts too.
+    const road = city.roads[lane.road]!;
+    const along = crossingPlacement(city, road, atEnd, source)
+      .stripes.flat()
+      .map((p) => nearestOnPolyline(lane.polyline, p))
+      .filter((on) => on.away <= lane.widthM / 2 + 0.05)
+      .map((on) => on.along);
+    return [
+      {
+        fromM: Math.min(span.nearM, span.farM, ...along) - LINE_CLEAR_M,
+        toM: Math.max(span.nearM, span.farM, ...along) + LINE_CLEAR_M,
+      },
+    ];
   });
   const zones = keepClearZones(city)[lane.idx]!;
   const straight = { fromM: lane.taperStartM, toM: lane.lengthM - lane.taperEndM };
@@ -1110,8 +1117,14 @@ function splitAtRing(line: Vec2[], ring: Vec2[]) {
   return { inside, outside };
 }
 
-/** TASK-217 (M7, owner-approved, German practice): a lane line is solid over the last
- * `SOLID_M` before a stop line, over the last half of a line shorter than twice that. */
+/** TASK-217 and TASK-386 (M7, owner-approved, German practice): the lane lines of a signal
+ * approach are solid over the last `SOLID_M` before its stop line, as a Fahrstreifenbegrenzung
+ * (StVO Anlage 2 zu § 41 Abs. 1, Abschnitt 9 Markierungen, Zeichen 295: the line may not be
+ * crossed), laid out as the FGSV's RMS-1 (Richtlinien für die Markierung von Straßen, Teil 1)
+ * marks a Knotenpunktzufahrt's lane division: dashes (Zeichen 340) on the open road, solid in
+ * the approach's sorting stretch. 30 m is the lead's default for urban roads; OSM tags no
+ * marking length (the importer reads no `change:lanes`), so every road takes it, and the last
+ * half of a line shorter than twice that. */
 const SOLID_M = 30;
 
 /**
@@ -1119,13 +1132,15 @@ const SOLID_M = 30;
  * before the approach's stop line (`approachMarkings`), in metres back from the lane's stop
  * position: `SOLID_M`, or half the stop position on a short road, and no farther back than the
  * end of a lane gain's taper on either side (the added lane is entered across a dashed line);
- * none beside a lane that ends in a taper (its cars merge across the line).
+ * none beside a lane that ends in a taper (its cars merge across the line). TASK-386: only
+ * where the stop line is a signal's; a stop sign's approach keeps its dashes.
  */
 function solidBeforeStop(city: CompiledCity, road: CRoad, lane: CLane): number {
   const neighbour = city.lanes[lane.right]!;
   if (
     lane.taperEndM ||
     neighbour.taperEndM ||
+    city.nodes[road.to]!.signal === null ||
     !road.lanes.some((i) => approachMarkings(city, city.lanes[i]!).stop)
   )
     return 0;

@@ -77,7 +77,7 @@ const baseline = {
     // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
     // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
     // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-    compile: '22ed3b87ddabc9c799df509d9f227c2868b0cc2d39b9c17692c453b52b845cf8',
+    compile: '41395f496ab0a4a3cea1c1de4f768b2de15027c77528e1ec775d868147e1c3f6',
     // TASK-271: Sindelfingen's 48 passage roads at grade; a works block splits in two.
     // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
     arrows: 'c43a0a8fc7eedf498d1d19cae20bb2d0a93ac875729fea110b233c16a55da650',
@@ -100,8 +100,8 @@ const baseline = {
     // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
     // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
     // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-    compile: '97941451fe25e95587e1380378ec210400c74357908628c7299dfff0c773f90c',
-    arrows: '78c0c21190095a89060dd900a32a4edea30f717798d1988e618f806c1251ceca',
+    compile: 'e03d179f808a4b47d663c922d336665e0aaa79d87f3f7b4a0d9b2118b57acde0',
+    arrows: 'cc06806115691202721a281b752c89bd8d457dcb6e3f71e63a9c882497f69e34',
   },
 } as const;
 const hash = (value: unknown) =>
