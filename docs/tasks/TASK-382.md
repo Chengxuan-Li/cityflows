@@ -187,7 +187,7 @@ Main references are TASK-383's `R\t383\m-*-d*.json`, main `e6ffa10d` with T377 o
 
 | Sums | Main | `rs` |
 | --- | --- | --- |
-| Heathrow, 3 days | 2,567 completed, 1,299 landed, 1,268 departed, 71 go-arounds | 2,623, 1,330, 1,300, 68 |
+| Heathrow, 3 days | 2,567 completed, 1,299 landed, 1,270 departed, 71 go-arounds | 2,623, 1,330, 1,300, 68 |
 | Zurich, 3 days | 2,202, go-arounds 22 | 2,202, 22 |
 | Boston, 3 days | 2,956, go-arounds 101 | 2,956, 101 |
 | London City | 150, 0 | 150, 0 |
@@ -198,7 +198,7 @@ off.
 
 **Go-arounds.** The change is in their causes:
 - Go-arounds at commitment behind a tow fall from 13 to 3.
-- Those behind the arrival ahead rise from 26 to 35, with the extra landings.
+- Those behind the arrival ahead rise from 27 to 35, with the extra landings.
 - Those behind departures are about level, 31 → 30.
 
 On the peaks the arrival-side rise outweighed the tow-side fall: 18 → 21. Over whole days the tow-side fall is
