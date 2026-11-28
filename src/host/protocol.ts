@@ -2,6 +2,7 @@ import type { CompiledCity } from '../network';
 import type { Person, Scenario, TripRequest } from '../schema';
 import type { Metrics, PatchResult, VehicleSnapshot } from '../sim/types';
 import type { AirportWind } from '../sim/runway-configuration';
+import type { DebugRequest } from '../sim/debug-snapshot';
 
 export interface HostPatchResult extends PatchResult {
   timeS: number;
@@ -57,7 +58,7 @@ export type HostRequest =
   | { id: number; type: 'setSpeed'; multiplier: number }
   | { id: number; type: 'step'; steps: number }
   | { id: number; type: 'restart' }
-  | { id: number; type: 'snapshot' }
+  | { id: number; type: 'snapshot'; debug?: DebugRequest }
   | { id: number; type: 'metrics' }
   | { id: number; type: 'flightBoard' }
   | { id: number; type: 'setWind'; wind: AirportWind }

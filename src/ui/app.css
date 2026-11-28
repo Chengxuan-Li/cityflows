@@ -117,6 +117,22 @@
   --signal-idle: #8e8e93;
   --signal-served: #248a3d;
   --signal-conflict: #d70015;
+  /* TASK-400: debug overlay inks, each 3:1 on the map canvas, with a casing in --debug-halo;
+     the ramp runs low to high (elevation, overdraw). */
+  --debug-blue: #0a5fd6;
+  --debug-teal: #00788a;
+  --debug-green: #1e7d32;
+  --debug-amber: #a65400;
+  --debug-red: #c4161c;
+  --debug-purple: #7a3fc8;
+  --debug-pink: #c2185b;
+  --debug-grey: #545a61;
+  --debug-halo: #ffffff;
+  --debug-ramp-0: #3a6fd8;
+  --debug-ramp-1: #1ba3a3;
+  --debug-ramp-2: #5cb84a;
+  --debug-ramp-3: #e8b730;
+  --debug-ramp-4: #d9482b;
   --schematic-road: #dcded2;
   --schematic-node: #e8e8dc;
   /* Glyphs drawn in CSS. */
@@ -215,6 +231,20 @@
   --signal-idle: #8e8e93;
   --signal-served: #30d158;
   --signal-conflict: #ff453a;
+  --debug-blue: #5aa9ff;
+  --debug-teal: #3fd0e0;
+  --debug-green: #4cd264;
+  --debug-amber: #ffb340;
+  --debug-red: #ff6961;
+  --debug-purple: #bf8cff;
+  --debug-pink: #ff6fae;
+  --debug-grey: #b4b4ba;
+  --debug-halo: #141517;
+  --debug-ramp-0: #5b8ff0;
+  --debug-ramp-1: #2cc2c2;
+  --debug-ramp-2: #74d062;
+  --debug-ramp-3: #f2c94c;
+  --debug-ramp-4: #ef6a4a;
   --schematic-road: #48484a;
   --schematic-node: #3a3a3c;
   --glyph-popup: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' rx='4' fill='%230a84ff'/%3E%3Cpath d='M5 6.5 8 3.75l3 2.75M5 9.5l3 2.75 3-2.75' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -1168,6 +1198,55 @@ input[type='file']::file-selector-button {
   min-width: 0;
   overflow: hidden;
   background: var(--canvas);
+}
+
+/* TASK-400: the debug overlays over both map canvases, and their hover tooltip. */
+.debug-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tooltip.debug-tip {
+  top: 0;
+  left: 0;
+  visibility: visible;
+  opacity: 1;
+  translate: none;
+  transition: none;
+}
+
+.debug-views {
+  display: grid;
+  gap: 4px;
+}
+
+.debug-rendered {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.debug-views p {
+  margin: 0;
+  font-size: var(--text-small);
+}
+
+.debug-group {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.debug-group legend {
+  padding: 6px 0 2px;
+  color: var(--label-secondary);
+  font-size: var(--text-small);
 }
 
 .map {

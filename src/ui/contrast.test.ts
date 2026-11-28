@@ -70,6 +70,10 @@ const graphics: [string, string[]][] = [
     (series): [string, string[]] => [`--chart-${series}`, ['--sidebar']],
   ),
   ['--heat', ['--sidebar']],
+  // TASK-400: debug overlay inks on the map canvas and on their own casing.
+  ...['blue', 'teal', 'green', 'amber', 'red', 'purple', 'pink', 'grey'].map(
+    (ink): [string, string[]] => [`--debug-${ink}`, ['--canvas', '--debug-halo']],
+  ),
 ];
 
 describe.each(Object.entries(appearances))('%s appearance', (_, tokens) => {
