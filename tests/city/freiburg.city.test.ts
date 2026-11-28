@@ -306,7 +306,8 @@ test('Freiburg passes its own gate at the showcase demand', () => {
   // onto the mapped nodes (1,528 to 1,526 completed, 62.5 to 62.2 s).
   // TASK-279: unmarked walkers wait for a gap. TASK-362's shared stop-line hold is in place,
   // and the morning completes 1,527 trips without gridlock.
-  expect(morning.stateHash).toBe(55277987);
+  // TASK-381: set-back unmarked exits release their queue reserve (1,528 trips, 59.6 s).
+  expect(morning.stateHash).toBe(3430388558);
   expect(morning.failedByReason.gridlocked).toBe(0);
   expect(morning.stalledHeads).toBe(0);
   expect(morning.failedByReason.no_route).toBe(0);

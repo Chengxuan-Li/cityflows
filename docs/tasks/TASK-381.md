@@ -1,6 +1,6 @@
 # TASK-381 — Queue reserves at unmarked crossings: why Munich needs them, and a rule that serves all three cities
 
-Status: parked 2026-11-27 (diagnosis and screens `606381fd`; simulator unchanged): V2 (reserve on approaches, released on exits with room before the crossing) London City 385.7 to 209.7 s, Boston gridlocks 54 to 39, Munich fixed −6.6%, but Munich actuated +7.9% (seeds 1–3). Started by the lead in the 10 h unsupervised run; city work merges under the traffic merge rule and the audit
+Status: merged 2026-11-28 (`9cbb7f80`, V2 by default; owner accepted the trade-off): London City 385.7 to 209.7 s, Boston landside gridlocks 54 to 39, Freiburg 61.0 to 59.6 s, every showcase passes; Munich 0.15 actuated +7.86%, fixed −6.57%; Munich full demand fixed (seeds 1–5, record) +7.51% mean delay with 0.6% more trips, gridlocks 843 to 778, stalled heads 12 to 21.
 tolerance). Owner: Codex (gpt-6.2-sol, high). Base: main.
 
 ## Finding (TASK-378, TASK-379)
@@ -201,3 +201,86 @@ unlinking its junction. The shared dependency target was left in place.
 | `npm run test:city` | `Test Files 77 passed (77)` · `Tests 292 passed \| 1 skipped (293)` · `Duration 2105.29s` |
 | `npm run test:traffic:light` | `Test Files 2 passed (2)` · `Tests 5 passed \| 1 expected fail (6)` · `Duration 290.45s` |
 | `npm run test:e2e:light` | `63 passed (4.5m)` on port 5393 |
+
+## Merge (owner accepted V2, 2026-11-28)
+
+V2 is the default on this branch from main `2d7fe75f`. The owner accepted the actuated
+Munich delay trade-off for London City and Boston. None of the gate floors changed.
+
+Cells are completed / mean delay (s) / worst visit (s) / gridlocked. City mornings use demand 0.15, seed 1, mode choice on and bundled controls. All measurements end at 10:00.
+
+| Showcase or probe | Main | V2 | Main gate | V2 gate |
+| --- | --- | --- | --- | --- |
+| London City Airport | 1,993 / 385.7 / 822.3 / 0 | 1,998 / 209.7 / 712.2 / 0 | Pass | Pass |
+| Freiburg | 1,527 / 61.0 / 199.5 / 0 | 1,528 / 59.6 / 140.0 / 0 | Pass | Pass |
+| Boston Logan landside | 5,558 / 1,734.6 / 3,216.0 / 54 | 5,526 / 1,728.8 / 4,508.3 / 39 | Record only | Record only |
+| Heathrow | 4,033 / 205.4 / 896.1 / 0 | 4,048 / 213.7 / 861.5 / 0 | Pass | Pass |
+| York | 1,801 / 84.7 / 156.4 / 0 | 1,799 / 85.4 / 175.2 / 0 | Pass | Pass |
+| Munich Donnersbergerbrücke | 2,581 / 84.0 / 562.0 / 0 | 2,573 / 97.6 / 370.1 / 0 | Pass | Pass |
+| Sindelfingen A81 | 444 / 17.1 / 90.3 / 0 | 444 / 17.1 / 90.3 / 0 | Pass | Pass |
+| Philadelphia Center City | 4,679 / 153.8 / 579.6 / 0 | 4,695 / 149.3 / 374.5 / 0 | Pass | Pass |
+| Lübeck Altstadt | 2,488 / 119.5 / 78.9 / 0 | 2,487 / 125.5 / 179.6 / 0 | Pass | Pass |
+| Zurich Airport | 4,277 / 111.8 / 246.9 / 0 | 4,278 / 112.2 / 246.9 / 0 | Pass | Pass |
+
+Freiburg delay changed by -1.4 s (within the 5 s band).
+
+Munich 0.15, actuated, mode choice off. Worst visit is on the six watched loop roads.
+
+| Seed | Main | V2 | Drain, main → V2 |
+| --- | --- | --- | --- |
+| 1 | 5,312 / 615.7 / 268.6 / 0 | 5,311 / 590.2 / 176.5 / 1 | Pass → Pass |
+| 2 | 5,311 / 580.7 / 247.1 / 0 | 5,311 / 706.4 / 354.9 / 0 | Pass → Pass |
+| 3 | 5,312 / 610.7 / 231.9 / 0 | 5,312 / 652.6 / 264.0 / 0 | Pass → Pass |
+| Mean completed and delay, max visit, total gridlocks | 5,311.7 / 602.4 / 268.6 / 0 | 5,311.3 / 649.7 / 354.9 / 1 | Delay +7.86% |
+
+Munich 0.15, fixed, mode choice off. Worst visit is on the six watched loop roads.
+
+| Seed | Main | V2 | Drain, main → V2 |
+| --- | --- | --- | --- |
+| 1 | 5,307 / 704.8 / 175.4 / 2 | 5,302 / 674.6 / 179.3 / 3 | Pass → Pass |
+| 2 | 5,304 / 831.7 / 229.4 / 1 | 5,309 / 799.4 / 228.2 / 2 | Pass → Pass |
+| 3 | 5,300 / 840.9 / 237.1 / 1 | 5,306 / 747.1 / 255.4 / 0 | Pass → Pass |
+| Mean completed and delay, max visit, total gridlocks | 5,303.7 / 792.4 / 237.1 / 4 | 5,305.7 / 740.4 / 255.4 / 5 | Delay -6.57% |
+
+Munich full demand, fixed, mode choice off. Worst visit is citywide.
+
+| Seed | Main | V2 | Stalled heads, main → V2 |
+| --- | --- | --- | --- |
+| 1 | 3,178 / 1,725.0 / 10,500.1 / 173 | 3,265 / 1,763.9 / 10,489.1 / 166 | 5 → 5 |
+| 2 | 3,032 / 1,842.9 / 9,636.7 / 182 | 3,200 / 2,021.1 / 10,200.2 / 160 | 0 → 2 |
+| 3 | 3,445 / 1,787.6 / 10,501.2 / 170 | 3,147 / 1,968.1 / 10,452.5 / 164 | 3 → 3 |
+| 4 | 3,350 / 1,816.3 / 10,615.8 / 155 | 3,134 / 1,896.2 / 10,232.6 / 136 | 2 → 7 |
+| 5 | 3,107 / 1,809.7 / 10,368.0 / 163 | 3,468 / 2,006.3 / 10,215.6 / 152 | 2 → 4 |
+| Mean completed and delay, max visit, total gridlocks | 3,222.4 / 1,796.3 / 10,615.8 / 843 | 3,242.8 / 1,931.1 / 10,489.1 / 778 | Delay +7.51% |
+
+All nine showcases pass, including Heathrow and York. London City's 712.2 s visit and
+Heathrow's 861.5 s visit are below 900 s. Boston was road-only and remains out of the
+showcase. All 12 Munich light runs pass the TASK-154 drain checks: no ring lasting at least
+300 s, no watched visit over 900 s, no vehicle stopped over the box wait on an inner
+link at 10:00, and no stalled heads. The full-demand matrix is for the record.
+
+### Re-pins
+
+| File | State | Old | New |
+| --- | --- | ---: | ---: |
+| `tests/city/freiburg.city.test.ts` | Freiburg at 10:00 | `55277987` | `3430388558` |
+| `tests/traffic/bundled-airport-load.test.ts` | London City after 60 s | `1229324366` | `483806754` |
+| `tests/traffic/bundled-airport-load.test.ts` | Zurich after 60 s | `2094351646` | `2685203968` |
+| `tests/traffic/bundled-airport-load.test.ts` | Boston after 60 s | `2047946547` | `2439037447` |
+| `tests/traffic/bundled-airport-load.test.ts` | Heathrow after 60 s | `4040218530` | `2497667952` |
+
+Compiled graphs, loaded-state hashes, flight boards and `bench/traffic-baseline.json`
+are unchanged. No OSM, curation, signal programs, fixtures, or dependencies changed.
+
+### Verification
+
+| Command | Final lines |
+| --- | --- |
+| `npm run check` | `Test Files  309 passed \| 1 skipped (310)` · `Tests  2244 passed \| 2 skipped (2246)` · `✓ built in 2.19s` |
+| `npm run test:city` | `Test Files  77 passed (77)` · `Tests  292 passed \| 1 skipped (293)` · `Duration  2979.24s (tests 98%, import 1%)` |
+| `npm run test:traffic:light` | `Test Files  2 passed (2)` · `Tests  5 passed \| 1 expected fail (6)` · `Duration  387.60s (tests 100%)` |
+| `npm run test:e2e:light` | `63 passed (6.1m)` |
+| `Airport startup pins (main and V2)` | `Test Files  1 passed (1)` · `Tests  4 passed (4)` |
+
+The Playwright tier used port 5394. Raw probe results and tier logs are in
+`D:/cityflows-wt/330-pilot/R/t381m/out`.

@@ -1,5 +1,6 @@
 import { headingAtDistance } from '../geo/polyline';
 import type { CMovement, CompiledCity } from '../network';
+import { reservesCrossingSpace } from '../network/keep-clear';
 import { railTimetable } from '../network/trams';
 import { vehicleClasses, type SimParams } from '../schema';
 import { reachableLanes, type Route } from '../routing';
@@ -102,16 +103,18 @@ export function createIntersections(
     compiled.lanes.map((lane) => lane.allowed.includes(name)),
   );
   const reservedSpace = new Float64Array(compiled.lanes.length);
-  // TASK-165: the far edge of each lane's exit-side crosswalk (a marked crossing at the node the
-  // lane leaves), 0 without one. Exit storage is measured from there, so a car is admitted only
-  // when its whole body fits beyond the stripes and does not queue across them.
+  // TASK-165: measure exit storage from the far edge of the crossing at the node the lane
+  // leaves when that crossing keeps its queue reserve (TASK-381).
   const crosswalkEnd = new Float64Array(compiled.lanes.length);
-  for (const link of compiled.walk.links)
-    for (const span of link.crossing?.spans ?? []) {
+  for (const { crossing } of compiled.walk.links) {
+    if (!crossing) continue;
+    for (const span of crossing.spans) {
       const lane = compiled.lanes[span.lane]!;
-      if (compiled.roads[lane.road]!.from !== link.crossing!.node) continue;
+      if (compiled.roads[lane.road]!.from !== crossing.node) continue;
+      if (!reservesCrossingSpace(compiled, crossing, span)) continue;
       crosswalkEnd[lane.idx] = Math.max(crosswalkEnd[lane.idx]!, span.atM + span.halfM);
     }
+  }
   type GroupPath = { movements: number[]; route: Route; step: number };
   // TASK-211: per-vehicle arrays are allocated whole; a sparse `[]` written at large ids turns
   // into a dictionary, and these are read for every car each step.

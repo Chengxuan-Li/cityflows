@@ -2501,10 +2501,10 @@ Step sequence, in this order every step:
      take, else on the lane after it. A red or ungranted movement is a standing obstacle at
      the lane end (TASK-072: at the lane's `stopM`, see below); an arrival connector is a
      standing obstacle at its position when the place cannot accept the vehicle.
-   - TASK-169, keep clear. `keepClearZones` (`src/network/keep-clear.ts`) gives each lane's
-     zones: the span of every marked crossing over it, and the mouths of lots and garages with
-     spaces (implicit garages included) on public lanes, 8 m before to 6.5 m past each exit
-     connector on its lane and 7 m either side of it on each lane of its street between the
+   - TASK-169, keep clear. `keepClearZones(city, true)` (`src/network/keep-clear.ts`) gives each lane's
+     queue zones: crossing spans with a static queue reserve (below) and the mouths of lots and
+     garages with spaces (implicit garages included) on public lanes, 8 m before to 6.5 m past
+     each exit connector on its lane and 7 m either side of it on each lane of its street between the
      facility and that lane. A car whose front would stand (behind its leader, projected by the
      leader's braking distance but no farther than behind the leader's own stand, or at a stop)
      with its body on a zone stands 0.5 m short of the zone instead, and short of any zone that
@@ -2571,11 +2571,14 @@ Step sequence, in this order every step:
      the exit also consume its space. After `boxWaitS` standing, admission needs actual rear
      clearance; waiting never replaces it with front clearance. Controlled movements recheck
      this storage when the front actually enters, since an approach grant can become stale.
-     TASK-165: the storage, for a single movement and for a group's exit alike, is measured from
-     the far edge of the exit lane's exit-side crosswalk (the span of a marked crossing at the
-     node the lane leaves), so an admitted car's whole body and gap fit beyond the stripes and it
-     does not queue across them. A car can still stand there when forced: a destination queue it
-     could not foresee, or a grant that went stale.
+     TASK-165/TASK-381: exit storage starts at the far edge of a crossing with a static queue
+     reserve at the node the lane leaves, or at the lane cut if there is no such reserve.
+     The reserve also governs queued stopping positions. Marked and signal crossings retain
+     it, as do unmarked spans on junction-group inner roads and on conflicting approaches
+     anchored to the crossing node. On other unmarked exits with conflicting movements, the
+     reserve applies only if the near edge is less than 5 m past the lane cut (a 4.5 m design
+     car plus 0.5 m clearance). The ordinary body-plus-gap storage check, walker priority
+     and active holds, parking-mouth reserves, and the parking-arrival interlock are unchanged.
    - TASK-131 Phase 3: group entries check the entire routed path through inner roads and the
      final exit again when the front crosses the entry, including cars already admitted whose
      exit space is reserved. Forecasts stop at a leader, destination connector or red stop line,

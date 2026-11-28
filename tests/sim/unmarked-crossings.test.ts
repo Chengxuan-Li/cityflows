@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { buildCity } from '../../src/fixtures/build-city';
 import type { CompiledCity } from '../../src/network';
+import { keepClearZones } from '../../src/network/keep-clear';
 import type { City, CrossingMarking, Scenario, TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { createIntersections } from '../../src/sim/intersection';
 import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
 import { createVehicles } from '../../src/sim/vehicle';
 import { createWalkers } from '../../src/sim/walkers';
@@ -306,4 +308,46 @@ test('TASK-373: GB and DE use the same rule for straight and turning-out traffic
   expect(priority('de')).toEqual([Infinity, Infinity]);
   for (const country of ['gb', 'ch', undefined, 'fr'])
     expect(priority(country)).toEqual(priority('de'));
+});
+
+test.each([
+  { imported: true, country: 'de', start: 4, reserve: true },
+  { imported: true, country: 'de', start: 6.2, reserve: false },
+  { imported: true, country: 'de', start: 9, reserve: false },
+  { imported: true, country: 'us', start: 9, reserve: false },
+  { imported: false, country: undefined, start: 9, reserve: true },
+])('TASK-381: queue reserve with $country and $start m to the seam', (c) => {
+  const { city } = tStreet(c.imported);
+  city.country = c.country;
+  const compiled = setup(city);
+  const crossing = eastCrossing(compiled)[0]!.crossing!;
+  const span = crossing.spans.find(
+    ({ lane }) => compiled.roads[compiled.lanes[lane]!.road]!.from === crossing.node,
+  )!;
+  span.atM = c.start + span.halfM;
+  const lane = compiled.lanes[span.lane]!;
+  const entrySpan = crossing.spans.find(
+    ({ lane }) => compiled.roads[compiled.lanes[lane]!.road]!.to === crossing.node,
+  )!;
+  const entryLane = compiled.lanes[entrySpan.lane]!;
+  entrySpan.atM = entryLane.lengthM - 12;
+  const movement = compiled.movements[lane.in[0]!]!;
+  const vehicles = createVehicles(2, compiled.lanes.length, compiled.movements.length);
+  const params = DEFAULT_SIM_PARAMS;
+  const junction = createIntersections(compiled, vehicles, params);
+  vehicles.insert(0, movement.fromLane, compiled.lanes[movement.fromLane]!.stopM);
+  vehicles.insert(1, lane.idx, 11.1); // A 4.5 m leader leaves 6.6 m behind it.
+
+  expect(junction.blockedExit(0, movement)).toBe(c.reserve ? 'exit-full' : null);
+  expect(keepClearZones(compiled, true)[lane.idx]!.some(({ kind }) => kind === 'crosswalk')).toBe(
+    c.reserve,
+  );
+  expect(keepClearZones(compiled)[lane.idx]!.some(({ kind }) => kind === 'crosswalk')).toBe(true);
+  expect(
+    keepClearZones(compiled, true)[entryLane.idx]!.some(({ kind }) => kind === 'crosswalk'),
+  ).toBe(true);
+
+  // Even without a crossing reserve, a car and its 2 m gap cannot fit in 6.4 m.
+  vehicles.position[1] = 10.9;
+  expect(junction.blockedExit(0, movement)).not.toBeNull();
 });
