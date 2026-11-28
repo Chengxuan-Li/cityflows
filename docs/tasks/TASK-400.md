@@ -1,8 +1,8 @@
 # TASK-400 — Debug views: overlays and shading for developers
 
-Status: PR open 2026-11-27 (Claude). First written as TASK-362 on `task/362-debug-views` (2026-11-26); renumbered
-TASK-400 as main took TASK-362 (two-controls signal fix) and TASK-373 to TASK-383 meanwhile; the owner chose TASK-400, clear of the numbers new contracts take. Work stays on
-`task/362-debug-views`; the lead reviews. A first Codex run was stopped by the owner; its unreviewed partial work is on `wip/362-debug-views-codex`.
+Status: merged 2026-11-28 (`ba372061`, PR #10, Claude). First written as TASK-362 on `task/362-debug-views` (2026-11-26); renumbered
+TASK-400 as main took TASK-362 (two-controls signal fix) and TASK-373 to TASK-383 meanwhile; the owner chose TASK-400, clear of the numbers new contracts take. Work was on
+`task/362-debug-views`. A first Codex run was stopped by the owner; its unreviewed partial work is on `wip/362-debug-views-codex`.
 
 ## Why
 
