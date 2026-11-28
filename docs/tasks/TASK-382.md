@@ -281,5 +281,5 @@ Go-arounds by cause, both on against main:
 | `npm run test:e2e:light` | 63 passed (5.6 min), port 5395 |
 | `tests/traffic/bundled-airport-load.test.ts` | 4 passed (91.45 s) |
 
-Runs: `D:\cityflows-wtØ-pilot\R	382\merge\` (`c-*`: both on; `rs-p*`: `T383=0`; `c2-lhr-d2`: re-run with
+Runs: `D:\cityflows-wt\330-pilot\R\t382\merge\` (`c-*`: both on; `rs-p*`: `T383=0`; `c2-lhr-d2`: re-run with
 TASK-384's checker).
