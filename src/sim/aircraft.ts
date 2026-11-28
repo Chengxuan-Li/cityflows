@@ -819,6 +819,8 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     ?.env;
   // TASK-377: on by default (owner gate: airports not worse, tail stops 3 to 1); T377=0 turns it off.
   const reserveExitMargin = env?.T377 !== '0';
+  const finishVacating = reserveExitMargin && env?.T383 === '1';
+  const reserveBehindMovingLeader = reserveExitMargin && env?.T383 === '2';
   const random = createRandom(seed).derive('aircraft');
   const crafts: Craft[] = [];
   const queue: number[] = [];
@@ -3997,6 +3999,7 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
       if (!own || own.gates[0]?.holdM !== -Infinity || exitEdge(own) !== exitEdge(leg)) continue;
       if (leaderPastS(o, own, pastM + o.lengthM / 2) <= exitS) leaving.add(o);
     }
+    const ignore = new Set([...yielding.keys(), ...leaving]);
     // ICAO Doc 4444 §7.10: vacate before holding on the exit. A stopped leader can be far
     // enough ahead to allow landing, but still hold a rear claim where the lander needs its
     // braking margin. Reserve through the actual taxi stop in that case, not just to its nose.
@@ -4012,8 +4015,25 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           Infinity
       )
         want = through;
+      else if (
+        reserveBehindMovingLeader &&
+        through > want &&
+        [...leaving].some(
+          (o) =>
+            o.mode === 'ground' &&
+            o.speedMps > 0.3 &&
+            o.lengthM < craft.lengthM &&
+            o.leg!.gates[0]?.holdM === -Infinity &&
+            !o.leg!.gates[0].released &&
+            exitEdge(o.leg!) === exitEdge(leg),
+        ) &&
+        firstConflict(craft, leg, want, through, ignore) === Infinity
+      ) {
+        // A shorter leader can be clear of the runway but still leave too little room for
+        // the longer follower to stop. Keep the extra room if no other claim needs it.
+        want = through;
+      }
     }
-    const ignore = new Set([...yielding.keys(), ...leaving]);
     // Ground aircraft whose claims reach into that stretch give way if they can still stop.
     for (
       let tries = 0;
@@ -5372,6 +5392,33 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     counts.goArounds++;
   }
 
+  /** The claim ends at the rear margin of an ordered arrival ahead on the same directed piece. */
+  function exitLeaderRear(craft: Craft, leg: Leg) {
+    const piece = leg.pieces.find((p) => p.startM <= craft.claimHi && craft.claimHi < p.endM);
+    if (!piece) return false;
+    const endE = edgeStation(piece, craft.claimHi);
+    return craft.waits.some(({ leg: on, pred, predLeg }) => {
+      if (
+        on !== leg ||
+        pred.mode !== 'ground' ||
+        pred.leg !== predLeg ||
+        pred.runway !== craft.runway ||
+        predLeg.gates[0]?.holdM !== -Infinity ||
+        pred.speedMps > 0.3 ||
+        pred.claimLo + margin > pred.stationM - pred.lengthM / 2 + 0.01
+      )
+        return false;
+      return predLeg.pieces.some(
+        (p) =>
+          p.edge === piece.edge &&
+          p.toE > p.fromE === piece.toE > piece.fromE &&
+          p.startM <= pred.claimLo &&
+          pred.claimLo < p.endM &&
+          Math.abs(edgeStation(p, pred.claimLo) - endE) <= 0.02,
+      );
+    });
+  }
+
   function stepGround(craft: Craft, timeS: number) {
     const leg = craft.leg!;
     const p = fixedWing(craft);
@@ -5469,7 +5516,24 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
     const gate = leg.gates.find((g) => !g.granted);
     if (gate) stop = Math.min(stop, gate.holdM);
     // Claims end at the leg's end, where the next leg takes over, or at its order's stop.
-    if (craft.claimHi < capHi - 1e-6) stop = Math.min(stop, craft.claimHi - margin - half);
+    if (craft.claimHi < capHi - 1e-6) {
+      let claimStop = craft.claimHi - margin - half;
+      const landing = leg.gates[0];
+      // ICAO Doc 4444 §7.10: a leader moving at commitment can stop before the follower has
+      // vacated. Finish clearing inside the claim already held, using the leader's rear margin
+      // for separation instead of stacking both margins. The runway gates and order still bind.
+      if (
+        finishVacating &&
+        landing?.holdM === -Infinity &&
+        !landing.released &&
+        claimStop < landing.vacateM + half &&
+        s + brake + WAIT_SHORT_M >= claimStop &&
+        craft.claimHi >= safeOf(craft, leg) + half &&
+        exitLeaderRear(craft, leg)
+      )
+        claimStop = safeOf(craft, leg);
+      stop = Math.min(stop, claimStop);
+    }
     stop = Math.max(Math.min(stop, cap - WAIT_SHORT_M), s);
     // A stop moved back by a new order is still within braking reach (canWaitAt), and so is a
     // stop on a re-routed leg, whose plan the re-route dropped while moving (TASK-320: Zurich
