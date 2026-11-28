@@ -1,11 +1,12 @@
 import { headingAtDistance, nearestOnPolyline, pointAtDistance } from '../geo/polyline';
 import type { CompiledCity } from './types';
+import type { CrossingSpan, CWalkLink } from './walk';
 
 /**
  * TASK-169: a stretch of a lane that queued traffic keeps clear (architecture section 8, keep
  * clear): no vehicle stops with its body over it unless the space beyond takes its whole body.
- * `crosswalk`: the span of a marked crossing (zebra or signal) over the lane. `mouth`: where
- * cars leaving a lot or garage join the lane or cross it, drawn as a keep-clear marking.
+ * `crosswalk`: a pedestrian crossing. `mouth`: where cars leaving a lot or garage join
+ * the lane or cross it, drawn as a keep-clear marking.
  */
 export interface KeepClearZone {
   lane: number;
@@ -25,19 +26,48 @@ export const MOUTH_AFTER_M = 6.5;
 export const MOUTH_CROSSED_M = 7;
 
 const cache = new WeakMap<CompiledCity, KeepClearZone[][]>();
+const queueCache = new WeakMap<CompiledCity, KeepClearZone[][]>();
+
+/** TASK-381: keep junction approaches open to walkers. On exits, don't reserve the far side
+ * of an unmarked span when a design car (4.5 m) can stand clear of the junction and 0.5 m
+ * short of the span. StVO §11(1) and the UK Highway Code rules 151 and 192 motivate keeping
+ * junctions and crossings clear, not the 5 m model distance. Walker priority (including
+ * Uniform Vehicle Code §§11-502–503 in TASK-373) and active holds are separate. */
+export function reservesCrossingSpace(
+  city: CompiledCity,
+  crossing: NonNullable<CWalkLink['crossing']>,
+  span: CrossingSpan,
+): boolean {
+  if (crossing.control !== 'unmarked') return true;
+  const lane = city.lanes[span.lane]!;
+  const road = city.roads[lane.road]!;
+  const conflicts = (idx: number) => city.movements[idx]!.conflicts.length > 0;
+  return (
+    road.group !== undefined ||
+    (span.atM - span.halfM < 5 && lane.in.some(conflicts)) ||
+    (road.to === crossing.node && lane.out.some(conflicts))
+  );
+}
 
 /**
  * The keep-clear zones of each lane, sorted by `fromM`, overlapping zones of a kind merged.
  * Mouths are the exits of lots and garages that have spaces, on public lanes (not lot aisles or
  * a junction group's inner roads): on the exit lane around the connector, and on every lane of
  * the exit's street that lies between the facility and the exit lane, which its cars cross.
+ * `queueOnly` excludes crossings without a static reserve, not from other uses such as a
+ * parking lot's manoeuvre interlock.
  */
-export function keepClearZones(city: CompiledCity): KeepClearZone[][] {
-  let zones = cache.get(city);
+export function keepClearZones(city: CompiledCity, queueOnly = false): KeepClearZone[][] {
+  const selected = queueOnly ? queueCache : cache;
+  let zones = selected.get(city);
   if (zones) return zones;
-  const byLane = city.lanes.map((): KeepClearZone[] => []);
-  for (const link of city.walk.links)
-    for (const span of link.crossing?.spans ?? []) {
+  const byLane = queueOnly
+    ? keepClearZones(city).map((lane) => lane.filter((zone) => zone.kind === 'mouth'))
+    : city.lanes.map((): KeepClearZone[] => []);
+  for (const { crossing } of city.walk.links) {
+    if (!crossing) continue;
+    for (const span of crossing.spans) {
+      if (queueOnly && !reservesCrossingSpace(city, crossing, span)) continue;
       const lane = city.lanes[span.lane]!;
       byLane[lane.idx]!.push({
         lane: lane.idx,
@@ -46,6 +76,23 @@ export function keepClearZones(city: CompiledCity): KeepClearZone[][] {
         kind: 'crosswalk',
       });
     }
+  }
+  if (!queueOnly) addMouthZones(city, byLane);
+  zones = byLane.map((list) => {
+    list.sort((a, b) => a.fromM - b.fromM || a.kind.localeCompare(b.kind));
+    const merged: KeepClearZone[] = [];
+    for (const zone of list) {
+      const last = merged.findLast((z) => z.kind === zone.kind);
+      if (last && zone.fromM <= last.toM) last.toM = Math.max(last.toM, zone.toM);
+      else merged.push({ ...zone });
+    }
+    return merged.sort((a, b) => a.fromM - b.fromM);
+  });
+  selected.set(city, zones);
+  return zones;
+}
+
+function addMouthZones(city: CompiledCity, byLane: KeepClearZone[][]) {
   const aisles = new Set(city.lots?.flatMap((lot) => lot.aisles) ?? []);
   const departures = new Set(
     city.parkingSpaces?.flatMap((s) => (s.departure === undefined ? [] : [s.departure])) ?? [],
@@ -91,16 +138,4 @@ export function keepClearZones(city: CompiledCity): KeepClearZone[][] {
       }
     }
   }
-  zones = byLane.map((list) => {
-    list.sort((a, b) => a.fromM - b.fromM || a.kind.localeCompare(b.kind));
-    const merged: KeepClearZone[] = [];
-    for (const zone of list) {
-      const last = merged.findLast((z) => z.kind === zone.kind);
-      if (last && zone.fromM <= last.toM) last.toM = Math.max(last.toM, zone.toM);
-      else merged.push({ ...zone });
-    }
-    return merged.sort((a, b) => a.fromM - b.fromM);
-  });
-  cache.set(city, zones);
-  return zones;
 }

@@ -52,6 +52,15 @@ describe('exemptRunwayPair', () => {
     expect(exemptRunwayPair(lined(0), lined(300, '27'))).toBe(false);
     expect(exemptRunwayPair(lined(0, null), lined(300, null))).toBe(false);
   });
+  it('keeps them in line while the front one still turns onto the runway (TASK-367)', () => {
+    // As Heathrow peak seed 1 at 08:42: the front one, 1.1 km ahead, still swings onto 27R.
+    const rear = pose('line-up', 1268, Math.PI, '27R');
+    const turning = (heading: number) => pose('line-up', 144, heading, '27R');
+    expect(exemptRunwayPair(rear, turning(-0.35))).toBe(true);
+    expect(exemptRunwayPair(turning(-1.12), rear)).toBe(true);
+    // One turning in beside it (nose past its tail) is still a conflict, whichever heading.
+    expect(exemptRunwayPair(pose('line-up', 1250, -Math.PI / 2, '27R'), rear)).toBe(false);
+  });
   it('does not exempt a crossing ahead of a take-off roll', () => {
     expect(exemptRunwayPair(pose('taxi', 300), pose('takeoff-roll', 0))).toBe(false);
   });
