@@ -139,8 +139,9 @@ The go-arounds rise 18 → 21 but are no longer caused by tows: main's five peak
 landing stream: 6.0 % of landings on main, 6.3 % on `rs`. This is the trade-off the owner accepted for TASK-363,
 now against the not-higher gate.
 
-**`T380=p` on top.** The branch was merged with `task/380-stand-pairing` (`e6efd8ef`) in a scratch worktree,
-`D:\cityflows-wt\330-pilot\R\t382\combo`, with additive conflicts kept from both sides. The result is 718 / 24: the
+**`T380=p` on top.** The branch was merged with `task/380-stand-pairing` (`e6efd8ef`) in a scratch worktree
+(since removed), keeping the additive conflicts from both sides. The merged diff is
+`D:\cityflows-wt\330-pilot\R\t382\combo-merge.patch`. The result is 718 / 24: the
 pairing still ends the stepped-out time but adds no completed on top of `rs`.
 
 **Gate 3 (full days) not run.** The ladder stopped at gate 2. An owner decision on the go-around gate for `rs`
