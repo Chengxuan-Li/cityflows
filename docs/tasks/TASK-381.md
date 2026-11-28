@@ -1,6 +1,6 @@
 # TASK-381 — Queue reserves at unmarked crossings: why Munich needs them, and a rule that serves all three cities
 
-Status: parked 2026-11-27 (diagnosis and screens `606381fd`; simulator unchanged): V2 (reserve on approaches, released on exits with room before the crossing) London City 385.7 to 209.7 s, Boston gridlocks 54 to 39, Munich fixed −6.6%, but Munich actuated +7.9% (seeds 1–3). Started by the lead in the 10 h unsupervised run; city work merges under the traffic merge rule and the audit
+Status: merged 2026-11-28 (`9cbb7f80`, V2 by default; owner accepted the trade-off): London City 385.7 to 209.7 s, Boston landside gridlocks 54 to 39, Freiburg 61.0 to 59.6 s, every showcase passes; Munich 0.15 actuated +7.86%, fixed −6.57%; Munich full demand fixed (seeds 1–5, record) +7.51% mean delay with 0.6% more trips, gridlocks 843 to 778, stalled heads 12 to 21.
 tolerance). Owner: Codex (gpt-6.2-sol, high). Base: main.
 
 ## Finding (TASK-378, TASK-379)
