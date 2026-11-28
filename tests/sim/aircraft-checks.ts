@@ -70,11 +70,11 @@ export const onRunway = (poses: readonly AircraftPoseSnapshot[]) =>
  * crossing aircraft; a crossing aircraft at least 150 m behind a landing roll along its heading; an
  * aircraft lining up behind a departure rolling away (take-off roll, rotation or climb), wherever
  * that one started (TASK-360 rule 2). TASK-360 rule 3: two aircraft lined up for the same runway
- * end, one behind the other along the front one's heading (a multiple line-up). */
+ * end, one behind the other along either one's heading (a multiple line-up). */
 export function exemptRunwayPair(a: AircraftPoseSnapshot, b: AircraftPoseSnapshot) {
   const crossing = (p: AircraftPoseSnapshot) => p.state === 'taxi' || p.state === 'tow';
-  const behind = (p: AircraftPoseSnapshot, ahead: AircraftPoseSnapshot) =>
-    (ahead.x - p.x) * Math.cos(ahead.heading) + (ahead.y - p.y) * Math.sin(ahead.heading);
+  const behind = (p: AircraftPoseSnapshot, ahead: AircraftPoseSnapshot, heading = ahead.heading) =>
+    (ahead.x - p.x) * Math.cos(heading) + (ahead.y - p.y) * Math.sin(heading);
   if (crossing(a) && crossing(b)) return true;
   if (crossing(a) !== crossing(b)) {
     const [mover, crosser] = crossing(a) ? [b, a] : [a, b];
@@ -84,10 +84,14 @@ export function exemptRunwayPair(a: AircraftPoseSnapshot, b: AircraftPoseSnapsho
     p.state === 'takeoff-roll' || p.state === 'rotation' || p.state === 'climb';
   if (a.state === 'line-up' && b.state === 'line-up') {
     if (a.runwayEnd === null || a.runwayEnd !== b.runwayEnd) return false;
-    const [rear, front] = behind(a, b) >= 0 ? [a, b] : [b, a];
     const lengthOf = (p: AircraftPoseSnapshot) =>
       aircraftTypes.find((t) => t.id === p.typeId)!.lengthM;
-    return behind(rear, front) >= (lengthOf(rear) + lengthOf(front)) / 2;
+    // TASK-367: in line along either one's heading (the one still turning onto the runway has
+    // not taken the runway's yet).
+    return [a.heading, b.heading].some((heading) => {
+      const [rear, front] = behind(a, b, heading) >= 0 ? [a, b] : [b, a];
+      return behind(rear, front, heading) >= (lengthOf(rear) + lengthOf(front)) / 2;
+    });
   }
   const [lineUp, roll] = a.state === 'line-up' ? [a, b] : [b, a];
   return lineUp.state === 'line-up' && rolling(roll) && behind(lineUp, roll) >= 0;
