@@ -211,3 +211,75 @@ there is no gridlock on every day.
 
 Read against the day gate (not worse): Heathrow completed and go-arounds are better. Zurich, Boston and London City
 are identical. Heathrow day 2's one real runway-conflict sample (0 → 1) is the exception.
+
+## Merge (owner accepted, 2026-11-28)
+
+The owner accepted `rs` and TASK-383's `T383=1`. Both are on by default: `T382=0` and `T383=0` turn each off, and
+`T383=2` still selects TASK-383's commitment variant. The merges into the branch:
+- main `2d7fe75f`;
+- `task/383-tail-day3` (`697a9b82`);
+- main `9eaadc85` (TASK-384's runway checker);
+- main `d3b493e3` (TASK-381 V2).
+
+None conflicted. `docs/architecture.md` gains the vacating rule in "Landing flow" and a "Tows and the way off"
+paragraph.
+
+**Ladder, both on** (`--checks`; Zurich `--daily 730`). Main is TASK-383's `R\t383\m-*` (`e6ffa10d`, T377 on). The
+columns:
+- "`rs` alone": `T383=0` on this branch for the peaks, and TASK-382's gate-3 days;
+- "`T383=1` alone": TASK-383's own runs (– where TASK-383 did not run it);
+- "both": `R\t382\merge\c-*`.
+
+Cells: completed (landed/departed, go-arounds, overlaps, `runwayConflictsReal`, gridlock h, mean delay s, tail stops).
+
+| Run | Main | `rs` alone | `T383=1` alone | Both |
+| --- | --- | --- | --- | --- |
+| Peak 1 | 145 (60/90, 4, 0, 0, -, 1,727, 0) | 155 (66/95, 4, 0, 0, -, 1,776, 0) | 145 (60/90, 4, 0, 0, -, 1,727, 0) | 155 (66/95, 4, 0, 0, -, 1,776, 0) |
+| Peak 2 | 130 (56/79, 2, 0, 0, -, 1,628, 0) | 137 (62/84, 6, 0, 0, -, 1,655, 0) | 130 (56/79, 2, 0, 0, -, 1,628, 0) | 137 (62/84, 6, 0, 0, -, 1,655, 0) |
+| Peak 3 | 133 (55/82, 0, 0, 0, -, 1,442, 0) | 143 (66/81, 0, 0, 0, -, 1,424, 0) | 133 (55/82, 0, 0, 0, -, 1,442, 0) | 143 (66/81, 0, 0, 0, -, 1,424, 0) |
+| Peak 4 | 135 (66/74, 4, 0, 0, -, 1,891, 0) | 143 (71/75, 6, 0, 0, -, 1,833, 0) | 135 (66/74, 4, 0, 0, -, 1,891, 0) | 143 (71/75, 6, 0, 0, -, 1,833, 0) |
+| Peak 5 | 146 (65/82, 8, 0, 0, -, 1,897, 0) | 146 (68/81, 5, 0, 0, -, 1,823, 0) | 146 (65/82, 8, 0, 0, -, 1,897, 0) | 146 (68/81, 5, 0, 0, -, 1,823, 0) |
+| Heathrow 1 | 871 (439/434, 21, 0, 0, -, 14,163, 0) | 887 (451/437, 20, 0, 0, -, 13,394, 0) | – | 887 (451/437, 20, 0, 0, -, 13,394, 0) |
+| Heathrow 2 | 869 (442/427, 22, 0, 0, -, 12,050, 0) | 875 (444/433, 25, 0, 1, -, 11,164, 0) | – | 875 (444/433, 25, 0, 1→0\*, -, 11,164, 0) |
+| Heathrow 3 | 827 (418/409, 28, 0, 0, -, 12,818, 1) | 861 (435/430, 23, 0, 0, -, 11,920, 1) | 836 (423/415, 30, 0, 0, -, 12,782, 0) | 861 (435/430, 23, 0, 0, -, 11,920, 0) |
+| Zurich 1 / 2 / 3 | 729 / 727 / 746 (7 / 7 / 8) | identical | identical | identical |
+| Boston 1 / 2 / 3 | 992 / 968 / 996 (17 / 35 / 49) | identical | 1, 2 identical | identical |
+| London City 1 | 150 (75/75, 0) | identical | – | identical |
+
+| Sums | Main | `rs` alone | Both |
+| --- | --- | --- | --- |
+| Heathrow peaks 1–5 | 689 completed, 302 landed, 18 go-arounds | 724, 333, 21 | 724, 333, 21 |
+| Heathrow days 1–3 | 2,567, 1,299, 71 | 2,623, 1,330, 68 | 2,623, 1,330, 68 |
+| Zurich, Boston, London City | 2,202 / 2,956 / 150 | identical | identical |
+
+With both on, every run matches `rs` alone, except that Heathrow day 3's one tail stop on the runway (G-EAGX, the
+TASK-383 case) is gone: `T383=1` and `rs` do not interact. Completed is the better of the two alone on every run, and
+there is no new safety case.
+- Every run: zero overlaps, no gridlock and zero tail stops.
+- \* The only real runway-conflict sample is Heathrow day 2 at 18:57:47. G-KFAD and G-FDXM are in a TASK-360
+  multiple line-up on 27R, the rear one still turning onto the runway. Re-run after merging TASK-384's checker
+  (`9eaadc85`), the day gives 0: its JSON matches the first run apart from the conflict counts (`c2-lhr-d2`).
+
+Go-arounds by cause, both on against main:
+
+| | Behind the arrival ahead | Behind a departure | Behind a tow |
+| --- | ---: | ---: | ---: |
+| Peaks 1–5, main → both | 15 → 21 | 1 → 0 | 2 → 0 |
+| Days 1–3, main → both | 27 → 35 | 31 → 30 | 13 → 3 |
+
+**Re-pins: none.** With both rules on and TASK-381 V2 merged, every pin holds:
+- the airport startup states and boards in `tests/traffic/bundled-airport-load.test.ts`, at main's TASK-381 values
+  (Heathrow `[3553834081, 2497667952]`); the rules do not act in the first 600 s;
+- the airside unit pins;
+- the Munich (`test:traffic:light`) and Freiburg (`test:city`) hash pins, at main's values.
+
+| Command | Final lines |
+| --- | --- |
+| `npm run check` | 310 files passed, 1 skipped; 2,247 tests passed, 2 skipped; built in 2.11 s |
+| `npm run test:city` | 77 files passed; 292 tests passed, 1 skipped (1,762.49 s) |
+| `npm run test:traffic:light` | 2 files passed; 5 tests passed, 1 expected fail (331.95 s) |
+| `npm run test:e2e:light` | 63 passed (5.6 min), port 5395 |
+| `tests/traffic/bundled-airport-load.test.ts` | 4 passed (91.45 s) |
+
+Runs: `D:\cityflows-wtØ-pilot\R	382\merge\` (`c-*`: both on; `rs-p*`: `T383=0`; `c2-lhr-d2`: re-run with
+TASK-384's checker).
