@@ -1,6 +1,6 @@
 # TASK-384 — Runway checker: a departure turning onto the runway behind one lined up (TASK-367's widening)
 
-Status: started 2026-11-28. Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Codex (gpt-6.2-sol, high). Base: main.
+Status: merged 2026-11-28 (`36c107a5`): main references unchanged (runwayConflictsReal 0 throughout); TASK-382 day 2 sample at 18:57:47 exempted (7.2 m along the turning aircraft's heading), its count 1 to 0. Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Codex (gpt-6.2-sol, high). Base: main.
 
 ## Finding (TASK-367)
 
