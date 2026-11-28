@@ -76,7 +76,8 @@ function Crossings({ node, compiled, city }: { node: CNode; compiled: CompiledCi
                     kind: 'setCrossing',
                     roadId: road.id,
                     end: atEnd ? 'end' : 'start',
-                    crossing: crossing === crossingDefault(compiled, road, atEnd) ? null : crossing,
+                    crossing:
+                      crossing === crossingDefault(compiled, road, atEnd, city) ? null : crossing,
                   }));
                   void commit({ kind: 'batch', label: 'Crossing', commands });
                 }}
