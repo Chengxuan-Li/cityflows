@@ -468,7 +468,7 @@ const summary = {
   fleet: fleet.metrics(),
   // TASK-352: go-arounds by cause, and seconds the head of each end's arrival queue was held.
   arrivalCauses: (() => {
-    const { goAround, release, steppedOut } = fleet.arrivalCauses();
+    const { goAround, release, steppedOut, tailOnRunway } = fleet.arrivalCauses();
     const sorted = (r: Record<string, number>) =>
       Object.fromEntries(
         Object.entries(r)
@@ -476,7 +476,12 @@ const summary = {
           .map(([k, v]) => [k, Math.round(v)]),
       );
     // TASK-363: seconds queued arrivals were held out of the landing order, by stand.
-    return { goAround: sorted(goAround), release: sorted(release), steppedOut: sorted(steppedOut) };
+    return {
+      goAround: sorted(goAround),
+      release: sorted(release),
+      steppedOut: sorted(steppedOut),
+      tailOnRunway: { s: Math.round(tailOnRunway.s), n: tailOnRunway.ids.length },
+    };
   })(),
   // TASK-382: tows over 20 minutes from request to parking (or not parked), or naming an arrival
   // queue head's refusal.
