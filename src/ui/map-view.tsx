@@ -22,6 +22,7 @@ import { pausedSnapshot, remapParkedCars } from './drawn-snapshot';
 import { useVisual } from './lighting-store';
 import { resolveAppearance, useAppearance } from './appearance-store';
 import { selectionAnchor } from './selection-anchor';
+import { createDebugFrame } from './debug-frame';
 
 function snapshotForMap(
   snapshot: VehicleSnapshot,
@@ -500,6 +501,9 @@ export function MapView() {
           loading3D = false;
         }
       }
+      // TASK-400: the developer debug views (nothing until developer tools are on).
+      const debug = createDebugFrame(canvas, canvas3D);
+      signal.addEventListener('abort', () => debug.destroy());
       let motionGeometry: Session['loadedCompiled'] | null = null;
       let drawnSelection: Pick | null = null;
       let drawnRoads: readonly string[] | null = null;
@@ -555,7 +559,7 @@ export function MapView() {
       view.setTiles(drawnLayers.basemap);
 
       async function pull(session: Session) {
-        const snapshot = await session.engine.snapshot();
+        const snapshot = await session.engine.snapshot(debug.request(active3D));
         const current = getState();
         if (signal.aborted || current.session !== session || current.busy) return;
         latestSnapshot = snapshot;
@@ -928,6 +932,7 @@ export function MapView() {
             : null;
         if (active3D) three!.follow(followed);
         const playing = run?.status === 'playing';
+        debug.prepare(view, three, active3D);
         if (active3D) three!.render(snapshotAgeS, run?.timeS ?? 0, playing);
         else {
           view.animateVehicles(snapshotAgeS, playing);
@@ -941,17 +946,19 @@ export function MapView() {
             }
           }
         }
-        if (pulling || failed === session) return;
-        pulling = true;
-        void pull(session)
-          .catch((error: unknown) => {
-            if (signal.aborted || getState().session !== session) return;
-            failed = session;
-            getState().reportError(error);
-          })
-          .finally(() => {
-            pulling = false;
-          });
+        if (!pulling && failed !== session) {
+          pulling = true;
+          void pull(session)
+            .catch((error: unknown) => {
+              if (signal.aborted || getState().session !== session) return;
+              failed = session;
+              getState().reportError(error);
+            })
+            .finally(() => {
+              pulling = false;
+            });
+        }
+        debug.draw(view, three, active3D, session, latestSnapshot, selection, now);
       }
 
       const tools = {

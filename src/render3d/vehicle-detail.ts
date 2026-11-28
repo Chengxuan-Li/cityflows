@@ -28,6 +28,11 @@ export class VehicleDetailView {
   private camera!: PerspectiveCamera;
   active = false;
 
+  /** TASK-400: the camera depth within which cars are drawn as models, while active. */
+  get depthM() {
+    return this.depth;
+  }
+
   update(camera: PerspectiveCamera, zoom: number, distance: number) {
     const active = zoom >= vehicleDetailZoom;
     const toggled = this.active !== active;

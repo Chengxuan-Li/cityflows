@@ -60,7 +60,7 @@ import {
 import type { LonLat } from '../geo/projection';
 import { buildHalos, buildPools, type LightPoint } from './lights';
 import { tramStopSize } from '../render/tram-stops';
-import { buildVegetation, surfaceTexture, type TreeLook } from './vegetation';
+import { buildVegetation, surfaceTexture, treeDetailM, type TreeLook } from './vegetation';
 import type { placeTrees, Tree } from '../render/vegetation';
 import { placeDetails, type placeStreet } from '../render/street';
 import { buildStreet } from './street';
@@ -93,6 +93,10 @@ import { trainTimetable, trainsAt } from '../network/trains';
 import { railTimetable } from '../network/trams';
 import { paintedCity } from '../render/road-paint';
 import { Labels3D, loadLabelAtlas } from './labels';
+import type { DebugSettings } from '../render/debug-settings';
+import { flatHeights, type DebugHeights, type DebugPalette } from '../render/debug-geometry';
+import { DebugPasses } from './debug-passes';
+import { detailRanges, projector3D, sceneHeights } from './debug-scene';
 
 export class Scene3D {
   private readonly scene = new Scene();
@@ -214,6 +218,12 @@ export class Scene3D {
   private readonly vehicleDetail = new VehicleDetailView();
   private shadowView = '';
   private compilePending = false;
+  // TASK-400: the developer debug views; null draws the scene exactly as without them.
+  private debug: DebugSettings | null = null;
+  private debugKey = '';
+  private debugPasses: DebugPasses | undefined;
+  private debugHeightsOf:
+    { city: CompiledCity; geometry: unknown; heights: DebugHeights } | undefined;
   private readonly restoreContext = () => {
     this.renderer.setClearColor(this.light.background);
     this.rail?.paintCache.reset();
@@ -1556,7 +1566,7 @@ export class Scene3D {
     // first 3D frame: 0.33 s instead of 0.53 s).
     if (this.compilePending) this.renderer.compile(this.scene, this.camera);
     this.compilePending = false;
-    this.renderer.render(this.scene, this.camera);
+    this.drawScene();
     if (import.meta.env.MODE === 'test') {
       this.canvas.dataset.railPaint = cachedRail ? 'cached' : 'mesh';
       this.canvas.dataset.frames = String(Number(this.canvas.dataset.frames) + 1);
@@ -1575,6 +1585,114 @@ export class Scene3D {
       } else this.invalidate();
     }
     this.canvas.dataset.vehicles = String(this.vehicles.mesh.count);
+  }
+
+  /** The scene draw: as it always was, unless a debug view changes it (TASK-400). Rendered view
+   *  off leaves the canvas plain; a shading draws every material's debug variant; the wireframe
+   *  goes over either, or alone. */
+  private drawScene() {
+    const debug = this.debug;
+    const wire = !!debug?.overlays.wireframe;
+    if (!debug || (debug.rendered && debug.shading === 'normal' && !wire)) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    const { renderer } = this;
+    const passes = (this.debugPasses ??= new DebugPasses());
+    const autoClear = renderer.autoClear;
+    renderer.info.autoReset = false;
+    renderer.info.reset();
+    renderer.autoClear = false;
+    try {
+      renderer.clear();
+      const { shading } = debug;
+      if (debug.rendered && shading === 'normal') renderer.render(this.scene, this.camera);
+      else if (debug.rendered && shading !== 'normal') {
+        // The elevation ramp spans the city's junctions, from 2 m below the lowest to 30 m above.
+        const nodes = this.geometry?.heights.nodes ?? [];
+        let low = Infinity;
+        for (const z of nodes) low = Math.min(low, z);
+        if (!Number.isFinite(low)) low = 0;
+        let high = low;
+        for (const z of nodes) high = Math.max(high, z);
+        passes.uniforms.debugLow.value = low - 2;
+        passes.uniforms.debugHigh.value = Math.max(high, low) + 30;
+        passes.draw(renderer, this.scene, this.camera, shading);
+      }
+      if (wire) passes.draw(renderer, this.scene, this.camera, 'wireframe');
+    } finally {
+      renderer.autoClear = autoClear;
+      renderer.info.autoReset = true;
+    }
+  }
+
+  /** TASK-400: the debug views' settings for this view (null: off). */
+  setDebug(settings: DebugSettings | null, palette: DebugPalette | null) {
+    const key = settings
+      ? `${JSON.stringify(settings)}|${palette?.ramp.join()}|${palette?.ink.blue}`
+      : '';
+    if (key === this.debugKey) return;
+    this.debugKey = key;
+    this.debug = settings;
+    if (palette)
+      (this.debugPasses ??= new DebugPasses()).setColours(palette.ramp, palette.ink.blue);
+    this.invalidate();
+  }
+
+  /** TASK-400: where the debug overlays sit on this view. */
+  debugProjector() {
+    return projector3D(
+      this.camera,
+      this.controls.target,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+    );
+  }
+
+  /** TASK-400: the scene's surface heights, by `city`'s indices. */
+  debugHeights(city: CompiledCity): DebugHeights {
+    const geometry = this.geometry;
+    if (!geometry) return flatHeights;
+    const known = this.debugHeightsOf;
+    if (known?.city === city && known.geometry === geometry) return known.heights;
+    const heights = sceneHeights(city, geometry.heights);
+    this.debugHeightsOf = { city, geometry, heights };
+    return heights;
+  }
+
+  /** TASK-400 Detail ranges, with a key that changes when they do. */
+  debugRanges() {
+    const target = this.controls.target;
+    const distance = this.camera.position.distanceTo(target);
+    const items = detailRanges({
+      content: this.content,
+      sun: this.sun,
+      target,
+      cameraDistance: distance,
+      treeDetailM,
+      carModels: this.vehicleDetail.active
+        ? { depthM: this.vehicleDetail.depthM, camera: this.camera.position }
+        : null,
+    });
+    const key = [
+      ...this.camera.matrixWorld.elements,
+      this.sun.shadow.camera.right,
+      this.content.children.length,
+    ]
+      .map((v) => v.toFixed(3))
+      .join(',');
+    return { items, key };
+  }
+
+  /** TASK-400: the last frame's draws (every debug pass) and the GPU's resident resources. */
+  debugStats() {
+    const { render, memory } = this.renderer.info;
+    return {
+      calls: render.calls,
+      triangles: render.triangles,
+      geometries: memory.geometries,
+      textures: memory.textures,
+    };
   }
 
   setWalkLayers(sidewalks: boolean, footways: boolean) {
@@ -1671,6 +1789,7 @@ export class Scene3D {
     this.labels.destroy();
     this.selection.geometry.dispose();
     this.selection.material.dispose();
+    this.debugPasses?.dispose();
     this.sun.shadow.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();

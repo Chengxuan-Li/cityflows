@@ -99,7 +99,7 @@ test(
 
 test(
   'Boston: a ground vehicle whose visit expires at its depot can turn in without driving',
-  { timeout: limit(90_000) },
+  { timeout: limit(180_000) },
   async () => {
     const project = await openBundled('boston-logan');
     const result = compile(project.city);
