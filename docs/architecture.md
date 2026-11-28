@@ -3963,6 +3963,16 @@ the city, and roads retain the strongest tone.
   crossing, still ends them).
   The node inspector lists the arms with a "Crossing" checkbox each (disabled, with the reason,
   where no stripe fits).
+- TASK-386 (TASK-215's M3 and M5): a trunk road end has no default crossing unless a mapped
+  crossing way leads its arm (within 12 m of the cut, as TASK-217's paint reads it); generated
+  walk links already left trunk arms out. Where the crossings of one arm step by more than
+  0.25 m along it (across an end's lanes or between its ends), the arm's crossings are redrawn as
+  one band square to the arm's axis (the mean outward direction of its ends), its near edge 0.25 m
+  beyond the farthest lane cut and 1 m beyond the farthest curb return along the axis, unless that
+  leaves an end fewer stripes; an arm centred on a mapped crossing node (TASK-265) or at a node
+  without an outline (TASK-348) keeps its placement. Each lane then has its own span (the stop
+  position, the walk link's line through `crossingCentres` and the street strips follow it).
+  TASK-215's doubled-crossing rule is not taken (owner, 2026-11-28).
 - TASK-257 (owner-approved field): a crossing walk link's optional `marking` is its paint as OSM
   maps it, read by the importer (`crossingMarking`) from the way's tags, else from its nearest
   crossing node along the way that has them (per link, so a way over a divided road can be
