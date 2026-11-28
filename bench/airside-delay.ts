@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+import { nearestOnPolyline } from '../src/geo/polyline';
 import { compile } from '../src/network';
 import { compileAirside } from '../src/network/airside';
 import { openProject } from '../src/project/open';
@@ -85,6 +86,9 @@ interface Track {
   wheelsOffS?: number;
   departedS?: number;
   goArounds: number;
+  /** TASK-353: parked at the run's start, and its tows (request, end). */
+  carriedIn?: boolean;
+  tows?: { requestS: number; towedS?: number }[];
 }
 const tracks = new Map<number, Track>();
 function track(id: number) {
@@ -117,6 +121,18 @@ fleet.requestHelicopterArrival = (...args) => {
   if (result.ok) track(result.id).arrivalRequestS = timeS;
   return result;
 };
+const spawnParked = fleet.spawnParked;
+fleet.spawnParked = (...args) => {
+  const result = spawnParked(...args);
+  if (result.ok && timeS <= startS) track(result.id).carriedIn = true;
+  return result;
+};
+const requestTow = fleet.requestTow;
+fleet.requestTow = (...args) => {
+  const result = requestTow(...args);
+  if (result.ok) (track(result.id).tows ??= []).push({ requestS: timeS });
+  return result;
+};
 const requestDeparture = fleet.requestDeparture;
 fleet.requestDeparture = (...args) => {
   const result = requestDeparture(...args);
@@ -125,6 +141,10 @@ fleet.requestDeparture = (...args) => {
 };
 /** TASK-330: touchdowns by runway end, for landings per hour and the gap between them. */
 const touchdowns: { timeS: number; end: string }[] = [];
+/** TASK-360: take-off roll starts by runway end (sampled each second), for take-offs per hour
+ * and the gap between them. */
+const rollStarts: { timeS: number; end: string }[] = [];
+const rolling = new Set<number>();
 const drainEvents = fleet.drainEvents;
 fleet.drainEvents = () => {
   const events = drainEvents();
@@ -149,6 +169,11 @@ fleet.drainEvents = () => {
         lastCompletionS = event.timeS;
         row.departedS = event.timeS;
         break;
+      case 'towed': {
+        const tow = row.tows?.at(-1);
+        if (tow) tow.towedS = event.timeS;
+        break;
+      }
       case 'go-around':
         row.goArounds++;
         break;
@@ -178,6 +203,7 @@ const checkRunwayConflicts = runwayConflictCheck(graph, { exempt: false });
 // TASK-345: without the pairs the owner approved as sharing a runway by design.
 const checkRunwayConflictsReal = runwayConflictCheck(graph);
 let overlapCount = 0;
+const overlapSamples: { timeS: number; pairs: ReturnType<typeof overlaps> }[] = [];
 let runwayConflicts = 0;
 let runwayConflictsReal = 0;
 let peakStuck = 0;
@@ -195,6 +221,7 @@ const ground =
     : null;
 let vehicleAircraftOverlaps = 0;
 let vehicleOverlaps = 0;
+const vehicleOverlapExamples: (ReturnType<typeof groundOverlaps> & { timeS: number })[] = [];
 console.info({ airport: graph.icao, seed, fromH, toH, endH: endS / 3600, ...operations.metrics() });
 for (let step = startS * 10; step < endS * 10; step++) {
   timeS = step / 10;
@@ -207,10 +234,19 @@ for (let step = startS * 10; step < endS * 10; step++) {
     const found = groundOverlaps(ground.snapshot(), poses);
     vehicleAircraftOverlaps += found.withAircraft.length;
     vehicleOverlaps += found.withVehicles.length;
+    if (
+      vehicleOverlapExamples.length < 5 &&
+      (found.withAircraft.length || found.withVehicles.length)
+    )
+      vehicleOverlapExamples.push({ timeS, ...found });
   }
   const seen = new Set<number>();
   for (const pose of poses) {
     seen.add(pose.id);
+    if (pose.state === 'takeoff-roll' && !rolling.has(pose.id)) {
+      rolling.add(pose.id);
+      rollStarts.push({ timeS, end: pose.runwayEnd ?? '?' });
+    }
     const row = track(pose.id);
     if (row.arrivalRequestS !== undefined && row.parkedS === undefined) sample(row.arrival, pose);
     if (row.offBlockS !== undefined && row.departedS === undefined) {
@@ -244,13 +280,54 @@ for (let step = startS * 10; step < endS * 10; step++) {
   peakStuck = Math.max(peakStuck, metrics.stuck);
   peakActive = Math.max(peakActive, metrics.active);
   if (checks) {
-    overlapCount += overlaps(poses).length;
+    // TASK-352 / TASK-370: which aircraft overlap, and their state and location.
+    const found = overlaps(poses);
+    if (found.length) {
+      overlapSamples.push({ timeS, pairs: found });
+      const involved = poses.filter((p) => found.some((pair) => pair.includes(p.registration)));
+      console.error('OVERLAP', timeS, JSON.stringify(found));
+      console.error(
+        'OVERLAP_POSES',
+        timeS,
+        JSON.stringify(
+          involved.map(({ route, ...pose }) => ({
+            ...pose,
+            visual: undefined,
+            route: route.slice(0, 4).map((i) => graph.edges[i]!.id),
+            nearestEdges: graph.edges
+              .map(({ id, ref, kind, line }) => ({
+                id,
+                ref,
+                kind,
+                away: nearestOnPolyline(line, pose).away,
+              }))
+              .sort((a, b) => a.away - b.away)
+              .slice(0, 3),
+            nearestHold: graph.holds
+              .map(({ id, ref, node }) => {
+                const { x, y } = graph.nodes[node]!.pos;
+                return { id, ref, away: Math.hypot(x - pose.x, y - pose.y) };
+              })
+              .sort((a, b) => a.away - b.away)[0],
+          })),
+        ),
+      );
+    }
+    overlapCount += found.length;
     runwayConflicts += checkRunwayConflicts(poses);
-    runwayConflictsReal += checkRunwayConflictsReal(poses);
+    // TASK-363: which aircraft are in a real runway conflict, and when (the log).
+    const real = checkRunwayConflictsReal(poses);
+    if (real) {
+      const on = poses.filter((p) => p.onRunway);
+      const who = on.map((p) => `${p.registration}:${p.state}:${p.runwayEnd ?? '-'}`);
+      console.error('RUNWAY', timeS, real, JSON.stringify(who));
+    }
+    runwayConflictsReal += real;
   }
   if (timeS % 3600 === 0 && timeS > startS) {
     // TASK-330 / TASK-339: the order's counters, for the log.
     console.error('PROGRESSIVE', timeS / 3600, JSON.stringify(fleet.orderCounters()));
+    const vehicles = ground?.metrics();
     console.info(
       JSON.stringify({
         h: timeS / 3600,
@@ -260,6 +337,16 @@ for (let step = startS * 10; step < endS * 10; step++) {
         queued: metrics.queuedArrivals,
         stuck: metrics.stuck,
         stuck5,
+        ...(vehicles && {
+          groundVehicles: {
+            active: vehicles.active,
+            queued: vehicles.stuck,
+            served: vehicles.served,
+            visits: vehicles.visits,
+            tugsMissing: vehicles.tugsMissing,
+            queueRelief: vehicles.queueRelief,
+          },
+        }),
       }),
     );
   }
@@ -276,6 +363,24 @@ for (const [id, row] of tracks) {
   byRegistration.set(registration, row);
 }
 const inWindow = ({ timeS }: { timeS: number }) => timeS >= startS && timeS < windowEndS;
+/** Events per hour by runway end in the window, and the median gap between them (s). */
+const perEnd = (events: { timeS: number; end: string }[]) =>
+  Object.fromEntries(
+    [...new Set(events.map((t) => t.end))].sort().map((end) => {
+      const times = events.filter((t) => t.end === end && inWindow(t)).map((t) => t.timeS);
+      const gaps = times
+        .slice(1)
+        .map((t, i) => t - times[i]!)
+        .sort((a, b) => a - b);
+      return [
+        end,
+        {
+          perHour: round(times.length / ((windowEndS - startS) / 3600)),
+          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
+        },
+      ];
+    }),
+  );
 const arrivals = board.arrivals.filter(inWindow).map((movement) => {
   const row = movement.registration ? byRegistration.get(movement.registration) : undefined;
   const dispatchS = Math.max(0, Math.ceil(movement.timeS - fleet.arrivalLeadS(movement.typeId)));
@@ -300,6 +405,8 @@ const departures = board.departures.filter(inWindow).map((movement) => {
     ...movement,
     ...(row?.departure ?? newTiming()),
     readinessS: movement.state === 'cancelled' ? 0 : Math.max(0, readyEndS - movement.timeS),
+    carriedIn: row?.carriedIn ?? false,
+    tows: row?.tows ?? [],
     taxiS:
       row?.wheelsOffS !== undefined && row.offBlockS !== undefined
         ? row.wheelsOffS - row.offBlockS
@@ -348,16 +455,34 @@ const summary = {
   gridlockH: gridlockS === null ? null : round(gridlockS / 3600),
   ...(checks && {
     overlapCount,
+    overlapSamples,
     parkedBlockS: Math.round(fleet.parkedBlockS()),
     runwayConflicts,
     runwayConflictsReal,
   }),
   ...(ground && {
     groundVehicles: ground.metrics(),
-    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps }),
+    ...(checks && { vehicleAircraftOverlaps, vehicleOverlaps, vehicleOverlapExamples }),
   }),
   day: operations.metrics(),
   fleet: fleet.metrics(),
+  // TASK-352: go-arounds by cause, and seconds the head of each end's arrival queue was held.
+  arrivalCauses: (() => {
+    const { goAround, release, steppedOut, tailOnRunway } = fleet.arrivalCauses();
+    const sorted = (r: Record<string, number>) =>
+      Object.fromEntries(
+        Object.entries(r)
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => [k, Math.round(v)]),
+      );
+    // TASK-363: seconds queued arrivals were held out of the landing order, by stand.
+    return {
+      goAround: sorted(goAround),
+      release: sorted(release),
+      steppedOut: sorted(steppedOut),
+      tailOnRunway: { s: Math.round(tailOnRunway.s), n: tailOnRunway.ids.length },
+    };
+  })(),
   arrivalStages: stages(arrivals, [
     'standWaitS',
     'sequencingS',
@@ -378,26 +503,34 @@ const summary = {
     'runwayS',
     'airborneS',
   ]),
+  // TASK-353: readiness wait of departures parked at the run's start (carried in) and of the
+  // rest, summed (s), and the tows of those carried in: requested to towed (s).
+  readiness: {
+    carriedIn: Math.round(
+      departures.filter((d) => d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    carriedInN: departures.filter((d) => d.carriedIn).length,
+    others: Math.round(
+      departures.filter((d) => !d.carriedIn).reduce((n, d) => n + d.readinessS, 0),
+    ),
+    othersN: departures.filter((d) => !d.carriedIn).length,
+    carriedInTowS: Math.round(
+      departures
+        .filter((d) => d.carriedIn)
+        .flatMap((d) => d.tows)
+        .reduce((n, t) => n + (t.towedS ?? endS) - t.requestS, 0),
+    ),
+  },
+  startRefusals: Object.fromEntries(
+    Object.entries(fleet.startRefusals())
+      .sort((a, b) => b[1].s - a[1].s)
+      .map(([why, { n, s }]) => [why, { n, s: Math.round(s) }]),
+  ),
   taxiIn: moving(arrivals),
   taxiOut: moving(departures),
-  landings: Object.fromEntries(
-    [...new Set(touchdowns.map((t) => t.end))].sort().map((end) => {
-      const times = touchdowns
-        .filter((t) => t.end === end && t.timeS >= startS && t.timeS < windowEndS)
-        .map((t) => t.timeS);
-      const gaps = times
-        .slice(1)
-        .map((t, i) => t - times[i]!)
-        .sort((a, b) => a - b);
-      return [
-        end,
-        {
-          perHour: round(times.length / ((windowEndS - startS) / 3600)),
-          medianGapS: gaps.length ? round(gaps[gaps.length >> 1]!) : null,
-        },
-      ];
-    }),
-  ),
+  landings: perEnd(touchdowns),
+  takeoffs: perEnd(rollStarts),
+  departureCounts: fleet.departureCounts(),
 };
 writeFileSync(output, JSON.stringify({ ...summary, arrivals, departures }, null, 2));
 console.info(JSON.stringify(summary, null, 1));

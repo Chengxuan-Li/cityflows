@@ -139,19 +139,23 @@ export function MetricsPanel() {
           </dd>
           <dt>Mean walk</dt>
           <dd>{Math.round(walkers.meanWalkTimeS)} s</dd>
-          <dt>Mean wait at a zebra, at a signal</dt>
+          <dt>Mean wait at a zebra, unmarked, at a signal</dt>
           <dd>
-            {walkers.meanWaitS.zebra.toFixed(1)} s, {walkers.meanWaitS.signal.toFixed(1)} s
+            {walkers.meanWaitS.zebra.toFixed(1)} s, {walkers.meanWaitS.unmarked.toFixed(1)} s,{' '}
+            {walkers.meanWaitS.signal.toFixed(1)} s
           </dd>
-          <dt>Vehicles stopped for pedestrians at zebras, at signals</dt>
+          <dt>Vehicles stopped for pedestrians at zebras, unmarked, at signals</dt>
           <dd>
             {walkers.vehicleStops.zebra.toLocaleString()},{' '}
+            {walkers.vehicleStops.unmarked.toLocaleString()},{' '}
             {walkers.vehicleStops.signal.toLocaleString()}
           </dd>
           <dt>Vehicle delay they cost</dt>
           <dd>
             {Math.round(
-              walkers.vehicleDelayS.zebra + walkers.vehicleDelayS.signal,
+              walkers.vehicleDelayS.zebra +
+                walkers.vehicleDelayS.unmarked +
+                walkers.vehicleDelayS.signal,
             ).toLocaleString()}{' '}
             s
           </dd>

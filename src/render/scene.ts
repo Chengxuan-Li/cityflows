@@ -7,6 +7,7 @@ import type { ContextFeature, Place } from '../schema';
 import { cityGrades } from './grades';
 import { Camera } from './camera';
 import { FrameDemand, renderContinuously } from './frame-demand';
+import type { DebugProjector } from './debug-canvas';
 import { drawVegetation } from './layers/vegetation';
 import type { placeTrees } from './vegetation';
 import { placeDetails, type placeStreet } from './street';
@@ -202,6 +203,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setWalkerRoute(links: readonly number[] | null): void;
   setLighting(settings: VisualSettings, timeS: number, origin?: LonLat): void;
   setMapPalette(palette: MapPalette): void;
+  /** TASK-400: whether the scene draws (Rendered view); off, only the canvas, the selection and
+   *  the edit overlays remain under the debug overlays. */
+  setDebugScene(rendered: boolean): void;
+  debugProjector(): DebugProjector;
+  /** TASK-400: the last frame's draw calls and triangles, and the GPU's textures and buffers. */
+  debugStats(): { calls: number; triangles: number; textures: number; buffers: number };
 } {
   const app = new Application();
   const demand = new FrameDemand();
@@ -639,6 +646,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let selection: Pick | null = null;
   let selectedVehicle = -1;
   let destroyed = false;
+  // TASK-400: draw calls and triangles, counted from the first stats readout on.
+  let counting = false;
+  const drawCounts = { calls: 0, triangles: 0 };
+  const lastDraw = { calls: 0, triangles: 0 };
+  let sceneDrawn = true;
   let resizeObserver: ResizeObserver | undefined;
   const ready = app
     .init({
@@ -687,7 +699,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
           if (tiles.update(camera, width, height, deltaMS)) invalidate();
         }
         if (demand.consume(renderContinuously())) {
+          drawCounts.calls = drawCounts.triangles = 0;
           app.render();
+          if (counting) Object.assign(lastDraw, drawCounts);
           if (import.meta.env.MODE === 'test')
             canvas.dataset.frames = String(Number(canvas.dataset.frames) + 1);
         }
@@ -731,6 +745,77 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   return {
     ready,
     camera,
+    setDebugScene(rendered) {
+      if (rendered === sceneDrawn) return;
+      sceneDrawn = rendered;
+      for (const container of [
+        map,
+        groundVehicles.container,
+        aircraft.container,
+        night.container,
+        labels.container,
+        heatOverlay,
+        disconnectedOverlay,
+        signalPreview,
+        parking,
+      ])
+        container.renderable = rendered;
+      invalidate();
+    },
+    debugProjector() {
+      const { width, height } = app.screen;
+      const zoom = camera.zoom;
+      const origin = camera.worldToScreen({ x: 0, y: 0 });
+      const low = camera.screenToWorld({ x: 0, y: 0 });
+      const high = camera.screenToWorld({ x: width, y: height });
+      return {
+        key: `${zoom},${origin.x},${origin.y},${width},${height}`,
+        width,
+        height,
+        scale: zoom,
+        bounds: { minX: low.x, minY: low.y, maxX: high.x, maxY: high.y },
+        project(x, y, _z, out) {
+          out[0] = x * zoom + origin.x;
+          out[1] = y * zoom + origin.y;
+          return true;
+        },
+      };
+    },
+    debugStats() {
+      if (!counting) {
+        counting = true;
+        const gl = (app.renderer as unknown as { gl: WebGL2RenderingContext }).gl;
+        const count = (mode: number, vertices: number, instances = 1) => {
+          drawCounts.calls++;
+          if (mode === gl.TRIANGLES) drawCounts.triangles += (vertices / 3) * instances;
+        };
+        const elements = gl.drawElements.bind(gl);
+        gl.drawElements = (mode, n, type, offset) => {
+          count(mode, n);
+          elements(mode, n, type, offset);
+        };
+        const arrays = gl.drawArrays.bind(gl);
+        gl.drawArrays = (mode, first, n) => {
+          count(mode, n);
+          arrays(mode, first, n);
+        };
+        const instanced = gl.drawElementsInstanced.bind(gl);
+        gl.drawElementsInstanced = (mode, n, type, offset, instances) => {
+          count(mode, n, instances);
+          instanced(mode, n, type, offset, instances);
+        };
+        invalidate();
+      }
+      const renderer = app.renderer as unknown as {
+        texture: { managedTextures: readonly unknown[] };
+        buffer: { _managedBuffers: { items: Record<number, unknown> } };
+      };
+      return {
+        ...lastDraw,
+        textures: renderer.texture.managedTextures.length,
+        buffers: Object.keys(renderer.buffer._managedBuffers.items).length,
+      };
+    },
     setActive(next) {
       active = next;
       if (import.meta.env.MODE === 'test') canvas.dataset.active = String(active);

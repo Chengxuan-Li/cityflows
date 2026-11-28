@@ -249,6 +249,12 @@ interface ActuatedState {
  * together the second sees the first changing and keeps its green: two controllers whose stop
  * lines a crossing joins cannot lock in opposite phases, each extended by a car the other holds
  * (Freiburg's n:18 and group 2).
+ *
+ * TASK-362: a stopped head at a stop line shared by its signal and the crossing also gets this
+ * overlap without a reciprocal call. Its green otherwise can expire during the downstream
+ * controller's change, so the two greens alternate without ever letting the head start. If the
+ * head has already waited a full cycle, allow up to one downstream cycle for that change to
+ * begin, so the overlap does not depend on the order or exact timing of max-outs.
  */
 export function createSignalControl(
   city: CompiledCity,
@@ -258,7 +264,7 @@ export function createSignalControl(
   timeS: number,
   walkCalls: () => ReadonlyMap<number, number> | undefined,
   previous?: ReadonlyMap<string, ActuatedState>,
-  crossingRed: (id: number) => number = () => -1,
+  crossingRed: (id: number, stopM?: number) => number = () => -1,
 ) {
   const actuated = signalControllers(city).flatMap((controller) => {
     const members = controller.nodes.map((n) => signals[n]!);
@@ -365,17 +371,37 @@ export function createSignalControl(
       let extend = false;
       let calls = 0;
       let kept = -Infinity;
+      let shared = -Infinity;
       let mutual = false;
       blocked.clear();
       for (const lane of c.lanes) {
         const stopM = city.lanes[lane]!.stopM;
-        for (let id = vehicles.first(lane); id !== -1; id = vehicles.next[id]!) {
+        const head = vehicles.first(lane);
+        for (let id = head; id !== -1; id = vehicles.next[id]!) {
           if (vehicles.position[id]! < stopM - DETECT_M) break;
           const mask = phaseMaskOf(ci, vehicles.movement[id]!);
           if (mask & own) {
             if (blocked.has(lane)) continue;
             extend = true;
-            kept = Math.max(kept, keptFor(c, id, timeS));
+            const red = crossingRed(id);
+            const keep = keptFor(c, red, timeS);
+            kept = Math.max(kept, keep);
+            if (
+              id === head &&
+              red !== -1 &&
+              vehicles.speed[id]! < 0.1 &&
+              Math.abs(vehicles.position[id]! - stopM) < params.idm.minGapM + 0.5 &&
+              crossingRed(id, stopM) !== -1
+            ) {
+              const far = actuated[owner[city.movements[red]!.node]!];
+              if (far && far !== c) {
+                if (keep > -Infinity) shared = Math.max(shared, keep + params.dtS);
+                else if (vehicles.stopped[id]! >= c.members[0]!.cycleS) {
+                  const deadline = s.stageS + phases[s.phase]!.durationS + far.members[0]!.cycleS;
+                  shared = Math.max(shared, Math.min(deadline, timeS + PASSAGE_S + params.dtS));
+                }
+              }
+            }
           } else {
             calls |= mask;
             mutual ||= heldBy(c, id);
@@ -394,7 +420,7 @@ export function createSignalControl(
           if (mask & own) {
             if (blocked.has(city.movements[movement]!.fromLane)) continue;
             extend = true;
-            kept = Math.max(kept, keptFor(c, id, timeS));
+            kept = Math.max(kept, keptFor(c, crossingRed(id), timeS));
           } else {
             calls |= mask;
             mutual ||= heldBy(c, id);
@@ -418,7 +444,7 @@ export function createSignalControl(
           Math.min(until, s.stageS + phases[s.phase]!.durationS),
         );
       else until = Math.max(until, timeS + params.dtS);
-      if (mutual) s.keepS = Math.max(s.keepS, kept);
+      s.keepS = Math.max(s.keepS, mutual ? kept : shared);
       until = Math.max(until, s.keepS);
       s.untilS = until;
       if (!calls || timeS < until - eps) return;
@@ -451,11 +477,10 @@ export function createSignalControl(
     return red !== -1 && actuated[owner[city.movements[red]!.node]!] === c;
   };
 
-  /** TASK-222: `id` would use the green of `c`, but a crossing holds it for a red stop line of
+  /** TASK-222: a car would use the green of `c`, but a crossing holds it for a red stop line of
    * another controller; while that one is changing to a phase serving the movement, the time
    * `c` keeps its green to (`PASSAGE_S` from now), else -Infinity. */
-  function keptFor(c: (typeof actuated)[number], id: number, timeS: number) {
-    const red = crossingRed(id);
+  function keptFor(c: (typeof actuated)[number], red: number, timeS: number) {
     if (red === -1) return -Infinity;
     const node = city.movements[red]!.node;
     if (actuated[owner[node]!] === c) return -Infinity;

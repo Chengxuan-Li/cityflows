@@ -186,7 +186,8 @@ const baselines = {
   // TASK-271: Munich's 14 passage roads and 77 passage walk links at grade.
   // TASK-290: Munich's compiled garage connector c:1911 moves from r:1071 to r:1070.
   // TASK-294: four public roads only Munich's private r:1109 reaches are a pocket (zone ids).
-  'munich-donnersberger': 'a218755f4870a1591d2611861e6bc21634470999700d34655cdf6a466b62ac97',
+  // TASK-279: crossing walk links that draw no paint are `unmarked` (Munich).
+  'munich-donnersberger': '4e5020e454f3bf741d286c87c7d102884dcc1410d638f9ef28e6f403442fb394',
   // TASK-136/151: Sindelfingen's 18 crossing facilities gain `spans`, `stops` and `railSpans`; without them it equals main's pin.
   // TASK-175: compiled nodes, roads and lanes gain `grade`; with it stripped every pin equals 6ea2994's.
   // TASK-180: generated signal programs are fixed-time again (no `actuated`, as before TASK-170).
@@ -200,8 +201,8 @@ const baselines = {
   // TASK-348: Sindelfingen's signalised crossings n:422 and n:733 laid out as plain nodes.
   // TASK-351: Entenseestraße's loop joins the circulation core; p:1408, p:1410 move onto it.
   // TASK-348 + TASK-351: both on main (crossings laid out as plain nodes; the new circulation core).
-  // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
-  'sindelfingen-a81': '244b6e8e2a485abf526aab23a7d8b0180b57fa6ae0dd8f8affa5dec5ff5eb286',
+  // TASK-279: crossing walk links that draw no paint are `unmarked` (Sindelfingen).
+  'sindelfingen-a81': '429ecf0942872ad598d70d87b3e5558ebc5b4e632fa9b3b978f9a73a1e9234e1',
 };
 const lampCounts = {
   grid: [0, 0],

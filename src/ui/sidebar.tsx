@@ -3,6 +3,8 @@ import { groupDiagnostics } from './diagnostics';
 import { Diagnostics } from './inspector/diagnostics';
 import { Layers } from './layers';
 import { VisualQuality } from './visual-quality';
+import { DebugSection } from './debug-section';
+import { useDebug, useVisual } from './lighting-store';
 import { ComparePanel } from './panels/compare';
 import { DemandPanel } from './panels/demand';
 import { MetricsPanel } from './panels/metrics';
@@ -87,6 +89,9 @@ export function Sidebar() {
   const metricsOpen = useAppStore((state) => state.metricsOpen);
   const demandOpen = useAppStore((state) => state.demandOpen);
   const compareOpen = useAppStore((state) => state.compareOpen);
+  const developerSwitch = useVisual((state) => state.visual.developerTools);
+  const developerUrl = useDebug((state) => state.fromUrl);
+  const developer = developerSwitch || developerUrl;
   const { toggleCompare, toggleLayers, toggleMetrics, toggleDemand, toggleDiagnostics } =
     useAppStore.getState();
   const disabled = !run || busy;
@@ -167,6 +172,11 @@ export function Sidebar() {
       >
         <Validation />
       </DisclosureGroup>
+      {developer && (
+        <DisclosureGroup title="Debug">
+          <DebugSection />
+        </DisclosureGroup>
+      )}
     </nav>
   );
 }

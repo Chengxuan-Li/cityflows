@@ -3,6 +3,10 @@ import { buildCity } from '../../src/fixtures/build-city';
 import { operatingCrossing } from '../../src/fixtures/operating-crossings';
 import type { TripRequest } from '../../src/schema';
 import { createEngine } from '../../src/sim/engine';
+import { DEFAULT_SIM_PARAMS } from '../../src/sim/params';
+import { createRailCrossings } from '../../src/sim/rail-crossings';
+import { createSignalControl, GREEN } from '../../src/sim/signals';
+import { createVehicles, DRIVING } from '../../src/sim/vehicle';
 import { scenario, setup } from './fixtures';
 
 /**
@@ -83,3 +87,83 @@ test('TASK-222 two actuated signals joined by a tram crossing do not lock in opp
   expect(together).toContain('1/1');
   expect(engine.metrics().trips).toMatchObject({ completed: 30, failed: 0, driving: 0 });
 });
+
+test.each([-0.5, 0, 0.5])(
+  'TASK-362 a shared stop line gets green overlap (far max-out offset %s s)',
+  (offsetS) => {
+    const { compiled, nodes } = corridor();
+    const signals = compiled.nodes.map((node) => node.signal);
+    const [near, far] = nodes.map((n) => signals[n!]!);
+    // Keep the cycles equal so offset greens never drift into overlap by chance.
+    far!.phases[0]!.durationS -= offsetS;
+    far!.phases[1]!.durationS += offsetS;
+    far!.offsetS = far!.phases[0]!.durationS + far!.amberS + far!.allRedS;
+    const [entry, exit, nearCall, farCall] = [
+      near!.phases[0],
+      far!.phases[0],
+      near!.phases[1],
+      far!.phases[1],
+    ].map((phase) => compiled.movements[phase!.movements[0]!]!);
+    const approach = compiled.lanes[entry!.fromLane]!;
+    compiled.rail!.facilities![0]!.stops!.push({ lane: approach.idx, stopM: approach.stopM });
+    const vehicles = createVehicles(3, compiled.lanes.length, compiled.movements.length);
+    vehicles.state.fill(DRIVING);
+    for (const [id, movement] of [entry!, nearCall!, farCall!].entries()) {
+      const lane = compiled.lanes[movement.fromLane]!;
+      vehicles.insert(id, lane.idx, lane.stopM - (id === 0 ? DEFAULT_SIM_PARAMS.idm.minGapM : 0));
+      vehicles.movement[id] = movement.idx;
+    }
+    vehicles.route[0] = {
+      roads: [entry!.fromLane, exit!.fromLane, exit!.toLane].map((n) => compiled.lanes[n]!.road),
+      movements: [entry!.idx, exit!.idx],
+      targetLanes: [],
+      costS: 0,
+    };
+    const colors = new Uint8Array(compiled.movements.length);
+    const rail = createRailCrossings(
+      compiled,
+      vehicles,
+      DEFAULT_SIM_PARAMS,
+      0,
+      (m) => colors[m] !== GREEN,
+    )!;
+    const control = createSignalControl(
+      compiled,
+      signals,
+      vehicles,
+      DEFAULT_SIM_PARAMS,
+      0,
+      () => undefined,
+      undefined,
+      rail.holdRed,
+    );
+    control.update(0, colors);
+    // The other two vehicles are independent detector calls, not held by the crossing.
+    expect(rail.hold(0)).toBe(approach.stopM);
+    expect(rail.holdRed(0)).toBe(exit!.idx);
+    let overlap = 0;
+    let served = false;
+    let opposingGreen = false;
+    for (let tick = 1; tick <= 1200; tick++) {
+      vehicles.stopped[0] = tick / 10;
+      control.update(tick / 10, colors);
+      if (served) {
+        if (colors[nearCall!.idx] === GREEN) {
+          opposingGreen = true;
+          break;
+        }
+        continue;
+      }
+      const stop = rail.hold(0);
+      if (colors[entry!.idx] === GREEN && colors[exit!.idx] === GREEN && stop === Infinity)
+        overlap++;
+      else overlap = 0;
+      if (overlap >= 30) {
+        served = true;
+        vehicles.remove(0);
+      }
+    }
+    expect(served, 'the head gets a continuous start-up window').toBe(true);
+    expect(opposingGreen, 'the near signal returns to opposing demand').toBe(true);
+  },
+);

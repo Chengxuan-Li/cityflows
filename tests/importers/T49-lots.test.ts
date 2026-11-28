@@ -86,9 +86,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81'] as const))(
     if (!imported.ok) throw new Error(JSON.stringify(imported.diagnostics));
     const city = imported.city;
     const stripped = withoutLotAisles(city);
-    // TASK-114's display-only marking theme is not part of TASK-102's pins (as in T44).
-    const { markingTheme, ...network } = stripped;
-    expect(markingTheme).toBe('de');
+    // TASK-114 and TASK-372 add metadata, not part of these German network pins (as in T44).
+    const { markingTheme, country, ...network } = stripped;
+    expect([markingTheme, country]).toEqual(['de', 'de']);
     expect(hash(network)).toBe(baseline[name][0]);
     expect(hash(compile(stripped))).toBe(baseline[name][1]);
     const start = performance.now();

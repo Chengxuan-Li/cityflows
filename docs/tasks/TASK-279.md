@@ -37,3 +37,25 @@ curation, downloads.
 ## Report
 
 Write it as the commit body.
+
+## Re-run 2026-11-26 (2)
+
+**Result: passes the owner's merge rule.** All 96 Munich 0.15 runs met the drain criteria.
+Mean delay changed by −3.3% / −2.1% with actuated signals (choice off / on) and by
+−3.8% / −0.8% with fixed signals. At full demand, the five-seed means changed by +0.3%
+actuated and −0.1% fixed. The Munich gate, mode-share guard, all seven showcases and all
+required verification tiers passed.
+
+Merged pinned main `8342af78` into `task/279-unmarked-yield`. TASK-265's mapped zebra placement
+and TASK-364's continuations are unchanged. TASK-362's shared stop-line hold is in place.
+The v2 crossing rule is unchanged. All nine buildable city archives were rebuilt and matched
+main byte for byte. Treating `unmarked` walk links as `zebra` also recovers main's compiled
+digest in every rebuilt city, so there is no geometry change to audit.
+
+Freiburg completes 1,527 trips at 61.0 s mean delay, against main's 1,526 at 62.2 s. The gate
+and seeds 2–3 have zero gridlocks and stalled heads. London City's showcase is below the 900 s
+visit limit at 822.3 s on `r:274`, against main's 801.5 s on `r:2253`. Its mean delay still rises
+from 210.2 to 385.7 s. The London gate passed, so no variant was tried. The unchanged v2 gap and
+turn-into rule is not a separate implementation of UK Highway Code H2 for turning out of a road.
+
+The rerun commit records the paired measurements, crossing trace, pins and verification.

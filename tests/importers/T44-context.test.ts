@@ -102,9 +102,9 @@ test.each(tierCities(['munich-donnersberger', 'sindelfingen-a81']))(
             // TASK-254: the A 81's `placement=right_of:1` (r:464, r:1252, r:1254 set 1.75 m right).
             'bbd681b2c1d625149533e028b82e1d6a68568bd3d4a699bbde9b4fa1156b8015',
           ];
-    // V114 adds a display-only setting; retain the original network hash.
-    const { markingTheme, ...originalCity } = off.city;
-    expect(markingTheme).toBe('de');
+    // TASK-372's German country metadata and V114's display setting leave this network unchanged.
+    const { markingTheme, country, ...originalCity } = off.city;
+    expect([markingTheme, country]).toEqual(['de', 'de']);
     expect(hash(originalCity)).toBe(baseline[0]);
     expect(hash(compile(off.city))).toBe(baseline[1]);
     expect(on.city.context?.features.length).toBeGreaterThan(0);

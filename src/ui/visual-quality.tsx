@@ -529,7 +529,11 @@ export function VisualQuality() {
               onChange={(colourVariation) => update({ colourVariation })}
             />
           </DisclosureGroup>
-          <DisclosureGroup title="Render" defaultOpen={false}>
+        </>
+      )}
+      <DisclosureGroup title="Render" defaultOpen={false}>
+        {view3d && (
+          <>
             <Field
               label="Render scale"
               cost={scales.find((s) => s.value === visual.renderScale)!.cost}
@@ -556,9 +560,14 @@ export function VisualQuality() {
                 onChange={(event) => update({ dropLines: event.currentTarget.checked })}
               />
             )}
-          </DisclosureGroup>
-        </>
-      )}
+          </>
+        )}
+        <Switch
+          label="Developer tools"
+          checked={visual.developerTools}
+          onChange={(event) => update({ developerTools: event.currentTarget.checked })}
+        />
+      </DisclosureGroup>
       <Sheet title="Offline rendering" open={pending !== null} onClose={() => setPending(null)}>
         <p>
           This setting is meant for rendering videos frame by frame. The view becomes very slow

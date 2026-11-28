@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   auditGeometry,
+  endOverlaps,
   joinAudit,
   junctionShapeAudit,
   laneOverlaps,
@@ -256,4 +257,34 @@ test('T34.9: a junction at another grade hides no lane overlap (TASK-231, TASK-2
   const alone = area(tunnel(false))!;
   expect(alone).toBeGreaterThan(150);
   expect(area(above)).toBe(alone);
+});
+
+test('T34.9: measure 9 leaves out inner-road overlap under the drawn group surface (TASK-375)', () => {
+  const { city, node, road } = buildCity('T34 group overlap', 1);
+  const a = node(0, 0, 1);
+  const b = node(12, 0, 1);
+  const inner = [road(a, b), road(a, b)];
+  const id = 'jg:1';
+  city.junctionGroups = {
+    [id]: {
+      id,
+      nodes: [a.id, b.id],
+      innerRoads: inner.map((r) => r.id),
+      signal: null,
+      provenance: { source: 'generated' },
+    },
+  };
+  const result = compile(city);
+  if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+  const net = result.compiled;
+  const pair = inner.map((r) => r.id).join('/');
+  const area = laneOverlaps(city, net, false).find((o) => o.roads === pair)!.areaM2;
+  expect(area).toBeGreaterThan(0);
+  expect(endOverlaps(city, net)).toContainEqual(
+    expect.objectContaining({ roads: pair, areaM2: area }),
+  );
+  expect(laneOverlaps(city, net)).toEqual([]);
+
+  for (const r of net.roads) relayLanes(net, r, 0, 20);
+  expect(laneOverlaps(city, net)).toEqual([expect.objectContaining({ roads: pair, areaM2: area })]);
 });

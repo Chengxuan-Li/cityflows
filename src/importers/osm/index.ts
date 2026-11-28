@@ -5,6 +5,7 @@ import { groupAngle, groupExits } from '../../network/groups';
 import { MINI_ROUNDABOUT, STOP_POSITION, STOP_POSITION_CROSSING } from '../../network/junctions';
 import { addImplicitGarages } from '../../network/parking';
 import { geographicMarkingTheme } from '../../schema/marking-theme';
+import { geographicCountry } from '../country';
 import { osmMarkingTheme } from './controls';
 import { allocateId, citySchema, type City, type Node } from '../../schema';
 import type { ImportOptions, ImportResult } from '../types';
@@ -162,6 +163,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     bounds.ring = [...ring, ring[0]!];
   }
   const markingTheme = osmMarkingTheme(data) ?? geographicMarkingTheme(geo);
+  const country = geographicCountry(geo);
   const city: City = {
     schemaVersion: 3,
     version: 0,
@@ -169,6 +171,7 @@ export function importOsm(xml: string, options: ImportOptions): ImportResult {
     // TASK-268 (D11): unless set, the side follows the marking theme, from the extract's country
     // tags or else its location: left where the theme is the UK's (Great Britain and Ireland).
     drivingSide: options.drivingSide ?? (markingTheme === 'uk' ? 'left' : 'right'),
+    ...(country && { country }),
     geo,
     markingTheme,
     nodes: {},
