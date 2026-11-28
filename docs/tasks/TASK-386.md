@@ -1,6 +1,6 @@
 # TASK-386 — TASK-215's lane markings without the doubled-crossing rule, and solid lines before signals (M7)
 
-Status: done 2026-11-28 (first version passes the merge rule; not merged). Started by the lead in the 9 h autonomous run (owner 2026-11-28: "Take all suggestions"). Owner: Claude subagent (Opus 5.5). Base: main; carries
+Status: merged 2026-11-28 (`451e424d`; lead re-pinned the airport startup pins): M3 (no default crossing on trunk ends: Freiburg 10 to 0, Munich 6 to 0) and M5 (straight bands: steps over 1 m Freiburg 10 to 3, Munich 6 to 3, Sindelfingen 17 to 5) added; M7 only before signals; doubled-crossing rule dropped. Munich 0.15 within 3% in all four configurations (+1.21%, −2.96%, +1.48%, −0.69%), full demand fixed +0.34%, actuated −1.16%; Freiburg 60.6 to 59.2 s; every showcase passes; audit identical apart from paint length; airside identical.
 `archive/task/215-markings` (`3e5e33f7`).
 
 ## Finding (TASK-215)
