@@ -1596,7 +1596,7 @@ function createRun({
     };
   }
 
-  /** TASK-383: the physical leader `prepareTravel` follows and the gap to its rear, read again
+  /** TASK-384: the physical leader `prepareTravel` follows and the gap to its rear, read again
    * without side effects (a copy of its search, so the travel step is untouched). */
   function debugLeader(id: number): [leader: number, gapM: number] {
     const field = vehicles.lane[id]!;
@@ -1633,7 +1633,7 @@ function createRun({
     ];
   }
 
-  /** TASK-383: the debug views' sim state, only when a snapshot asks for it. */
+  /** TASK-384: the debug views' sim state, only when a snapshot asks for it. */
   function debugSnapshot(request: DebugRequest, ids: Uint32Array): DebugSnapshot {
     const debug: DebugSnapshot = {};
     if (request.aircraft || request.gridlock) {

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { button, pageErrors, sidebarSection, stateHash } from './helpers';
 
-// TASK-383: developer tools turn on the sidebar's Debug section. Rendered view off with Road graph
+// TASK-384: developer tools turn on the sidebar's Debug section. Rendered view off with Road graph
 // and Wireframe leaves only those on the plain canvas; Shading Unlit colour and back to Normal
 // changes the scene and restores it; with developer tools off again the default view is back
 // unchanged and the simulation never moved.
@@ -36,7 +36,7 @@ const changed = (page: Page, a: string, b: string) =>
     [a, b],
   );
 
-test('V383 debug views: rendered view off, road graph and wireframe, unlit shading and back', async ({
+test('V384 debug views: rendered view off, road graph and wireframe, unlit shading and back', async ({
   page,
 }) => {
   test.setTimeout(180_000);

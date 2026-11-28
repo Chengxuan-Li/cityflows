@@ -501,7 +501,7 @@ export function MapView() {
           loading3D = false;
         }
       }
-      // TASK-383: the developer debug views (nothing until developer tools are on).
+      // TASK-384: the developer debug views (nothing until developer tools are on).
       const debug = createDebugFrame(canvas, canvas3D);
       signal.addEventListener('abort', () => debug.destroy());
       let motionGeometry: Session['loadedCompiled'] | null = null;

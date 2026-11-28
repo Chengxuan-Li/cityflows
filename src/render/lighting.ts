@@ -58,7 +58,7 @@ export interface VisualSettings {
   /** Times the device pixel ratio (itself capped at 2). */
   renderScale: RenderScale;
   dropLines: boolean;
-  /** TASK-383: shows the sidebar's Debug section. */
+  /** TASK-384: shows the sidebar's Debug section. */
   developerTools: boolean;
 }
 

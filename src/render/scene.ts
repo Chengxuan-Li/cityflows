@@ -203,11 +203,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   setWalkerRoute(links: readonly number[] | null): void;
   setLighting(settings: VisualSettings, timeS: number, origin?: LonLat): void;
   setMapPalette(palette: MapPalette): void;
-  /** TASK-383: whether the scene draws (Rendered view); off, only the canvas, the selection and
+  /** TASK-384: whether the scene draws (Rendered view); off, only the canvas, the selection and
    *  the edit overlays remain under the debug overlays. */
   setDebugScene(rendered: boolean): void;
   debugProjector(): DebugProjector;
-  /** TASK-383: the last frame's draw calls and triangles, and the GPU's textures and buffers. */
+  /** TASK-384: the last frame's draw calls and triangles, and the GPU's textures and buffers. */
   debugStats(): { calls: number; triangles: number; textures: number; buffers: number };
 } {
   const app = new Application();
@@ -646,7 +646,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene & {
   let selection: Pick | null = null;
   let selectedVehicle = -1;
   let destroyed = false;
-  // TASK-383: draw calls and triangles, counted from the first stats readout on.
+  // TASK-384: draw calls and triangles, counted from the first stats readout on.
   let counting = false;
   const drawCounts = { calls: 0, triangles: 0 };
   const lastDraw = { calls: 0, triangles: 0 };
