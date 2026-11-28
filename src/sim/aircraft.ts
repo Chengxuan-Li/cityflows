@@ -4378,7 +4378,9 @@ export function createAircraftFleet(graph: AirsideGraph, seed: number) {
           : o.mode === 'air' && o.air?.kind === 'approach' && o.next[0]?.kind === 'taxi'
             ? o.next[0].leg
             : undefined;
-      if (!leg) return false;
+      // One that waits for this tow (it would not appear before the tow has gone) does not
+      // hold it: neither would move.
+      if (!leg || o.waits.some((w) => w.pred === craft && !passed(w))) return false;
       const safeM = safeOf(o, leg);
       return conflicts(craft, own, o).some((c) => c.otherLeg === leg && c.x1 - SAMPLE_M < safeM);
     });
