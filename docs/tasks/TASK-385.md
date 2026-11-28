@@ -39,7 +39,7 @@ bundled-city rebuilds and re-pins. Out of scope: OSM edits, per-id curation, gat
 
 **V2 passes the audit and traffic merge rule on `b5806054`.** V1 is retained in the comparison
 because its Sindelfingen void total exceeded tolerance. This branch has not been pushed or merged
-to main. The lead's re-check after TASK-381 remains separate.
+to main. The re-check with TASK-381 V2 is recorded below.
 
 Merged frozen main `b5806054` into the task branch at `2cdba524`. The conflicted archives were
 regenerated with `bench/bundled-cities.ts`. All comparisons below use that exact main, before the
@@ -207,3 +207,17 @@ npm run test:e2e:light
 The synthetic median/ramp regressions were red without their changes and now pass, including the
 displaced equal-width gap and a provisional ramp placement discarded at its far end. The B 31
 city regression also checks the group outline and the lane seam together.
+
+### Re-check on main with TASK-381
+
+With TASK-381 V2 in both builds (main `23a76314`), Freiburg's 10:00 gate moved from 59.635 to
+60.597 s (+0.963 s, within 5 s), with 1,528 to 1,529 completed trips and no failed trips or
+stalled heads. Its state hash was the only merge conflict and was measured again before
+re-pinning: main `3430388558`, old branch `2581833985`, combined `3918479990`. Rebuilding all ten
+bundled projects changed no branch bytes. Sindelfingen completed 444 trips on each side at
+17.147 and 17.150 s mean delay. The five-city and 23-case geometry audits reproduced the earlier
+reports exactly, including Sindelfingen's 1,266.19 m² of counted void and 808.19 m² of mapped
+median, and no bulge at the B 31 group. Munich's canonical and compiled inputs and diagnostics
+matched for both actuated and fixed signals, so the seed matrices were not rerun. All nine
+showcases passed, including the separate Heathrow probe, whose result was identical to main.
+All four airport startup tests passed with TASK-381's pins unchanged.
