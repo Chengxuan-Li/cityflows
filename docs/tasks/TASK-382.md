@@ -1,6 +1,6 @@
 # TASK-382 — Heathrow: A380 tows that wait 47–98 minutes and stand in the runway way off
 
-Status: parked 2026-11-27 (branch `task/382-a380-tows` at `d7ae24fb`, `T382` off): rule `rs` (tow routes avoid arrivals' exit taxiways; tows wait at the stand while a cleared arrival's exit path crosses their way) lifts peaks 689 to 724 and landings 302 to 333, and cuts tow-held 27L queue time 6,160 to 2,105 s, but go-arounds rise 18 to 21 (all behind the arrival ahead, 6.0% to 6.3% of landings). Fails the go-around gate; owner trade-off like TASK-363. Started by the lead in the 10 h unsupervised run; airside merges on gates. Owner: Claude subagent (Opus 5.5,
+Status: parked 2026-11-27 for the owner (branch `task/382-a380-tows` at `d6d29541`, main merged in, `T382` off). Full days (gate 3, owner follow-up): Heathrow 2,567 to 2,623 completed and go-arounds 71 to 68, Zurich, Boston and London City identical; but Heathrow day 2 has one real runway conflict (two departures lined up on 27R, a TASK-360 line-up, not a tow). Peaks: rule `rs` (tow routes avoid arrivals' exit taxiways; tows wait at the stand while a cleared arrival's exit path crosses their way) lifts peaks 689 to 724 and landings 302 to 333, and cuts tow-held 27L queue time 6,160 to 2,105 s, but go-arounds rise 18 to 21 (all behind the arrival ahead, 6.0% to 6.3% of landings). Fails the go-around gate; owner trade-off like TASK-363. Started by the lead in the 10 h unsupervised run; airside merges on gates. Owner: Claude subagent (Opus 5.5,
 continuing TASK-376 and TASK-380). Base: main.
 
 ## Finding (TASK-376, TASK-380)
@@ -166,3 +166,48 @@ Raw runs are in `D:\cityflows-wt\330-pilot\R\t382\`:
 - `dg-*`: main with the counter;
 - `r-*`, `rs-*` (`rs2-*` re-run with the ring fix): the rules;
 - `rsp-*`: `rs` with `T380=p`.
+
+## Gate 3 (owner follow-up, 2026-11-27)
+
+These days run on `task/382-a380-tows` after merging main `4bf89c3e`, which has TASK-377's exit margin on by default
+(merge `1da5c407`). With `T382` unset, peak seed 1 `--checks` matches TASK-383's main `m-p1` (145).
+
+Main references are TASK-383's `R\t383\m-*-d*.json`, main `e6ffa10d` with T377 on. Branch runs use `T382=rs`, in
+`D:\cityflows-wt\330-pilot\R\t382\days\`. Cells: completed (landed/departed, go-arounds, overlaps,
+`runwayConflictsReal`, gridlock h, mean delay s, tail stops).
+
+| Day | Main | `rs` |
+| --- | --- | --- |
+| Heathrow 1 | 871 (439/434, 21, 0, 0, -, 14,163, 0) | 887 (451/437, 20, 0, 0, -, 13,394, 0) |
+| Heathrow 2 | 869 (442/427, 22, 0, 0, -, 12,050, 0) | 875 (444/433, 25, 0, 1, -, 11,164, 0) |
+| Heathrow 3 | 827 (418/409, 28, 0, 0, -, 12,818, 1) | 861 (435/430, 23, 0, 0, -, 11,920, 1) |
+| Zurich 730, 1 / 2 / 3 | 729 / 727 / 746 (go-arounds 7 / 7 / 8) | identical |
+| Boston 1 / 2 / 3 | 992 / 968 / 996 (go-arounds 17 / 35 / 49) | identical |
+| London City 1 | 150 (75/75, 0) | identical |
+
+| Sums | Main | `rs` |
+| --- | --- | --- |
+| Heathrow, 3 days | 2,567 completed, 1,299 landed, 1,270 departed, 71 go-arounds | 2,623, 1,330, 1,300, 68 |
+| Zurich, 3 days | 2,202, go-arounds 22 | 2,202, 22 |
+| Boston, 3 days | 2,956, go-arounds 101 | 2,956, 101 |
+| London City | 150, 0 | 150, 0 |
+
+On the Heathrow days `rs` raises completed by 56 and landings by 31. Go-arounds fall 71 → 68 and diversions fall
+342 → 336. Mean delay falls on every day. The other airports are identical: their tows never meet an arrival's way
+off.
+
+**Go-arounds.** The change is in their causes:
+- Go-arounds at commitment behind a tow fall from 13 to 3.
+- Those behind the arrival ahead rise from 27 to 35, with the extra landings.
+- Those behind departures are about level, 31 → 30.
+
+On the peaks the arrival-side rise outweighed the tow-side fall: 18 → 21. Over whole days the tow-side fall is
+larger.
+
+**Real runway conflict.** Heathrow day 2 has one real runway-conflict sample, against none on main. At 18:57:47 two
+departures, G-KFAD and G-FDXM, are lined up on 27R together; the checker does not exempt that line-up. It is a
+departure-side TASK-360 line-up, not a tow, like the triple line-up TASK-363 met on a day 3. Overlaps are 0 and
+there is no gridlock on every day.
+
+Read against the day gate (not worse): Heathrow completed and go-arounds are better. Zurich, Boston and London City
+are identical. Heathrow day 2's one real runway-conflict sample (0 → 1) is the exception.
