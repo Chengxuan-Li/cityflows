@@ -1,7 +1,6 @@
 # TASK-377 — Heathrow: a landed aircraft stops with its tail on the runway
 
-Status: started 2026-11-27 (owner: "yes", 10 h unsupervised run). Owner: Codex (gpt-6.2-sol, high). Base: main
-`138bf349`.
+Status: merged 2026-11-27 (lead): the narrower rule is on by default (`T377=0` turns it off). Tail stops on the runway 3 to 1 across the ladder; every other count identical to main. Heathrow day 3's 26 s stop remains (TASK-383). Owner: Codex (gpt-6.2-sol, high). Base: main `138bf349`.
 
 ## Finding (TASK-366)
 
